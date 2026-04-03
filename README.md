@@ -1,6 +1,6 @@
 # MCP Server Template
 
-A production-ready [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server built with .NET 8 and the official [C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk). Ships with two real-world providers — SMHI weather forecasts and historical observations — that serve as working examples you can replace with your own API integrations.
+A production-ready [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server built with .NET 8 and the official [C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk). Ships with three working providers — SMHI weather forecasts, historical observations, and JSONPlaceholder (fake REST API for testing) — that serve as working examples you can replace with your own API integrations.
 
 ## Features
 
@@ -28,6 +28,13 @@ McpServerTemplate/
 │   ├── ToolCallThrottleFilter.cs     # Per-tool sliding window rate limiter
 │   └── HealthProbe.cs               # Startup upstream connectivity check
 ├── Providers/
+│   ├── JsonPlaceholder/              # Fake REST API provider (testing/demo)
+│   │   ├── JsonPlaceholderApiClient.cs       # Typed HTTP client
+│   │   ├── JsonPlaceholderConfig.cs          # Strongly-typed config
+│   │   ├── JsonPlaceholderFormatters.cs      # LLM-optimized output
+│   │   ├── JsonPlaceholderServiceRegistration.cs # DI registration
+│   │   ├── JsonPlaceholderTools.cs           # MCP tools (Get/CreateBlogPost, etc.)
+│   │   └── Models/                           # DTOs (Post, Comment, Todo)
 │   ├── Smhi/                         # Weather forecast provider (example)
 │   │   ├── SmhiApiClient.cs          # Typed HTTP client with resilience
 │   │   ├── SmhiConfig.cs             # Strongly-typed config
@@ -43,7 +50,14 @@ McpServerTemplate/
 │       └── ...
 ├── appsettings.json                  # Base configuration
 ├── appsettings.Development.json      # Debug logging, relaxed rate limits
-└── appsettings.Production.json       # Warning level, strict limits
+├── appsettings.Production.json       # Warning level, strict limits
+└── docs/                             # Comprehensive documentation
+    ├── README.md                     # Documentation index and navigation
+    ├── 01-ARCHITECTURE.md            # Technical deep dive & design patterns
+    ├── 02-ARCHITECTURE-FLOWCHARTS.md # 10 visual flowcharts (Mermaid diagrams)
+    ├── 03-TESTING-STRATEGY.md        # Testing approach & examples
+    ├── 04-CONFIGURATION.md           # Complete configuration reference
+    └── 05-USAGE-GUIDE-BEGINNERS.md   # Beginner-friendly guide with examples
 ```
 
 ## Quick Start
@@ -169,8 +183,7 @@ All settings live in `appsettings.json` and can be overridden via environment va
 | `HttpTransport:BindAddress` | `localhost` | Bind address (`localhost`, `0.0.0.0`, etc.) |
 | `HttpTransport:AllowedOrigins` | `[]` | CORS allowed origins (empty = deny all) |
 | `Authentication:ApiKey` | `""` | Required API key for HTTP mode |
-| `RateLimit:MaxCallsPerToolPerMinute` | `10` | Per-tool rate limit (agentic loop protection) |
-| `Providers:Smhi:BaseUrl` | SMHI API URL | Must be absolute HTTPS |
+| `RateLimit:MaxCallsPerToolPerMinute` | `10` | Per-tool rate limit (agentic loop protection) || `Providers:JsonPlaceholder:BaseUrl` | `https://jsonplaceholder.typicode.com` | Fake REST API (must be HTTPS) || `Providers:Smhi:BaseUrl` | SMHI API URL | Must be absolute HTTPS |
 | `Providers:SmhiObs:BaseUrl` | SMHI Obs API URL | Must be absolute HTTPS |
 
 ### Environment-specific overrides
@@ -178,7 +191,33 @@ All settings live in `appsettings.json` and can be overridden via environment va
 - **Development** (`ASPNETCORE_ENVIRONMENT=Development`) — Debug logging, 30 calls/min rate limit, `-dev` user agent
 - **Production** (`ASPNETCORE_ENVIRONMENT=Production`) — Warning level, 10 calls/min, 30-day log retention
 
+## Documentation
+
+Comprehensive documentation is available in the [docs/](docs/) folder:
+
+- **[docs/README.md](docs/README.md)** — Navigation guide, learning paths by role
+- **[docs/01-ARCHITECTURE.md](docs/01-ARCHITECTURE.md)** — Technical deep dive: 4-layer architecture, data flow, DI patterns
+- **[docs/02-ARCHITECTURE-FLOWCHARTS.md](docs/02-ARCHITECTURE-FLOWCHARTS.md)** — 10 visual flowcharts (Mermaid diagrams)
+- **[docs/03-TESTING-STRATEGY.md](docs/03-TESTING-STRATEGY.md)** — Testing approach, xUnit examples, best practices
+- **[docs/04-CONFIGURATION.md](docs/04-CONFIGURATION.md)** — Complete config reference, environment selection, scenarios
+- **[docs/05-USAGE-GUIDE-BEGINNERS.md](docs/05-USAGE-GUIDE-BEGINNERS.md)** — Newbie-friendly guide with step-by-step examples
+
+**New to the project?** Start with [docs/05-USAGE-GUIDE-BEGINNERS.md](docs/05-USAGE-GUIDE-BEGINNERS.md).
+
+**Building features?** Read [docs/01-ARCHITECTURE.md](docs/01-ARCHITECTURE.md).
+
 ## MCP Tools
+
+### JSONPlaceholder (Fake REST API - Testing/Demo)
+
+| Tool | Description |
+|------|-------------|
+| `GetBlogPost` | Retrieve a blog post (ID 1-100) |
+| `CreateBlogPost` | Create a new blog post (demonstrates POST) |
+| `GetPostComments` | View comments on a post |
+| `AddPostComment` | Add a comment to a post (demonstrates POST) |
+| `GetUserTodos` | View a user's todo list |
+| `CreateUserTodo` | Create a new todo item (demonstrates POST) |
 
 ### SMHI Forecast
 
@@ -240,13 +279,17 @@ Tool responses are formatted for LLM consumption, not raw JSON:
 
 ## Creating Your Own Provider
 
+See [docs/01-ARCHITECTURE.md#4-provider-layer-api-integration-logic](docs/01-ARCHITECTURE.md#4-provider-layer-api-integration-logic) and [docs/02-ARCHITECTURE-FLOWCHARTS.md#10-adding-a-new-provider-step-by-step](docs/02-ARCHITECTURE-FLOWCHARTS.md#10-adding-a-new-provider-step-by-step) for detailed guidance.
+
+Quick steps:
+
 1. Create a folder under `Providers/YourApi/`
-2. Add these files following the SMHI pattern:
+2. Add these files following the JsonPlaceholder or SMHI pattern:
    - `YourApiConfig.cs` — strongly-typed config record
    - `YourApiClient.cs` — typed HTTP client with input validation
    - `YourApiTools.cs` — `[McpServerToolType]` class with tool methods
    - `YourApiServiceRegistration.cs` — `AddYourApiProvider()` extension method
-   - Optionally: formatters, resources, prompts
+   - Optionally: formatters, resources, prompts, models
 3. Register in `Program.cs`:
    ```csharp
    builder.Services.AddYourApiProvider(builder.Configuration);
