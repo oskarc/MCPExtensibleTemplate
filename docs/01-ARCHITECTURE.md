@@ -177,13 +177,18 @@ public static IServiceCollection AddJsonPlaceholderProvider(
     IConfiguration configuration)
 {
     // 1. Bind config from appsettings.json
-    services.Configure<JsonPlaceholderConfig>(
-        configuration.GetSection("Providers:JsonPlaceholder"));
+    var section = configuration.GetSection("Providers:JsonPlaceholder");
+    services.Configure<JsonPlaceholderConfig>(section);
+
+    var config = section.Get<JsonPlaceholderConfig>()
+        ?? throw new InvalidOperationException(
+            "Missing configuration section 'Providers:JsonPlaceholder' in appsettings.json.");
 
     // 2. Register typed HttpClient
     services.AddHttpClient<JsonPlaceholderApiClient>(client =>
     {
-        client.BaseAddress = new Uri(baseConfig.BaseUrl);
+        client.BaseAddress = new Uri(config.BaseUrl);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(config.UserAgent);
     });
 
     return services;
@@ -208,15 +213,21 @@ public static async Task<string> GetBlogPost(
 The system supports multiple configuration sources in order of precedence:
 
 1. **Environment Variables** (highest priority)
+   ```powershell
+   $env:Transport = "http"
+   $env:Authentication__ApiKey = "secret"
+   ```
+
+   Or on bash/zsh:
    ```bash
    export Transport=http
    export Authentication__ApiKey=secret
    ```
 
 2. **appsettings.{Environment}.json**
-   ```bash
-   ASPNETCORE_ENVIRONMENT=Development  # loads appsettings.Development.json
-   ASPNETCORE_ENVIRONMENT=Production   # loads appsettings.Production.json
+   ```text
+   ASPNETCORE_ENVIRONMENT=Development  -> loads appsettings.Development.json
+   ASPNETCORE_ENVIRONMENT=Production   -> loads appsettings.Production.json
    ```
 
 3. **appsettings.json** (base/default)

@@ -231,11 +231,11 @@ graph TB
     end
 
     subgraph "2. Environment-Specific"
-        Env["appsettings.Development.json<br/>────────────<br/>Log Level: Debug<br/>RateLimit: 100/min<br/>(override)"]
+        Env["appsettings.Development.json<br/>────────────<br/>Log Level: Debug<br/>RateLimit: 30/min<br/>(override)"]
     end
 
     subgraph "3. Environment Variables"
-        EnvVars["export Transport=http<br/>export RateLimit__MaxCallsPerToolPerMinute=20"]
+        EnvVars["$env:Transport = 'http'<br/>$env:RateLimit__MaxCallsPerToolPerMinute = '20'"]
     end
 
     subgraph "Result"

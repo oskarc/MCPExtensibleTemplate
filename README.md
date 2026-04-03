@@ -15,7 +15,7 @@ A production-ready [Model Context Protocol](https://modelcontextprotocol.io/) (M
 - **Kestrel hardening** — request body size cap, connection limits, header timeouts
 - **CORS control** — deny-all by default, configurable allowed origins
 - **Environment configs** — Development (verbose, relaxed limits) and Production (warnings, strict)
-- **39 unit tests** — xUnit, covering formatters, coordinate validation, error mapping
+- **35 unit tests** — xUnit, covering formatters, coordinate validation, error mapping
 
 ## Project Structure
 
@@ -91,6 +91,14 @@ dotnet run -- --Transport http --Authentication:ApiKey "your-secret-key"
 
 Or via environment variables:
 
+```powershell
+$env:Transport = "http"
+$env:Authentication__ApiKey = "your-secret-key"
+dotnet run
+```
+
+Or on bash/zsh:
+
 ```bash
 export Transport=http
 export Authentication__ApiKey=your-secret-key
@@ -133,7 +141,7 @@ Or connect to a running HTTP instance:
 {
   "mcpServers": {
     "weather": {
-      "url": "http://localhost:3001/sse",
+      "url": "http://localhost:3001/mcp",
       "headers": {
         "X-Api-Key": "your-secret-key"
       }
@@ -183,7 +191,9 @@ All settings live in `appsettings.json` and can be overridden via environment va
 | `HttpTransport:BindAddress` | `localhost` | Bind address (`localhost`, `0.0.0.0`, etc.) |
 | `HttpTransport:AllowedOrigins` | `[]` | CORS allowed origins (empty = deny all) |
 | `Authentication:ApiKey` | `""` | Required API key for HTTP mode |
-| `RateLimit:MaxCallsPerToolPerMinute` | `10` | Per-tool rate limit (agentic loop protection) || `Providers:JsonPlaceholder:BaseUrl` | `https://jsonplaceholder.typicode.com` | Fake REST API (must be HTTPS) || `Providers:Smhi:BaseUrl` | SMHI API URL | Must be absolute HTTPS |
+| `RateLimit:MaxCallsPerToolPerMinute` | `10` | Per-tool rate limit (agentic loop protection) |
+| `Providers:JsonPlaceholder:BaseUrl` | `https://jsonplaceholder.typicode.com` | Fake REST API (must be HTTPS) |
+| `Providers:Smhi:BaseUrl` | SMHI API URL | Must be absolute HTTPS |
 | `Providers:SmhiObs:BaseUrl` | SMHI Obs API URL | Must be absolute HTTPS |
 
 ### Environment-specific overrides
@@ -263,8 +273,8 @@ Upstream HTTP calls go through a resilience pipeline powered by `Microsoft.Exten
 
 Every MCP tool call passes through the infrastructure filters in order:
 
-1. **ThrottleFilter** — checks per-tool sliding window rate limit; rejects immediately if exceeded
-2. **LoggingFilter** — assigns a crypto-random correlation ID, logs arguments (names only at Info level), starts a timer
+1. **LoggingFilter** — assigns a crypto-random correlation ID, logs arguments (names only at Info level), starts a timer
+2. **ThrottleFilter** — checks per-tool sliding window rate limit; rejects immediately if exceeded
 3. **Tool execution** — the provider's tool method runs, calling the upstream API through the resilient HTTP client
 4. **LoggingFilter** — logs duration and result status with the same correlation ID
 

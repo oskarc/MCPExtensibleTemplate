@@ -93,7 +93,7 @@ Used for **local development** with relaxed limits and verbose logging.
 ```json
 {
   "RateLimit": {
-    "MaxCallsPerToolPerMinute": 100
+    "MaxCallsPerToolPerMinute": 30
   },
   "Serilog": {
     "MinimumLevel": {
@@ -153,8 +153,13 @@ Used for **hosted deployments** with strict limits and minimal logging.
 - **Applies**: Only when `Transport=http`
 - **Description**: The port the HTTP server listens on
 
+```powershell
+# Set via environment variable in PowerShell
+$env:HttpTransport__Port = "8080"
+```
+
 ```bash
-# Set via environment variable
+# Set via environment variable in bash/zsh
 export HttpTransport__Port=8080
 
 # Set via appsettings.json
@@ -206,21 +211,32 @@ export HttpTransport__Port=8080
 
 #### `Authentication:ApiKey`
 - **Type**: `string`
-- **Default**: `""` (empty = no key required)
+- **Default**: `""` (empty — **required** when using HTTP transport)
 - **Applies**: Only when `Transport=http`
 - **Description**: Secret key used to authenticate HTTP requests
+  - The middleware **throws at startup** if this is empty when HTTP transport is enabled
   - Clients must send `X-Api-Key: {this-key}` header with every request
   - Use a strong random string (minimum 32 characters recommended)
   - Never commit real keys to git; use environment variables instead
 
+```powershell
+# Generate a secure key in PowerShell
+[Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
 ```bash
-# Generate a secure key (Linux/Mac)
+# Generate a secure key in bash/zsh
 openssl rand -hex 32
 
 # Result: a3f5b9c2d1e4f8a6b2c5d9e3f1a4b7c0d2e5f8a1b4c7d0e3f6a9b2c5d8e1f4
 
-# Set via environment variable (never in code!)
+# Set via environment variable in bash/zsh (never in code!)
 export Authentication__ApiKey=a3f5b9c2d1e4f8a6b2c5d9e3f1a4b7c0d2e5f8a1b4c7d0e3f6a9b2c5d8e1f4
+```
+
+```powershell
+# Set via environment variable in PowerShell (never in code!)
+$env:Authentication__ApiKey = "a3f5b9c2d1e4f8a6b2c5d9e3f1a4b7c0d2e5f8a1b4c7d0e3f6a9b2c5d8e1f4"
 ```
 
 ---
@@ -391,9 +407,9 @@ JSON nested keys → environment variables using `__` (double underscore)
 }
 
 // Equivalent environment variables:
-export Transport=http
-export HttpTransport__Port=8080
-export Providers__JsonPlaceholder__BaseUrl=https://custom-api.com
+$env:Transport = "http"
+$env:HttpTransport__Port = "8080"
+$env:Providers__JsonPlaceholder__BaseUrl = "https://custom-api.com"
 ```
 
 ### Setting Environment Variables
@@ -472,13 +488,13 @@ dotnet run
 **appsettings.Development.json** (override):
 ```json
 {
-  "RateLimit": { "MaxCallsPerToolPerMinute": 100 }
+  "RateLimit": { "MaxCallsPerToolPerMinute": 30 }
 }
 ```
 
 **Result** (when `ASPNETCORE_ENVIRONMENT=Development`):
 ```
-MaxCallsPerToolPerMinute = 100  (from Development file, overrides base)
+MaxCallsPerToolPerMinute = 30  (from Development file, overrides base)
 ```
 
 ---
@@ -489,6 +505,15 @@ MaxCallsPerToolPerMinute = 100  (from Development file, overrides base)
 
 **Goal**: Fast iteration, relaxed limits, verbose logging
 
+```powershell
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+$env:Transport = "stdio"
+
+dotnet run
+```
+
+Or on bash/zsh:
+
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
 export Transport=stdio
@@ -498,7 +523,7 @@ dotnet run
 
 **Effective config**:
 - Transport: stdio
-- Max calls per tool per minute: 100
+- Max calls per tool per minute: 30
 - Log level: Debug
 - Server listens on stdin/stdout
 
@@ -507,6 +532,17 @@ dotnet run
 ### Scenario 2: Local Testing (HTTP Mode)
 
 **Goal**: Test HTTP mode locally
+
+```powershell
+$env:Transport = "http"
+$env:HttpTransport__Port = "3001"
+$env:HttpTransport__BindAddress = "localhost"
+$env:Authentication__ApiKey = "test-key-12345"
+
+dotnet run
+```
+
+Or on bash/zsh:
 
 ```bash
 export Transport=http
@@ -527,6 +563,19 @@ curl -H "X-Api-Key: test-key-12345" http://localhost:3001/mcp
 ### Scenario 3: Production Deployment
 
 **Goal**: Secure, monitored, strict limits
+
+```powershell
+$env:ASPNETCORE_ENVIRONMENT = "Production"
+$env:Transport = "http"
+$env:HttpTransport__Port = "3001"
+$env:HttpTransport__BindAddress = "0.0.0.0"
+$env:Authentication__ApiKey = [Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+$env:RateLimit__MaxCallsPerToolPerMinute = "10"
+
+dotnet run
+```
+
+Or on bash/zsh:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Production
@@ -596,12 +645,15 @@ if (!Uri.TryCreate(config.BaseUrl, UriKind.Absolute, out var baseUri) ||
 
 ### API Key Validation
 
-The API key must be present when running in HTTP mode:
+The API key must be present when running in HTTP mode. If the key is empty or missing, the middleware **throws at startup**:
 
 ```csharp
 // In ApiKeyMiddleware.cs
-if (string.IsNullOrEmpty(apiKey))
-    return Results.Unauthorized();
+if (string.IsNullOrWhiteSpace(apiKey))
+{
+    throw new InvalidOperationException(
+        "Authentication:ApiKey must be configured when using HTTP transport.");
+}
 ```
 
 **Why**: Prevents unauthorized access to your MCP tools
@@ -651,6 +703,10 @@ if (string.IsNullOrEmpty(apiKey))
 **Current limit**: Check `RateLimit:MaxCallsPerToolPerMinute`
 
 **Fix**: Either wait 1 minute, or increase the limit:
+```powershell
+$env:RateLimit__MaxCallsPerToolPerMinute = "100"
+```
+
 ```bash
 export RateLimit__MaxCallsPerToolPerMinute=100
 ```
@@ -664,6 +720,10 @@ export RateLimit__MaxCallsPerToolPerMinute=100
 **Check**: Is `Serilog:MinimumLevel:Default` set to `"Warning"` or higher?
 
 **Fix**: Lower to `"Debug"` or `"Information"`:
+```powershell
+$env:Serilog__MinimumLevel__Default = "Debug"
+```
+
 ```bash
 export Serilog__MinimumLevel__Default=Debug
 ```

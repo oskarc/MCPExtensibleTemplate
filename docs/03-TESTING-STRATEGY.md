@@ -68,6 +68,8 @@ McpServerTemplate.Tests/
 
 ```csharp
 using Xunit;
+using McpServerTemplate.Providers.Smhi;
+using McpServerTemplate.Providers.Smhi.Models;
 
 namespace McpServerTemplate.Tests.Providers.Smhi;
 
@@ -77,19 +79,27 @@ public class SmhiFormattersTests
     public void FormatCurrentWeather_WithValidData_ReturnsFormattedString()
     {
         // Arrange
-        var forecast = new ForecastResponse
+        var now = DateTimeOffset.UtcNow;
+        var forecast = new SmhiForecastResponse
         {
-            Timeseries = new[]
-            {
-                new TimeseriesPoint
+            ReferenceTime = now,
+            CreatedTime = now,
+            TimeSeries =
+            [
+                new SmhiTimeSeries
                 {
-                    Time = DateTime.UtcNow,
-                    Data = new ForecastData
+                    ValidTime = now,
+                    Data = new SmhiTimeSeriesData
                     {
-                        Instant = new Instant { Details = new { AirTemperature = 15.5 } }
+                        Temperature = 15.5,
+                        WindSpeed = 8.0,
+                        WindDirection = 225.0,
+                        Humidity = 65.0,
+                        PrecipitationMean = 0.0,
+                        SymbolCode = 1.0
                     }
                 }
-            }
+            ]
         };
 
         // Act
@@ -97,22 +107,31 @@ public class SmhiFormattersTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Contains("15.5", result);  // Temperature should be in output
+        Assert.Contains("15", result);  // Temperature should be in output
+        Assert.Contains("Clear sky", result);
     }
 
     [Fact]
-    public void FormatCurrentWeather_WithEmptyForecast_ReturnsError()
+    public void FormatCurrentWeather_WithEmptyForecast_ReturnsNoDataMessage()
     {
         // Arrange
-        var forecast = new ForecastResponse { Timeseries = Array.Empty<TimeseriesPoint>() };
+        var forecast = new SmhiForecastResponse
+        {
+            ReferenceTime = DateTimeOffset.UtcNow,
+            CreatedTime = DateTimeOffset.UtcNow,
+            TimeSeries = []
+        };
 
-        // Act & Assert
-        Assert.Throws<InvalidOperationException>(() => SmhiFormatters.FormatCurrentWeather(forecast));
+        // Act
+        var result = SmhiFormatters.FormatCurrentWeather(forecast);
+
+        // Assert — returns a friendly message, does NOT throw
+        Assert.Equal("No current weather data available.", result);
     }
 }
 ```
 
-**What it tests**: Output formatting works correctly and handles edge cases
+**What it tests**: Output formatting works correctly and handles edge cases (empty data returns a friendly message, not an exception)
 
 **Why it matters**: Ensures AI assistants receive properly formatted, readable responses
 
@@ -124,39 +143,58 @@ public class SmhiFormattersTests
 
 ```csharp
 using Xunit;
+using McpServerTemplate.Providers.Smhi;
 
 namespace McpServerTemplate.Tests.Providers.Smhi;
 
 public class SmhiCoordinateValidationTests
 {
-    [Theory]
-    [InlineData(59.33, 18.07)]  // Stockholm - valid
-    [InlineData(55.60, 13.00)]  // Malmö - valid
-    public void ValidateCoordinates_WithValidRange_ReturnsTrue(double lat, double lon)
-    {
-        // Act
-        var result = SmhiCoordinateValidator.IsWithinSmhiArea(lat, lon);
+    private const string FakeBaseUrl = "https://example.com";
 
-        // Assert
-        Assert.True(result);
+    [Theory]
+    [InlineData(49.0, 18.0)]  // Below min latitude
+    [InlineData(73.0, 18.0)]  // Above max latitude
+    [InlineData(59.0, -2.0)]  // Below min longitude
+    [InlineData(59.0, 41.0)]  // Above max longitude
+    public async Task GetPointForecastAsync_InvalidCoordinates_ThrowsMcpException(
+        double latitude, double longitude)
+    {
+        var handler = new FakeHttpMessageHandler(
+            new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri(FakeBaseUrl) };
+        var client = new SmhiApiClient(httpClient);
+
+        var ex = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+            () => client.GetPointForecastAsync(latitude, longitude));
+
+        Assert.Contains("outside", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Theory]
-    [InlineData(90.1, 0)]       // Too far north
-    [InlineData(-10, 0)]        // Too far south
-    [InlineData(0, 50)]         // Too far east
-    public void ValidateCoordinates_WithInvalidRange_ReturnsFalse(double lat, double lon)
+    [Fact]
+    public async Task GetPointForecastAsync_Api404_ThrowsDescriptiveError()
     {
-        // Act
-        var result = SmhiCoordinateValidator.IsWithinSmhiArea(lat, lon);
+        var handler = new FakeHttpMessageHandler(
+            new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri(FakeBaseUrl) };
+        var client = new SmhiApiClient(httpClient);
 
-        // Assert
-        Assert.False(result);
+        var ex = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
+            () => client.GetPointForecastAsync(59.33, 18.07));
+
+        Assert.Contains("No forecast data", ex.Message);
+    }
+
+    /// Minimal fake handler that returns a preconfigured response.
+    private sealed class FakeHttpMessageHandler(HttpResponseMessage response) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(response);
     }
 }
 ```
 
-**What it tests**: Input validation correctly rejects out-of-range coordinates
+**What it tests**: Coordinate validation rejects out-of-range values via `SmhiApiClient.GetPointForecastAsync()`, which throws `McpException`
 
 **Why it matters**: Prevents users from requesting weather for unsupported areas
 
@@ -168,41 +206,44 @@ public class SmhiCoordinateValidationTests
 
 ```csharp
 using Xunit;
+using McpServerTemplate.Providers.Smhi.Models;
 
 namespace McpServerTemplate.Tests.Providers.Smhi;
 
 public class WeatherSymbolTests
 {
     [Theory]
-    [InlineData("01", "☀️ Clear sky")]
-    [InlineData("02", "🌤 Partly cloudy")]
-    [InlineData("05", "⛅ Fall between 6-9")]
-    [InlineData("10", "🌧 Light rain")]
-    [InlineData("26", "⛈ Thunder")]
-    public void MapWeatherSymbol_WithValidCode_ReturnsReadableDescription(
-        string code,
-        string expectedDescription)
+    [InlineData(1, "Clear sky")]
+    [InlineData(6, "Overcast")]
+    [InlineData(11, "Thunderstorm")]
+    [InlineData(20, "Heavy rain")]
+    [InlineData(27, "Heavy snowfall")]
+    public void GetDescription_KnownCode_ReturnsExpectedText(int code, string expected)
     {
         // Act
-        var result = WeatherSymbol.MapToEmoji(code);
+        var result = WeatherSymbol.GetDescription(code);
 
         // Assert
-        Assert.Equal(expectedDescription, result);
+        Assert.Equal(expected, result);
     }
 
-    [Fact]
-    public void MapWeatherSymbol_WithUnknownCode_ReturnsDefaultSymbol()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(28)]
+    [InlineData(-1)]
+    public void GetDescription_UnknownCode_ReturnsUnknownWithCode(int code)
     {
         // Act
-        var result = WeatherSymbol.MapToEmoji("999");
+        var result = WeatherSymbol.GetDescription(code);
 
         // Assert
-        Assert.Equal("❓ Unknown", result);
+        Assert.StartsWith("Unknown", result);
+        Assert.Contains(code.ToString(), result);
     }
 }
 ```
 
-**What it tests**: Weather symbols are correctly translated to readable emoji + text
+**What it tests**: Weather symbol codes (int 1-27) are correctly mapped to human-readable descriptions via `WeatherSymbol.GetDescription()`
 
 **Why it matters**: Users see human-friendly descriptions instead of cryptic codes
 
@@ -352,12 +393,16 @@ public class YourProviderValidationTests
    public void TestMethod(string input) { ... }
    ```
 
-4. **Mock external dependencies**:
+4. **Fake external dependencies**:
    ```csharp
-   // Don't call real APIs; mock them
-   var mockClient = new Mock<IApiClient>();
-   mockClient.Setup(x => x.GetDataAsync(1))
-       .ReturnsAsync(new DataResponse { ... });
+   // Don't call real APIs; use fake handlers
+   var handler = new FakeHttpMessageHandler(
+       new HttpResponseMessage(HttpStatusCode.OK)
+       {
+           Content = new StringContent("{...}", Encoding.UTF8, "application/json")
+       });
+   var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://example.com") };
+   var client = new YourApiClient(httpClient);
    ```
 
 5. **Use `[Theory]` for multiple test cases**:
@@ -389,11 +434,12 @@ public class YourProviderTestFixture : IDisposable
     {
         // Setup common test data
         TestData = new YourDataModel { Id = 1, Title = "Test" };
-        MockClient = new Mock<IYourApiClient>();
+        FakeHandler = new FakeHttpMessageHandler(
+            new HttpResponseMessage(System.Net.HttpStatusCode.OK));
     }
 
     public YourDataModel TestData { get; }
-    public Mock<IYourApiClient> MockClient { get; }
+    public FakeHttpMessageHandler FakeHandler { get; }
 
     public void Dispose()
     {
@@ -414,7 +460,7 @@ public class YourProviderToolsTests : IClassFixture<YourProviderTestFixture>
     [Fact]
     public async Task GetData_CallsClient()
     {
-        // Use _fixture.TestData, _fixture.MockClient, etc.
+        // Use _fixture.TestData, _fixture.FakeHandler, etc.
     }
 }
 ```

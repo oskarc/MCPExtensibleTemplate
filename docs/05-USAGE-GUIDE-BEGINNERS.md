@@ -152,14 +152,9 @@ dotnet run
 - The server starts
 - It listens on stdin/stdout
 - Clients (like VS Code or Claude Desktop) can now connect
-- You should see messages like:
+- You should see log output in your terminal indicating the server has started
 
-```
-[12:34:56 INF] Starting MCP server with stdio transport
-[12:34:56 INF] Available tools: GetBlogPost, CreateBlogPost, GetUserTodos, ...
-```
-
-**You're now running an MCP Server!** 🎉
+> **Note**: In stdio mode, the server communicates over stdin/stdout. Log messages are written to stderr and to the `logs/` folder.
 
 ---
 
@@ -173,7 +168,7 @@ dotnet run
 
 **Option B: Claude Desktop**
 
-1. Edit `~/.config/codeium/mcp_config.json` (Mac/Linux) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
+1. Edit `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac)
 2. Add:
    ```json
    {
@@ -278,8 +273,15 @@ dotnet run
 
 **What's happening**:
 - Transport: stdio (local only)
-- Rate limit: 100 calls per minute (relaxed for testing)
-- Logs: Very detailed (Debug level)
+- Rate limit: 10 calls per tool per minute (base config)
+- Logs: Information level (base config)
+
+> **Tip**: To get relaxed limits (30 calls/min) and Debug logging, set the environment first:
+> ```powershell
+> $env:ASPNETCORE_ENVIRONMENT = "Development"
+> dotnet run
+> ```
+> Without this, `appsettings.Development.json` is **not** loaded.
 
 ---
 
@@ -303,6 +305,13 @@ Want to test from another computer? Switch to HTTP mode.
 ```
 
 **Step 2**: Run the server
+
+```powershell
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+dotnet run
+```
+
+Or on bash/zsh:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
@@ -338,6 +347,16 @@ curl -H "X-Api-Key: test-key-12345" \
 ```
 
 **Set environment variables** (securely, not in code):
+
+```powershell
+$env:ASPNETCORE_ENVIRONMENT = "Production"
+$env:Transport = "http"
+$env:HttpTransport__Port = "3001"
+$env:Authentication__ApiKey = [Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+$env:HttpTransport__BindAddress = "0.0.0.0"
+```
+
+Or on bash/zsh:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Production
@@ -402,32 +421,27 @@ Claude can call `GetRepository`, `CreateIssue`, etc.
 
 ## Debugging: Tools for Understanding What's Happening
 
-### 1. Check Available Tools
+### 1. Check the Logs
 
-When the server starts, it lists all tools:
-
-```
-[12:34:56 INF] Registering tools:
-  - GetBlogPost
-  - CreateBlogPost
-  - GetPostComments
-  - AddPostComment
-  - GetUserTodos
-  - CreateUserTodo
-```
+When the server starts, tool registrations and requests are logged to the `logs/` folder and to stderr. Check the log files for details on which tools were discovered and any errors.
 
 ### 2. View Request Logs
 
-The server logs every request:
+The server logs every tool call with a correlation ID:
 
 ```
-[12:34:57 INF] Tool call: GetBlogPost
-  Parameters: { postId: 1 }
-  Duration: 234ms
-  Result size: 512 bytes
+[12:34:57 INF] ToolCallLoggingFilter: [abc123] Calling tool GetBlogPost with arguments: postId
+[12:34:57 INF] ToolCallLoggingFilter: [abc123] Tool GetBlogPost completed in 234ms
 ```
 
 ### 3. Enable More Detailed Logging
+
+```powershell
+$env:Serilog__MinimumLevel__Default = "Debug"
+dotnet run
+```
+
+Or on bash/zsh:
 
 ```bash
 export Serilog__MinimumLevel__Default=Debug
@@ -511,13 +525,17 @@ A: Edit the tool in `Providers/YourProvider/YourProviderTools.cs`. The MCP serve
 **Solution**: 
 1. Make sure the server is running: `dotnet run`
 2. Restart your Claude Desktop or VS Code
-3. Check logs for errors: `export Serilog__MinimumLevel__Default=Debug` then run again
+3. Check logs for errors: in PowerShell run `$env:Serilog__MinimumLevel__Default = "Debug"`, then run again
 
 ### Pitfall 2: "Rate limit keeps hitting me"
 
 **Cause**: You're calling tools too fast (~10+ times per minute)
 
 **Solution**: Increase the rate limit for development:
+```powershell
+$env:RateLimit__MaxCallsPerToolPerMinute = "100"
+```
+
 ```bash
 export RateLimit__MaxCallsPerToolPerMinute=100
 ```
@@ -535,7 +553,7 @@ Or just wait a minute before retrying.
 **Cause**: Configuration error or port already in use
 
 **Solution**:
-1. Check PORT: Is 3001 already in use? Change: `export HttpTransport__Port=3002`
+1. Check PORT: Is 3001 already in use? In PowerShell use `$env:HttpTransport__Port = "3002"`
 2. Check CONFIG: Review `appsettings.json` for syntax errors
 3. Check LOGS: Run with all logs enabled to see the real error
 
