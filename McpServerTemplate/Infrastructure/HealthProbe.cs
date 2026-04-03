@@ -36,9 +36,12 @@ public static class HealthProbe
         // Read upstream URLs from configuration instead of hardcoding,
         // so health checks match the actual configured provider endpoints.
         var config = services.GetService<IConfiguration>();
+        // The forecast API has no lightweight metadata endpoint — use a known Stockholm
+        // coordinate with ResponseHeadersRead so we only check reachability, not body.
         var smhiBase = config?["Providers:Smhi:BaseUrl"];
         if (smhiBase is not null)
-            endpoints.Add(("SMHI Forecast", $"{smhiBase.TrimEnd('/')}/api/category/snow1g/version/1.json"));
+            endpoints.Add(("SMHI Forecast",
+                $"{smhiBase.TrimEnd('/')}/api/category/snow1g/version/1/geotype/point/lon/18.07/lat/59.33/data.json"));
 
         var obsBase = config?["Providers:SmhiObs:BaseUrl"];
         if (obsBase is not null)
@@ -51,7 +54,8 @@ public static class HealthProbe
         {
             try
             {
-                using var response = await client.GetAsync(url);
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
                 if (response.IsSuccessStatusCode)
                 {
                     logger?.LogInformation("Health check: {Provider} is reachable", name);
