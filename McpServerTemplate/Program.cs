@@ -1,6 +1,7 @@
 ﻿using System.Reflection;
 using System.Threading.RateLimiting;
 using McpServerTemplate.Infrastructure;
+using McpServerTemplate.Providers.JsonPlaceholder;
 using McpServerTemplate.Providers.Smhi;
 using McpServerTemplate.Providers.SmhiObs;
 using Microsoft.Extensions.Configuration;
@@ -139,6 +140,7 @@ try
     // ── PROVIDER-SPECIFIC: Register your provider's services here ──
     builder.Services.AddSmhiProvider(builder.Configuration);
     builder.Services.AddSmhiObsProvider(builder.Configuration);
+    builder.Services.AddJsonPlaceholderProvider(builder.Configuration);
 
     var app = builder.Build();
 
