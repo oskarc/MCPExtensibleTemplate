@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "smhi-weather": {
+      "command": "dotnet",
+      "args": ["run", "--project", "d:\\projects\\mcp\\McpServerTemplate"],
+      "cwd": "d:\\projects\\mcp\\McpServerTemplate"
+    }
+  }
+}

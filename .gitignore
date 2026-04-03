@@ -1,0 +1,15 @@
+# Build outputs
+bin/
+obj/
+
+# Logs (written by Serilog file sink)
+logs/
+
+# User-specific files
+*.user
+*.suo
+
+# IDE
+.vs/
+.idea/
+*.swp
