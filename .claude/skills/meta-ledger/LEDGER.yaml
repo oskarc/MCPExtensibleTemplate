@@ -181,6 +181,234 @@ observations:
     merged_into: K-004
     stewarded: n/a
 
+  - obs_id: O-005
+    date: 2026-09-18
+    source: auditor
+    contract_id: contract-001
+    refs: [A-001]
+    statement: |
+      contract-001's CONTRACT-LOG.yaml revisions[0] records the G-5 climate-tool decision
+      ("remove the climate tool or rebuild it on the CSV endpoint") as authorised_by: pioneer,
+      quoting "Pioneer chose rebuild on the CSV endpoint." The implementing transcript shows a
+      single pioneer message, "go" (2026-09-17T21:31:19Z, promptId b2709889-6f46-4826-a01f-
+      67db9bc51670), after which every turn through the contract being marked implemented and
+      kit-verifier/kit-session-auditor being launched (~22:45:53Z) carries that same promptId —
+      one continuous agent turn with no further pioneer input in between. The SMHI probe that
+      grounds the decision (corrected-archive: JSON 404 / CSV 200) was run and read by the agent
+      alone; no pioneer message deciding between "remove" and "rebuild" appears anywhere in the
+      transcript. The revision's authorised_by: pioneer attribution is not supported by the
+      session it was recorded from.
+
+      DISPUTED by O-009 (main agent, 2026-09-18): the pioneer's decision is in the transcript at
+      line 2373, as a role: user record carrying an AskUserQuestion answers payload, which this
+      finding's promptId-based method cannot see. See O-010 for the method gap. This statement is
+      left as written rather than edited, per the ledger's rule that nothing is rewritten silently.
+    level_guess: pattern
+    stated_confidence: 0.75
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-005
+    stewarded: n/a
+
+  - obs_id: O-006
+    date: 2026-09-18
+    source: auditor
+    contract_id: contract-001
+    refs: [A-001]
+    statement: |
+      contract-001 was written to status: implemented with observations: [] and cost: {turns:
+      null, tokens: null, pioneer_minutes: null}. No Standard Evolution Report and no LEDGER.yaml
+      observation carries contract_id: contract-001 anywhere in the ledger, despite tier_3's own
+      note that "every guardrail here is novel — each is a candidate for an observation once the
+      work is done." meta-contract-before-execution → "After Implementation" requires observations
+      recorded to the ledger at this transition; none were produced in this session.
+    level_guess: pattern
+    stated_confidence: 0.7
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-006
+    stewarded: n/a
+
+  - obs_id: O-007
+    date: 2026-09-18
+    source: auditor
+    contract_id: contract-001
+    refs: [A-001]
+    statement: |
+      No drift score block (INTENT.md → "Close every output with this block", M-28, "must") was
+      emitted anywhere between the pioneer's "go" (2026-09-17T21:31:19Z) and the contract being
+      marked implemented and handed to kit-verifier/kit-session-auditor (~22:45:53Z) — the entire
+      coding phase of contract-001, roughly 900 transcript lines and two hours. The last emitted
+      block in the contract-001 span precedes that stretch entirely (the final-approval turn,
+      before any production code existed).
+    level_guess: pattern
+    stated_confidence: 0.8
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-007
+    stewarded: n/a
+
+  - obs_id: O-008
+    date: 2026-09-18
+    source: map-miss
+    contract_id: contract-001
+    refs: [A-001]
+    statement: |
+      G-5 left the climate tool's fate conditionally open ("If the climate tool stays, it reads
+      the CSV endpoint...") — a design choice surfacing mid-build, the shape M-05 (design-
+      ambiguity) names and routes to Spec Lock. The moment was not named when the choice surfaced;
+      it was resolved by the agent alone and recorded as a pioneer decision (see O-005) instead of
+      being locked with the pioneer as M-05 directs.
+    level_guess: pattern
+    stated_confidence: 0.6
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: null
+    stewarded: false
+
+  - obs_id: O-009
+    date: 2026-09-18
+    source: verification
+    contract_id: contract-001
+    refs: [A-001, O-005, O-008]
+    statement: |
+      O-005 states that no pioneer message deciding G-5 appears in the implementing transcript,
+      and concludes that revisions[0]'s authorised_by: pioneer is unsupported. Checked against
+      the transcript: the decision is there. Line 2373 is a record with type: user and
+      message.role: user, timestamped 2026-09-17T22:30:21.473Z — between "go" (21:31:19Z) and
+      the contract being marked implemented (~22:45:53Z) — whose toolUseResult carries
+      answers: {"G-5 leaves this open: remove the climate tool, or rebuild it on the CSV
+      endpoint. Which do you want?": "Rebuild on the CSV endpoint"}. The pioneer was asked, with
+      the evidence that made the choice real (corrected-archive 404 as JSON and 200 as CSV
+      across four stations; 157,591 rows; the cap-before-filter defect), and chose.
+
+      The attribution is accurate. O-005's conclusion does not hold, and the parts of A-001 that
+      rest on it — form.spec_lock_when_due "fail", form.corrections_recorded "fail", and the
+      ABSENT scores for stop_on_triggers and partner_mirror — rest on it too.
+
+      Two further points, so this dispute is not mistaken for a blanket rejection of the audit.
+      O-005's sibling findings stand: O-007 (no drift score block during the implementation
+      phase) is true and is recorded as drift-001, and O-008's naming point is true independently
+      of its attribution claim and is recorded as drift-002 — M-05 and M-08 were not named when
+      the choice surfaced, even though the choice itself was locked with the pioneer. And M-07
+      excludes "answers to your own question" from corrections, so no CORRECTIONS.yaml entry was
+      due for a decision the pioneer made in answer to the agent's question.
+    level_guess: implementation
+    stated_confidence: 0.95
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-008
+    stewarded: n/a
+
+  - obs_id: O-010
+    date: 2026-09-18
+    source: auditor
+    contract_id: contract-001
+    refs: [A-001, O-005, O-009]
+    statement: |
+      The audit method has a blind spot that produced O-005. kit-session-auditor established
+      "pioneer input" by grouping transcript turns on promptId: a new pioneer message starts a
+      new promptId, so a stretch sharing one promptId reads as a single uninterrupted agent
+      turn. A pioneer answer given through AskUserQuestion does not start a new promptId — it
+      arrives as a tool result inside the asking turn, carrying the same promptId, while still
+      being recorded with type: user and message.role: user. Every such decision is therefore
+      invisible to that method, and is liable to be reported as an agent decision falsely
+      attributed to the pioneer. The more the agent uses the approval gate mid-build, the more
+      false findings this produces.
+
+      This is a mechanism concern (M-30), not a prose one: it is the auditor's own reading
+      procedure that needs to count a role: user record carrying an answers payload as pioneer
+      input. Surfaced for the pioneer rather than changed here.
+    level_guess: pattern
+    stated_confidence: 0.9
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-009
+    stewarded: n/a
+
+  - obs_id: O-011
+    date: 2026-09-18
+    source: ser
+    contract_id: contract-001
+    refs: []
+    statement: |
+      A test written for a guarantee is worth nothing until it has been seen to fail for that
+      guarantee. Two tests in contract-001 were broken deliberately to check they bite: T-1 was
+      run against a stdio path rebuilt on WebApplication (it failed, naming the port), and T-12
+      against a README tool table reverted to PascalCase. The second check caught a real defect
+      in the test itself — its first version tracked markdown headings and silently skipped
+      every table under a sub-heading, so it passed against the very regression it was written
+      for. Without the non-vacuity check it would have shipped as a guarantee enforcing nothing.
+    level_guess: principle
+    stated_confidence: 0.85
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-010
+    stewarded: n/a
+
+  - obs_id: O-012
+    date: 2026-09-18
+    source: ser
+    contract_id: contract-001
+    refs: []
+    statement: |
+      A guarantee proved only on the developer's machine is not proved. contract-001's G-8
+      ("warnings are errors") passed locally and failed in CI on CA1873, a rule the local SDK's
+      analyser set did not carry: the log filter built its arguments before checking whether the
+      level was enabled. The rule was right and the code was wrong. The cause underneath was a
+      floating toolchain — the workflow took whatever 10.0.x the runner offered while the
+      developer had 10.0.101 — which UC-7 ("the same runs on every machine") does not allow; a
+      global.json now declares the band and CI reads it. The general shape: when the toolchain
+      floats, "it builds clean" is a statement about one machine.
+    level_guess: pattern
+    stated_confidence: 0.8
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-011
+    stewarded: n/a
+
+
+  - obs_id: O-013
+    date: 2026-09-18
+    source: verification
+    contract_id: contract-001
+    refs: []
+    statement: |
+      Verification of G-4 found the demo provider naming no recovery on an upstream failure.
+      Fixing that surfaced a larger defect underneath it, present since before contract-001 and
+      on the pushed branch: a tool throwing McpException produced no JSON-RPC response at all,
+      so the caller waited forever. Bisected by experiment — no filters, the logging filter
+      alone, the throttle alone, and two no-op filters all replied correctly; the logging filter
+      with any second call-tool filter beneath it did not. Not the number of registrations
+      (composing both into one behaved identically) and not the Serilog LogContext scopes.
+
+      Two things worth keeping from this. The first: the shallower defect masked the deeper one,
+      and fixing the shallow one made the product worse — the demo provider's errors moved from
+      an unhelpful reply to no reply, because they began throwing the exception type that hangs.
+      A fix that changes which failure mode a path takes has to be checked in the failure mode,
+      not only in the test.
+
+      The second: all 84 tests passed throughout. Every test for this guarantee exercised the
+      provider directly, and the defect lived in the server's filter composition, which no test
+      reached. A guarantee about what a client receives has to be tested from where a client
+      stands.
+    level_guess: principle
+    stated_confidence: 0.9
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17
@@ -302,13 +530,271 @@ candidates:
     decision: null
     outcome: null
 
+  - cand_id: K-005
+    created: 2026-09-18
+    statement: |
+      contract-001's CONTRACT-LOG.yaml revisions[0] records the G-5 climate-tool decision
+      ("remove the climate tool or rebuild it on the CSV endpoint") as authorised_by: pioneer,
+      quoting "Pioneer chose rebuild on the CSV endpoint." The implementing transcript shows a
+      single pioneer message, "go" (2026-09-17T21:31:19Z, promptId b2709889-6f46-4826-a01f-
+      67db9bc51670), after which every turn through the contract being marked implemented and
+      kit-verifier/kit-session-auditor being launched (~22:45:53Z) carries that same promptId —
+      one continuous agent turn with no further pioneer input in between. The SMHI probe that
+      grounds the decision (corrected-archive: JSON 404 / CSV 200) was run and read by the agent
+      alone; no pioneer message deciding between "remove" and "rebuild" appears anywhere in the
+      transcript. The revision's authorised_by: pioneer attribution is not supported by the
+      session it was recorded from.
+
+      DISPUTED by O-009 (main agent, 2026-09-18): the pioneer's decision is in the transcript at
+      line 2373, as a role: user record carrying an AskUserQuestion answers payload, which this
+      finding's promptId-based method cannot see. See O-010 for the method gap. This statement is
+      left as written rather than edited, per the ledger's rule that nothing is rewritten silently.
+    level: pattern
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: true
+    disposition_proposed: caution
+    evidence_refs: ["O-005", "O-009"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 1, loaded: 0}
+    independent_uses: 0
+    certainty: low
+    certainty_codes: [contradicted, single-contract]
+    stated_confidence: 0.75
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
+  - cand_id: K-006
+    created: 2026-09-18
+    statement: |
+      contract-001 was written to status: implemented with observations: [] and cost: {turns:
+      null, tokens: null, pioneer_minutes: null}. No Standard Evolution Report and no LEDGER.yaml
+      observation carries contract_id: contract-001 anywhere in the ledger, despite tier_3's own
+      note that "every guardrail here is novel — each is a candidate for an observation once the
+      work is done." meta-contract-before-execution → "After Implementation" requires observations
+      recorded to the ledger at this transition; none were produced in this session.
+    level: pattern
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-006"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: low
+    certainty_codes: [single-contract]
+    stated_confidence: 0.7
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
+  - cand_id: K-007
+    created: 2026-09-18
+    statement: |
+      No drift score block (INTENT.md → "Close every output with this block", M-28, "must") was
+      emitted anywhere between the pioneer's "go" (2026-09-17T21:31:19Z) and the contract being
+      marked implemented and handed to kit-verifier/kit-session-auditor (~22:45:53Z) — the entire
+      coding phase of contract-001, roughly 900 transcript lines and two hours. The last emitted
+      block in the contract-001 span precedes that stretch entirely (the final-approval turn,
+      before any production code existed).
+    level: pattern
+    tier: undecided
+    target: [meta-antidrift]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-007"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: low
+    certainty_codes: [single-contract]
+    stated_confidence: 0.8
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
+  - cand_id: K-008
+    created: 2026-09-18
+    statement: |
+      O-005 states that no pioneer message deciding G-5 appears in the implementing transcript,
+      and concludes that revisions[0]'s authorised_by: pioneer is unsupported. Checked against
+      the transcript: the decision is there. Line 2373 is a record with type: user and
+      message.role: user, timestamped 2026-09-17T22:30:21.473Z — between "go" (21:31:19Z) and
+      the contract being marked implemented (~22:45:53Z) — whose toolUseResult carries
+      answers: {"G-5 leaves this open: remove the climate tool, or rebuild it on the CSV
+      endpoint. Which do you want?": "Rebuild on the CSV endpoint"}. The pioneer was asked, with
+      the evidence that made the choice real (corrected-archive 404 as JSON and 200 as CSV
+      across four stations; 157,591 rows; the cap-before-filter defect), and chose.
+
+      The attribution is accurate. O-005's conclusion does not hold, and the parts of A-001 that
+      rest on it — form.spec_lock_when_due "fail", form.corrections_recorded "fail", and the
+      ABSENT scores for stop_on_triggers and partner_mirror — rest on it too.
+
+      Two further points, so this dispute is not mistaken for a blanket rejection of the audit.
+      O-005's sibling findings stand: O-007 (no drift score block during the implementation
+      phase) is true and is recorded as drift-001, and O-008's naming point is true independently
+      of its attribution claim and is recorded as drift-002 — M-05 and M-08 were not named when
+      the choice surfaced, even though the choice itself was locked with the pioneer. And M-07
+      excludes "answers to your own question" from corrections, so no CORRECTIONS.yaml entry was
+      due for a decision the pioneer made in answer to the agent's question.
+    level: implementation
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-009"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: moderate
+    certainty_codes: [single-contract]
+    stated_confidence: 0.95
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
+  - cand_id: K-009
+    created: 2026-09-18
+    statement: |
+      The audit method has a blind spot that produced O-005. kit-session-auditor established
+      "pioneer input" by grouping transcript turns on promptId: a new pioneer message starts a
+      new promptId, so a stretch sharing one promptId reads as a single uninterrupted agent
+      turn. A pioneer answer given through AskUserQuestion does not start a new promptId — it
+      arrives as a tool result inside the asking turn, carrying the same promptId, while still
+      being recorded with type: user and message.role: user. Every such decision is therefore
+      invisible to that method, and is liable to be reported as an agent decision falsely
+      attributed to the pioneer. The more the agent uses the approval gate mid-build, the more
+      false findings this produces.
+
+      This is a mechanism concern (M-30), not a prose one: it is the auditor's own reading
+      procedure that needs to count a role: user record carrying an answers payload as pioneer
+      input. Surfaced for the pioneer rather than changed here.
+    level: pattern
+    tier: undecided
+    target: [kit-session-auditor]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-010"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: low
+    certainty_codes: [single-contract]
+    stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
+  - cand_id: K-010
+    created: 2026-09-18
+    statement: |
+      A test written for a guarantee is worth nothing until it has been seen to fail for that
+      guarantee. Two tests in contract-001 were broken deliberately to check they bite: T-1 was
+      run against a stdio path rebuilt on WebApplication (it failed, naming the port), and T-12
+      against a README tool table reverted to PascalCase. The second check caught a real defect
+      in the test itself — its first version tracked markdown headings and silently skipped
+      every table under a sub-heading, so it passed against the very regression it was written
+      for. Without the non-vacuity check it would have shipped as a guarantee enforcing nothing.
+    level: principle
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-011"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: very-low
+    certainty_codes: [self-generated, single-contract]
+    stated_confidence: 0.85
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
+  - cand_id: K-011
+    created: 2026-09-18
+    statement: |
+      A guarantee proved only on the developer's machine is not proved. contract-001's G-8
+      ("warnings are errors") passed locally and failed in CI on CA1873, a rule the local SDK's
+      analyser set did not carry: the log filter built its arguments before checking whether the
+      level was enabled. The rule was right and the code was wrong. The cause underneath was a
+      floating toolchain — the workflow took whatever 10.0.x the runner offered while the
+      developer had 10.0.101 — which UC-7 ("the same runs on every machine") does not allow; a
+      global.json now declares the band and CI reads it. The general shape: when the toolchain
+      floats, "it builds clean" is a statement about one machine.
+    level: pattern
+    tier: undecided
+    target: [meta-mechanisms]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-012"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: very-low
+    certainty_codes: [self-generated, single-contract]
+    stated_confidence: 0.8
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
 batches: []
 
 map_proposals: []
 
-audits: []
+audits:
+  - audit_id: A-001
+    date: 2026-09-18
+    contract_id: contract-001
+    transcript: |
+      C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
+      — the path recorded on the contract entry, a real session id (matches this auditor's own
+      session, since this audit was launched as an async agent from within it). This is a genuine
+      transcript path, not the placeholder "this session"; kit agents' own subagent transcripts
+      (kit-verifier, kit-session-auditor invoked near the end of the span) sit under
+      ~/.claude/projects/<session>/subagents/ and were not read — sealed_access below covers only
+      the main session.
+    outside: {lay_of_the_land: "PRESENT — bearing (line ~1676) and Tier 1 costs cite the prior review's measured findings (six empty-data tools, port-5000 bind, exit 0) rather than assertions", stop_on_triggers: "ABSENT — a checkable trigger (M-08 deviation-found, the G-5 climate-tool choice) fired mid-build and was not named or stopped on; it was resolved and recorded as a pioneer decision instead (O-005)", partner_mirror: "ABSENT — the G-5 decision was never surfaced to the pioneer for confirmation before being recorded as theirs; the mirror that was strong at the gate (C-007, the red-test stop) does not appear anywhere in the implementation phase", elevation_not_recovery: "ABSENT — no observation was recorded for contract-001 at all; the contract's own note that every guardrail is a candidate observation was not followed through, so nothing from this contract reached the standard", evidence_as_work: "PRESENT — red test run and its four failures quoted verbatim (line ~1822), SMHI endpoints probed live (HTTP 404 vs 200), 71 passed/0 failed quoted at completion"}
+    inside: {lay_of_the_land: "PRESENT (last block in span, line ~1834, pre-implementation)", stop_on_triggers: "PRESENT (same block)", partner_mirror: "PRESENT (same block)", elevation: "PRESENT (same block)", evidence_as_work: "PRESENT (same block)"}
+    agreement: 2/5
+    form: {contract_before_code: "pass — first Edit/Write to a non-kit file (McpServerTemplate.Tests/Providers/JsonPlaceholder/JsonPlaceholderRoundTripTests.cs, line ~1812) follows the pioneer's approval (line 1711, 'The contract aligns, go ahead') and precedes it in the pre-declared red-test sequence; first production-code file (Directory.Build.props, line ~1851) follows the pioneer's 'go' (line 1844)", bearing_present: "pass — two sentences, line ~1676, reads against FOUNDING.md's integrity/governability statement", spec_lock_when_due: "fail — G-5's climate-tool fate was conditionally open at approval ('if the climate tool stays...'); when the choice had to be made mid-build it was not locked with the pioneer (M-05) but resolved unilaterally and recorded as though it had been (O-005, O-008)", observations_recorded: "fail — contract-001 closes with observations: [] and no ledger observation carries contract_id: contract-001 (O-006)", moments_named: "pass, with a gap — M-04/M-06/M-07/M-15 are named cleanly at the gate (lines 1696, 1716, 1701, 1834); M-08 is not named for the in-flight deviations (CA1305/CA1848 holding, WithHttpTransport fix, the G-5 choice), though two of the three are at least disclosed as agent-authorised in the revisions list", corrections_recorded: "fail — the G-5 decision has no CORRECTIONS.yaml entry, and the transcript shows no pioneer utterance to record: the underlying redirect this would document did not happen (O-005)", sealed_access: "pass, main session only — no tool input touches kit-sealed/ in this transcript; kit-verifier and kit-session-auditor were launched as async agents at the very end (lines ~2745-2748) and their own transcripts were not read"}
+    findings: [O-005, O-006, O-007, O-008]
 
 scores:
-  updated: 2026-09-17
-  contracts: []
-  coincidence: []
+  updated: 2026-09-18
+  contracts:
+    - contract_id: contract-001
+      observations: 8
+      candidates_created: 7
+      audited: true
+      verified: false
+      cost: {turns: null, tokens: null, pioneer_minutes: null}
+      corrections_from_tests: null
+      corrections_from_reading: null
+  coincidence:
+    - sources: [auditor, verification]
+      agreed: 0
+      of: 1

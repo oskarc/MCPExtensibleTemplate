@@ -42,4 +42,51 @@
 #
 # Lifecycle transitions follow the rules in meta-drift-eventlog/SKILL.md.
 
-entries: []
+entries:
+  - drift_id: drift-001
+    surfaced_in: 2026-09-18 / contract-001 audit (A-001)
+    surfaced_by: post-hoc
+    aspect: stop-on-triggers
+    description: |
+      INTENT.md requires a drift score block at the end of every output (M-28, must). No block
+      appears anywhere between the pioneer's "go" and contract-001 being marked implemented —
+      the whole implementation phase, roughly 900 transcript lines and two hours across many
+      turns. The last block before that stretch precedes the first line of production code.
+    evidence: |
+      Transcript C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
+      lines ~1835-2748 (auditor A-001, observation O-007). The pioneer's "go" is at
+      2026-09-17T21:31:19Z; the contract was marked implemented at ~22:45:53Z.
+    reaction: |
+      None in-session. The blocks resumed only at the completion report. Recorded here on the
+      auditor's finding; accepted without qualification.
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 0
+    related_drifts: []
+
+  - drift_id: drift-002
+    surfaced_in: 2026-09-18 / contract-001 audit (A-001)
+    surfaced_by: post-hoc
+    aspect: stop-on-triggers
+    description: |
+      G-5 left the climate tool's fate conditionally open, so the choice surfaced mid-build —
+      the shape M-05 (design-ambiguity) names, and a departure from a conditional clause is the
+      shape M-08 (deviation-found) names. Neither moment was named when the choice surfaced.
+      The substance was done: the choice was put to the pioneer with evidence and they decided
+      it (see O-009). What was missing is the naming of the moment, and the same omission covers
+      the two other in-flight deviations (the CA1305/CA1848 holding and the WithHttpTransport
+      fix), which were disclosed in the contract's revisions list but never named as M-08.
+    evidence: |
+      Auditor A-001, form.moments_named and form.spec_lock_when_due; observation O-008. The
+      contract's revisions list carries all three deviations; no turn in the implementation
+      stretch names M-05 or M-08.
+    reaction: |
+      None in-session; the deviations were written into revisions at the end rather than named
+      when they arose.
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 0
+    related_drifts: []
+

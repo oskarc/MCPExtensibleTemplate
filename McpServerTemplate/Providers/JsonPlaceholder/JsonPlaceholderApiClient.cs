@@ -1,5 +1,6 @@
 using System.Text.Json;
 using McpServerTemplate.Providers.JsonPlaceholder.Models;
+using ModelContextProtocol;
 
 namespace McpServerTemplate.Providers.JsonPlaceholder;
 
@@ -26,13 +27,47 @@ public class JsonPlaceholderApiClient
         _httpClient = httpClient;
     }
 
+
+    /// <summary>
+    /// Turns a non-success response into an error a model can act on.
+    ///
+    /// contract-001 · G-4 — the framework's own status guard throws HttpRequestException carrying
+    /// "Response status code does not indicate success: 500", which reaches the caller as
+    /// "An error occurred invoking 'get_blog_post'" and names no recovery. The guarantee is that
+    /// a tool either returns a populated model or throws with a recovery hint, so every status is
+    /// mapped here, preserving the distinction that matters to a caller: wait and try again, or
+    /// stop asking for something that is not there.
+    /// </summary>
+    private static void EnsureSuccess(HttpResponseMessage response, string what)
+    {
+        if (response.IsSuccessStatusCode)
+            return;
+
+        var statusCode = (int)response.StatusCode;
+
+        throw new McpException(statusCode switch
+        {
+            404 => $"{what} does not exist upstream. Do not retry; check the id. "
+                 + "JSONPlaceholder serves posts 1-100 and users 1-10.",
+            429 => $"The upstream refused {what}: too many requests. Wait a minute and try again, "
+                 + "reusing results you already have rather than re-fetching them.",
+            >= 500 => $"The upstream is temporarily unavailable and could not serve {what}. "
+                    + "Try again in a few moments; if it persists the service is down and no "
+                    + "retry will help.",
+            401 or 403 => $"The upstream refused {what} as unauthorised. That is a server "
+                        + "configuration problem, not something to try again.",
+            _ => $"The upstream returned HTTP {statusCode} for {what}. Try again; if it persists, "
+               + "the request may no longer match what the API accepts.",
+        });
+    }
+
     /// <summary>
     /// Retrieve a single post by ID.
     /// </summary>
     public async Task<Post> GetPostAsync(int postId, CancellationToken cancellationToken = default)
     {
         var response = await _httpClient.GetAsync($"/posts/{postId}", cancellationToken);
-        response.EnsureSuccessStatusCode();
+        EnsureSuccess(response, $"post {postId}");
 
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
         return JsonSerializer.Deserialize<Post>(content, JsonOptions)
@@ -68,7 +103,7 @@ public class JsonPlaceholderApiClient
         var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
         var response = await _httpClient.PostAsync("/posts", content, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        EnsureSuccess(response, "the new post");
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
         return JsonSerializer.Deserialize<Post>(responseContent, JsonOptions)
@@ -83,7 +118,7 @@ public class JsonPlaceholderApiClient
     public async Task<List<Comment>> GetPostCommentsAsync(int postId, CancellationToken cancellationToken = default)
     {
         var response = await _httpClient.GetAsync($"/posts/{postId}/comments", cancellationToken);
-        response.EnsureSuccessStatusCode();
+        EnsureSuccess(response, $"the comments on post {postId}");
 
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
         return JsonSerializer.Deserialize<List<Comment>>(content, JsonOptions)
@@ -123,7 +158,7 @@ public class JsonPlaceholderApiClient
         var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
         var response = await _httpClient.PostAsync("/comments", content, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        EnsureSuccess(response, "the new comment");
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
         return JsonSerializer.Deserialize<Comment>(responseContent, JsonOptions)
@@ -138,7 +173,7 @@ public class JsonPlaceholderApiClient
     public async Task<List<Todo>> GetUserTodosAsync(int userId, CancellationToken cancellationToken = default)
     {
         var response = await _httpClient.GetAsync($"/todos?userId={userId}", cancellationToken);
-        response.EnsureSuccessStatusCode();
+        EnsureSuccess(response, $"the todos for user {userId}");
 
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
         return JsonSerializer.Deserialize<List<Todo>>(content, JsonOptions)
@@ -170,7 +205,7 @@ public class JsonPlaceholderApiClient
         var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
         var response = await _httpClient.PostAsync("/todos", content, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        EnsureSuccess(response, "the new todo");
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
         return JsonSerializer.Deserialize<Todo>(responseContent, JsonOptions)

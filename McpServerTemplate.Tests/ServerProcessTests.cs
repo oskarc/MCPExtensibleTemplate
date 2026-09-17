@@ -332,6 +332,92 @@ public class ServerProcessTests
         Assert.NotEqual(HttpStatusCode.Unauthorized, correctResponse.StatusCode);
     }
 
+    // ── G-4 / UC-3: a failing tool answers, and says what to do ───────────────
+
+    [Fact]
+    public async Task T5_a_tool_that_fails_still_answers_the_client()
+    {
+        // Every other test for this guarantee calls the provider directly. That misses the thing
+        // that actually reaches a client: the answer has to survive the server's filter pipeline.
+        // It did not — a tool throwing McpException produced no JSON-RPC response at all, and the
+        // caller waited forever.
+        var reply = await CallToolAsync("get_current_weather", new { latitude = 999, longitude = 999 });
+
+        Assert.NotNull(reply);
+
+        var result = reply!.Value.GetProperty("result");
+        Assert.True(result.GetProperty("isError").GetBoolean());
+
+        var text = result.GetProperty("content")[0].GetProperty("text").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(text));
+
+        // The recovery has to reach the caller, not just the server's log.
+        Assert.Contains("Stockholm", text!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Calls one tool over stdio and returns the reply, or null if none arrived. A null return is
+    /// the failure this exists to catch, so the wait is generous rather than tight.
+    /// </summary>
+    private static async Task<JsonElement?> CallToolAsync(string tool, object arguments)
+    {
+        using var process = Start(
+            new Dictionary<string, string>
+            {
+                ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                ["Transport"] = "stdio",
+            },
+            redirectStdin: true);
+
+        try
+        {
+            var cancellation = new CancellationTokenSource(60_000).Token;
+
+            await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = 1,
+                method = "initialize",
+                @params = new
+                {
+                    protocolVersion = "2025-06-18",
+                    capabilities = new { },
+                    clientInfo = new { name = "acceptance-test", version = "1" },
+                },
+            }));
+            await process.StandardInput.FlushAsync();
+            await process.StandardOutput.ReadLineAsync(cancellation);
+
+            await process.StandardInput.WriteLineAsync(
+                JsonSerializer.Serialize(new { jsonrpc = "2.0", method = "notifications/initialized" }));
+            await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = 2,
+                method = "tools/call",
+                @params = new { name = tool, arguments },
+            }));
+            await process.StandardInput.FlushAsync();
+
+            try
+            {
+                var line = await process.StandardOutput.ReadLineAsync(cancellation);
+                if (string.IsNullOrWhiteSpace(line))
+                    return null;
+
+                return JsonDocument.Parse(line).RootElement.Clone();
+            }
+            catch (OperationCanceledException)
+            {
+                return null; // no reply: the failure this test is for
+            }
+        }
+        finally
+        {
+            process.Kill(entireProcessTree: true);
+        }
+    }
+
     // ── G-11: documented names are the names the server exposes ───────────────
 
     [Fact]
