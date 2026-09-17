@@ -23,10 +23,13 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
+      # Reads global.json, so CI builds on the SDK band the repository declares. Without this
+      # the runner took whatever 10.0.x was newest and its analyser set differed from a
+      # developer's, which UC-7 ("the same runs on every machine") does not allow.
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       # --locked-mode fails if packages.lock.json does not match the project files, so a
       # dependency cannot change without the change being visible in the diff.

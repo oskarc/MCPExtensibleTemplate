@@ -65,10 +65,16 @@ public static class ToolCallLoggingFilter
         ILogger? logger, string correlationId, string toolName,
         RequestContext<CallToolRequestParams> context)
     {
+        // The guard comes before the argument is built, not after. Joining the argument names
+        // costs an allocation on every tool call, and paid it even when the level was off.
+        if (logger is null || !logger.IsEnabled(LogLevel.Information))
+            return;
+
         var argNames = context.Params?.Arguments is { } a
             ? string.Join(", ", a.Keys)
             : "(none)";
-        logger?.LogInformation(
+
+        logger.LogInformation(
             "[{CorrelationId}] Tool call: {ToolName} with args: [{ArgNames}]",
             correlationId, toolName, argNames);
     }
@@ -77,12 +83,15 @@ public static class ToolCallLoggingFilter
         ILogger? logger, string correlationId, string toolName,
         RequestContext<CallToolRequestParams> context)
     {
-        if (logger?.IsEnabled(LogLevel.Debug) is not true)
+        // Serialising every argument is the most expensive thing this filter does; it must not
+        // happen unless the message will actually be written.
+        if (logger is null || !logger.IsEnabled(LogLevel.Debug))
             return;
 
         var argsJson = context.Params?.Arguments is { } args
             ? JsonSerializer.Serialize(args)
             : "{}";
+
         logger.LogDebug(
             "[{CorrelationId}] Tool {ToolName} full args: {Args}",
             correlationId, toolName, argsJson);
@@ -92,15 +101,21 @@ public static class ToolCallLoggingFilter
         ILogger? logger, string correlationId, string toolName,
         long elapsedMs, CallToolResult result)
     {
+        if (logger is null)
+            return;
+
         if (result.IsError is true)
         {
-            logger?.LogWarning(
-                "[{CorrelationId}] Tool {ToolName} returned error in {ElapsedMs}ms",
-                correlationId, toolName, elapsedMs);
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning(
+                    "[{CorrelationId}] Tool {ToolName} returned error in {ElapsedMs}ms",
+                    correlationId, toolName, elapsedMs);
+            }
         }
-        else
+        else if (logger.IsEnabled(LogLevel.Information))
         {
-            logger?.LogInformation(
+            logger.LogInformation(
                 "[{CorrelationId}] Tool {ToolName} completed in {ElapsedMs}ms",
                 correlationId, toolName, elapsedMs);
         }

@@ -69,3 +69,11 @@
 2026-09-17T21:31:19Z|prompt|
 2026-09-17T21:57:15Z|subagent|
 2026-09-17T21:57:16Z|session-start|compact
+2026-09-17T22:45:54Z|loaded-agent|meta-contract-before-execution/CONTRACT-LOG.yaml
+2026-09-17T22:45:56Z|loaded-agent|meta-antidrift/SKILL.md
+2026-09-17T22:45:56Z|loaded-agent|meta-correction-log/SKILL.md
+2026-09-17T22:45:57Z|loaded-agent|meta-ledger/SKILL.md
+2026-09-17T22:45:57Z|loaded-agent|meta-contract-before-execution/CONTRACT-LOG.yaml
+2026-09-17T22:46:01Z|loaded-agent|meta-correction-log/CORRECTIONS.yaml
+2026-09-17T22:46:02Z|loaded-agent|meta-casebook/CASEBOOK.yaml
+2026-09-17T22:46:05Z|loaded-agent|meta-ledger/LEDGER.yaml
