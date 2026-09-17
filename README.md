@@ -224,33 +224,36 @@ Comprehensive documentation is available in the [docs/](docs/) folder:
 
 ## MCP Tools
 
+These are the names the server exposes over MCP; a client calls them exactly as written.
+Send `tools/list` to a running server to confirm the set.
+
 ### JSONPlaceholder (Fake REST API - Testing/Demo)
 
 | Tool | Description |
 |------|-------------|
-| `GetBlogPost` | Retrieve a blog post (ID 1-100) |
-| `CreateBlogPost` | Create a new blog post (demonstrates POST) |
-| `GetPostComments` | View comments on a post |
-| `AddPostComment` | Add a comment to a post (demonstrates POST) |
-| `GetUserTodos` | View a user's todo list |
-| `CreateUserTodo` | Create a new todo item (demonstrates POST) |
+| `get_blog_post` | Retrieve a blog post (ID 1-100) |
+| `create_blog_post` | Create a new blog post (demonstrates POST) |
+| `get_post_comments` | View comments on a post |
+| `add_post_comment` | Add a comment to a post (demonstrates POST) |
+| `get_user_todos` | View a user's todo list |
+| `create_user_todo` | Create a new todo item (demonstrates POST) |
 
 ### SMHI Forecast
 
 | Tool | Description |
 |------|-------------|
-| `GetForecast` | Multi-day weather forecast for coordinates in Northern Europe |
-| `GetCurrentWeather` | Current conditions snapshot (temperature, wind, humidity, etc.) |
-| `GetForecastModelInfo` | When the forecast model was last updated |
+| `get_forecast` | Multi-day weather forecast for coordinates in Northern Europe |
+| `get_current_weather` | Current conditions snapshot (temperature, wind, humidity, etc.) |
+| `get_forecast_model_info` | When the forecast model was last updated |
 
 ### SMHI Observations
 
 | Tool | Description |
 |------|-------------|
-| `GetRecentTemperature` | Last 24h of actual temperature readings from nearest station |
-| `GetTemperatureHistory` | ~4 months of daily temperature summaries |
-| `GetPrecipitationHistory` | ~4 months of daily precipitation totals |
-| `GetMonthlyClimate` | Historical monthly climate comparison across years |
+| `get_recent_temperature` | Last 24h of actual temperature readings from nearest station |
+| `get_temperature_history` | ~4 months of daily temperature summaries |
+| `get_precipitation_history` | ~4 months of daily precipitation totals |
+| `get_monthly_climate` | One month of the year across every archived year, from SMHI's corrected archive |
 
 ### MCP Resources
 

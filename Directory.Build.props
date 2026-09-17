@@ -1,0 +1,31 @@
+<Project>
+
+  <!-- contract-001 · G-8 — one solution, warnings are errors, both projects on .NET 10.
+       Applies to every project in the repository; individual .csproj files carry only
+       what is specific to them. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <!-- contract-001 · G-9 — CI restores in locked mode, which needs a committed lock file. -->
+  <PropertyGroup>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <!-- contract-001 · G-9 — a vulnerable package fails the build, transitive ones included.
+       Named explicitly rather than relying on TreatWarningsAsErrors, so the audit keeps
+       failing even if that property is ever relaxed for a single project. -->
+  <PropertyGroup>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

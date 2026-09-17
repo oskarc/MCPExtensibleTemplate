@@ -84,4 +84,169 @@
 # HTML path), `artifact` (published URL), `led_to` / `follows` (cross-links between a report and the
 # contract it led to). See meta-contract-artifact/SKILL.md.
 
-contracts: []
+contracts:
+  - contract_id: contract-001
+    feature: phase-0-foundation
+    type: contract
+    date_proposed: 2026-09-17
+    date_approved: 2026-09-17
+    bearing: |
+      This contract makes the base governable: after it, a defect in this server fails a build instead of
+      reaching a user, and the platform under the frame is current and honest about failure. The bet is that
+      the frame your statement calls the core cannot hold integrity on a base where six tools silently return
+      empty data and stdio opens a port nobody asked for.
+    tier_1: |
+      Who. Two users. The teams who will run this server - a dev team, or an organisation centralising MCP
+      access. And, because this is a foundational contract, whoever builds the later phases on it: us.
+      What they are trying to do. Run the server and trust what it says. Build the provider frame on top of
+      it without inheriting surprises.
+      Success. The server starts only the way it was configured to start. Every tool returns real data or an
+      error that says what to do. A broken change fails a build before anyone runs it. The runtime still
+      receives security updates.
+      Cost of skipping. Six of this server's tools return empty values and report success. Running it for an
+      IDE opens a network port that serves nothing. A crash exits with code 0, so a supervisor believes it is
+      healthy. .NET 8 stops receiving security updates on 10 November 2026. Nothing runs on push.
+    tier_2: |
+      UC-1 Run the server for an IDE (stdio) -> speaks MCP over stdin/stdout, opens no network port. Outside
+           development it refuses to start rather than running unauthenticated.
+      UC-2 Run the server over HTTP -> listens only on the configured address; requests cross middleware in a
+           fixed order. A failure to bind is a failure, not a silent success.
+      UC-3 Call a demo-provider tool -> returns the actual record. An upstream error returns a message naming
+           the recovery, never an empty shell reported as success.
+      UC-4 Ask for historical climate data -> returns data, or the tool does not exist. No tool that cannot
+           succeed against its upstream stays on the list.
+      UC-5 Upstream is slow or failing -> times out on the provider's budget; documented retries happen. The
+           client-level timeout never cuts the retry budget short.
+      UC-6 Probe health from an orchestrator -> liveness and readiness answer immediately; startup makes no
+           upstream calls.
+      UC-7 Open the repo as a developer -> one command builds and tests everything; the same runs on every
+           push. Warnings, vulnerable packages and committed secrets fail the build.
+      UC-8 Read the docs and wire a client -> documented tool names are the names the server exposes.
+      UC-9 Take delivery of the phase -> the finished work is on the remote branch for review.
+    tier_3: |
+      G-1  (UC-1) stdio builds a plain host with no web server, and only in Development; anywhere else it
+           exits 78.
+      G-2  (UC-1, UC-2) Unhandled failure exits 70, configuration failure exits 78; never 0.
+      G-3  (UC-2) Middleware order fixed: forwarded headers, HTTPS, host allowlist, CORS, rate limiter,
+           authentication. The per-tool throttle keys only on tool names the server registered.
+      G-4  (UC-3) The demo provider deserialises with web-style casing and explicit property names; every
+           tool returns a populated model or throws with a recovery hint.
+      G-5  (UC-4) No tool remains that cannot succeed against its upstream. If the climate tool stays, it
+           reads the CSV endpoint and filters by month before capping rows.
+      G-6  (UC-5) The client timeout does not cap the resilience pipeline; total timeout exceeds attempt
+           timeout x (1 + retries), asserted at startup.
+      G-7  (UC-6) Liveness and readiness endpoints replace the startup probe; no upstream call before
+           serving.
+      G-8  (UC-7) One solution file; warnings are errors; both projects on .NET 10 and MCP SDK 2.2.0, with
+           deprecations resolved rather than suppressed.
+      G-9  (UC-7) CI on every push: locked restore, build, test, package audit as errors, secret scan.
+      G-10 (UC-7) No credential in the repository; development reads secrets from user-secrets.
+      G-11 (UC-8) Documented tool names equal the names the server exposes.
+      G-12 (UC-9) The phase ends committed and pushed on epic/security-hardening.
+      Note: the kit has no project nodes yet, so every guardrail here is novel - each is a candidate for an
+      observation once the work is done. No precedent carried M-04; nothing applied or distinguished.
+    tier_4: |
+      T-1  (G-1) Spawn the built server with Transport=stdio in Development, send initialize, inspect the
+           process's listening sockets. Fails if any listener exists, or no JSON-RPC reply reaches stdout.
+      T-2  (G-1) Start with ASPNETCORE_ENVIRONMENT=Production and Transport=stdio. Fails if the exit code is
+           anything but 78, or the process serves a request.
+      T-3  (G-2) Start with a provider BaseUrl of http (configuration error), then force an unhandled startup
+           failure. Fails if either exits 0; expected 78 and 70.
+      T-4  (G-3) Send a request with a foreign Host header; then call 100 invented tool names and inspect the
+           throttle's key set. Fails if the host request reaches authentication, or the key set contains
+           anything but registered tool names.
+      T-5  (G-4) Feed the demo provider a recorded camelCase upstream payload and call each of its six tools.
+           Fails if any returns an id of 0, an empty title, or an empty collection reported as success. Then
+           return HTTP 500: fails if the error message does not name a recovery.
+      T-6  (G-5) Enumerate registered tools and run each against a recorded response. Fails if any tool is
+           registered that has no path to success - specifically if the climate tool is still registered
+           while its upstream serves only CSV.
+      T-7  (G-6) Assert at startup that total timeout exceeds attempt timeout x (1 + retries); have a fake
+           upstream stall past the attempt timeout and count attempts. Fails if the assertion does not hold
+           or fewer attempts are made than configured.
+      T-8  (G-7) Start with a fake handler that records calls, then GET /healthz and /readyz. Fails if either
+           does not return 200, or the handler recorded a call before the first request arrived.
+      T-9  (G-8) Run dotnet build McpServerTemplate.sln -warnaserror; read both project files and package
+           versions; grep for suppressions added around SDK deprecations. Fails if the build errors, either
+           project is not net10.0, the MCP packages are not 2.2.0, or a deprecation was silenced with
+           NoWarn or pragma instead of resolved.
+      T-10 (G-9) Run the workflow's own steps locally against seeded fixtures: a package with a known
+           advisory, a lock file out of step, a planted secret. Fails if any of the three passes.
+      T-11 (G-10) Run the secret scan over the tree and read every appsettings json file. Fails if the scan
+           reports anything, or an API key value is present in configuration.
+      T-12 (G-11) Enumerate registered tool names and search the docs for each. Fails if a documented name
+           does not exist, or a PascalCase spelling of a tool name appears in the docs.
+      T-13 (G-12) Check the working tree is clean and the head commit exists on
+           origin/epic/security-hardening. Fails if either is untrue.
+      untested: G-3's full middleware order - T-4 proves the host check precedes authentication, but not the
+           position of every stage; the rest is verified by reading. G-2's exit code 70 - forcing a genuinely
+           unhandled failure deterministically may not be possible; if it is not, that half of T-3 becomes a
+           reading check. G-8's "resolved rather than suppressed" - T-9 catches the two common suppressions,
+           but a deprecation avoided some other way would pass.
+    disappointment: |
+      Same as it reads.
+      (Given for all twelve guardrails, G-1 to G-12, in answer to "what result would make you say this
+      wasn't met?")
+    premortem: |
+      Pre mortem, well if those acceptance criteria is not enforced it would be considered a failiure.
+    red_test:
+      broke: G-4
+      went_red: T-5
+      note: |
+        Not staged. G-4 is broken in the tree today - the case-sensitive deserialisation this
+        contract fixes - so T-5 went red against the current code on first run: 4 failed, 0
+        passed, every assertion reading id 0 where the recorded upstream sent 1 (and 101 for
+        the created post). Test file: McpServerTemplate.Tests/Providers/JsonPlaceholder/
+        JsonPlaceholderRoundTripTests.cs
+      date: 2026-09-17
+    approval: approved-at-gate
+    status: implemented
+    verification_state: awaiting-evidence
+    audited: false
+    transcript: C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
+    observations: []
+    revisions:
+      - what: |
+          G-5 left the climate tool's fate open ("remove the climate tool or rebuild it on the
+          CSV endpoint"). Put to the pioneer with the evidence: corrected-archive is 404 as JSON
+          and 200 as CSV at every station tested. Pioneer chose rebuild on the CSV endpoint.
+        authorised_by: pioneer
+        date: 2026-09-18
+        tests_changed: [T-6]
+      - what: |
+          CA1305 (locale-dependent formatting, ~40 sites in the provider formatters) and CA1848
+          (LoggerMessage delegates) were held at suggestion in .editorconfig rather than fixed,
+          so that G-8's "warnings are errors" could be met without enlarging this contract. The
+          reasons are recorded in the file. CA1305 is a real defect class for this server and is
+          a candidate for its own contract; CA1848 carries no correctness content.
+          Not pioneer-authorised: G-8 fixes the property, not the analyser set, so this is a
+          choice inside the clause rather than a departure from it. Surfaced here to be judged.
+        authorised_by: agent
+        date: 2026-09-18
+        tests_changed: []
+      - what: |
+          Not in the contract and found in flight: SDK 2.2.0 requires WithHttpTransport() before
+          MapMcp. Without it the HTTP transport threw at startup, so that transport was broken in
+          the tree independently of the guarantees this contract names. Fixed under G-3, whose
+          middleware order cannot be demonstrated on a transport that will not start.
+        authorised_by: agent
+        date: 2026-09-18
+        tests_changed: []
+    cost: {turns: null, tokens: null, pioneer_minutes: null}
+    tests_run:
+      date: 2026-09-18
+      command: dotnet test McpServerTemplate.sln --configuration Release
+      result: 71 passed, 0 failed
+      note: |
+        Automated: T-1, T-2, T-3, T-4 (host allowlist and authentication halves), T-5, T-6, T-7,
+        T-8, T-9, T-11 (configuration half), T-12.
+        Run but not automated: the HTTP pipeline probe, the live archive read against SMHI
+        (12,890 July readings, 1985-2025), the secret scan planted-secret check.
+        Not written: T-4's limiter half (constructing a RequestContext needs an McpServer; the
+        guarantee is met in code by keying on MatchedPrimitive, but no test holds it), T-10 (the
+        workflow's steps were run locally by hand, not as a test), T-13.
+        T-1 and T-12 were each checked for non-vacuity by breaking the code and seeing them fail.
+    file: docs/contracts/contract-001-foundation.html
+    artifact: https://claude.ai/artifact/26zNr2YEhyHsQJSLpoHTAi
+    work_id: null
+

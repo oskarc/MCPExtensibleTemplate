@@ -47,10 +47,10 @@ Claude: "It's 15°C and cloudy."
 ```
 
 **Examples of tools**:
-- `GetBlogPost` - retrieve a blog post
-- `CreateBlogPost` - write a new post
-- `GetUserTodos` - view tasks
-- `CreateUserTodo` - add a task
+- `get_blog_post` - retrieve a blog post
+- `create_blog_post` - write a new post
+- `get_user_todos` - view tasks
+- `create_user_todo` - add a task
 
 ---
 
@@ -196,8 +196,8 @@ dotnet run
 
 **What happens behind the scenes**:
 
-1. Claude sees you have a `GetBlogPost` tool available
-2. Claude calls: `GetBlogPost(postId=1)`
+1. Claude sees you have a `get_blog_post` tool available
+2. Claude calls: `get_blog_post(postId=1)`
 3. MCP Server receives this request
 4. **Tool Execution**:
    - Tool calls JsonPlaceholderApiClient
@@ -233,7 +233,7 @@ Title: sunt aut facere repellat provident occaecati excepturi optio reprehenderi
 
 ```
 You: "Show me blog post #99999"
-Claude: Calls GetBlogPost(99999)
+Claude: Calls get_blog_post(99999)
 MCP Server: "Post not found"
 Claude: "I couldn't find post #99999. Valid posts are 1-100."
 ```
@@ -241,7 +241,7 @@ Claude: "I couldn't find post #99999. Valid posts are 1-100."
 ### Error 2: Rate Limit Exceeded
 
 ```
-You: "Create 50 new posts" (calling CreateBlogPost 50 times in 1 minute)
+You: "Create 50 new posts" (calling create_blog_post 50 times in 1 minute)
 Config says: Max 10 calls per minute
 MCP Server: "🛑 Rate limit exceeded!"
 Claude: "I've been rate-limited. Please wait a minute before trying again."
@@ -250,7 +250,7 @@ Claude: "I've been rate-limited. Please wait a minute before trying again."
 ### Error 3: External API is Down
 
 ```
-Claude: Calls GetBlogPost(1)
+Claude: Calls get_blog_post(1)
 MCP Server: Makes HTTP request to external API
 External API: (no response - server is down)
 MCP Server: Retries (up to 3 times) with backoff
@@ -430,8 +430,8 @@ When the server starts, tool registrations and requests are logged to the `logs/
 The server logs every tool call with a correlation ID:
 
 ```
-[12:34:57 INF] ToolCallLoggingFilter: [abc123] Calling tool GetBlogPost with arguments: postId
-[12:34:57 INF] ToolCallLoggingFilter: [abc123] Tool GetBlogPost completed in 234ms
+[12:34:57 INF] ToolCallLoggingFilter: [abc123] Calling tool get_blog_post with arguments: postId
+[12:34:57 INF] ToolCallLoggingFilter: [abc123] Tool get_blog_post completed in 234ms
 ```
 
 ### 3. Enable More Detailed Logging
@@ -576,3 +576,32 @@ For detailed technical info, see:
 - [Flowcharts](02-ARCHITECTURE-FLOWCHARTS.md)
 - [Testing](03-TESTING-STRATEGY.md)
 - [Configuration Reference](04-CONFIGURATION.md)
+
+---
+
+## Tool reference
+
+These are the names the server exposes over MCP. A client calls them exactly as written here.
+
+| Tool | What it does |
+|---|---|
+| `get_blog_post` | Retrieve a blog post by id |
+| `create_blog_post` | Create a blog post |
+| `get_post_comments` | List the comments on a post |
+| `add_post_comment` | Add a comment to a post |
+| `get_user_todos` | List a user's todo items |
+| `create_user_todo` | Create a todo item for a user |
+| `get_current_weather` | Current conditions at a coordinate in Sweden |
+| `get_forecast` | Forecast for a coordinate in Sweden |
+| `get_forecast_model_info` | Metadata about the forecast model |
+| `get_recent_temperature` | Recent temperature readings from the nearest station |
+| `get_temperature_history` | Daily temperature summary, last ~4 months |
+| `get_precipitation_history` | Daily precipitation totals, last ~4 months |
+| `get_monthly_climate` | One month of the year across all archived years |
+
+Verify this list against a running server at any time:
+
+```bash
+# after initialize, send:
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+```

@@ -48,7 +48,7 @@ public class SmhiObsFormattersTests
 
         // Should contain only 5 readings (the most recent)
         var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var dataLines = lines.Where(l => l.TrimStart().StartsWith("2026")).ToList();
+        var dataLines = lines.Where(l => l.TrimStart().StartsWith("2026", StringComparison.Ordinal)).ToList();
         Assert.Equal(5, dataLines.Count);
     }
 

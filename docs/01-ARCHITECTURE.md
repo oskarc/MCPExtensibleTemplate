@@ -126,7 +126,7 @@ Here's what happens when an AI assistant uses an MCP tool:
 1. MCP Client (e.g., Claude Desktop)
    ↓
 2. HTTP Request or stdio message
-   "Please call GetBlogPost with postId=1"
+   "Please call get_blog_post with postId=1"
    ↓
 3. Transport Layer
    Route to MCP protocol handler
@@ -137,7 +137,7 @@ Here's what happens when an AI assistant uses an MCP tool:
    - Check rate limit
    ↓
 5. MCP Protocol Layer
-   Identify that "GetBlogPost" tool exists in JsonPlaceholderTools
+   Identify that the "get_blog_post" tool exists in JsonPlaceholderTools
    ↓
 6. Provider Layer: JsonPlaceholder
    a) JsonPlaceholderTools.GetBlogPost() is called

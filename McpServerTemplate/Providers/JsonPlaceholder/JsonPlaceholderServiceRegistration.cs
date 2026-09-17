@@ -1,5 +1,7 @@
+using McpServerTemplate.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
 
 namespace McpServerTemplate.Providers.JsonPlaceholder;
 
@@ -43,11 +45,24 @@ public static class JsonPlaceholderServiceRegistration
                 $"Providers:JsonPlaceholder:BaseUrl must be an absolute HTTPS URL, got: '{config.BaseUrl}'");
         }
 
+        // Declared here, not in the options callback: the callback runs lazily when the
+        // first HttpClient is built, which is a tool call, not startup.
+        var budget = ResilienceBudget.Create(
+            providerName: "JsonPlaceholder",
+attemptTimeout: TimeSpan.FromSeconds(5),
+            maxRetryAttempts: 2,
+            // Must exceed 5s x 3 = 15s.
+            totalTimeout: TimeSpan.FromSeconds(20),
+            samplingDuration: TimeSpan.FromSeconds(30),
+            breakDuration: TimeSpan.FromSeconds(15));
+
         services.AddHttpClient<JsonPlaceholderApiClient>(client =>
         {
             client.BaseAddress = new Uri(config.BaseUrl);
             client.DefaultRequestHeaders.UserAgent.ParseAdd(config.UserAgent);
-        });
+            client.Timeout = ResilienceBudget.ClientTimeout;
+        })
+        .AddStandardResilienceHandler(budget.Apply);
 
         return services;
     }

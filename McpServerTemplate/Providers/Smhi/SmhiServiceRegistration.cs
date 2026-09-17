@@ -1,3 +1,4 @@
+using McpServerTemplate.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
@@ -44,32 +45,28 @@ public static class SmhiServiceRegistration
                 $"Providers:Smhi:BaseUrl must be an absolute HTTPS URL, got: '{config.BaseUrl}'");
         }
 
+        // Declared here, not in the options callback: the callback runs lazily when the
+        // first HttpClient is built, which is a tool call, not startup.
+        var budget = ResilienceBudget.Create(
+            providerName: "Smhi",
+            // A forecast is a small document; an attempt that has not answered in 10s is stuck.
+            attemptTimeout: TimeSpan.FromSeconds(10),
+            maxRetryAttempts: 2,
+            // Must exceed 10s x 3 = 30s, or the third attempt could never run.
+            totalTimeout: TimeSpan.FromSeconds(35),
+            samplingDuration: TimeSpan.FromSeconds(30),
+            breakDuration: TimeSpan.FromSeconds(15));
+
         services.AddHttpClient<SmhiApiClient>(client =>
         {
             client.BaseAddress = new Uri(config.BaseUrl);
             client.DefaultRequestHeaders.UserAgent.ParseAdd(config.UserAgent);
 
-            // Guardrail: explicit timeout prevents a hanging upstream API from
-            // blocking the agent indefinitely. Default HttpClient timeout is 100s —
-            // far too long for an agentic flow where responsiveness matters.
-            client.Timeout = TimeSpan.FromSeconds(15);
+            // No client-level deadline: it would wrap the resilience pipeline and cut the
+            // retries short. See ProviderResilience for why.
+            client.Timeout = ResilienceBudget.ClientTimeout;
         })
-        .AddStandardResilienceHandler(options =>
-        {
-            // Retry: 3 attempts with exponential backoff for transient HTTP errors (5xx, 408, 429).
-            options.Retry.MaxRetryAttempts = 3;
-            options.Retry.Delay = TimeSpan.FromMilliseconds(500);
-
-            // Circuit breaker: after 5 failures in 30s, open for 15s.
-            // Prevents hammering a down upstream and gives it time to recover.
-            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
-            options.CircuitBreaker.FailureRatio = 0.5;
-            options.CircuitBreaker.MinimumThroughput = 5;
-            options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(15);
-
-            // Total request timeout including retries — caps worst-case latency.
-            options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(30);
-        });
+        .AddStandardResilienceHandler(budget.Apply);
 
         return services;
     }

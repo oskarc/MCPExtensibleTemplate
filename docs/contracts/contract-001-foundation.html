@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 0 Foundation</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --paper:#F2F4F1; --surface:#FFFFFF; --ink:#17201D; --muted:#5F706B;
+    --rule:#CFD8D4; --rule-strong:#AEBBB6;
+    --accent:#0E6B66; --accent-ink:#0B5551; --accent-soft:#DDEDEA; --on-accent:#FFFFFF;
+    --kept:#2F7D4F; --kept-soft:#E0F0E6;
+    --new:#B7791F; --new-soft:#F7ECD9;
+    --open:#B3352C; --open-soft:#F6E3E1;
+    --code-bg:#E3EAE7;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#141B18; --surface:#1C2522; --ink:#E6ECE9; --muted:#9AABA5;
+      --rule:#2B3733; --rule-strong:#3B4945;
+      --accent:#58C4BB; --accent-ink:#7FD6CE; --accent-soft:#1E3B38; --on-accent:#0B1512;
+      --kept:#6CC08B; --kept-soft:#1E3427;
+      --new:#E0AE5A; --new-soft:#3A2F1C;
+      --open:#E37A72; --open-soft:#3A2321;
+      --code-bg:#101614;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#141B18; --surface:#1C2522; --ink:#E6ECE9; --muted:#9AABA5;
+    --rule:#2B3733; --rule-strong:#3B4945;
+    --accent:#58C4BB; --accent-ink:#7FD6CE; --accent-soft:#1E3B38; --on-accent:#0B1512;
+    --kept:#6CC08B; --kept-soft:#1E3427;
+    --new:#E0AE5A; --new-soft:#3A2F1C;
+    --open:#E37A72; --open-soft:#3A2321;
+    --code-bg:#101614;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Source Sans 3", system-ui, "Segoe UI", sans-serif;
+    font-size:16.5px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:940px; margin:0 auto; padding-inline:24px; padding-block:32px 96px; }
+  h1,h2,h3 { font-family:"Archivo","Helvetica Neue",Arial,sans-serif; line-height:1.15; letter-spacing:-0.01em; text-wrap:balance; margin:0; }
+  h1 { font-size:40px; font-weight:800; }
+  h2 { font-size:24px; font-weight:700; margin-block:52px 12px; padding-top:22px; border-top:1px solid var(--rule-strong); }
+  h3 { font-size:16px; font-weight:700; margin-block:22px 8px; }
+  p { margin:0 0 12px; max-width:68ch; }
+  a { color:var(--accent-ink); }
+  code, .mono { font-family:"IBM Plex Mono","Cascadia Mono",Consolas,monospace; font-size:0.86em; }
+  code { background:var(--code-bg); padding:1px 5px; border-radius:3px; }
+  .num { font-variant-numeric:tabular-nums; }
+  .eyebrow { font-family:"IBM Plex Mono",monospace; font-size:12.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 10px; }
+  .lede { font-size:19px; line-height:1.45; max-width:60ch; margin-top:14px; }
+
+  .state { display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline;
+    margin-top:22px; padding:12px 16px; border-left:4px solid var(--kept); background:var(--kept-soft); }
+  .state b { font-weight:700; }
+  .state span { font-size:14.5px; }
+
+  .tally { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px; background:var(--rule);
+    border:1px solid var(--rule); margin-top:20px; }
+  .tally div { background:var(--surface); padding:12px 14px; }
+  .tally .v { font-family:"Archivo",sans-serif; font-weight:700; font-size:26px; line-height:1; font-variant-numeric:tabular-nums; }
+  .tally .k { font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--muted); margin-top:7px; }
+  .tally .hot .v { color:var(--open); }
+
+  blockquote { margin:0 0 12px; padding:10px 16px; border-left:3px solid var(--accent); background:var(--surface); font-size:15.5px; }
+  blockquote p { margin:0 0 8px; }
+  blockquote p:last-child { margin:0; }
+  blockquote cite { display:block; margin-top:8px; font-style:normal; font-size:13px; color:var(--muted); }
+
+  .table-wrap { overflow-x:auto; margin:12px 0 18px; }
+  table { border-collapse:collapse; width:100%; font-size:14.5px; }
+  th, td { text-align:left; vertical-align:top; padding:8px 12px 8px 0; border-bottom:1px solid var(--rule); }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--muted); border-bottom:1px solid var(--rule-strong); font-weight:600; }
+  td.id, th.id { font-family:"IBM Plex Mono",monospace; font-size:13px; white-space:nowrap; color:var(--accent-ink); }
+  td.holds { font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--muted); white-space:nowrap; }
+
+  .chip { display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:11.5px; padding:1px 7px; border-radius:3px; border:1px solid; white-space:nowrap; }
+  .chip.new { background:var(--new-soft); color:var(--new); border-color:var(--new); }
+  .chip.kept { background:var(--kept-soft); color:var(--kept); border-color:var(--kept); }
+  .chip.open { background:var(--open-soft); color:var(--open); border-color:var(--open); }
+
+  figure { margin:18px 0 8px; }
+  .fig-scroll { overflow-x:auto; }
+  figure svg { display:block; width:100%; min-width:620px; height:auto; color:var(--ink); }
+  figcaption { font-size:13px; color:var(--muted); padding-top:8px; max-width:78ch; }
+  .nd rect { fill:var(--surface); stroke:var(--rule-strong); stroke-width:1.25; }
+  .nd text { fill:currentColor; font:500 12.5px "Source Sans 3",system-ui,sans-serif; }
+  .nd .m { font-family:"IBM Plex Mono",monospace; font-size:11.5px; }
+  .nd.new rect { fill:var(--new-soft); stroke:var(--new); }
+  .nd.stop rect { fill:var(--open-soft); stroke:var(--open); }
+  .nd.good rect { fill:var(--kept-soft); stroke:var(--kept); }
+  .edge { fill:none; stroke:var(--muted); stroke-width:1.3; }
+  .edge.stop { stroke:var(--open); }
+  .elabel { fill:var(--muted); font:500 11px "Source Sans 3",sans-serif; }
+
+  .matrix td, .matrix th { text-align:center; padding:6px 4px; }
+  .matrix td:first-child, .matrix th:first-child { text-align:left; padding-right:10px; }
+  .matrix .hit { color:var(--accent-ink); font-weight:700; }
+  .matrix .dot { color:var(--rule-strong); }
+
+  ul { padding-left:20px; max-width:68ch; }
+  li { margin-bottom:6px; }
+  .gate { border:1px solid var(--rule-strong); border-radius:3px; background:var(--surface); padding:18px 20px; margin-top:16px; }
+  .gate h3 { margin-top:0; }
+  .foot { margin-top:44px; padding-top:18px; border-top:1px solid var(--rule-strong); font-size:13.5px; color:var(--muted); }
+  .foot b { color:var(--ink); }
+
+  @media (max-width:760px) {
+    .wrap { padding-inline:16px; }
+    h1 { font-size:30px; }
+    .tally { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">contract-001 · MCP Server Template · phase 0</p>
+    <h1>Phase 0 — Foundation</h1>
+    <p class="lede">Six of this server's tools answer with empty records and report success; running it for an IDE opens a network port that serves nothing; a crash exits as if all were well. This contract makes the base tell the truth before a security frame is built on it.</p>
+
+    <div class="state">
+      <span><b>Approved at the gate</b> · 2026-09-17</span>
+      <span>Status in the log: <code>approved</code></span>
+      <span>No code has been written. Implementation begins only after one guarantee is broken on purpose and a named test is seen to go red.</span>
+    </div>
+
+    <div class="tally">
+      <div><div class="v num">9</div><div class="k">Use cases</div></div>
+      <div><div class="v num">12</div><div class="k">Guardrails</div></div>
+      <div><div class="v num">13</div><div class="k">Acceptance tests</div></div>
+      <div><div class="v num">3</div><div class="k">Guarantees untested</div></div>
+      <div class="hot"><div class="v num">1</div><div class="k">Decision still open</div></div>
+    </div>
+  </header>
+
+  <h2>Bearing</h2>
+  <p>This contract makes the base governable: after it, a defect in this server fails a build instead of reaching a user, and the platform under the frame is current and honest about failure. The bet is that the frame the founding statement calls the core cannot hold integrity on a base where six tools silently return empty data and stdio opens a port nobody asked for.</p>
+
+  <h2>Provenance</h2>
+  <p>Everything below traces to one of these. <strong>A clause that cannot be traced to them is wrong, not merely debatable.</strong></p>
+
+  <blockquote>
+    <p>This application is a general purpose MCP server, it can be used by a small dev team or and big organisation looking to centralize MCP usage across the organisation. The app must be compliant with OWASP MCP Top 10 and other frameworks or approaches regulating secure usage of the protocol.</p>
+    <p>The core of the application is the frame that governs the providers, it must actually hold the integrity over time, making sure there are no loopholes or workarounds.</p>
+    <cite>Founding statement, recorded verbatim 2026-09-17</cite>
+  </blockquote>
+
+  <blockquote>
+    <p>We will follow the phases as stated, and commit and push after each phase.</p>
+    <cite>Pioneer, 2026-09-17 — fixes the phase order and produces G-12</cite>
+  </blockquote>
+
+  <blockquote>
+    <p>Pre mortem, well if those acceptance criteria is not enforced it would be considered a failiure.</p>
+    <cite>Pioneer's pre-mortem — why enforcement, not intent, is what Tier 4 checks</cite>
+  </blockquote>
+
+  <blockquote>
+    <p>Same as it reads.</p>
+    <cite>Pioneer's disappointment line, given for all twelve guardrails</cite>
+  </blockquote>
+
+  <h2>What starts, and how it fails</h2>
+  <figure>
+    <div class="fig-scroll">
+      <svg viewBox="0 0 900 320" role="img" aria-label="Startup paths after this contract: stdio builds a plain host with no web server and only in Development, HTTP builds a web application with a fixed middleware order, and any failure exits 70 or 78 rather than 0.">
+        <g class="nd"><rect x="16" y="130" width="130" height="46" rx="5"/><text text-anchor="middle"><tspan x="81" y="152">Process starts</tspan><tspan x="81" y="167" class="m">dotnet run</tspan></text></g>
+        <g class="nd"><rect x="186" y="130" width="120" height="46" rx="5"/><text text-anchor="middle"><tspan x="246" y="158">Transport?</tspan></text></g>
+
+        <g class="nd new"><rect x="350" y="42" width="220" height="56" rx="5"/><text text-anchor="middle"><tspan x="460" y="65">stdio: plain host, no web server</tspan><tspan x="460" y="82">Development only</tspan></text></g>
+        <g class="nd"><rect x="610" y="42" width="180" height="56" rx="5"/><text text-anchor="middle"><tspan x="700" y="65">Serves over</tspan><tspan x="700" y="82">stdin / stdout</tspan></text></g>
+
+        <g class="nd"><rect x="350" y="204" width="220" height="56" rx="5"/><text text-anchor="middle"><tspan x="460" y="227">http: web application</tspan><tspan x="460" y="244">configured address only</tspan></text></g>
+        <g class="nd new"><rect x="610" y="204" width="180" height="56" rx="5"/><text text-anchor="middle"><tspan x="700" y="227">Fixed middleware</tspan><tspan x="700" y="244">order, then serve</tspan></text></g>
+
+        <g class="nd stop"><rect x="350" y="126" width="220" height="50" rx="5"/><text text-anchor="middle"><tspan x="460" y="147">Anything wrong</tspan><tspan x="460" y="163" class="m">exit 78 · config · exit 70 · fatal</tspan></text></g>
+
+        <path class="edge" d="M146 153H186" marker-end="url(#a1)"/>
+        <path class="edge" d="M306 145V70H350" marker-end="url(#a1)"/>
+        <path class="edge" d="M306 161V232H350" marker-end="url(#a1)"/>
+        <path class="edge" d="M570 70H610" marker-end="url(#a1)"/>
+        <path class="edge" d="M570 232H610" marker-end="url(#a1)"/>
+        <path class="edge stop" d="M460 98V126" marker-end="url(#a2)"/>
+        <path class="edge stop" d="M460 204V176" marker-end="url(#a2)"/>
+        <text class="elabel" x="318" y="62">stdio</text>
+        <text class="elabel" x="318" y="248">http</text>
+        <text class="elabel" x="470" y="116">outside Development, or bind fails</text>
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor" opacity="0.55"/></marker>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#B3352C"/></marker>
+        </defs>
+      </svg>
+    </div>
+    <figcaption><span class="chip new">new</span> marks what this contract adds; unmarked boxes exist today. Today both paths build a web application, so stdio opens port 5000 and a failed bind exits 0.</figcaption>
+  </figure>
+
+  <h2>What enforcement looks like</h2>
+  <figure>
+    <div class="fig-scroll">
+      <svg viewBox="0 0 900 250" role="img" aria-label="The CI gate: locked restore, build with warnings as errors, tests, package audit and secret scan, each of which must refuse a seeded fixture — a drifted lock file, a package with a known advisory, and a planted secret.">
+        <g class="nd new"><rect x="16" y="40" width="150" height="46" rx="5"/><text text-anchor="middle"><tspan x="91" y="62">Locked restore</tspan><tspan x="91" y="78" class="m">--locked-mode</tspan></text></g>
+        <g class="nd new"><rect x="190" y="40" width="150" height="46" rx="5"/><text text-anchor="middle"><tspan x="265" y="62">Build</tspan><tspan x="265" y="78" class="m">warnings = errors</tspan></text></g>
+        <g class="nd new"><rect x="364" y="40" width="130" height="46" rx="5"/><text text-anchor="middle"><tspan x="429" y="68">Tests</tspan></text></g>
+        <g class="nd new"><rect x="518" y="40" width="150" height="46" rx="5"/><text text-anchor="middle"><tspan x="593" y="62">Package audit</tspan><tspan x="593" y="78" class="m">findings = errors</tspan></text></g>
+        <g class="nd new"><rect x="692" y="40" width="140" height="46" rx="5"/><text text-anchor="middle"><tspan x="762" y="68">Secret scan</tspan></text></g>
+        <g class="nd good"><rect x="692" y="170" width="140" height="44" rx="5"/><text text-anchor="middle"><tspan x="762" y="197">Green</tspan></text></g>
+
+        <path class="edge" d="M166 63H190" marker-end="url(#b1)"/>
+        <path class="edge" d="M340 63H364" marker-end="url(#b1)"/>
+        <path class="edge" d="M494 63H518" marker-end="url(#b1)"/>
+        <path class="edge" d="M668 63H692" marker-end="url(#b1)"/>
+        <path class="edge" d="M762 86V170" marker-end="url(#b1)"/>
+
+        <g class="nd stop"><rect x="16" y="150" width="150" height="44" rx="5"/><text text-anchor="middle"><tspan x="91" y="177">Lock file drifted</tspan></text></g>
+        <g class="nd stop"><rect x="518" y="150" width="150" height="44" rx="5"/><text text-anchor="middle"><tspan x="593" y="177">Known advisory</tspan></text></g>
+        <g class="nd stop"><rect x="692" y="96" width="140" height="40" rx="5"/><text text-anchor="middle"><tspan x="762" y="121">Planted secret</tspan></text></g>
+
+        <path class="edge stop" d="M91 150V86" marker-end="url(#b2)"/>
+        <path class="edge stop" d="M593 150V86" marker-end="url(#b2)"/>
+        <path class="edge stop" d="M762 96V86" marker-end="url(#b2)"/>
+        <text class="elabel" x="100" y="128">must fail here</text>
+        <text class="elabel" x="602" y="128">must fail here</text>
+        <defs>
+          <marker id="b1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor" opacity="0.55"/></marker>
+          <marker id="b2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#B3352C"/></marker>
+        </defs>
+      </svg>
+    </div>
+    <figcaption>Every stage is new — there is no CI today. <strong>T-10</strong> runs the three red boxes against the gate: a stage that lets its fixture through has not been enforced, which is the failure the pre-mortem names.</figcaption>
+  </figure>
+
+  <h2>Tier 1 — Who this serves</h2>
+  <p><strong>Two users.</strong> The teams who will run this server — a dev team, or an organisation centralising MCP access. And, because this contract is foundational, whoever builds the later phases on it.</p>
+  <p><strong>Success.</strong> The server starts only the way it was configured to start. Every tool returns real data or an error that says what to do. A broken change fails a build before anyone runs it. The runtime still receives security updates.</p>
+  <p><strong>The cost of skipping it.</strong> Six tools return empty values and report success. Running for an IDE opens a port that serves nothing. A crash exits 0, so a supervisor believes the process is healthy. .NET 8 stops receiving security updates on 10 November 2026. Nothing runs on push, so all of it can return silently.</p>
+
+  <h2>Tier 2 — Use cases</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th class="id">Id</th><th>Action</th><th>Response, and what must not happen</th></tr></thead>
+      <tbody>
+        <tr><td class="id">UC-1</td><td>Run the server for an IDE</td><td>Speaks MCP over stdin and stdout, opens no network port. Outside development it refuses to start rather than running unauthenticated.</td></tr>
+        <tr><td class="id">UC-2</td><td>Run the server over HTTP</td><td>Listens only on the configured address; requests cross middleware in a fixed order. A failure to bind is a failure, not a silent success.</td></tr>
+        <tr><td class="id">UC-3</td><td>Call a demo-provider tool</td><td>Returns the actual record. An upstream error returns a message naming the recovery — never an empty shell reported as success.</td></tr>
+        <tr><td class="id">UC-4</td><td>Ask for historical climate data</td><td>Returns data, or the tool does not exist. No tool that cannot succeed against its upstream stays on the list.</td></tr>
+        <tr><td class="id">UC-5</td><td>Upstream is slow or failing</td><td>Times out on the provider's budget; documented retries happen. The client-level timeout never cuts the retry budget short.</td></tr>
+        <tr><td class="id">UC-6</td><td>Probe health from an orchestrator</td><td>Liveness and readiness answer immediately. Startup makes no upstream calls.</td></tr>
+        <tr><td class="id">UC-7</td><td>Open the repo as a developer</td><td>One command builds and tests everything; the same runs on every push. Warnings, vulnerable packages and committed secrets fail the build.</td></tr>
+        <tr><td class="id">UC-8</td><td>Read the docs and wire a client</td><td>Documented tool names are the names the server exposes.</td></tr>
+        <tr><td class="id">UC-9</td><td>Take delivery of the phase</td><td>The finished work is on the remote branch for review.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Tier 3 — Guardrails</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th class="id">Id</th><th>Guardrail</th><th class="id">Holds</th></tr></thead>
+      <tbody>
+        <tr><td class="id">G-1</td><td>stdio builds a plain host with no web server, and only in Development; anywhere else it exits 78.</td><td class="holds">UC-1</td></tr>
+        <tr><td class="id">G-2</td><td>Unhandled failure exits 70, configuration failure exits 78; never 0.</td><td class="holds">UC-1, UC-2</td></tr>
+        <tr><td class="id">G-3</td><td>Middleware order fixed: forwarded headers, HTTPS, host allowlist, CORS, rate limiter, authentication. The per-tool throttle keys only on tool names the server registered.</td><td class="holds">UC-2</td></tr>
+        <tr><td class="id">G-4</td><td>The demo provider deserialises with web-style casing and explicit property names; every tool returns a populated model or throws with a recovery hint.</td><td class="holds">UC-3</td></tr>
+        <tr><td class="id">G-5</td><td>No tool remains that cannot succeed against its upstream. If the climate tool stays, it reads the CSV endpoint and filters by month before capping rows.</td><td class="holds">UC-4</td></tr>
+        <tr><td class="id">G-6</td><td>The client timeout does not cap the resilience pipeline; total timeout exceeds attempt timeout × (1 + retries), asserted at startup.</td><td class="holds">UC-5</td></tr>
+        <tr><td class="id">G-7</td><td>Liveness and readiness endpoints replace the startup probe; no upstream call before serving.</td><td class="holds">UC-6</td></tr>
+        <tr><td class="id">G-8</td><td>One solution file; warnings are errors; both projects on .NET 10 and MCP SDK 2.2.0, with deprecations resolved rather than suppressed.</td><td class="holds">UC-7</td></tr>
+        <tr><td class="id">G-9</td><td>CI on every push: locked restore, build, test, package audit as errors, secret scan.</td><td class="holds">UC-7</td></tr>
+        <tr><td class="id">G-10</td><td>No credential in the repository; development reads secrets from user-secrets.</td><td class="holds">UC-7</td></tr>
+        <tr><td class="id">G-11</td><td>Documented tool names equal the names the server exposes.</td><td class="holds">UC-8</td></tr>
+        <tr><td class="id">G-12</td><td>The phase ends committed and pushed on <code>epic/security-hardening</code>.</td><td class="holds">UC-9</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The kit holds no project nodes yet, so every guardrail here is novel — each becomes a candidate observation once the work is done. No precedent in the casebook carried this moment, so nothing is applied or distinguished.</p>
+
+  <h2>Magnitudes</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Quantity</th><th>Value</th><th>Where it comes from</th><th>State</th></tr></thead>
+      <tbody>
+        <tr><td>Target framework</td><td class="mono">net10.0</td><td>.NET 8 and 9 both leave support on 10 Nov 2026; .NET 10 is LTS to Nov 2028</td><td><span class="chip new">new</span></td></tr>
+        <tr><td>MCP SDK</td><td class="mono">2.2.0</td><td>Current release implementing the 2026-07-28 protocol; the repo is on 1.2.0</td><td><span class="chip new">new</span></td></tr>
+        <tr><td>Configuration failure</td><td class="mono">exit 78</td><td><code>EX_CONFIG</code>, sysexits convention</td><td><span class="chip new">new</span></td></tr>
+        <tr><td>Unhandled failure</td><td class="mono">exit 70</td><td><code>EX_SOFTWARE</code>, sysexits convention</td><td><span class="chip new">new</span></td></tr>
+        <tr><td>Demo tools that must return real data</td><td class="num">6</td><td>Counted from the provider's registered tools; all six return empty records today</td><td><span class="chip kept">kept</span></td></tr>
+        <tr><td>Invented tool names in T-4</td><td class="num">100</td><td>Enough to show unbounded growth in a dictionary keyed on caller input</td><td><span class="chip new">new</span></td></tr>
+        <tr><td>Seeded CI fixtures</td><td class="num">3</td><td>One per gate that must refuse: lock drift, known advisory, planted secret</td><td><span class="chip new">new</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Traceability</h2>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead><tr><th>&nbsp;</th><th class="id">G-1</th><th class="id">G-2</th><th class="id">G-3</th><th class="id">G-4</th><th class="id">G-5</th><th class="id">G-6</th><th class="id">G-7</th><th class="id">G-8</th><th class="id">G-9</th><th class="id">G-10</th><th class="id">G-11</th><th class="id">G-12</th></tr></thead>
+      <tbody>
+        <tr><td class="id">UC-1</td><td class="hit">●</td><td class="hit">●</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td></tr>
+        <tr><td class="id">UC-2</td><td class="dot">·</td><td class="hit">●</td><td class="hit">●</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td></tr>
+        <tr><td class="id">UC-3</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="hit">●</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td></tr>
+        <tr><td class="id">UC-4</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="hit">●</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td></tr>
+        <tr><td class="id">UC-5</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="hit">●</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td></tr>
+        <tr><td class="id">UC-6</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="hit">●</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td></tr>
+        <tr><td class="id">UC-7</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="hit">●</td><td class="hit">●</td><td class="hit">●</td><td class="dot">·</td><td class="dot">·</td></tr>
+        <tr><td class="id">UC-8</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="hit">●</td><td class="dot">·</td></tr>
+        <tr><td class="id">UC-9</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="dot">·</td><td class="hit">●</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Every row and every column carries a mark: no use case is left unprotected, and no guardrail defends nothing.</p>
+
+  <h2>Tier 4 — How we would know</h2>
+  <p>The pioneer authored the disappointment — <em>"same as it reads"</em> for all twelve — and the commands below are mine. Each says what failure looks like before it says what runs.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th class="id">Id</th><th>Holds</th><th>What is checked, and what counts as failure</th></tr></thead>
+      <tbody>
+        <tr><td class="id">T-1</td><td class="holds">G-1</td><td>Start over stdio in Development and inspect the process's listening sockets. <strong>Fails</strong> if any listener exists, or no JSON-RPC reply reaches stdout.</td></tr>
+        <tr><td class="id">T-2</td><td class="holds">G-1</td><td>Start over stdio with the environment set to Production. <strong>Fails</strong> if the exit code is anything but 78, or the process serves a request.</td></tr>
+        <tr><td class="id">T-3</td><td class="holds">G-2</td><td>Start with an invalid provider URL, then force an unhandled startup failure. <strong>Fails</strong> if either exits 0; expected 78 and 70.</td></tr>
+        <tr><td class="id">T-4</td><td class="holds">G-3</td><td>Send a foreign <code>Host</code> header; then call 100 invented tool names and read the throttle's key set. <strong>Fails</strong> if the host request reaches authentication, or the key set holds anything but registered tool names.</td></tr>
+        <tr><td class="id">T-5</td><td class="holds">G-4</td><td>Feed the demo provider a recorded camelCase payload and call all six tools. <strong>Fails</strong> if any returns an id of 0, an empty title, or an empty collection reported as success. Then return HTTP 500: <strong>fails</strong> if the error does not name a recovery.</td></tr>
+        <tr><td class="id">T-6</td><td class="holds">G-5</td><td>Run every registered tool against a recorded response. <strong>Fails</strong> if any tool is registered with no path to success — specifically the climate tool, while its upstream serves only CSV.</td></tr>
+        <tr><td class="id">T-7</td><td class="holds">G-6</td><td>Assert the timeout arithmetic at startup, then stall a fake upstream past the attempt timeout and count attempts. <strong>Fails</strong> if the assertion does not hold, or fewer attempts are made than configured.</td></tr>
+        <tr><td class="id">T-8</td><td class="holds">G-7</td><td>Start with a handler that records calls, then probe both endpoints. <strong>Fails</strong> if either does not return 200, or a call was recorded before the first request.</td></tr>
+        <tr><td class="id">T-9</td><td class="holds">G-8</td><td>Build the solution with warnings as errors; read both project files and package versions; search for suppressions around SDK deprecations. <strong>Fails</strong> on a build error, a project not on <code>net10.0</code>, packages not on 2.2.0, or a deprecation silenced rather than resolved.</td></tr>
+        <tr><td class="id">T-10</td><td class="holds">G-9</td><td>Run the workflow's own steps against three seeded fixtures. <strong>Fails</strong> if any of the three passes.</td></tr>
+        <tr><td class="id">T-11</td><td class="holds">G-10</td><td>Scan the tree for secrets and read every settings file. <strong>Fails</strong> if the scan reports anything, or an API key value sits in configuration.</td></tr>
+        <tr><td class="id">T-12</td><td class="holds">G-11</td><td>Enumerate registered tool names and search the docs for each. <strong>Fails</strong> if a documented name does not exist, or a PascalCase spelling appears.</td></tr>
+        <tr><td class="id">T-13</td><td class="holds">G-12</td><td>Check the tree is clean and the head commit exists on the remote branch. <strong>Fails</strong> if either is untrue.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Untested — three guarantees no test reaches</h3>
+  <ul>
+    <li><strong>G-3's full middleware order.</strong> T-4 proves the host check precedes authentication, not the position of every stage. The rest is verified by reading.</li>
+    <li><strong>G-2's exit code 70.</strong> Forcing a genuinely unhandled failure deterministically may not be possible. If it isn't, that half of T-3 becomes a reading check and the contract will say so.</li>
+    <li><strong>G-8's "resolved rather than suppressed".</strong> T-9 catches the two common suppressions; a deprecation avoided some other way would pass.</li>
+  </ul>
+
+  <h2>Boundaries</h2>
+  <p>This contract is foundation only. Naming what it excludes is what lets scope be refused later without renegotiating:</p>
+  <ul>
+    <li><strong>No identity.</strong> Callers are not authenticated; that is Phase 1.</li>
+    <li><strong>No provider policy frame, no egress guard.</strong> The core the founding statement names is Phase 2, and it needs an identity to key policy on.</li>
+    <li><strong>No audit trail, no strikes, no revocation.</strong> Phases 3 and 4.</li>
+    <li><strong>No bounded response reads, no Redis, no container work.</strong> Phases 2 and 6.</li>
+    <li><strong>The API key middleware stays for now.</strong> It is removed in Phase 1, when something replaces it.</li>
+  </ul>
+
+  <div class="gate">
+    <h3>The gate</h3>
+    <p><strong>Approval authorises</strong> implementation of exactly these twelve guardrails, verified by these thirteen tests, on the <code>epic/security-hardening</code> branch.</p>
+    <p><strong>A deviation found in flight stops the work.</strong> If implementation cannot proceed against a clause as written, the work halts and the deviation is surfaced before anything else is done. An unauthorised deviation is drift, not a revision, and is recorded as such.</p>
+    <p><strong>A change is a whole redraw.</strong> Not a patched clause here and a republished section there — the contract is drawn again in full, and this page is republished whole to the same URL.</p>
+    <p><strong>One decision is deliberately open</strong> <span class="chip open">open</span> — <strong>G-5</strong>: whether the climate tool is removed or rebuilt against the CSV endpoint. Approving as-is leaves that choice to implementation, on the condition that no tool remains which cannot succeed. That condition is what T-6 checks either way.</p>
+    <p><strong>Before code:</strong> one guarantee is broken on purpose — G-4, by restoring the old case-sensitive deserialisation — and T-5 is seen to go red. A suite that has never failed carries no information.</p>
+  </div>
+
+  <div class="foot">
+    <p><b>Surfaces read this session:</b> <code>Program.cs</code>, the three provider folders and their tests; <code>docs/06-SECURITY-ROADMAP.md</code> §4 Phase 0; the live SMHI forecast and observation endpoints; JSONPlaceholder's response shape; the .NET support schedule; the MCP C# SDK release notes. The six empty-record tools, the port-5000 bind and the exit code 0 were each reproduced by running this server, not inferred.</p>
+    <p><b>No code has changed.</b> This page renders <code>contract-001</code> as recorded in <code>CONTRACT-LOG.yaml</code>; where the two disagree, the log is right and this page is stale.</p>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,54 @@
+name: CI
+
+# contract-001 · G-9 — every push, not only pull requests: the guarantee is that nothing
+# reaches a branch without having been restored from the lock file, built with warnings as
+# errors, tested, audited for vulnerable packages and scanned for credentials.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # --locked-mode fails if packages.lock.json does not match the project files, so a
+      # dependency cannot change without the change being visible in the diff.
+      - name: Restore (locked)
+        run: dotnet restore McpServerTemplate.sln --locked-mode
+
+      - name: Build (warnings are errors)
+        run: dotnet build McpServerTemplate.sln --no-restore --configuration Release -warnaserror
+
+      - name: Test
+        run: dotnet test McpServerTemplate.sln --no-build --configuration Release --verbosity normal
+
+      # Direct and transitive. NuGetAudit already fails the build through warnings-as-errors;
+      # this step states the finding plainly rather than leaving it in build output.
+      - name: Audit packages
+        run: |
+          set -o pipefail
+          output=$(dotnet list McpServerTemplate.sln package --vulnerable --include-transitive 2>&1 | tee /dev/stderr)
+          if echo "$output" | grep -q "has the following vulnerable packages"; then
+            echo "::error::Vulnerable package(s) found. Upgrade or replace them."
+            exit 1
+          fi
+
+      - name: Secret scan
+        run: bash scripts/secret-scan.sh

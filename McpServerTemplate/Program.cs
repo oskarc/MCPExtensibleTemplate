@@ -1,10 +1,13 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Threading.RateLimiting;
 using McpServerTemplate.Infrastructure;
 using McpServerTemplate.Providers.JsonPlaceholder;
 using McpServerTemplate.Providers.Smhi;
 using McpServerTemplate.Providers.SmhiObs;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
 
@@ -23,9 +26,12 @@ using Serilog.Events;
 //      classes — no additional wiring needed.
 //
 // TRANSPORT:
-//   Default is stdio (for IDE/local use). Set environment variable or config:
-//     Transport=http  — starts an HTTP server on the configured port
-//     Transport=stdio — (default) uses stdin/stdout
+//   Transport=stdio — (default) stdin/stdout, for a local IDE. Development only: it builds a
+//                     plain host with no web server and authenticates nobody.
+//   Transport=http  — a hosted server behind the middleware pipeline fixed below.
+//
+// EXIT CODES (contract-001 · G-2):
+//   0  normal shutdown · 70 unhandled failure · 78 configuration the server will not honour
 // ============================================================================
 
 // ── Serilog bootstrap logger ──
@@ -41,23 +47,230 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
+    // The transport decides which kind of host is built, so it has to be read before either
+    // builder exists. Both environment variables are consulted: the generic host reads
+    // DOTNET_ENVIRONMENT and the web host reads ASPNETCORE_ENVIRONMENT, and the stdio guard
+    // below must not be escapable by setting only the one this process would otherwise ignore.
+    var environmentName =
+        Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+        ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+        ?? Environments.Production;
+
+    var bootstrapConfiguration = new ConfigurationBuilder()
+        .SetBasePath(AppContext.BaseDirectory)
+        .AddJsonFile("appsettings.json", optional: true)
+        .AddJsonFile($"appsettings.{environmentName}.json", optional: true)
+        .AddEnvironmentVariables()
+        .AddCommandLine(args)
+        .Build();
+
+    var transport = (bootstrapConfiguration["Transport"] ?? "stdio").Trim();
+
+    if (transport.Equals("stdio", StringComparison.OrdinalIgnoreCase))
+    {
+        return await RunStdioAsync(args, environmentName);
+    }
+
+    if (transport.Equals("http", StringComparison.OrdinalIgnoreCase))
+    {
+        return await RunHttpAsync(args);
+    }
+
+    throw new ConfigurationException(
+        $"Unknown transport '{transport}'. Set Transport to 'stdio' (local IDE, Development only) "
+        + "or 'http' (hosted).");
+}
+catch (ConfigurationException ex)
+{
+    // The deployment asked for something the server will not do. The operator needs to change
+    // configuration, not read a stack trace — so the message is the log, and the code says which.
+    Log.Fatal("MCP Server cannot start: {Reason}", ex.Message);
+    return ExitCode.Configuration;
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "MCP Server terminated unexpectedly");
+    return ExitCode.Software;
+}
+finally
+{
+    await Log.CloseAndFlushAsync();
+}
+
+// ── stdio transport ──
+// A plain generic host: no Kestrel, no port, no middleware. Nothing binds a socket.
+static async Task<int> RunStdioAsync(string[] args, string environmentName)
+{
+    if (!environmentName.Equals(Environments.Development, StringComparison.OrdinalIgnoreCase))
+    {
+        throw new ConfigurationException(
+            $"Transport 'stdio' is permitted only in Development; this process is running as "
+            + $"'{environmentName}'. stdio exposes the server's whole tool surface to whoever owns "
+            + "the process, with no authentication and no rate limit per caller. Set Transport=http "
+            + "for any hosted environment.");
+    }
+
+    var builder = Host.CreateApplicationBuilder(args);
+
+    ConfigureLogging(builder.Services, builder.Configuration);
+    var mcpBuilder = ConfigureMcpServer(builder.Services, builder.Configuration);
+    mcpBuilder.WithStdioServerTransport();
+    RegisterProviders(builder.Services, builder.Configuration);
+
+    var host = builder.Build();
+    await host.RunAsync();
+    return ExitCode.Ok;
+}
+
+// ── HTTP transport ──
+static async Task<int> RunHttpAsync(string[] args)
+{
     var builder = WebApplication.CreateBuilder(args);
+    var configuration = builder.Configuration;
 
-    // ── Serilog integration ──
-    builder.Services.AddSerilog(config => config
-        .ReadFrom.Configuration(builder.Configuration)
+    ConfigureLogging(builder.Services, configuration);
+
+    // The HTTP transport's services must be registered before MapMcp can route to them;
+    // without this the host builds and then throws on the first route mapping.
+    ConfigureMcpServer(builder.Services, configuration).WithHttpTransport();
+
+    var port = configuration.GetValue("HttpTransport:Port", 3001);
+    var bindAddress = configuration.GetValue("HttpTransport:BindAddress", "localhost") ?? "localhost";
+
+    // Fail before binding rather than serving unauthenticated: the middleware that enforces the
+    // key is constructed lazily, so without this the server would come up and only reject the
+    // first request.
+    if (string.IsNullOrWhiteSpace(configuration.GetValue<string>("Authentication:ApiKey")))
+    {
+        throw new ConfigurationException(
+            "Authentication:ApiKey must be configured when using HTTP transport. In development set it "
+            + "with 'dotnet user-secrets set Authentication:ApiKey <value>'; in a hosted environment "
+            + "supply it as the environment variable Authentication__ApiKey.");
+    }
+
+    Log.Information("Starting MCP server with HTTP transport on {BindAddress}:{Port}", bindAddress, port);
+    builder.WebHost.UseUrls($"http://{bindAddress}:{port}");
+
+    // ── Kestrel hardening ──
+    builder.WebHost.ConfigureKestrel(kestrel =>
+    {
+        kestrel.Limits.MaxRequestBodySize = 1_048_576; // 1 MB
+        kestrel.Limits.MaxConcurrentConnections = 100;
+        kestrel.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
+        kestrel.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(120);
+    });
+
+    // ── Trust proxy headers only from a proxy ──
+    // Known networks and proxies default to loopback, so a forwarded header from anywhere else
+    // is ignored. Without that, any caller could set X-Forwarded-For and choose which bucket of
+    // the per-client rate limiter to spend.
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.ForwardLimit = 1;
+    });
+
+    // ── Host allowlist ──
+    // Rejects requests whose Host header this server does not answer for, which is what stops
+    // DNS rebinding from turning a browser on the operator's machine into a client of it.
+    var allowedHosts = configuration.GetSection("HttpTransport:AllowedHosts").Get<string[]>();
+    if (allowedHosts is not { Length: > 0 })
+    {
+        allowedHosts = bindAddress is "localhost" or "127.0.0.1" or "::1"
+            ? ["localhost", "127.0.0.1", "[::1]"]
+            : [bindAddress];
+    }
+
+    builder.Services.AddHostFiltering(options =>
+    {
+        options.AllowedHosts = allowedHosts;
+        options.AllowEmptyHosts = false;
+        options.IncludeFailureMessage = false;
+    });
+
+    // ── Per-client (IP) rate limiting for HTTP transport ──
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 60,
+                    Window = TimeSpan.FromMinutes(1),
+                    AutoReplenishment = true
+                }));
+    });
+
+    // ── Restrictive CORS — deny all cross-origin by default ──
+    var allowedOrigins = configuration.GetSection("HttpTransport:AllowedOrigins").Get<string[]>();
+    builder.Services.AddCors(options =>
+    {
+        options.AddDefaultPolicy(policy =>
+        {
+            if (allowedOrigins is { Length: > 0 })
+                policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+            else
+                policy.SetIsOriginAllowed(_ => false);
+        });
+    });
+
+    RegisterProviders(builder.Services, configuration);
+
+    var app = builder.Build();
+
+    // ── Middleware order (contract-001 · G-3) ──
+    // Fixed, and each stage depends on the ones before it:
+    //   forwarded headers  — establishes the real client address and scheme
+    //   HTTPS redirection  — acts on that scheme (a no-op when no HTTPS port is configured)
+    //   host allowlist     — rejects a Host this server does not answer for
+    //   CORS               — answers preflight before anything spends a rate-limit permit
+    //   rate limiter       — partitions on the address forwarded headers established
+    //   health endpoints   — probes carry no credential, and disclose nothing
+    //   authentication     — the last gate before any tool is reachable
+    app.UseForwardedHeaders();
+    app.UseHttpsRedirection();
+    app.UseHostFiltering();
+    app.UseCors();
+    app.UseRateLimiter();
+    app.UseHealthEndpoints(app.Lifetime);
+    app.UseMiddleware<ApiKeyMiddleware>();
+    app.MapMcp();
+
+    await app.RunAsync();
+    return ExitCode.Ok;
+}
+
+// ── Shared registration ──
+
+static void ConfigureLogging(IServiceCollection services, IConfiguration configuration)
+{
+    // A log path that can climb out of its directory is a write primitive, so it is refused
+    // rather than normalised.
+    var logPath = configuration["Serilog:WriteTo:1:Args:path"];
+    if (logPath?.Contains("..", StringComparison.Ordinal) == true)
+    {
+        throw new ConfigurationException(
+            $"Log file path '{logPath}' contains path traversal characters (..). Use an absolute path.");
+    }
+
+    services.AddSerilog(config => config
+        .ReadFrom.Configuration(configuration)
         .Enrich.FromLogContext());
+}
 
-    // ── Server metadata ──
+static IMcpServerBuilder ConfigureMcpServer(IServiceCollection services, IConfiguration configuration)
+{
     var assemblyVersion = Assembly.GetExecutingAssembly()
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
         ?? "1.0.0";
 
-    // ── Rate limit from configuration (defaults to 10/min if not set) ──
-    var maxCallsPerToolPerMinute = builder.Configuration.GetValue("RateLimit:MaxCallsPerToolPerMinute", 10);
+    var maxCallsPerToolPerMinute = configuration.GetValue("RateLimit:MaxCallsPerToolPerMinute", 10);
+    var throttle = new ToolCallThrottleFilter(maxCallsPerToolPerMinute);
+    services.AddSingleton(throttle);
 
-    // ── MCP Server setup ──
-    var mcpBuilder = builder.Services
+    return services
         .AddMcpServer(options =>
         {
             options.ServerInfo = new()
@@ -72,97 +285,14 @@ try
         .WithRequestFilters(filters =>
         {
             filters.AddCallToolFilter(ToolCallLoggingFilter.Create());
-            filters.AddCallToolFilter(ToolCallThrottleFilter.Create(maxCallsPerToolPerMinute));
+            filters.AddCallToolFilter(throttle.AsFilter());
         });
-
-    // ── Transport selection ──
-    // "stdio" for IDE/local; "http" for hosted multi-client scenarios.
-    var transport = builder.Configuration.GetValue<string>("Transport") ?? "stdio";
-
-    if (transport.Equals("http", StringComparison.OrdinalIgnoreCase))
-    {
-        var port = builder.Configuration.GetValue("HttpTransport:Port", 3001);
-        var bindAddress = builder.Configuration.GetValue("HttpTransport:BindAddress", "localhost");
-        Log.Information("Starting MCP server with HTTP transport on {BindAddress}:{Port}", bindAddress, port);
-        builder.WebHost.UseUrls($"http://{bindAddress}:{port}");
-
-        // ── Kestrel hardening ──
-        builder.WebHost.ConfigureKestrel(kestrel =>
-        {
-            kestrel.Limits.MaxRequestBodySize = 1_048_576; // 1 MB
-            kestrel.Limits.MaxConcurrentConnections = 100;
-            kestrel.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
-            kestrel.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(120);
-        });
-
-        // ── Per-client (IP) rate limiting for HTTP transport ──
-        builder.Services.AddRateLimiter(options =>
-        {
-            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = 60,
-                        Window = TimeSpan.FromMinutes(1),
-                        AutoReplenishment = true
-                    }));
-        });
-
-        // ── Restrictive CORS — deny all cross-origin by default ──
-        var allowedOrigins = builder.Configuration
-            .GetSection("HttpTransport:AllowedOrigins").Get<string[]>();
-        builder.Services.AddCors(options =>
-        {
-            options.AddDefaultPolicy(policy =>
-            {
-                if (allowedOrigins is { Length: > 0 })
-                    policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
-                else
-                    policy.SetIsOriginAllowed(_ => false);
-            });
-        });
-    }
-    else
-    {
-        mcpBuilder.WithStdioServerTransport();
-    }
-
-    // ── Log path safety check ──
-    var logPath = builder.Configuration["Serilog:WriteTo:1:Args:path"];
-    if (logPath?.Contains("..") == true)
-    {
-        throw new InvalidOperationException(
-            $"Log file path '{logPath}' contains path traversal characters (..). Use an absolute path.");
-    }
-
-    // ── PROVIDER-SPECIFIC: Register your provider's services here ──
-    builder.Services.AddSmhiProvider(builder.Configuration);
-    builder.Services.AddSmhiObsProvider(builder.Configuration);
-    builder.Services.AddJsonPlaceholderProvider(builder.Configuration);
-
-    var app = builder.Build();
-
-    // ── HTTP transport: apply security middleware and map MCP endpoints ──
-    if (transport.Equals("http", StringComparison.OrdinalIgnoreCase))
-    {
-        app.UseMiddleware<ApiKeyMiddleware>();
-        app.UseCors();
-        app.UseRateLimiter();
-        app.MapMcp();
-    }
-
-    // ── Startup health check ──
-    await HealthProbe.CheckUpstreamAsync(app.Services);
-
-    await app.RunAsync();
 }
-catch (Exception ex)
+
+// ── PROVIDER-SPECIFIC: Register your provider's services here ──
+static void RegisterProviders(IServiceCollection services, IConfiguration configuration)
 {
-    Log.Fatal(ex, "MCP Server terminated unexpectedly");
-}
-finally
-{
-    await Log.CloseAndFlushAsync();
+    services.AddSmhiProvider(configuration);
+    services.AddSmhiObsProvider(configuration);
+    services.AddJsonPlaceholderProvider(configuration);
 }

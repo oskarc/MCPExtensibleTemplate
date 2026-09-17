@@ -1,3 +1,4 @@
+using McpServerTemplate.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
@@ -32,25 +33,25 @@ public static class SmhiObsServiceRegistration
 
         services.AddMemoryCache();
 
+        // Declared here, not in the options callback: the callback runs lazily when the
+        // first HttpClient is built, which is a tool call, not startup.
+        var budget = ResilienceBudget.Create(
+            providerName: "SmhiObs",
+            // Historical observation series are larger and slower than a forecast.
+            attemptTimeout: TimeSpan.FromSeconds(20),
+            maxRetryAttempts: 2,
+            // Must exceed 20s x 3 = 60s.
+            totalTimeout: TimeSpan.FromSeconds(70),
+            samplingDuration: TimeSpan.FromSeconds(45),
+            breakDuration: TimeSpan.FromSeconds(15));
+
         services.AddHttpClient<SmhiObsApiClient>(client =>
         {
             client.BaseAddress = new Uri(config.BaseUrl);
             client.DefaultRequestHeaders.UserAgent.ParseAdd(config.UserAgent);
-            client.Timeout = TimeSpan.FromSeconds(30); // Historical data can be larger/slower
+            client.Timeout = ResilienceBudget.ClientTimeout;
         })
-        .AddStandardResilienceHandler(options =>
-        {
-            options.Retry.MaxRetryAttempts = 3;
-            options.Retry.Delay = TimeSpan.FromMilliseconds(500);
-
-            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
-            options.CircuitBreaker.FailureRatio = 0.5;
-            options.CircuitBreaker.MinimumThroughput = 5;
-            options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(15);
-
-            // Higher total timeout for historical data which can be large.
-            options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(60);
-        });
+        .AddStandardResilienceHandler(budget.Apply);
 
         return services;
     }

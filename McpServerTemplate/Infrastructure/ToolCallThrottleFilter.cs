@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Threading.RateLimiting;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
@@ -14,45 +15,85 @@ namespace McpServerTemplate.Infrastructure;
 /// Without throttling, a single agent session could make hundreds of HTTP requests
 /// to the upstream API in seconds.
 ///
-/// This filter uses <see cref="SlidingWindowRateLimiter"/> per tool name, which is
-/// thread-safe, memory-bounded, and automatically evicts old windows.
+/// contract-001 · G-3 — the limiter is keyed on the tool the server actually matched, never on
+/// the name the caller sent. Keying on the caller's string makes the limiter itself the attack:
+/// each invented name mints a limiter that is never collected, so an unauthenticated caller can
+/// exhaust the server's memory through the very component meant to protect it. A call that
+/// matched no tool is passed straight through and fails as an unknown tool, as it should.
 ///
 /// TEMPLATE INFRASTRUCTURE — works for any provider.
 ///
 /// Register AFTER <see cref="ToolCallLoggingFilter"/> so rejected calls are still logged,
 /// providing full audit trail visibility.
 /// </summary>
-public static class ToolCallThrottleFilter
+public sealed class ToolCallThrottleFilter
 {
-    /// <summary>
-    /// Creates a rate-limiting filter with a per-tool sliding window.
-    /// </summary>
+    // One limiter per matched tool. SlidingWindowRateLimiter is thread-safe and manages its own
+    // internal state, so there is no manual queue to leak. The dictionary is bounded by the number
+    // of registered tools, which is fixed at startup.
+    private readonly ConcurrentDictionary<string, SlidingWindowRateLimiter> _limiters =
+        new(StringComparer.Ordinal);
+
+    private readonly int _maxCallsPerToolPerMinute;
+
     /// <param name="maxCallsPerToolPerMinute">
     /// Maximum calls allowed per tool name within a 1-minute window.
     /// Default 10 is generous for human-paced interaction but catches agentic loops.
     /// Tune down for expensive APIs, up for chatty legitimate patterns.
     /// Configurable via <c>RateLimit:MaxCallsPerToolPerMinute</c> in appsettings.json.
     /// </param>
-    public static McpRequestFilter<CallToolRequestParams, CallToolResult> Create(
-        int maxCallsPerToolPerMinute = 10)
+    public ToolCallThrottleFilter(int maxCallsPerToolPerMinute = 10)
     {
-        // ConcurrentDictionary<string, SlidingWindowRateLimiter> — each tool gets its own limiter.
-        // SlidingWindowRateLimiter is thread-safe and automatically manages its internal state,
-        // eliminating the manual Queue<DateTimeOffset> + lock pattern and its memory leak.
-        var limiters = new System.Collections.Concurrent.ConcurrentDictionary<string, SlidingWindowRateLimiter>();
+        if (maxCallsPerToolPerMinute < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxCallsPerToolPerMinute),
+                maxCallsPerToolPerMinute,
+                "A per-tool limit below 1 would reject every call. Set RateLimit:MaxCallsPerToolPerMinute to 1 or more.");
+        }
 
-        return next => async (context, cancellationToken) =>
+        _maxCallsPerToolPerMinute = maxCallsPerToolPerMinute;
+    }
+
+    /// <summary>
+    /// How many distinct tools this filter is currently tracking. Bounded by the number of
+    /// registered tools; a test asserts that unmatched call names never raise it.
+    /// </summary>
+    public int TrackedToolCount => _limiters.Count;
+
+    /// <summary>
+    /// The name the limiter keys on: the matched tool's own name, or null when nothing matched.
+    /// Primitive matching happens before the filter pipeline runs, so this is already resolved.
+    /// </summary>
+    public static string? MatchedToolName(RequestContext<CallToolRequestParams> context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return context.MatchedPrimitive is McpServerTool tool ? tool.ProtocolTool.Name : null;
+    }
+
+    /// <summary>
+    /// Applies the throttle to a call, delegating to <paramref name="next"/> when it is allowed.
+    /// </summary>
+    public McpRequestFilter<CallToolRequestParams, CallToolResult> AsFilter() =>
+        next => async (context, cancellationToken) =>
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var toolName = context.Params?.Name ?? "unknown";
+            var toolName = MatchedToolName(context);
 
-            var limiter = limiters.GetOrAdd(toolName, _ => new SlidingWindowRateLimiter(
+            // Nothing matched. Do not mint a limiter for a name the server does not serve —
+            // let the handler reject it as an unknown tool.
+            if (toolName is null)
+            {
+                return await next(context, cancellationToken);
+            }
+
+            var limiter = _limiters.GetOrAdd(toolName, _ => new SlidingWindowRateLimiter(
                 new SlidingWindowRateLimiterOptions
                 {
                     Window = TimeSpan.FromMinutes(1),
                     SegmentsPerWindow = 6, // 10-second segments for smooth sliding
-                    PermitLimit = maxCallsPerToolPerMinute,
+                    PermitLimit = _maxCallsPerToolPerMinute,
                     QueueLimit = 0, // Reject immediately, don't queue
                     AutoReplenishment = true
                 }));
@@ -62,11 +103,10 @@ public static class ToolCallThrottleFilter
             if (!lease.IsAcquired)
             {
                 throw new McpException(
-                    $"Rate limit: '{toolName}' has exceeded {maxCallsPerToolPerMinute} calls per minute. "
+                    $"Rate limit: '{toolName}' has exceeded {_maxCallsPerToolPerMinute} calls per minute. "
                     + "Please reuse the results from previous calls instead of calling this tool again.");
             }
 
             return await next(context, cancellationToken);
         };
-    }
 }

@@ -10,7 +10,6 @@ namespace McpServerTemplate.Providers.SmhiObs;
 public static class SmhiObsFormatters
 {
     private const int MaxValues = 200;
-    private const int MaxClimatologyReadings = 50_000;
 
     /// <summary>
     /// Formats a daily summary of recent observations — groups hourly readings
@@ -80,47 +79,54 @@ public static class SmhiObsFormatters
     }
 
     /// <summary>
-    /// Formats a climate comparison: groups by month and shows monthly averages
-    /// across available years. Useful for "what's typical for April?" queries.
+    /// Formats a climate comparison for one month of the year: per-year statistics from the
+    /// station's corrected archive, then the overall picture.
+    ///
+    /// The series arrives already filtered to the requested month (see MetObsArchiveCsv), so
+    /// nothing here has to guess which readings the cap admitted.
     /// </summary>
-    public static string FormatMonthlyClimatology(MetObsDataResponse data, int targetMonth)
+    public static string FormatMonthlyClimatology(ArchiveSeries series, int targetMonth)
     {
+        ArgumentNullException.ThrowIfNull(series);
+
         var monthName = CultureInfo.InvariantCulture.DateTimeFormat.GetMonthName(targetMonth);
 
         var sb = new StringBuilder();
-        sb.AppendLine($"SMHI Historical Observations — {data.Parameter.Name}");
-        sb.AppendLine($"Station: {data.Station.Name}");
-        sb.AppendLine($"Month: {monthName}");
-        sb.AppendLine($"Unit: {data.Parameter.Unit}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"SMHI Corrected Archive — {series.ParameterName}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Station: {series.StationName}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Month: {monthName}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Unit: {series.Unit}");
         sb.AppendLine(new string('-', 50));
 
-        var parsed = data.Values
-            .Take(MaxClimatologyReadings) // Cap to prevent memory issues with large archives
-            .Where(v => DateTimeOffset.FromUnixTimeMilliseconds(v.DateUnixMs).Month == targetMonth)
-            .Select(v => (Date: DateTimeOffset.FromUnixTimeMilliseconds(v.DateUnixMs),
-                          Value: double.TryParse(v.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : (double?)null))
-            .Where(v => v.Value.HasValue)
-            .ToList();
-
-        if (parsed.Count == 0)
+        if (series.Readings.Count == 0)
         {
-            sb.AppendLine($"No observations available for {monthName}.");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"No archived observations available for {monthName}.");
             return sb.ToString();
         }
 
-        var byYear = parsed
-            .GroupBy(v => v.Date.Year)
+        var byYear = series.Readings
+            .GroupBy(r => r.Timestamp.Year)
             .OrderByDescending(g => g.Key);
 
         foreach (var year in byYear)
         {
-            var values = year.Select(v => v.Value!.Value).ToList();
-            sb.AppendLine($"  {year.Key}: min {values.Min():F1}, max {values.Max():F1}, mean {values.Average():F1} {data.Parameter.Unit} ({values.Count} readings)");
+            var values = year.Select(r => r.Value).ToList();
+            sb.AppendLine(CultureInfo.InvariantCulture,
+                $"  {year.Key}: min {values.Min():F1}, max {values.Max():F1}, mean {values.Average():F1} {series.Unit} ({values.Count} readings)");
         }
 
-        var allValues = parsed.Select(v => v.Value!.Value).ToList();
+        var all = series.Readings.Select(r => r.Value).ToList();
+        var years = series.Readings.Select(r => r.Timestamp.Year).ToList();
         sb.AppendLine();
-        sb.AppendLine($"Overall {monthName} climate: min {allValues.Min():F1}, max {allValues.Max():F1}, mean {allValues.Average():F1} {data.Parameter.Unit}");
+        sb.AppendLine(CultureInfo.InvariantCulture,
+            $"Overall {monthName} climate ({years.Min()}-{years.Max()}): min {all.Min():F1}, max {all.Max():F1}, mean {all.Average():F1} {series.Unit}");
+
+        if (series.Truncated)
+        {
+            sb.AppendLine();
+            sb.AppendLine(CultureInfo.InvariantCulture,
+                $"Note: the archive held more {monthName} readings than this tool returns; the most recent were kept.");
+        }
 
         return sb.ToString();
     }

@@ -32,7 +32,7 @@ The testing strategy covers **4 layers**:
 - Slower execution
 - Verify the entire flow works
 
-**Example**: Simulate an MCP client calling `GetBlogPost` and verifying the response format matches MCP spec
+**Example**: Simulate an MCP client calling `get_blog_post` and verifying the response format matches MCP spec
 
 ### 4. **Security & Load Tests** (non-functional)
 - Rate limiting enforcement

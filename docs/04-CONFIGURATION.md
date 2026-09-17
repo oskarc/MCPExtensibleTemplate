@@ -265,7 +265,7 @@ $env:Authentication__ApiKey = "a3f5b9c2d1e4f8a6b2c5d9e3f1a4b7c0d2e5f8a1b4c7d0e3f
 **What happens when limit is exceeded**:
 ```
 ✗ 429 Too Many Requests
-Tool 'GetBlogPost' exceeded rate limit: 10 calls per minute
+Tool 'get_blog_post' exceeded rate limit: 10 calls per minute
 ```
 
 ---

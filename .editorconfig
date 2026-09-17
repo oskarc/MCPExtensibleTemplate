@@ -1,0 +1,24 @@
+# Analyzer severities for this repository.
+# The build runs with TreatWarningsAsErrors and AnalysisLevel=latest-recommended (Directory.Build.props),
+# so anything left at warning stops the build. Two rules are deliberately held at suggestion.
+
+root = true
+
+[*.cs]
+
+# CA1305 — locale-dependent formatting. This fires on ~40 sites in the provider formatters, where
+# interpolated numbers and dates are rendered with the current culture. It is a real defect class for a
+# server whose output is parsed by a model: under a Swedish locale a temperature renders "12,3" where the
+# text claims "12.3". Fixing it is a change to every formatter and belongs in its own contract, not in
+# contract-001 (foundation), whose G-8 asks only that warnings are errors.
+dotnet_diagnostic.CA1305.severity = suggestion
+
+# CA1848 — LoggerMessage delegates instead of ILogger extension methods. A throughput optimisation for
+# high-rate logging paths; this server logs once per tool call. No correctness content.
+dotnet_diagnostic.CA1848.severity = suggestion
+
+# Test projects. Test method names are sentences — Method_Condition_Expectation — and are read as
+# documentation of what broke. CA1707 governs the naming of a public API surface; a test assembly has
+# no such surface, and renaming forty tests to PascalCase would cost the only thing the names are for.
+[McpServerTemplate.Tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none

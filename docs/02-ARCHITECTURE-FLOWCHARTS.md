@@ -24,7 +24,7 @@ graph TB
     end
 
     subgraph MCP["MCP Protocol Layer<br/>(auto-discovery)"]
-        MP["Tool Registry<br/>(GetBlogPost, CreatePost, etc.)"]
+        MP["Tool Registry<br/>(get_blog_post, create_blog_post, etc.)"]
     end
 
     subgraph Providers["Provider Layer (Pluggable)"]

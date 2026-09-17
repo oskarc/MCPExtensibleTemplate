@@ -221,6 +221,32 @@ corrections:
     precedent: null
     clerk_note: null
 
+  - corr_id: C-007
+    date: 2026-09-17
+    contract_id: contract-001
+    moment: M-04
+    grade: option-override
+    intervention: redirected
+    agent_offered: |
+      So, per guardrail: what result would make you say this wasn't met? You don't need twelve answers.
+      "Same as it says" is a real answer and I'll record it as one.
+    pioneer_said: |
+      Same as it reads, id like you to write tier 4 by default and i can adjust those or confirm your
+      question that they hold, same as usecases and the other.
+    reason_given: |
+      none given
+    noticed: |
+      not asked
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
 trajectory:
   updated: 2026-09-17
   by_contract:

@@ -79,7 +79,8 @@ public static class SmhiObsTools
         if (month < 1 || month > 12)
             throw new ModelContextProtocol.McpException("Month must be between 1 and 12.");
 
-        var data = await client.GetNearestObservationsAsync(latitude, longitude, parameterId: 1, period: "corrected-archive", cancellationToken);
-        return SmhiObsFormatters.FormatMonthlyClimatology(data, month);
+        var station = await client.FindNearestStationAsync(latitude, longitude, parameterId: 1, cancellationToken);
+        var series = await client.GetCorrectedArchiveAsync(station.Id, parameterId: 1, month, cancellationToken);
+        return SmhiObsFormatters.FormatMonthlyClimatology(series, month);
     }
 }
