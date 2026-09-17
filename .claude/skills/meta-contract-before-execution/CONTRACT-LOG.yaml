@@ -201,7 +201,7 @@ contracts:
       date: 2026-09-17
     approval: approved-at-gate
     status: implemented
-    verification_state: reported
+    verification_state: none
     verification:
       date: 2026-09-18
       by: kit-verifier
@@ -428,6 +428,25 @@ contracts:
             under G-8.
       summary: {verified: 19, corrected: 2, open: 0}
       open_needs: []
+    verification_history:
+      - superseded: 2026-09-18
+        by_evidence: |
+          commit addc334 — the demo provider maps every non-success status to an McpException
+          naming a recovery, which is the close kit-verifier itself named; and the logging filter
+          now converts McpException into a CallToolResult instead of rethrowing it, fixing a
+          defect the report did not reach: a throwing tool sent no JSON-RPC response at all, so
+          the caller waited forever. New test T5_a_tool_that_fails_still_answers_the_client calls
+          a failing tool over stdio and reads what a client receives. 85 tests pass in Release;
+          CI green on addc334.
+        note: |
+          The block above it is the kit-verifier report of 2026-09-18 (19 verified, 2 corrected,
+          0 open; T-5 fail), retained in full until a new report replaces it.
+          One point in it is disputed. Its UC-3 evidence says the same probe "against the SMHI
+          provider returns a full recovery sentence". End to end over stdio, on a clean build of
+          66e8477 with all later work stashed, get_current_weather with coordinates (999, 999)
+          returned no reply at all; the behaviour was bisected across six pipeline configurations.
+          The verifier may have probed the SMHI client directly rather than through the server's
+          filters, where the behaviour does differ. Recorded rather than resolved.
     audited: true
     transcript: C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
     observations: [O-009, O-010, O-011, O-012, O-013]
