@@ -1,0 +1,45 @@
+# DRIFTLOG.yaml
+# Project instance data for the drift event log. Governed by meta-drift-eventlog/SKILL.md.
+# Seeded by meta-bootstrap. The agent writes entries and the open -> watching transition itself: recording an
+# incident is not a judgement about it. Everything that judges an elevation needs the pioneer —
+# watching -> mitigated when an authorised elevation is committed, mitigated -> resolved only at a review
+# batch. Every write names its evidence; nothing is written silently.
+# In the base-building-kit repo: templates/DRIFTLOG.template.yaml
+# In a consumer project: .claude/skills/meta-drift-eventlog/DRIFTLOG.yaml
+#
+# AGENT INSTRUCTIONS:
+# This file is a template. meta-bootstrap copies it to
+# .claude/skills/meta-drift-eventlog/DRIFTLOG.yaml as the empty seed.
+# Drift history is project-specific — it does not travel via meta-extract.
+# A new project always starts with an empty entries list, regardless of any
+# inherited type-category kit.
+#
+# Schema reference (full details in meta-drift-eventlog/SKILL.md):
+#
+#   - drift_id: drift-NNN                  # sequential, never reused
+#     surfaced_in: YYYY-MM-DD / topic
+#     surfaced_by: human | self | post-hoc
+#     # aspect — one of:
+#     #   agent: lay-of-the-land | stop-on-triggers | partner-mirror | elevation-not-recovery | evidence-as-work
+#     #   human: exercise-judgment | closeness | distance | re-orient | approval-gate
+#     #   meta:  meta
+#     aspect: lay-of-the-land
+#     description: |
+#       Concrete, non-evaluative statement of what happened.
+#     evidence: |
+#       Cited referent — exact statement, log line, file:line.
+#     reaction: |
+#       What was done in-session in response.
+#     status: open | watching | mitigated | resolved | legacy   # legacy: recorded under an earlier practice and deferred by the pioneer at an upgrade — counted by no hook, presented in no batch (contract-008)
+#     elevation:
+#       - target: skill, contract, mechanism or memory name
+#         kind: new-skill | skill-update | mechanism-change | test-added | agent-added | memory-update | manifest-update
+#         mitigation_medium: prose | mechanism | agent | test | memory | unknown
+#         date: YYYY-MM-DD
+#     reviewed: null                     # date a keep-watching decision was taken at a batch
+#     recurrence_count: 0
+#     related_drifts: []
+#
+# Lifecycle transitions follow the rules in meta-drift-eventlog/SKILL.md.
+
+entries: []

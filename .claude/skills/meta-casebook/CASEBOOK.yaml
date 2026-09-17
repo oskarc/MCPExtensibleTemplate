@@ -1,0 +1,194 @@
+# CASEBOOK.yaml
+# Project instance data. Governed by meta-casebook/SKILL.md.
+# In the base-building-kit repo: templates/CASEBOOK.template.yaml
+# In a consumer project: .claude/skills/meta-casebook/CASEBOOK.yaml
+#
+# AGENT INSTRUCTIONS:
+# meta-bootstrap copies this file as the empty seed, then appends any type-category precedents inherited from a
+# library kit (tier: type-category, with {bindings} to re-bind). kit-case-clerk writes precedents and scenario
+# cards; the main agent appends distinguished_by entries at contract approval; only the pioneer overrules.
+#
+# Schema:
+#
+#   precedents:
+#     - prec_id: P-NNN                      # sequential, never reused
+#       date: YYYY-MM-DD
+#       from: [C-NNN, contract-NNN, drift-NNN, K-NNN]
+#       moments: [M-NN]                     # retrieval key
+#       tier: project | type-category
+#       facts: |
+#         [material facts only; project-specific names in {braces} when tier is type-category]
+#       question: |
+#         [what had to be decided]
+#       holding: |
+#         [what was decided — binds matching situations]
+#       reasons: |
+#         [the pioneer's reasons, verbatim, or: none recorded]
+#       binding: true
+#       distinguished_by: []                # {date, contract_id, how_facts_differ}
+#       status: active | overruled
+#       overruled_by: null                  # C-NNN
+#
+#   scenarios:
+#     - card_id: S-NNN
+#       date: YYYY-MM-DD
+#       from: [C-NNN, P-NNN]
+#       moment: M-NN
+#       situation: |
+#         [the decision point as it stood]
+#       options:
+#         - key: A
+#           text: [option]
+#       pioneer_ranking: pending            # or [B, A, C] — only from the pioneer
+#       rationale: |
+#         [the pioneer's, verbatim]
+#       dissent: |
+#         [a minority view the pioneer gave, or: none]
+#
+#   reconstruction_tests:
+#     - test_id: RT-NNN
+#       date: YYYY-MM-DD
+#       kit_version: [manifest version]
+#       held_out: [C-NNN, B-NNN/I-n]
+#       decisions_tested: 0
+#       matched: 0
+#       misses: []                           # {item, predicted, actual, what the kit lacked}
+
+precedents:
+  - prec_id: P-001
+    date: 2026-09-17
+    from: [C-001]
+    moments: [M-27]
+    tier: project
+    facts: |
+      During install/upgrade orientation (M-27), the agent's lay-of-the-land step surfaced other local
+      repositories/projects reachable in this session as a potential conflict for the install, and described
+      (without quoting) the projects they belong to.
+    question: |
+      Whether the agent may reference or look at other local repositories in this workspace during
+      orientation or later work on this project.
+    holding: |
+      The agent must never reference any other local repo in this work, and must never look at other local
+      repos in this workspace.
+    reasons: |
+      I am building a product that is in no way related to other repos, i dont want to show the public every
+      technical thing im building all jumbled up in this product.
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — the holding forbids referencing an open-ended, session-specific set of other repositories; a script enforcing it would have to hardcode those repositories' names in this checked-in file, which the correction itself forbids"
+
+  - prec_id: P-002
+    date: 2026-09-17
+    from: [C-002]
+    moments: [M-27]
+    tier: project
+    facts: |
+      During install/upgrade orientation (M-27), immediately after the no-other-repos rule was recorded
+      (C-001, P-001), the agent put a further decision to the pioneer by asking a direct question — whether to
+      write `P-001.sh` as a path-shape check — without first setting out the surrounding situation for the
+      pioneer's context.
+    question: |
+      Whether the agent may put a decision to the pioneer by asking for input alone, or must also include the
+      pioneer in the context the decision depends on.
+    holding: |
+      The agent must include the pioneer in the context, instead of only asking for input.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — the holding is a judgement about what counts as sufficient context in a question, not a fixed shape a script could verify"
+
+  - prec_id: P-003
+    date: 2026-09-17
+    from: [C-003]
+    moments: [M-27]
+    tier: project
+    facts: |
+      Following the no-other-repos rule (P-001) and the correction on including context (C-002), the agent
+      recommended writing a path-shape check script (`P-001.sh`) under the kit's mechanisms to enforce that
+      rule, describing it as about ten lines that would run with the kit's other checks.
+    question: |
+      Whether a rule of engagement between the pioneer and the agent, outside the kit's subject matter, should
+      be encoded as a script under the kit's mechanisms.
+    holding: |
+      Do not write the script. It is not part of the kit — it is rules of engagement between the pioneer and
+      the agent.
+    reasons: |
+      its not part of the kit its rules of engagement for you and me
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — the holding itself forbids turning this class of rule into a script; a check enforcing it would do the thing the holding declines to do, and deciding what counts as a rule of engagement rather than a kit rule is judgement"
+
+  - prec_id: P-004
+    date: 2026-09-17
+    from: [C-004]
+    moments: [M-07, M-24]
+    tier: project
+    facts: |
+      The agent proposed letting a further proposal run — one that would, in its own words, "rewrite the kit's
+      own foundation" over the no-other-repos rule — reasoning that a refused proposal is worth having on
+      record even if the pioneer would decline it with one word.
+    question: |
+      Whether a personal instruction to the agent, unrelated to the founding statement's subject, belongs in
+      the kit's foundation or its learning.
+    holding: |
+      It does not. Telling the agent not to read other repos is not part of the standard building kit for an
+      MCP server, has nothing to do with it, and should not be part of the learning.
+    reasons: |
+      Me telling you to not read other repos is not part of the STANDARD BUILDING KIT for a mcp server, it
+      has nothing to do with that.
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — deciding whether a directive bears on the founding statement's subject is judgement, not a shape a script could verify"
+
+scenarios:
+  - card_id: S-001
+    date: 2026-09-17
+    from: [C-003]
+    moment: M-27
+    situation: |
+      After the pioneer's rule that the agent must never reference or look at other local repos (C-001,
+      P-001), and the correction to include the pioneer in context rather than only ask for input (C-002),
+      the agent considered whether to write a path-shape check script enforcing the no-other-repos rule as
+      part of the kit's mechanisms.
+    options:
+      - key: A
+        text: |
+          I'd write it. It's about ten lines, it runs with the kit's other checks, and it guards the thing you
+          actually care about: what reaches the public repo.
+      - key: B
+        text: |
+          dont write the script, its not part of the kit its rules of engagement for you and me
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-002
+    date: 2026-09-17
+    from: [C-004]
+    moment: M-07
+    situation: |
+      The agent weighed whether to let a proposal run that would, in its own words, rewrite the kit's own
+      foundation over the no-other-repos rule, anticipating the pioneer would decline it with one word.
+    options:
+      - key: A
+        text: |
+          I'd let it run. You'd be declining it with one word, and a refused proposal to rewrite the kit's own
+          foundation is worth having on record the first time it happens.
+      - key: B
+        text: |
+          Me telling you to not read other repos is not part of the STANDARD BUILDING KIT for a mcp server, it
+          has nothing to do with that, so i disagree and it should not be part of the learning.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+reconstruction_tests: []

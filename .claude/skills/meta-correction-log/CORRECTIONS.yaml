@@ -1,0 +1,231 @@
+# CORRECTIONS.yaml
+# Project instance data. Governed by meta-correction-log/SKILL.md.
+# In the base-building-kit repo: templates/CORRECTIONS.template.yaml
+# In a consumer project: .claude/skills/meta-correction-log/CORRECTIONS.yaml
+#
+# AGENT INSTRUCTIONS:
+# meta-bootstrap copies this file as the empty seed. Entries are appended the moment a correction happens
+# (map M-07), verbatim, and never edited afterwards except for the fields kit-case-clerk owns
+# (clerked, precedent, clerk_note, and the trajectory block). Does not travel via meta-extract.
+# MARKER KEY read by the mechanisms — do not rename: clerked.
+#
+# Schema:
+#
+#   - corr_id: C-NNN                       # sequential, never reused
+#     date: YYYY-MM-DD
+#     contract_id: contract-NNN | null
+#     moment: M-NN                         # the map moment the correction happened in
+#     grade: tier-redraw | bearing-reevaluation | option-override | scope | decline | frame-reset | stop | detail
+#     intervention: did-it | redirected | hinted | reviewed-after
+#     agent_offered: |
+#       [verbatim excerpt of what the agent proposed or recommended]
+#     pioneer_said: |
+#       [verbatim]
+#     reason_given: |
+#       [verbatim, or: none given]
+#     noticed: |                           # the three incident probes (contract-006 G-6), asked once, verbatim:
+#       [what did you notice that made this wrong? — or: not asked]
+#     would_have_been_right: |
+#       [what would have been right here? — or: not asked]
+#     seen_before: |
+#       [where have you seen this before? — or: not asked]
+#     supersedes: []                       # corr_ids this reverses
+#     recorded_by: main-agent | kit-session-auditor
+#     clerked: false                       # MARKER — kit-case-clerk sets true
+#     precedent: null                      # P-NNN / S-NNN written by kit-case-clerk, or pending-pioneer
+#     clerk_note: null                     # why the clerk set it aside; the pioneer can overrule
+#
+# An answer that departs from the option the agent recommended is a correction (option-override), not a
+# plain answer. The clerk may set an entry aside with clerk_note and precedent: pending-pioneer, which puts
+# the question to the pioneer — it never closes it.
+#
+# trajectory:                              # recomputed by kit-case-clerk
+#   updated: YYYY-MM-DD
+#   by_contract:
+#     - contract_id: contract-NNN
+#       corrections: 0
+#       bearing_reevaluations: 0
+#       interventions: {did-it: 0, redirected: 0, hinted: 0, reviewed-after: 0}
+#   moments: {}                            # M-NN: count
+
+corrections:
+  - corr_id: C-001
+    date: 2026-09-17
+    contract_id: null
+    moment: M-27
+    grade: scope
+    intervention: redirected
+    agent_offered: |
+      Step 2 orientation listed folders outside this repository that this session can reach, and named the
+      projects they belong to, as a potential conflict for the install. (Described, not quoted: the quote
+      would carry the names this correction forbids.)
+    pioneer_said: |
+      I never want you to reference any other repo in this local environment. I am building a product that is
+      in no way related to other repos, i dont want to show the public every technical thing im building all
+      jumbled up in this product.
+
+      i will never mention any local repos in this work, and you will never look at other local repos in this
+      workspace. So you concerns are moot.
+    reason_given: |
+      I am building a product that is in no way related to other repos, i dont want to show the public every
+      technical thing im building all jumbled up in this product.
+    noticed: |
+      not answered
+    would_have_been_right: |
+      not answered
+    seen_before: |
+      not answered
+    supersedes: []
+    recorded_by: main-agent
+    clerked: true
+    precedent: P-001
+    clerk_note: null
+    redaction: |
+      A question that followed the first paragraph named one of the pioneer's other projects; it is not
+      transcribed. The rule is that no other repo is referenced in this one, and this file is committed to a
+      public repository. The words recorded above are verbatim and unaltered.
+
+
+  - corr_id: C-002
+    date: 2026-09-17
+    contract_id: null
+    moment: M-27
+    grade: frame-reset
+    intervention: redirected
+    agent_offered: |
+      That's yours to decide, not mine or the clerk's: should I write `P-001.sh` as that path-shape check?
+      It would catch the file-level leak, not everything your rule covers — it can't see me *reading*
+      elsewhere, only what lands in the repo.
+    pioneer_said: |
+      i dont understand what you are asking. You need to include me in the context, instead of only asking
+      for input.
+    reason_given: |
+      none given
+    noticed: |
+      asked, not answered
+    would_have_been_right: |
+      asked, not answered
+    seen_before: |
+      asked, not answered
+    supersedes: []
+    recorded_by: main-agent
+    clerked: true
+    precedent: P-002
+    clerk_note: null
+
+  - corr_id: C-003
+    date: 2026-09-17
+    contract_id: null
+    moment: M-27
+    grade: option-override
+    intervention: redirected
+    agent_offered: |
+      I'd write it. It's about ten lines, it runs with the kit's other checks, and it guards the thing you
+      actually care about: what reaches the public repo.
+    pioneer_said: |
+      dont write the script, its not part of the kit its rules of engagement for you and me
+    reason_given: |
+      its not part of the kit its rules of engagement for you and me
+    noticed: |
+      not asked - the moment did not allow it: the pioneer had just corrected the pattern of asking for
+      input, and this correction is itself the answer to the question that was asked
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: main-agent
+    clerked: true
+    precedent: "P-003, S-001"
+    clerk_note: null
+
+  - corr_id: C-004
+    date: 2026-09-17
+    contract_id: null
+    moment: M-07
+    grade: option-override
+    intervention: redirected
+    agent_offered: |
+      I'd let it run. You'd be declining it with one word, and a refused proposal to rewrite the kit's own
+      foundation is worth having on record the first time it happens.
+    pioneer_said: |
+      Me telling you to not read other repos is not part of the STANDARD BUILDING KIT for a mcp server, it
+      has nothing to do with that, so i disagree and it should not be part of the learning.
+    reason_given: |
+      Me telling you to not read other repos is not part of the STANDARD BUILDING KIT for a mcp server, it
+      has nothing to do with that.
+    noticed: |
+      not asked - the pioneer has corrected the pattern of asking for input (C-002) and the reason is
+      stated in the correction itself
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked - supersedes nothing, but restates the boundary drawn in C-003
+    supersedes: []
+    recorded_by: main-agent
+    clerked: true
+    precedent: "P-004, S-002"
+    clerk_note: null
+
+  - corr_id: C-005
+    date: 2026-09-17
+    contract_id: null
+    moment: M-15
+    grade: frame-reset
+    intervention: redirected
+    agent_offered: |
+      The useful one is P-004, which turns your last message into a standing rule: a personal directive
+      unrelated to the founding statement's subject is not part of the kit's foundation or learning.
+    pioneer_said: |
+      you need to present with context, i have never seen P-004 and dont know in what regard it matters or
+      why you are telling me.
+    reason_given: |
+      i have never seen P-004 and dont know in what regard it matters or why you are telling me.
+    noticed: |
+      not asked - the correction states what was wrong: a kit artifact was named by id, unseen, with no
+      account of what it says, where it came from, or why it was being raised
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      restates C-002 - the same correction about presenting without context, now for the second time; the
+      prose rule recorded as P-002 did not hold
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+  - corr_id: C-006
+    date: 2026-09-17
+    contract_id: null
+    moment: M-14
+    grade: stop
+    intervention: redirected
+    agent_offered: |
+      If you do nothing: I still follow your rule. If you want it clean: say so and I retire the first one,
+      leaving the second, which states your boundary correctly.
+    pioneer_said: |
+      OK, follow the rule from memory but dont take it further. Commit and push, then lets look at the
+      roadmap for the hardenings.
+    reason_given: |
+      none given
+    noticed: |
+      not asked
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+trajectory:
+  updated: 2026-09-17
+  by_contract:
+    - contract_id: null
+      corrections: 4
+      bearing_reevaluations: 0
+      interventions: {did-it: 0, redirected: 4, hinted: 0, reviewed-after: 0}
+  moments: {M-27: 3, M-07: 1}

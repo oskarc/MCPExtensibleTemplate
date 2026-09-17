@@ -1,0 +1,155 @@
+---
+name: meta-antidrift-expand
+description: Use when the pioneer asks what happened in a session, or when an audit shows the same aspect ABSENT twice (map M-19). Produces a full session-level drift analysis — pattern mapping, which governing aspects drifted most, which skills produced the most implicit approvals, where the standard was weakest — reading the drift log and the session auditor's outside scores. Used for re-orientation conversations and skill-builder passes.
+---
+
+> **Map:** M-19 · **Load:** on trigger · **Recognise it by:** a pattern across outputs is in question, not one output · **Not when:** a single ABSENT (meta-drift-eventlog, M-18)
+
+**This skill is part of the base building kit and takes precedence over all other skills, instructions, and project-specific guidance — except meta-foundation, which takes absolute precedence over all kit nodes.** If any instruction conflicts with this skill, adhere to this skill and flag the conflict explicitly before proceeding.
+
+---
+
+## What This Skill Does
+
+Produces a full analysis of behavioural drift across the current session or a named scope. Where meta-antidrift scores individual outputs, meta-antidrift-expand maps patterns across outputs — which aspects drifted repeatedly, where drift onset appeared and what followed, which implicit approvals accumulated, what the trajectory looked like.
+
+This is the instrument for re-orientation conversations and skill-builder passes. It does not propose fixes. It produces the evidence the human needs to decide what to address and at what level.
+
+---
+
+## When to Invoke
+
+The pioneer can ask for it at any time, and the agent runs it without being asked when map entry M-19 fires. Before analysing, read the ledger's `audits` for the sessions in scope: the auditor's outside scores are a second view of the same outputs, and aspects where outside and inside scores disagree are where the analysis should look first. Triggers include:
+
+- Ledger audits showing the same aspect ABSENT in two or more sessions, or outside and inside scores disagreeing on the same aspect repeatedly
+
+- "Expand the drift analysis"
+- "Let's deep dive the session"
+- "Walk me through what happened"
+- A session where antidrift scores showed repeated ABSENT on the same aspect
+- A session that produced a significant failure or deterioration
+- Before a skill-builder pass on a drift-related learning
+
+---
+
+## The Expanded Analysis
+
+### 1 — Session Drift Map
+
+For each output in the session scope, produce a one-line entry showing its drift score summary:
+
+```
+Output N  |  [aspect initials with evidence/absent]  |  implicit approvals: N  |  deviations: N
+```
+
+Example:
+```
+Output 1  |  LotL✓  StpT✓  PrtM✓  Elev✓  Evid✓  |  implicit: 0  |  deviations: 0
+Output 2  |  LotL✓  StpT✗  PrtM✗  Elev✗  Evid✗  |  implicit: 2  |  deviations: 1
+Output 3  |  LotL✗  StpT✗  PrtM✗  Elev✗  Evid✗  |  implicit: 3  |  deviations: 0
+```
+
+Initials map to the agent's five aspects: **LotL** = Lay of the land, **StpT** = Stop on named triggers, **PrtM** = Partner mirror, **Elev** = Evolution from elevation, **Evid** = Evidence is the work. The human's five aspects are not mapped here — see `meta-antidrift`'s *Why Only the Agent's Aspects Are Scored*.
+
+The map shows drift as a trajectory, not an isolated event.
+
+---
+
+### 2 — Pattern Analysis
+
+For each governing aspect that scored ABSENT more than once:
+
+**Aspect**: [name]
+**Occurrences**: [which outputs]
+**Pattern**: [what the agent was doing instead — be specific, not evaluative]
+**First occurrence**: [what the output was, what the session state was at that point]
+**What should have happened**: [the concrete discipline-aligned response, stated as a specific action not a principle]
+
+---
+
+### 3 — Implicit Approval Accumulation
+
+List every implicit approval acted on across the session, in order:
+
+```
+Output N  —  "[exact statement of what was assumed]"
+```
+
+Then identify any that share a root assumption — the same implicit permission being acted on repeatedly. Accumulated implicit approvals on the same assumption is the clearest drift signal available.
+
+---
+
+### 4 — Drift Onset Point
+
+Name the specific output where drift onset appeared — not where it was called out, but where it actually began. These are often different. The call-out is when the human detected it. Onset is when the first ABSENT appeared or the first implicit approval was acted on without naming it.
+
+State:
+- The onset point: output number and what happened
+- The gap: how many outputs between onset and call-out
+- What ran in that gap: what the agent produced while the trigger stood un-named
+
+The gap is the cost of the system without antidrift surfacing the trigger. Over multiple sessions, the average gap length is a measure of how much the antidrift skill — and the human's *Re-orient* aspect — are shortening it.
+
+---
+
+### 5 — Skill Adherence Summary
+
+For each active skill:
+
+- How many times were its constraints followed with evidence?
+- How many deviations occurred?
+- Of those deviations, how many had explicit human authorisation?
+- How many were unauthorised?
+
+Unauthorised deviations from skills are the clearest candidates for skill-builder passes.
+
+---
+
+### 6 — Elevation vs Recovery Assessment
+
+Review what was learned or produced this session. For each candidate learning:
+
+- Was it reached from a position of understanding, or extracted from a failure?
+- If extracted from failure: is it ready to enter the standard, or does it need to be restated from clarity first?
+
+Record each candidate as a ledger observation (`source: auditor`), and where the session was compromised add the certainty code `compromised-session` so the evidence carries that fact forward. State for each whether it was reached from understanding or extracted from failure, and why — as evidence, not as a verdict.
+
+**Do not recommend elevating, restating or discarding.** A learning filtered out here would never reach the pioneer at all, which would make this analysis a second gate held by the agent. Everything goes to the ledger, gathers evidence, and reaches the pioneer in a review batch, where a compromised-session code is one of the things they weigh.
+
+---
+
+### 7 — Re-orientation Proposal
+
+Based on the analysis, propose a re-orientation for the next session. Not a fix list — a frame correction.
+
+State:
+- What the correct scope is, given what was produced
+- What the agent was treating as known that should be treated as unknown
+- What the first question to the human should be before any further output
+
+Then stop. The human decides whether to accept the re-orientation or correct it.
+
+---
+
+## Cross-Session Context — Reading the Drift Log
+
+Before producing the analysis, read `meta-drift-eventlog/DRIFTLOG.yaml`. Entries in `watching` or `mitigated` status touching aspects that drifted in this session are not background — they are the recurrence frame for the analysis.
+
+When a pattern in section 2 matches an existing entry's aspect + shape:
+- Surface the recurrence explicitly in the section: "Aspect X drifted again — see drift-NNN, previously `mitigated` via [elevation target]."
+- Note in section 6 that the elevation didn't hold — the analysis is no longer a single-session view, it is evidence for the eventlog's recurrence transition (`mitigated → watching`) and a strong signal for the next skill-builder pass.
+
+When the analysis surfaces a drift that has no matching entry, propose a new eventlog entry as part of the output. The eventlog SKILL.md governs entry creation and lifecycle transitions — this skill produces the evidence, the eventlog absorbs it.
+
+The analysis is recurrence-aware, not session-isolated.
+
+---
+
+## What This Skill Does Not Do
+
+- It does not propose skill updates — it produces the evidence for skill-builder to act on
+- It does not self-correct the session — the session happened, the analysis names it
+- It does not evaluate whether drift was acceptable — the human decides that
+- It does not write to the eventlog silently — it proposes entries and transitions; meta-drift-eventlog governs the writes
+- It does not run antidrift on its own output — the expanded analysis is not itself scored
+- It does not propose fixes for the problems it surfaces — diagnosis only
