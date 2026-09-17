@@ -80,6 +80,53 @@ Welcome to the MCP Server Template documentation! This folder contains comprehen
 
 ---
 
+### [06-SECURITY-ROADMAP.md](06-SECURITY-ROADMAP.md)
+**For**: Security engineers and the team taking this server into a security-sensitive environment
+
+**What you'll find**:
+- The nine invariants the hardened server guarantees
+- A requirement register: MCP specification 2026-07-28, OWASP MCP Top 10, OWASP MCP cheat sheet, OWASP Agentic Top 10, OWASP logging vocabulary
+- Target architecture: request pipeline, per-provider policy model, risk classes, rate-limit layers, audit events, strike ladder
+- Eight phases with work items, testable exit criteria, and effort estimates
+- A compliance matrix tracing every requirement to its control and its test
+- Decisions the owner must make before Phase 1
+
+**Best for**: Planning and tracking the hardening work, security review, compliance evidence
+
+---
+
+### [07-SECURITY-FLOWCHARTS.md](07-SECURITY-FLOWCHARTS.md)
+**For**: Anyone who needs to follow the hardened design without reading the tables
+
+**What you'll find**:
+- 17 Mermaid diagrams across 16 numbered flows
+- Trust boundaries, a call end to end, and every way a call can be refused
+- Identity routing across several providers, and the one-per-provider binding
+- Risk-class gates, the confirmation round-trip, the egress guard, the four rate-limit layers
+- The strike ladder, injection versus malice, and how a revocation actually lands
+- Startup validation, fail-closed behaviour, and the audit hash chain
+
+**Best for**: Onboarding, design review, explaining the mechanics to someone else
+
+---
+
+### [MCP Hardening Field Guide](artifacts/security-guide/index.html) (interactive)
+**For**: Anyone who wants to *see* the hardened design work, one mechanism at a time
+
+**What you'll find**:
+- 17 interactive chapters: pick a scenario or step through each flow while a narration explains it
+- Token anatomy, issuer routing, and which caller sees which tool
+- The refusal ladder, risk classes, the confirmation round-trip, the egress guard, and rate-limit layers
+- A strike-ladder simulation, injection versus malice, and revocation timing drawn to scale
+- Startup checks, a dependency-failure switchboard, and a tamperable audit chain with real SHA-256
+- The eight phases: dependency map, schedule to scale, and each phase's exit criteria
+
+Open `artifacts/security-guide/index.html` in a browser. The roadmap is also available as a single page: [artifacts/06-SECURITY-ROADMAP.html](artifacts/06-SECURITY-ROADMAP.html).
+
+**Best for**: Onboarding, workshops, explaining the design to people who won't read the tables
+
+---
+
 ## 🎯 Quick Navigation by Role
 
 ### **I'm a Beginner**
@@ -141,6 +188,9 @@ Test coverage → [03-TESTING-STRATEGY.md](03-TESTING-STRATEGY.md)
 | [02-ARCHITECTURE-FLOWCHARTS](02-ARCHITECTURE-FLOWCHARTS.md) | Visual system overview | Visual learners | ~15 min | Yes (flowcharts) |
 | [03-TESTING-STRATEGY](03-TESTING-STRATEGY.md) | How to write tests | QA/Developers | ~25 min | Yes (code examples) |
 | [04-CONFIGURATION](04-CONFIGURATION.md) | Configure for any environment | DevOps/Developers | ~20 min | No (references) |
+| [06-SECURITY-ROADMAP](06-SECURITY-ROADMAP.md) | Harden for a security-sensitive environment | Security/Developers | ~40 min | Yes (pipeline diagram, tables) |
+| [07-SECURITY-FLOWCHARTS](07-SECURITY-FLOWCHARTS.md) | Follow the hardened flows visually | Everyone | ~20 min | Yes (17 diagrams) |
+| [Field Guide](artifacts/security-guide/index.html) | Explore each flow and phase interactively | Everyone | ~45 min | Yes (17 interactive chapters) |
 
 ---
 
@@ -192,9 +242,12 @@ Test coverage → [03-TESTING-STRATEGY.md](03-TESTING-STRATEGY.md)
 ### Configuration
 - [All Config Options](04-CONFIGURATION.md#configuration-keys-reference)
 - [Environment Selection](04-CONFIGURATION.md#environment-selection)
-- [Using Environment Variables](04-CONFIGURATION.md#set-environment-variables)
+- [Using Environment Variables](04-CONFIGURATION.md#setting-environment-variables)
 
 ### Security
+- [Security Hardening Roadmap](06-SECURITY-ROADMAP.md)
+- [Security Flowcharts](07-SECURITY-FLOWCHARTS.md)
+- [MCP Hardening Field Guide (interactive)](artifacts/security-guide/index.html)
 - [Security Model](01-ARCHITECTURE.md#security-model)
 - [HTTPS Validation](04-CONFIGURATION.md#https-only-validation)
 - [API Key Management](04-CONFIGURATION.md#authenticationapikey)
@@ -264,4 +317,4 @@ A: Some parts are specific to this .NET template, but concepts (architecture, te
 
 ---
 
-Last updated: April 2026
+Last updated: September 2026

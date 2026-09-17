@@ -57,7 +57,10 @@ McpServerTemplate/
     ├── 02-ARCHITECTURE-FLOWCHARTS.md # 10 visual flowcharts (Mermaid diagrams)
     ├── 03-TESTING-STRATEGY.md        # Testing approach & examples
     ├── 04-CONFIGURATION.md           # Complete configuration reference
-    └── 05-USAGE-GUIDE-BEGINNERS.md   # Beginner-friendly guide with examples
+    ├── 05-USAGE-GUIDE-BEGINNERS.md   # Beginner-friendly guide with examples
+    ├── 06-SECURITY-ROADMAP.md        # Security hardening roadmap (strict form)
+    ├── 07-SECURITY-FLOWCHARTS.md     # 17 diagrams of the hardened design
+    └── artifacts/                    # Interactive field guide and HTML roadmap
 ```
 
 ## Quick Start
@@ -211,6 +214,9 @@ Comprehensive documentation is available in the [docs/](docs/) folder:
 - **[docs/03-TESTING-STRATEGY.md](docs/03-TESTING-STRATEGY.md)** — Testing approach, xUnit examples, best practices
 - **[docs/04-CONFIGURATION.md](docs/04-CONFIGURATION.md)** — Complete config reference, environment selection, scenarios
 - **[docs/05-USAGE-GUIDE-BEGINNERS.md](docs/05-USAGE-GUIDE-BEGINNERS.md)** — Newbie-friendly guide with step-by-step examples
+- **[docs/06-SECURITY-ROADMAP.md](docs/06-SECURITY-ROADMAP.md)** — Security hardening roadmap: requirements, target architecture, phased plan, compliance matrix
+- **[docs/07-SECURITY-FLOWCHARTS.md](docs/07-SECURITY-FLOWCHARTS.md)** — 17 diagrams of the hardened design: trust boundaries, refusal paths, revocation, audit chain
+- **[docs/artifacts/security-guide/index.html](docs/artifacts/security-guide/index.html)** — MCP Hardening Field Guide: 17 interactive chapters explaining each flow and phase (open in a browser)
 
 **New to the project?** Start with [docs/05-USAGE-GUIDE-BEGINNERS.md](docs/05-USAGE-GUIDE-BEGINNERS.md).
 

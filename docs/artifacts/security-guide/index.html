@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP Hardening Field Guide</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<svg class="g-defs" aria-hidden="true" focusable="false">
+  <defs>
+    <marker id="g-arr" class="g-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+    <marker id="g-arr-on" class="g-mk-on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+    <marker id="g-arr-deny" class="g-mk-deny" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+</svg>
+<div class="shell" id="top">
+  <nav class="rail" id="rail" aria-label="Guide chapters"></nav>
+  <main id="guide"></main>
+</div>
+<script src="guide.js"></script>
+<script src="ch-01-orientation.js"></script>
+<script src="ch-02-identity.js"></script>
+<script src="ch-03-refusal-risk.js"></script>
+<script src="ch-04-confirm-egress-limits.js"></script>
+<script src="ch-05-consequences.js"></script>
+<script src="ch-06-guarantees.js"></script>
+<script src="ch-07-phases.js"></script>
+<script>Guide.boot();</script>
+</body>
+</html>

@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strict-Form Hardening Roadmap</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --paper: #F2F4F1;
+    --surface: #FFFFFF;
+    --ink: #17201D;
+    --muted: #5F706B;
+    --rule: #CFD8D4;
+    --rule-strong: #AEBBB6;
+    --accent: #0E6B66;
+    --accent-ink: #0B5551;
+    --accent-soft: #DDEDEA;
+    --critical: #B3352C;
+    --warn: #B7791F;
+    --ok: #2F7D4F;
+    --critical-soft: #F6E3E1;
+    --warn-soft: #F7ECD9;
+    --ok-soft: #E0F0E6;
+    --code-bg: #E9EEEC;
+    --zone-edge: #E8EEEC;
+    --zone-mcp: #E2EBE8;
+    --zone-egress: #DCE7E3;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #141B18;
+      --surface: #1C2522;
+      --ink: #E6ECE9;
+      --muted: #9AABA5;
+      --rule: #2B3733;
+      --rule-strong: #3B4945;
+      --accent: #58C4BB;
+      --accent-ink: #7FD6CE;
+      --accent-soft: #1E3B38;
+      --critical: #E37A72;
+      --warn: #E0AE5A;
+      --ok: #6CC08B;
+      --critical-soft: #3A2321;
+      --warn-soft: #3A2F1C;
+      --ok-soft: #1E3427;
+      --code-bg: #101614;
+      --zone-edge: #1A2320;
+      --zone-mcp: #1E2926;
+      --zone-egress: #22302C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #141B18;
+    --surface: #1C2522;
+    --ink: #E6ECE9;
+    --muted: #9AABA5;
+    --rule: #2B3733;
+    --rule-strong: #3B4945;
+    --accent: #58C4BB;
+    --accent-ink: #7FD6CE;
+    --accent-soft: #1E3B38;
+    --critical: #E37A72;
+    --warn: #E0AE5A;
+    --ok: #6CC08B;
+    --critical-soft: #3A2321;
+    --warn-soft: #3A2F1C;
+    --ok-soft: #1E3427;
+    --code-bg: #101614;
+    --zone-edge: #1A2320;
+    --zone-mcp: #1E2926;
+    --zone-egress: #22302C;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Sans 3", system-ui, "Segoe UI", sans-serif;
+    font-size: 16.5px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:hover { color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  h1, h2, h3, h4 {
+    font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    line-height: 1.15;
+    margin: 0;
+  }
+  h1 { font-size: 40px; font-weight: 800; }
+  h2 { font-size: 26px; font-weight: 700; margin-block: 56px 16px; padding-top: 24px; border-top: 1px solid var(--rule-strong); }
+  h3 { font-size: 20px; font-weight: 700; margin-block: 32px 10px; }
+  h4 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-block: 22px 8px; }
+  p { margin: 0 0 12px; max-width: 68ch; }
+  p.lede { font-size: 19px; line-height: 1.45; max-width: 60ch; }
+  code, .mono {
+    font-family: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+    font-size: 0.86em;
+  }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.5;
+    margin: 12px 0 18px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  strong { font-weight: 600; }
+  .eyebrow {
+    font-size: 12.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent-ink);
+    margin: 0 0 10px;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* Frame */
+  .frame {
+    display: grid;
+    grid-template-columns: 216px minmax(0, 1fr);
+    gap: 56px;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding-inline: 28px;
+    padding-block: 36px 96px;
+  }
+  .rail {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    align-self: start;
+    padding-top: 8px;
+    font-size: 14px;
+  }
+  .rail .eyebrow { margin-bottom: 8px; }
+  .rail ol { list-style: none; margin: 0 0 22px; padding: 0; border-top: 1px solid var(--rule); }
+  .rail li { border-bottom: 1px solid var(--rule); }
+  .rail li a {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 8px;
+    padding: 7px 2px;
+    text-decoration: none;
+    color: var(--ink);
+  }
+  .rail li a:hover { color: var(--accent-ink); }
+  .rail li a .n { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--accent); padding-top: 2px; }
+  .rail ul { list-style: none; margin: 0; padding: 0; }
+  .rail ul li { border: 0; }
+  .rail ul a { display: block; padding: 4px 0; color: var(--muted); text-decoration: none; }
+  .rail ul a:hover { color: var(--accent-ink); }
+
+  /* Header */
+  .head { padding-bottom: 8px; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 6px 22px;
+    margin: 18px 0 0; padding: 12px 0;
+    border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+    font-size: 14px; color: var(--muted);
+  }
+  .meta div { display: flex; gap: 8px; }
+  .meta dt { font-weight: 600; color: var(--ink); }
+  .meta dd { margin: 0; }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin-top: 22px;
+  }
+  .tile { background: var(--surface); padding: 14px 16px 12px; }
+  .tile .v { font-family: "Archivo", sans-serif; font-weight: 700; font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .tile .k { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-top: 8px; }
+
+  /* Invariants */
+  .inv { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+  .inv li {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 190px;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .inv .id { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--accent); padding-top: 3px; }
+  .inv .by { font-size: 13.5px; color: var(--muted); padding-top: 3px; }
+  .inv p { margin: 0; max-width: none; }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; margin: 12px 0 20px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--rule); }
+  th { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--rule-strong); }
+  td:last-child, th:last-child { padding-right: 0; }
+  td.id { font-family: "IBM Plex Mono", monospace; font-size: 13px; white-space: nowrap; color: var(--accent-ink); }
+  .compact td, .compact th { padding-block: 6px; }
+  .register { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 40px; }
+  .register > div { min-width: 0; }
+  .register h3 { margin-top: 20px; font-size: 16px; }
+  .register .full { grid-column: 1 / -1; }
+
+  /* Chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 4px; }
+  .chip {
+    font-family: "IBM Plex Mono", monospace; font-size: 12px;
+    background: var(--accent-soft); color: var(--accent-ink);
+    padding: 2px 7px; border-radius: 3px; white-space: nowrap;
+  }
+  .chip.inv-chip { background: transparent; border: 1px solid var(--rule-strong); color: var(--ink); }
+
+  /* Pipeline ladder */
+  .pipe { display: grid; gap: 10px; margin: 16px 0 12px; max-width: 760px; }
+  .zone { border: 1px solid var(--rule-strong); border-radius: 3px; padding: 12px 14px 10px; }
+  .zone.edge { background: var(--zone-edge); }
+  .zone.mcp { background: var(--zone-mcp); }
+  .zone.egress { background: var(--zone-egress); }
+  .zone .zname { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+  .stages { list-style: none; margin: 0; padding: 0; counter-reset: stage; }
+  .stages li {
+    counter-increment: stage;
+    display: grid; grid-template-columns: 26px minmax(0, 1fr);
+    gap: 10px; padding: 6px 0; border-top: 1px dashed var(--rule-strong);
+    font-size: 14.5px;
+  }
+  .stages li:first-child { border-top: 0; }
+  .stages li::before {
+    content: counter(stage);
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--accent);
+    padding-top: 2px;
+  }
+  .stages small { display: block; color: var(--muted); font-size: 13px; }
+  .pipe-arrow { text-align: left; color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 13px; padding-left: 14px; }
+  .pipe-note { font-size: 14px; color: var(--muted); max-width: 68ch; }
+
+  /* Risk classes */
+  .risk td:first-child { font-weight: 600; padding-left: 12px; border-left: 4px solid var(--rule); }
+  .risk tr.read td:first-child { border-left-color: var(--ok); }
+  .risk tr.write td:first-child { border-left-color: var(--warn); }
+  .risk tr.irr td:first-child { border-left-color: var(--critical); }
+
+  /* Strike ladder */
+  .ladder { list-style: none; margin: 14px 0 6px; padding: 0; max-width: 700px; display: grid; gap: 8px; }
+  .ladder li { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 14px; align-items: start; }
+  .ladder .thr { font-family: "IBM Plex Mono", monospace; font-size: 13px; padding-top: 6px; color: var(--ink); }
+  .ladder .bar { height: 28px; border-radius: 3px; display: flex; align-items: center; padding-inline: 10px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .ladder .bar.throttle { width: 30%; background: var(--ok-soft); border-left: 4px solid var(--ok); }
+  .ladder .bar.suspend { width: 60%; background: var(--warn-soft); border-left: 4px solid var(--warn); }
+  .ladder .bar.revoke { width: 100%; background: var(--critical-soft); border-left: 4px solid var(--critical); }
+  .ladder .desc { font-size: 14px; color: var(--muted); margin-top: 4px; }
+
+  /* Phases */
+  .phase {
+    border: 1px solid var(--rule-strong);
+    border-radius: 3px;
+    background: var(--surface);
+    padding: 22px 26px 24px;
+    margin: 22px 0;
+  }
+  .phase-head { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .phase-num {
+    font-family: "Archivo", sans-serif; font-weight: 800; font-size: 34px; line-height: 1;
+    color: var(--accent); padding-top: 2px; font-variant-numeric: tabular-nums;
+  }
+  .phase-head h3 { margin: 0; font-size: 22px; }
+  .phase-meta { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 6px 0 0; font-size: 14px; color: var(--muted); }
+  .phase-meta b { color: var(--ink); font-weight: 600; }
+  .phase .goal { margin-top: 18px; }
+  .work { list-style: none; margin: 0; padding: 0; }
+  .work li { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; padding: 7px 0; border-top: 1px solid var(--rule); font-size: 15.5px; }
+  .work li:first-child { border-top: 0; }
+  .work .wid { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent-ink); padding-top: 3px; }
+  .exit { list-style: none; margin: 0; padding: 0; }
+  .exit li { position: relative; padding: 5px 0 5px 26px; font-size: 15.5px; }
+  .exit li::before {
+    content: ""; position: absolute; left: 2px; top: 11px;
+    width: 12px; height: 12px; border: 1.5px solid var(--accent); border-radius: 2px;
+  }
+  .total { font-size: 15.5px; padding: 14px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); max-width: 68ch; margin-top: 8px; }
+
+  /* Sources */
+  .sources { padding-left: 18px; font-size: 14.5px; }
+  .plain { padding-left: 20px; max-width: 72ch; margin: 0 0 16px; }
+  .plain li { margin-bottom: 8px; }
+  .sources li { margin-bottom: 4px; overflow-wrap: anywhere; }
+
+  @media (max-width: 900px) {
+    .frame { grid-template-columns: 1fr; gap: 20px; padding-inline: 18px; }
+    .rail { position: static; border-bottom: 1px solid var(--rule); padding-bottom: 10px; }
+    .rail ol { display: flex; flex-wrap: wrap; gap: 6px; border: 0; margin-bottom: 8px; }
+    .rail li { border: 0; }
+    .rail li a { display: inline-flex; gap: 6px; padding: 4px 8px; border: 1px solid var(--rule-strong); border-radius: 3px; }
+    .rail ul { display: none; }
+    h1 { font-size: 32px; }
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .register { grid-template-columns: 1fr; }
+    .inv li { grid-template-columns: 40px minmax(0, 1fr); }
+    .inv .by { grid-column: 2; padding-top: 0; }
+    .phase { padding: 18px 16px 20px; }
+    .ladder .bar.throttle { width: 45%; }
+    .ladder .bar.suspend { width: 72%; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="frame">
+  <nav class="rail" aria-label="Contents">
+    <p class="eyebrow">Phases</p>
+    <ol>
+      <li><a href="#phase-0"><span class="n">0</span><span>Foundation and defect burn-down</span></a></li>
+      <li><a href="#phase-1"><span class="n">1</span><span>Identity</span></a></li>
+      <li><a href="#phase-2"><span class="n">2</span><span>Provider policy frame and egress guard</span></a></li>
+      <li><a href="#phase-3"><span class="n">3</span><span>Audit pipeline</span></a></li>
+      <li><a href="#phase-4"><span class="n">4</span><span>Guardrails, strikes, suspension, revocation</span></a></li>
+      <li><a href="#phase-5"><span class="n">5</span><span>Tool integrity and supply chain</span></a></li>
+      <li><a href="#phase-6"><span class="n">6</span><span>Deployment hardening</span></a></li>
+      <li><a href="#phase-7"><span class="n">7</span><span>Verification and compliance evidence</span></a></li>
+    </ol>
+    <p class="eyebrow">Sections</p>
+    <ul>
+      <li><a href="#invariants">1 · Invariants</a></li>
+      <li><a href="#register">2 · Requirement register</a></li>
+      <li><a href="#architecture">3 · Target architecture</a></li>
+      <li><a href="#phases">4 · Phases</a></li>
+      <li><a href="#matrix">5 · Compliance matrix</a></li>
+      <li><a href="#decisions">6 · Decisions needed</a></li>
+      <li><a href="#out-of-scope">7 · Out of scope</a></li>
+      <li><a href="#sources">8 · Sources</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <header class="head">
+      <p class="eyebrow">MCP Server Template · Security</p>
+      <h1>Strict-Form Hardening Roadmap</h1>
+      <p class="lede" style="margin-top:14px">A plan to run this MCP server in a security-sensitive environment: every call attributed to a verified caller, every provider held inside an allowance the framework enforces, every decision audited, and guardrail violations answered automatically with throttling, suspension, and revocation at the identity provider.</p>
+      <dl class="meta">
+        <div><dt>Status</dt><dd>Proposed</dd></div>
+        <div><dt>Date</dt><dd>2026-09-15</dd></div>
+        <div><dt>Baseline</dt><dd class="mono">812340d</dd></div>
+        <div><dt>Source of truth</dt><dd class="mono">docs/06-SECURITY-ROADMAP.md</dd></div>
+      </dl>
+      <div class="tiles">
+        <div class="tile"><div class="v">8</div><div class="k">Phases, in dependency order</div></div>
+        <div class="tile"><div class="v">36–58</div><div class="k">Working days, one engineer</div></div>
+        <div class="tile"><div class="v">59</div><div class="k">Requirement IDs traced</div></div>
+        <div class="tile"><div class="v">10</div><div class="k">Decisions before Phase 1</div></div>
+      </div>
+    </header>
+
+    <p style="margin-top:22px">"Strict form" means two things. The controls are enforced by the framework, so a provider cannot opt out. And every control is proven by a test that is traceable to a requirement, so compliance is demonstrated rather than asserted. Where a requirement cannot be met in code, <a href="#out-of-scope">§7</a> says so and names the owner.</p>
+
+    <!-- ============================================================ -->
+    <h2 id="invariants">1 · The nine invariants</h2>
+    <p>The properties the finished system guarantees. Each is enforced by the framework and covered by at least one test in the compliance matrix.</p>
+    <ol class="inv">
+      <li><span class="id">I1</span><p><strong>No identity, no service.</strong> Every tool call carries a verified principal (<code>sub</code>, <code>client_id</code>, <code>jti</code>). stdio transport exists only in the <code>Development</code> environment, with a synthetic principal, and refuses to start anywhere else.</p><span class="by">JWT bearer authentication; transport gate at startup</span></li>
+      <li><span class="id">I2</span><p><strong>Deny by default.</strong> A tool with no policy fails startup. A scope not in the catalog fails startup. A provider not listed in <code>Providers:Enabled</code> is never loaded.</p><span class="by"><code>PolicyValidator</code> at startup</span></li>
+      <li><span class="id">I3</span><p><strong>Provider code never touches the network directly.</strong> Providers receive an <code>HttpClient</code> only through <code>AddProvider&lt;T&gt;()</code>, which attaches the egress guard. Constructing <code>HttpClient</code>, <code>WebClient</code>, or <code>Process</code> is a build error.</p><span class="by">Banned-API analyzer; egress guard handler</span></li>
+      <li><span class="id">I4</span><p><strong>Inbound tokens never leave the process.</strong> The egress guard compares every outbound <code>Authorization</code> header with the inbound token and aborts the request on a match.</p><span class="by">Egress guard handler</span></li>
+      <li><span class="id">I5</span><p><strong>Every decision is audited.</strong> Allow and deny paths emit an OWASP-vocabulary event carrying principal, tool, policy rule, and trace ID into an append-only, hash-chained log and the SIEM.</p><span class="by">Audit filter (outermost)</span></li>
+      <li><span class="id">I6</span><p><strong>Violations have automatic consequences.</strong> Strikes accumulate per principal; thresholds throttle, suspend, then revoke at the identity provider. Suspension takes effect on the next request on every instance.</p><span class="by">Strike engine; shared denylist checked at token validation</span></li>
+      <li><span class="id">I7</span><p><strong>Fail closed.</strong> If the policy store, denylist, or audit sink is unavailable, Write and Irreversible tools are denied. Read tools follow a configured mode whose default is also deny.</p><span class="by">Policy filter dependency checks</span></li>
+      <li><span class="id">I8</span><p><strong>Nothing secret in the repository or the logs.</strong> Secrets come from a vault or <code>dotnet user-secrets</code>; logs carry a hash of the token ID, never the token.</p><span class="by">Secret scanning in CI; redaction in audit</span></li>
+      <li><span class="id">I9</span><p><strong>One trust domain per provider.</strong> Each provider is bound to exactly one identity provider. A principal authenticated by any other identity provider can neither list nor call its tools. The administrative plane is bound to exactly one identity provider as well.</p><span class="by">Issuer-routed authentication; binding rules in <code>PolicyValidator</code>; binding check in <code>ListToolsFilter</code> and <code>PolicyFilter</code></span></li>
+    </ol>
+
+    <!-- ============================================================ -->
+    <h2 id="register">2 · Requirement register</h2>
+    <p>IDs are used throughout and as xUnit traits on tests (<code>[Requirement("SPEC-02")]</code>), so the compliance matrix can be regenerated from the test suite.</p>
+
+    <div class="register">
+      <div class="full">
+        <h3>2.1 MCP specification 2026-07-28 (normative)</h3>
+        <div class="table-wrap"><table class="compact">
+          <thead><tr><th>ID</th><th>Requirement</th></tr></thead>
+          <tbody>
+            <tr><td class="id">SPEC-01</td><td>The server is an OAuth 2.1 resource server. It publishes Protected Resource Metadata (RFC 9728) and answers unauthenticated requests with <code>401</code> and <code>WWW-Authenticate: Bearer resource_metadata="…"</code>.</td></tr>
+            <tr><td class="id">SPEC-02</td><td>MUST NOT accept tokens not issued for it. Validate <code>aud</code> against the server's canonical resource URI (RFC 8707).</td></tr>
+            <tr><td class="id">SPEC-03</td><td>Token passthrough is forbidden. MUST NOT forward an inbound token upstream; use token exchange (RFC 8693) when an upstream needs the user's identity.</td></tr>
+            <tr><td class="id">SPEC-04</td><td>Stateless protocol. No session identifiers. Any state handle is random, expiring, and bound server-side to the verified <code>sub</code>; possession is not authentication.</td></tr>
+            <tr><td class="id">SPEC-05</td><td>Minimize scopes. No wildcard scopes. Signal step-up through <code>WWW-Authenticate</code> scope challenges. Log scope elevation with correlation IDs.</td></tr>
+            <tr><td class="id">SPEC-06</td><td>HTTPS for all OAuth-related URLs in production; loopback <code>http://</code> only in development.</td></tr>
+            <tr><td class="id">SPEC-07</td><td>Validate the <code>Origin</code> header (DNS rebinding). Local servers use stdio or require a token; HTTP binds to loopback unless deployment requires otherwise.</td></tr>
+            <tr><td class="id">SPEC-08</td><td>SSRF controls: reject private, loopback, and link-local ranges; no blind redirects; HTTPS enforced; DNS pinned between check and use. Applied here to all provider egress, as the OWASP cheat sheet recommends.</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div>
+        <h3>2.2 OWASP MCP Top 10 (2025, beta)</h3>
+        <div class="table-wrap"><table class="compact">
+          <tbody>
+            <tr><td class="id">MCP01</td><td>Token mismanagement and secret exposure</td></tr>
+            <tr><td class="id">MCP02</td><td>Privilege escalation via scope creep</td></tr>
+            <tr><td class="id">MCP03</td><td>Tool poisoning</td></tr>
+            <tr><td class="id">MCP04</td><td>Supply chain attacks and dependency tampering</td></tr>
+            <tr><td class="id">MCP05</td><td>Command injection and execution</td></tr>
+            <tr><td class="id">MCP06</td><td>Prompt injection via contextual payloads</td></tr>
+            <tr><td class="id">MCP07</td><td>Insufficient authentication and authorization</td></tr>
+            <tr><td class="id">MCP08</td><td>Lack of audit and telemetry</td></tr>
+            <tr><td class="id">MCP09</td><td>Shadow MCP servers</td></tr>
+            <tr><td class="id">MCP10</td><td>Context injection and over-sharing</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>2.4 OWASP Agentic Top 10 (2026), server-relevant subset</h3>
+        <div class="table-wrap"><table class="compact">
+          <tbody>
+            <tr><td class="id">ASI01</td><td>Agent goal hijack — hostile instructions arriving through tool output</td></tr>
+            <tr><td class="id">ASI02</td><td>Tool misuse — legitimate tools driven outside their envelope</td></tr>
+            <tr><td class="id">ASI03</td><td>Identity and privilege abuse — inherited or escalated credentials</td></tr>
+            <tr><td class="id">ASI04</td><td>Agentic supply chain</td></tr>
+            <tr><td class="id">ASI06</td><td>Memory and context poisoning</td></tr>
+            <tr><td class="id">ASI08</td><td>Cascading failures — upstream failure amplified through retries</td></tr>
+            <tr><td class="id">ASI10</td><td>Rogue agents — a compromised caller that looks legitimate</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div>
+        <h3>2.3 OWASP MCP Security Cheat Sheet</h3>
+        <div class="table-wrap"><table class="compact">
+          <tbody>
+            <tr><td class="id">CS-01</td><td>Strict JSON Schema for tool input; <code>additionalProperties: false</code>; anchored patterns; bounded lengths</td></tr>
+            <tr><td class="id">CS-02</td><td>Sanitize tool output before it re-enters model context; alert on imperative patterns</td></tr>
+            <tr><td class="id">CS-03</td><td>Pin tool definitions by cryptographic hash; refuse or alert on change</td></tr>
+            <tr><td class="id">CS-04</td><td>Each provider is an independent trust domain</td></tr>
+            <tr><td class="id">CS-05</td><td>Rate limits, quotas, timeouts per user or tenant</td></tr>
+            <tr><td class="id">CS-06</td><td>Log full (redacted) parameters, user context, source and destination; feed a SIEM</td></tr>
+            <tr><td class="id">CS-07</td><td>Sandbox: containerized, non-root, restricted file system, default-deny egress</td></tr>
+            <tr><td class="id">CS-08</td><td>Human-in-the-loop for destructive operations; never auto-approve</td></tr>
+            <tr><td class="id">CS-09</td><td>Bind to loopback where possible; validate <code>Host</code> on every request</td></tr>
+            <tr><td class="id">CS-10</td><td>Secrets in a vault or OS keychain, never in manifests or logs</td></tr>
+            <tr><td class="id">CS-11</td><td>Secure state handles, bound to the user (same as SPEC-04)</td></tr>
+            <tr><td class="id">CS-12</td><td>Message-level signing with nonces — <strong>not adopted</strong>, see §7</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>2.5 OWASP Logging Vocabulary</h3>
+        <div class="table-wrap"><table class="compact">
+          <tbody>
+            <tr><td class="id">LOG-01</td><td>Standard event names: <code>authn_token_revoked</code>, <code>authn_token_reuse</code>, <code>authz_fail</code>, <code>authz_admin</code>, <code>excess_rate_limit_exceeded</code>, <code>input_validation_fail</code>, <code>malicious_extraneous</code>, <code>malicious_cors</code>, <code>mcp_prompt_injection</code>, <code>mcp_resource_exhaustion</code>, <code>mcp_tool_poisoning</code>, <code>sys_startup</code>, <code>sys_shutdown</code>, <code>sys_crash</code></td></tr>
+            <tr><td class="id">LOG-02</td><td>Every event carries <code>datetime</code> (ISO 8601 UTC), <code>appid</code>, <code>event</code>, <code>level</code>, <code>description</code>, <code>source_ip</code>, <code>hostname</code>, <code>request_uri</code>, <code>request_method</code>, <code>useragent</code>. No secrets or PII.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>2.6 Owner goals</h3>
+        <div class="table-wrap"><table class="compact">
+          <tbody>
+            <tr><td class="id">GOAL-01</td><td>Audit logging attributable to each caller</td></tr>
+            <tr><td class="id">GOAL-02</td><td>Rate limiting per caller, per tool, per provider</td></tr>
+            <tr><td class="id">GOAL-03</td><td>Automatic suspension and revocation on guardrail violations</td></tr>
+            <tr><td class="id">GOAL-04</td><td>Per-provider allowances enforced by the framework, not by convention</td></tr>
+            <tr><td class="id">GOAL-05</td><td>Support for more than one identity provider, each validated by its own scheme</td></tr>
+            <tr><td class="id">GOAL-06</td><td>Each provider is bound to exactly one identity provider; principals from any other identity provider can neither list nor call its tools</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="full">
+        <h3>2.7 Defects from the 2026-09-14 review</h3>
+        <div class="table-wrap"><table class="compact">
+          <thead><tr><th>ID</th><th>Defect</th><th>Why it matters here</th></tr></thead>
+          <tbody>
+            <tr><td class="id">DEF-01</td><td>Kestrel listener starts in stdio mode</td><td>Unauthenticated socket; startup fails when port 5000 is taken</td></tr>
+            <tr><td class="id">DEF-02</td><td>Fatal errors exit with code 0</td><td>Supervisors cannot detect failure</td></tr>
+            <tr><td class="id">DEF-03</td><td>JSONPlaceholder deserialization is case-sensitive; all six tools return wrong data</td><td>Wrong data reaches the model with no error</td></tr>
+            <tr><td class="id">DEF-04</td><td><code>GetMonthlyClimate</code> requests <code>corrected-archive</code> as JSON; SMHI serves it only as CSV</td><td>Tool cannot succeed</td></tr>
+            <tr><td class="id">DEF-05</td><td>Climatology caps 50 000 readings before filtering by month</td><td>Answers from the oldest years</td></tr>
+            <tr><td class="id">DEF-06</td><td><code>HttpClient.Timeout</code> 15 s caps the 30 s resilience budget; retries are cut off</td><td>Documented resilience does not happen</td></tr>
+            <tr><td class="id">DEF-07</td><td>API-key middleware runs before CORS; preflight fails</td><td>CORS configuration is inert</td></tr>
+            <tr><td class="id">DEF-08</td><td>Throttle dictionary grows on attacker-chosen tool names</td><td>Memory growth by an authenticated caller</td></tr>
+            <tr><td class="id">DEF-09</td><td>Fixed-time comparison returns early on length mismatch</td><td>Moot once the API key is removed (Phase 1)</td></tr>
+            <tr><td class="id">DEF-10</td><td>Upstream health probe blocks startup for up to 10 s</td><td>Delays the first response; leaks reachability into logs</td></tr>
+            <tr><td class="id">DEF-11</td><td>No solution file; no CI</td><td>Nothing is built or tested automatically</td></tr>
+            <tr><td class="id">DEF-12</td><td>Response size cap applied after full buffering</td><td>The cap does not bound memory</td></tr>
+            <tr><td class="id">DEF-13</td><td>Docs list PascalCase tool names; the SDK exposes snake_case</td><td>Callers wired by name fail</td></tr>
+            <tr><td class="id">DEF-14</td><td>Development API key committed in <code>appsettings.Development.json</code></td><td>Secret in the repository</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <h2 id="architecture">3 · Target architecture</h2>
+
+    <h3>3.1 Request pipeline</h3>
+    <p>Middleware order is a security control. Anything that can reject cheaply runs before anything expensive; identity is established before any MCP handler runs; the audit filter is outermost so that every deny path, including rate limiting, is recorded.</p>
+    <div class="pipe">
+      <div class="zone edge">
+        <div class="zname">Edge · ASP.NET Core middleware (Transport=http)</div>
+        <ol class="stages">
+          <li><span>Forwarded headers <small>trusted proxies only</small></span></li>
+          <li><span>HTTPS / HSTS</span></li>
+          <li><span>Host allowlist <small><code>AllowedHosts</code>, never <code>*</code></small></span></li>
+          <li><span>Origin guard <small>DNS rebinding</small></span></li>
+          <li><span>Per-IP rate limiter <small>before authentication</small></span></li>
+          <li><span>Issuer-routed JWT bearer authentication <small>one scheme per identity provider · <code>aud</code> · <code>iss</code> · <code>exp</code> · algorithm allowlist · <code>jti</code> required · <code>OnTokenValidated</code> → normalize principal · denylist check</small></span></li>
+          <li><span>Authorization <small>authenticated principal required</small></span></li>
+          <li><span>MCP endpoint <small>stateless streamable HTTP</small></span></li>
+        </ol>
+      </div>
+      <div class="pipe-arrow">↓</div>
+      <div class="zone mcp">
+        <div class="zname">MCP request filters</div>
+        <ol class="stages">
+          <li><span>AuditFilter <small>outermost; records every outcome</small></span></li>
+          <li><span>PolicyFilter <small>identity-provider binding · scope · risk gate · suspension · quotas · argument guard</small></span></li>
+          <li><span>OutputGuardFilter <small>size cap · tag stripping · injection heuristics</small></span></li>
+          <li><span>Tool method</span></li>
+        </ol>
+      </div>
+      <div class="pipe-arrow">↓</div>
+      <div class="zone egress">
+        <div class="zname">Provider HttpClient (framework-owned)</div>
+        <ol class="stages">
+          <li><span>EgressGuardHandler <small>host · method · scheme · token-leak check</small></span></li>
+          <li><span>Resilience <small>attempt timeout · total timeout · retry · breaker · concurrency</small></span></li>
+          <li><span>SocketsHttpHandler <small>no redirects · <code>ConnectCallback</code> IP vetting · TLS 1.2+ · bounded response stream</small></span></li>
+          <li><span>Upstream API</span></li>
+        </ol>
+      </div>
+    </div>
+    <p class="pipe-note">In stdio mode (Development only) the edge zone is replaced by a synthetic principal; the filter and egress zones are identical.</p>
+
+    <h3>3.2 Policy model</h3>
+    <p>Each provider declares one <code>ProviderPolicy</code>. The framework enforces it; provider code cannot alter it at runtime.</p>
+<pre><code>public enum RiskClass { Read, Write, Irreversible }
+
+public sealed record ToolPolicy(
+    string Scope,                         // "weather:read" — must exist in Authorization:ScopeCatalog
+    RiskClass Risk,
+    int PerPrincipalPerMinute,
+    int MaxOutputBytes = 32_768,
+    string[]? SensitiveArgs = null,       // redacted in audit
+    int MaxStringArgLength = 512);
+
+public sealed record EgressPolicy(
+    string[] Hosts,                       // exact FQDNs — no wildcards, no IP literals
+    HttpMethod[] Methods,
+    long MaxResponseBytes,
+    TimeSpan AttemptTimeout,
+    TimeSpan TotalTimeout,                // must exceed AttemptTimeout × (1 + retries)
+    int MaxConcurrentUpstreamCalls,
+    int DailyCallBudget);
+
+public sealed record ProviderPolicy(
+    string Name,
+    EgressPolicy Egress,
+    IReadOnlyDictionary&lt;string, ToolPolicy&gt; Tools);   // keyed by wire name, e.g. "get_forecast"
+
+public interface IProviderModule
+{
+    string Name { get; }
+    ProviderPolicy Policy { get; }
+    void Register(IServiceCollection services, IConfiguration configuration);
+}
+
+public sealed record IdentityProviderConfig(   // bound from Authentication:IdentityProviders:{name}
+    string Name,
+    string Authority,
+    string Issuer,
+    string[] Algorithms,                  // subset of RS256, PS256, ES256
+    string ScopeClaim,                    // "scope" (Keycloak, Auth0) or "scp" (Entra ID)
+    string ClientIdClaim,                 // "client_id" or "azp"
+    string[] ScopeCatalog,
+    Uri? IntrospectionEndpoint,
+    string Revoker);                      // "entra" | "keycloak" | "auth0" | "rfc7009"</code></pre>
+    <p><code>Program.cs</code> calls <code>AddProviders(configuration)</code>, which loads only the modules named in <code>Providers:Enabled</code>. At startup, <code>PolicyValidator</code> checks that every discovered tool has exactly one policy and every policy names a discovered tool; <code>Providers:{Name}:IdentityProvider</code> names exactly one configured identity provider; every scope is in the bound identity provider's <code>ScopeCatalog</code> and none contains <code>*</code>; <code>Authentication:AdminIdentityProvider</code> names a configured identity provider whose catalog contains <code>mcp:admin</code>; every egress host is a fully qualified domain name; <code>TotalTimeout &gt; AttemptTimeout × (1 + retries)</code>; and tool annotations match the risk class. Any failure logs <code>sys_startup</code> at CRITICAL and exits with code 78 (<code>EX_CONFIG</code>).</p>
+
+    <h3>3.3 Risk classes and their gates</h3>
+    <div class="table-wrap"><table class="risk">
+      <thead><tr><th>Risk</th><th>Gate before invocation</th><th>Tool annotations</th><th>Revocation SLA</th></tr></thead>
+      <tbody>
+        <tr class="read"><td>Read</td><td>Valid token; scope; not suspended; quotas; argument guard</td><td><code>readOnlyHint: true</code>, <code>openWorldHint: true</code></td><td>Token lifetime (target 5 min)</td></tr>
+        <tr class="write"><td>Write</td><td>All of Read, plus token freshness: <code>iat</code> within 5 min <strong>or</strong> an introspection result (RFC 7662) no older than 60 s</td><td><code>readOnlyHint: false</code>, <code>destructiveHint: false</code>, <code>idempotentHint</code> per tool</td><td>60 s</td></tr>
+        <tr class="irr"><td>Irreversible</td><td>All of Write, plus per-request introspection (no cache) <strong>and</strong> a server-enforced confirmation round-trip (§3.4)</td><td><code>destructiveHint: true</code></td><td>Per request</td></tr>
+      </tbody>
+    </table></div>
+    <p>Where the identity provider offers no introspection endpoint, the Write gate uses <code>iat</code> freshness only and the Irreversible gate uses a 60 s token lifetime plus confirmation. The SLA table in <code>docs/COMPLIANCE.md</code> must state which applies.</p>
+
+    <h3>3.4 Server-enforced confirmation for Irreversible tools</h3>
+    <p>The server cannot control how a client renders approval, but it can refuse to act without an explicit confirmation round-trip. In SDK 2.x this is a multi-round-trip request: the tool throws <code>InputRequiredException</code> with <code>InputRequest.ForElicitation(...)</code>, the client collects the answer, and the call resumes. The elicitation carries a nonce computed as <code>HMAC(sub, tool, SHA-256(args), timestamp)</code>; the confirmation must echo it within 120 s. The HMAC makes verification stateless, and binding the nonce to the argument hash prevents a client from pre-answering. A client that does not support elicitation is denied with a message that says so. Every confirmation is audited (<code>mcp_tool_confirmed</code>).</p>
+
+    <h3>3.5 Audit event</h3>
+    <p>One record per decision, in the OWASP vocabulary, with MCP-specific fields:</p>
+<pre><code>{
+  "datetime": "2026-09-15T08:12:43.118Z",
+  "appid": "mcp-server",
+  "event": "authz_fail:sub=9f1c…,resource=get_user_todos",
+  "level": "CRITICAL",
+  "description": "Tool get_user_todos requires scope demo:read; token carries weather:read",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "request_id": "0HN8K3M2QJ4R7",
+  "principal": { "idp": "entra", "sub": "9f1c…", "client_id": "ide-vscode", "jti_sha256": "3a1f…", "scopes": ["weather:read"] },
+  "source_ip": "10.4.2.17",
+  "hostname": "mcp-01",
+  "request_uri": "/mcp",
+  "request_method": "POST",
+  "useragent": "mcp-client/2.2",
+  "mcp": { "method": "tools/call", "provider": "Demo", "tool": "get_user_todos", "risk": "Read" },
+  "args": { "userId": 1 },
+  "decision": { "outcome": "deny", "rule": "scope" },
+  "upstream": null,
+  "prev_hash": "b7e2…",
+  "hash": "51c9…"
+}</code></pre>
+    <p>Project extensions to the vocabulary (the OWASP MCP category defines only three events): <code>mcp_tool_call</code> (INFO, allowed and completed), <code>mcp_tool_denied</code> (WARN, with <code>decision.rule</code>), <code>mcp_tool_confirmed</code> (INFO), <code>mcp_egress_denied</code> (CRITICAL), <code>mcp_revocation_failed</code> (CRITICAL).</p>
+
+    <h3>3.6 Rate-limit layers</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Layer</th><th>Key</th><th>Window</th><th>Rejects with</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td class="id">L1</td><td>Source IP</td><td>Fixed, 1 min</td><td>HTTP 429</td><td>Protect token validation from floods; runs before authentication</td></tr>
+        <tr><td class="id">L2</td><td><code>{idp}:{sub}</code></td><td>Sliding, 1 min</td><td>MCP error + <code>excess_rate_limit_exceeded</code></td><td>Cap one caller's total activity</td></tr>
+        <tr><td class="id">L3</td><td><code>{idp}:{sub}</code> + tool</td><td>Sliding, 1 min (from <code>ToolPolicy</code>)</td><td>MCP error + <code>excess_rate_limit_exceeded</code></td><td>Catch agentic loops on one tool</td></tr>
+        <tr><td class="id">L4</td><td>Provider</td><td>Concurrency + daily budget</td><td>MCP error + <code>mcp_resource_exhaustion</code></td><td>Protect the upstream and the bill</td></tr>
+      </tbody>
+    </table></div>
+    <p>L2–L4 live in Redis (atomic Lua sliding window) so limits hold across instances. An in-memory implementation is permitted only in <code>Development</code>.</p>
+
+    <h3>3.7 Violations and consequences</h3>
+    <div class="table-wrap"><table class="compact">
+      <thead><tr><th>Signal</th><th>Event</th><th>Weight</th></tr></thead>
+      <tbody>
+        <tr><td>Calling a tool outside the token's scopes</td><td><code>authz_fail</code></td><td class="num">3</td></tr>
+        <tr><td>Calling a tool of a provider bound to a different identity provider</td><td><code>authz_fail</code> (rule <code>idp-binding</code>)</td><td class="num">3</td></tr>
+        <tr><td>Unknown argument name</td><td><code>malicious_extraneous</code></td><td class="num">3</td></tr>
+        <tr><td>Argument fails schema</td><td><code>input_validation_fail</code></td><td class="num">1</td></tr>
+        <tr><td>Rate limit exceeded (L2/L3)</td><td><code>excess_rate_limit_exceeded</code></td><td class="num">1</td></tr>
+        <tr><td>Egress denied (only possible if an argument steered a URL)</td><td><code>mcp_egress_denied</code></td><td class="num">5</td></tr>
+        <tr><td>Request while suspended</td><td><code>authz_fail</code></td><td class="num">5</td></tr>
+        <tr><td>Token of a revoked principal presented</td><td><code>authn_token_reuse</code></td><td class="num">10 (hard signal)</td></tr>
+        <tr><td>Injection pattern in <strong>tool output</strong></td><td><code>mcp_prompt_injection</code></td><td>0 to the principal; 1 to the provider's health counter</td></tr>
+      </tbody>
+    </table></div>
+    <p>Strikes accumulate in a 10-minute window per <code>{idp}:{sub}</code>. Bars are drawn to the threshold scale:</p>
+    <ol class="ladder">
+      <li><span class="thr">≥ 3</span><div><div class="bar throttle">Throttle</div><div class="desc">L2/L3 quotas halved for 10 min · reverses automatically</div></div></li>
+      <li><span class="thr">≥ 6</span><div><div class="bar suspend">Suspend</div><div class="desc">Denylist <code>sub</code>; the next request on any instance fails authentication · 30 min · reverses automatically</div></div></li>
+      <li><span class="thr">≥ 10</span><div><div class="bar revoke">Revoke at the identity provider, and suspend</div><div class="desc">Also on any hard signal · 24 h · reversed only by human review via <code>mcp:admin</code></div></div></li>
+    </ol>
+    <p>The last step removes a real user's access. Two rules keep it honest: automatic suspensions expire on their own, and permanent revocation requires either a hard signal or a human. Prompt injection detected in upstream content never strikes the caller, because it is not the caller's action; the audit record carries <code>preceding_tool_output_hash</code> so an investigator can tell the two cases apart.</p>
+
+    <h3>3.8 Identity providers and trust domains</h3>
+    <p>The server accepts tokens from more than one identity provider, and each provider is bound to exactly one of them. The binding is a deployment decision, so it lives in configuration (<code>Providers:{Name}:IdentityProvider</code>), is required, and is validated at startup. Two providers may share an identity provider; no provider may have none, and none may have more than one.</p>
+    <ul class="plain">
+      <li><strong>One scheme per identity provider.</strong> Each entry under <code>Authentication:IdentityProviders</code> registers its own JWT bearer scheme with its own authority, issuer, signing keys, algorithm allowlist, and claim mapping. A policy scheme in front of them reads the <code>iss</code> claim of the presented token <em>without validating it</em>, forwards to the scheme registered for that issuer, and refuses unregistered issuers before any key lookup. The forwarded scheme validates signature, issuer, audience, and lifetime in full, so a token that names issuer A but is signed by B fails there. Bearer tokens over 8 KB are refused before parsing.</li>
+      <li><strong>One canonical principal.</strong> <code>OnTokenValidated</code> normalizes every token into <code>{ idp, sub, client_id, jti, scopes, iat }</code> using the identity provider's claim mapping (<code>scp</code> versus <code>scope</code>, <code>azp</code> versus <code>client_id</code>). The principal's key everywhere — rate limits, strikes, the denylist, audit — is <code>{idp}:{sub}</code>, so identical <code>sub</code> values from two identity providers are two principals.</li>
+      <li><strong>Binding enforced twice.</strong> <code>ListToolsFilter</code> shows a principal only the tools of providers bound to its identity provider. <code>PolicyFilter</code> checks the binding immediately after resolving the tool and before the scope check; a mismatch is <code>authz_fail</code> with rule <code>idp-binding</code>. Scope names mean something only within their identity provider, so the scope check that follows uses the bound identity provider's catalog.</li>
+      <li><strong>One resource, several authorization servers.</strong> The Protected Resource Metadata document lists every configured identity provider in <code>authorization_servers</code>; the resource URI and the <code>aud</code> value are the same for all of them. A per-identity-provider endpoint topology (<code>/mcp/{idp}</code>, each with its own resource URI and metadata) is an optional refinement to evaluate in Phase 1 against the SDK; the binding checks above are the enforcement point in either topology.</li>
+      <li><strong>The administrative plane is bound too.</strong> <code>Authentication:AdminIdentityProvider</code> names the one identity provider whose <code>mcp:admin</code> scope is honoured; the same scope issued by any other identity provider is ignored.</li>
+      <li><strong>Revocation per identity provider.</strong> The strike engine routes suspensions, introspection, and revocation to the adapter of the principal's identity provider. A compromise of one identity provider is contained to the providers bound to it.</li>
+      <li><strong>Development principal.</strong> The stdio principal declares its identity provider and scopes under <code>Development:DevPrincipal</code>; it exists only in <code>Development</code>.</li>
+    </ul>
+
+    <!-- ============================================================ -->
+    <h2 id="phases">4 · Phases</h2>
+    <p>Ordered by dependency: identity before policy (policy is keyed on the principal), audit before guardrails (guardrails consume audit events). Phases 5 and 6 can run alongside 3 and 4. Effort is an estimate in working days for one engineer who knows ASP.NET Core; the identity-provider adapter in Phase 4 is the least predictable item.</p>
+
+    <section class="phase" id="phase-0">
+      <header class="phase-head">
+        <span class="phase-num">0</span>
+        <div><h3>Foundation and defect burn-down</h3><p class="phase-meta"><span><b>3–5 days</b></span><span>No dependencies</span></p></div>
+      </header>
+      <p class="goal"><strong>Goal.</strong> A base that builds, tests, and starts correctly in every mode, so later phases are not built on the defects found in review.</p>
+      <div class="chips"><span class="chip">DEF-01 … DEF-14</span><span class="chip">MCP01 (partial)</span><span class="chip">MCP04 (partial)</span></div>
+      <h4>Work</h4>
+      <ol class="work">
+        <li><span class="wid">P0.1</span><span>Add <code>McpServerTemplate.sln</code> and <code>Directory.Build.props</code> with <code>TreatWarningsAsErrors</code>, <code>Nullable</code>, <code>AnalysisLevel=latest-recommended</code>, <code>EnforceCodeStyleInBuild</code>.</span></li>
+        <li><span class="wid">P0.2</span><span>Retarget to <code>net10.0</code>. .NET 8 and 9 leave support on 2026-11-10; .NET 10 is LTS until November 2028. Upgrade <code>ModelContextProtocol</code> and <code>ModelContextProtocol.AspNetCore</code> from 1.2.0 to 2.2.0, which implements the 2026-07-28 specification and targets net8–net10. The v2 announcement states v1 code keeps compiling; resolve deprecation warnings rather than suppress them.</span></li>
+        <li><span class="wid">P0.3</span><span>Split hosting. <code>Transport=http</code> builds a <code>WebApplication</code>. <code>Transport=stdio</code> builds a plain <code>Host.CreateApplicationBuilder</code> with no Kestrel, and only when <code>IHostEnvironment.IsDevelopment()</code>; otherwise log <code>sys_startup</code> failure and exit 78. (DEF-01)</span></li>
+        <li><span class="wid">P0.4</span><span>Exit codes: unhandled fatal → 70 (<code>EX_SOFTWARE</code>) with <code>sys_crash</code>; configuration error → 78 (<code>EX_CONFIG</code>). (DEF-02)</span></li>
+        <li><span class="wid">P0.5</span><span>Replace <code>HealthProbe</code> with ASP.NET Core health checks (<code>/healthz</code> liveness, <code>/readyz</code> readiness). No upstream calls before the server is serving. (DEF-10)</span></li>
+        <li><span class="wid">P0.6</span><span>Provider fixes: JSONPlaceholder uses <code>JsonSerializerOptions.Web</code> and <code>[JsonPropertyName]</code>, throws <code>McpException</code> with recovery hints, gains a size cap and timeout mapping (DEF-03). Remove <code>GetMonthlyClimate</code>, or re-implement it on the CSV endpoint with a streaming parser and a hard row cap (DEF-04). Filter by month before capping (DEF-05). Set <code>HttpClient.Timeout = Timeout.InfiniteTimeSpan</code> so the resilience pipeline's total timeout governs, and assert <code>Total &gt; Attempt × (1 + retries)</code> (DEF-06).</span></li>
+        <li><span class="wid">P0.7</span><span>Middleware order: forwarded headers → HTTPS → hosts → CORS → rate limiter → authentication. Key the throttle on registered tool names only, resolved from <code>IEnumerable&lt;McpServerTool&gt;</code> at startup. (DEF-07, DEF-08; both superseded by Phase 2 but fixed now so the base is safe.)</span></li>
+        <li><span class="wid">P0.8</span><span>Remove <code>Authentication:ApiKey</code> from every <code>appsettings*.json</code>; development uses <code>dotnet user-secrets</code>; add gitleaks to CI. (DEF-14)</span></li>
+        <li><span class="wid">P0.9</span><span>Documentation: tool names in snake_case; remove the troubleshooting line that calls immediate exit "normal". (DEF-13)</span></li>
+        <li><span class="wid">P0.10</span><span>CI on GitHub Actions: <code>dotnet restore --locked-mode</code>, build with warnings as errors, test, <code>NuGetAudit</code> with <code>NuGetAuditMode=all</code> and <code>NuGetAuditLevel=low</code>, gitleaks. Commit <code>packages.lock.json</code>.</span></li>
+      </ol>
+      <h4>Exit criteria</h4>
+      <ul class="exit">
+        <li>CI is green on <code>main</code>.</li>
+        <li>An end-to-end stdio test spawns the process, sends <code>tools/list</code>, asserts JSON-RPC on stdout, and asserts no listening TCP socket exists (<code>IPGlobalProperties.GetActiveTcpListeners()</code>).</li>
+        <li>An end-to-end HTTP test starts the server on an ephemeral port and completes a <code>tools/call</code>.</li>
+        <li>A JSONPlaceholder round-trip test feeds a canned camelCase payload and asserts a non-zero <code>id</code> and non-empty <code>title</code>.</li>
+        <li>The fatal path returns a non-zero exit code (the test spawns the process with an invalid configuration).</li>
+        <li>Every DEF-* has a regression test, or the code it lived in is deleted.</li>
+      </ul>
+    </section>
+
+    <section class="phase" id="phase-1">
+      <header class="phase-head">
+        <span class="phase-num">1</span>
+        <div><h3>Identity</h3><p class="phase-meta"><span><b>5–8 days</b></span><span>Depends on Phase 0</span></p></div>
+      </header>
+      <p class="goal"><strong>Goal.</strong> Every HTTP request carries a verified principal from one of the configured identity providers. The server behaves as a standards-conformant OAuth 2.1 resource server, with each provider bound to exactly one identity provider.</p>
+      <div class="chips"><span class="chip">SPEC-01</span><span class="chip">SPEC-02</span><span class="chip">SPEC-05</span><span class="chip">SPEC-06</span><span class="chip">SPEC-07</span><span class="chip">CS-09</span><span class="chip">MCP07</span><span class="chip">ASI03</span><span class="chip">GOAL-05</span><span class="chip">GOAL-06</span><span class="chip inv-chip">I1</span><span class="chip inv-chip">I9</span></div>
+      <h4>Work</h4>
+      <ol class="work">
+        <li><span class="wid">P1.1</span><span>One <code>AddJwtBearer("idp:{name}", ...)</code> scheme per entry in <code>Authentication:IdentityProviders</code>: <code>Authority</code> and <code>ValidIssuer</code> pinned to that entry; <code>ValidAudience</code> = the canonical resource URI (for example <code>https://mcp.example.com/mcp</code>), the same for every identity provider; <code>ValidateLifetime</code>, <code>RequireExpirationTime</code>, <code>RequireSignedTokens</code>; <code>ClockSkew = 30 s</code>; <code>ValidAlgorithms</code> from the entry's allowlist, itself a subset of RS256, PS256, ES256 (rejects <code>none</code> and HMAC); <code>MapInboundClaims = false</code>. <code>OnTokenValidated</code> normalizes the principal (§3.8), requires <code>sub</code>, <code>jti</code>, <code>client_id</code> (or <code>azp</code>), <code>iat</code>, and invokes the denylist check added in Phase 4. <code>OnAuthenticationFailed</code> maps to <code>authn_login_fail</code>.</span></li>
+        <li><span class="wid">P1.2</span><span><code>.AddMcp(o =&gt; o.ResourceMetadata = ...)</code> with <code>Resource</code>, <code>AuthorizationServers</code> (every configured identity provider's issuer), and <code>ScopesSupported</code> (the union of the catalogs) from configuration. This publishes the RFC 9728 document and the <code>resource_metadata</code> challenge. Verify option names against SDK 2.2.0 (the SDK sample uses <code>ResourceMetadata</code>, <code>AuthorizationServers</code>, <code>ScopesSupported</code>).</span></li>
+        <li><span class="wid">P1.3</span><span><code>AddAuthorization()</code>; <code>app.MapMcp().RequireAuthorization()</code>; <code>AddAuthorizationFilters()</code> on the MCP builder; <code>[Authorize]</code> at class level on every tool, resource, and prompt type as defense in depth beneath the Phase 2 policy filter.</span></li>
+        <li><span class="wid">P1.4</span><span>Stateless streamable HTTP (<code>Stateless = true</code>, the v2 default). No session affinity; no <code>Mcp-Session-Id</code>.</span></li>
+        <li><span class="wid">P1.5</span><span><code>AllowedHosts</code> set to the public FQDN, never <code>*</code>. <code>OriginGuardMiddleware</code>: when an <code>Origin</code> header is present and not in <code>HttpTransport:AllowedOrigins</code>, respond <code>403</code> and log <code>malicious_cors</code>. The C# SDK does not validate <code>Origin</code> itself; the TypeScript SDK does, and the specification requires it.</span></li>
+        <li><span class="wid">P1.6</span><span>TLS: Kestrel serves HTTPS with a certificate from the vault, or <code>ForwardedHeaders</code> is restricted to <code>KnownProxies</code>/<code>KnownNetworks</code>. <code>UseHsts()</code>. In <code>Production</code>, refuse to start when neither is configured.</span></li>
+        <li><span class="wid">P1.7</span><span>Delete <code>ApiKeyMiddleware</code>. The per-IP limiter (L1) runs before authentication.</span></li>
+        <li><span class="wid">P1.8</span><span>Scope catalog per identity provider in <code>Authentication:IdentityProviders:{name}:ScopeCatalog</code> (initially <code>weather:read</code>, <code>observations:read</code>, <code>demo:read</code>, <code>demo:write</code>, and <code>mcp:admin</code> in the administrative identity provider only). Insufficient scope at the HTTP layer returns <code>403</code> with <code>WWW-Authenticate: Bearer error="insufficient_scope", scope="…"</code>; at the tool layer, a structured error names the missing scope. This is the step-up signal SPEC-05 asks for.</span></li>
+        <li><span class="wid">P1.9</span><span>Development stdio principal from <code>Development:DevPrincipal</code>: identity provider, <code>sub = dev-user</code>, <code>client_id = dev-ide</code>, scopes. Any other environment refuses stdio (exit 78).</span></li>
+        <li><span class="wid">P1.10</span><span>Issuer routing: <code>AddPolicyScheme("Bearer", ...)</code> is the default scheme; its <code>ForwardDefaultSelector</code> refuses bearer tokens over 8 KB, reads the <code>iss</code> claim without validation, and forwards to the scheme registered for that issuer. An unregistered issuer is refused before any key lookup. <code>Providers:{Name}:IdentityProvider</code> and <code>Authentication:AdminIdentityProvider</code> are bound and validated at startup (§3.2).</span></li>
+      </ol>
+      <h4>Exit criteria (all are tests)</h4>
+      <ul class="exit">
+        <li>No token → <code>401</code> with <code>WWW-Authenticate</code> containing <code>resource_metadata</code>.</li>
+        <li>Wrong <code>aud</code>, wrong <code>iss</code>, expired, <code>alg=none</code>, <code>alg=HS256</code>, missing <code>jti</code> → <code>401</code>, each a separate test.</li>
+        <li><code>GET /.well-known/oauth-protected-resource</code> returns the configured resource URI, authorization server, and scopes.</li>
+        <li><code>Origin: https://evil.example</code> → <code>403</code> and one <code>malicious_cors</code> event.</li>
+        <li><code>Host: 127.0.0.1</code> against an FQDN allowlist → <code>400</code>.</li>
+        <li><code>Transport=stdio</code> with <code>ASPNETCORE_ENVIRONMENT=Production</code> → exit 78.</li>
+        <li>A token with no scopes sees an empty <code>tools/list</code>.</li>
+        <li>With two identity providers A and B configured as test fixtures, a valid token from B against a provider bound to A: the provider's tools are absent from <code>tools/list</code>, and a direct call → <code>authz_fail</code> with rule <code>idp-binding</code>.</li>
+        <li>A token whose <code>iss</code> is not registered → <code>401</code>, and the test asserts that no JWKS request was made.</li>
+        <li>A token that names issuer A but is signed with B's key → <code>401</code>.</li>
+        <li><code>mcp:admin</code> issued by an identity provider other than <code>AdminIdentityProvider</code> → <code>403</code> on <code>/admin</code>.</li>
+        <li>A provider whose <code>IdentityProvider</code> is missing or unknown → exit 78.</li>
+      </ul>
+    </section>
+
+    <section class="phase" id="phase-2">
+      <header class="phase-head">
+        <span class="phase-num">2</span>
+        <div><h3>Provider policy frame and egress guard</h3><p class="phase-meta"><span><b>8–12 days</b></span><span>Depends on Phase 1</span></p></div>
+      </header>
+      <p class="goal"><strong>Goal.</strong> Each provider operates inside a declared allowance that the framework enforces on the way in (scope, risk, quota, arguments) and on the way out (host, method, size, token leakage).</p>
+      <div class="chips"><span class="chip">GOAL-02</span><span class="chip">GOAL-04</span><span class="chip">SPEC-03</span><span class="chip">SPEC-04</span><span class="chip">SPEC-08</span><span class="chip">CS-01</span><span class="chip">CS-04</span><span class="chip">CS-05</span><span class="chip">CS-08</span><span class="chip">CS-11</span><span class="chip">MCP02</span><span class="chip">MCP05</span><span class="chip">MCP10</span><span class="chip">ASI02</span><span class="chip">ASI08</span><span class="chip inv-chip">I2</span><span class="chip inv-chip">I3</span><span class="chip inv-chip">I4</span><span class="chip inv-chip">I7</span></div>
+      <h4>Work</h4>
+      <ol class="work">
+        <li><span class="wid">P2.1</span><span>Implement the types in §3.2, <code>IProviderModule</code>, and <code>AddProviders()</code> with the <code>Providers:Enabled</code> allowlist.</span></li>
+        <li><span class="wid">P2.2</span><span><code>PolicyValidator</code> at startup with the rules in §3.2; failure exits 78.</span></li>
+        <li><span class="wid">P2.3</span><span>Filter order: <code>AuditFilter</code> (Phase 3 fills it in; register the shell now) → <code>PolicyFilter</code> → <code>OutputGuardFilter</code> → tool. A <code>ListToolsFilter</code> hides tools whose scope the token lacks and serves the pinned definitions from Phase 5.</span></li>
+        <li><span class="wid">P2.4</span><span><code>PolicyFilter</code>, in this order, each failure producing a distinct <code>decision.rule</code>: principal present → tool known → identity-provider binding (§3.8) → scope in token (against the bound identity provider's catalog) → risk gate (§3.3) → not suspended (Phase 4) → L2, L3, L4 quotas → argument guard. The argument guard rejects any argument name not in the tool's schema (<code>malicious_extraneous</code>), validates against the schema with <code>JsonSchema.Net</code> (<code>input_validation_fail</code>), enforces <code>MaxStringArgLength</code>, and rejects non-finite numbers (today <code>double.NaN</code> passes coordinate validation).</span></li>
+        <li><span class="wid">P2.5</span><span>Server-enforced confirmation for Irreversible tools (§3.4).</span></li>
+        <li><span class="wid">P2.6</span><span><code>EgressGuardHandler</code> as the outermost <code>DelegatingHandler</code>: host must equal one of <code>Hosts</code> (case-insensitive, exact), scheme <code>https</code>, method in <code>Methods</code>, no user-info in the URL, and the outbound <code>Authorization</code> value must not equal the inbound bearer token (tracked as an <code>AsyncLocal</code> SHA-256). Violations throw, log <code>mcp_egress_denied</code>, and strike.</span></li>
+        <li><span class="wid">P2.7</span><span>Primary handler: <code>SocketsHttpHandler</code> with <code>AllowAutoRedirect = false</code>, <code>PooledConnectionLifetime = 5 min</code>, <code>SslOptions.EnabledSslProtocols = Tls12 | Tls13</code>, default certificate validation (never overridden), and a <code>ConnectCallback</code> that resolves DNS, rejects any address in <code>10/8</code>, <code>172.16/12</code>, <code>192.168/16</code>, <code>127/8</code>, <code>169.254/16</code>, <code>::1</code>, <code>fc00::/7</code>, <code>fe80::/10</code>, multicast, and then connects to the vetted address. Resolving and connecting inside the callback pins DNS between check and use.</span></li>
+        <li><span class="wid">P2.8</span><span>Bounded response: reject when <code>Content-Length &gt; MaxResponseBytes</code>; otherwise wrap the content stream in a <code>BoundedReadStream</code> that throws at byte <code>max + 1</code>. Providers deserialize from the stream (<code>ReadFromJsonAsync</code>), never from a buffered string. (Replaces DEF-12.)</span></li>
+        <li><span class="wid">P2.9</span><span>Resilience per provider from <code>EgressPolicy</code>: attempt timeout, total timeout, retry (idempotent methods only), circuit breaker, concurrency limiter, daily budget counter in Redis.</span></li>
+        <li><span class="wid">P2.10</span><span>Banned APIs via <code>Microsoft.CodeAnalysis.BannedApiAnalyzers</code> with <code>BannedSymbols.txt</code>: <code>HttpClient</code> constructors, <code>WebClient</code>, <code>Process.Start</code>, <code>Environment.GetEnvironmentVariable</code> inside <code>Providers/</code>. Each entry names the sanctioned alternative.</span></li>
+        <li><span class="wid">P2.11</span><span>Provider isolation: keyed DI registrations per provider; one <code>MemoryCache</code> instance per provider; a documented rule that any cache key for principal-specific data includes <code>sub</code> (SMHI station lists are public and exempt).</span></li>
+        <li><span class="wid">P2.12</span><span>Tool annotations derived from <code>RiskClass</code> and verified at startup.</span></li>
+        <li><span class="wid">P2.13</span><span>Migrate the three providers to modules, each bound to an identity provider in configuration (<code>Providers:Smhi:IdentityProvider</code>, and so on). JSONPlaceholder becomes the <code>Demo</code> provider: it is the only provider with Write-class tools, so it carries the Write-gate tests, and it is absent from <code>Providers:Enabled</code> in <code>Production</code>.</span></li>
+      </ol>
+      <h4>Exit criteria (all are tests)</h4>
+      <ul class="exit">
+        <li>Startup refuses when: a tool has no policy; a policy names an unknown tool; a provider's identity provider is missing or unknown; a scope is not in the bound identity provider's catalog; an egress host is an IP literal or contains <code>*</code>; <code>TotalTimeout ≤ AttemptTimeout</code>.</li>
+        <li><code>tools/list</code> for a <code>weather:read</code> token lists only the weather tools; calling a hidden tool → <code>authz_fail</code> and a structured error.</li>
+        <li>An extra argument is rejected before invocation; the fake upstream records zero requests.</li>
+        <li><code>latitude = NaN</code> is rejected by the argument guard.</li>
+        <li>Egress: a non-allowlisted host, an <code>http://</code> URL, a <code>POST</code> where only <code>GET</code> is allowed, a <code>302</code> response, and connections to <code>169.254.169.254</code>, <code>10.0.0.1</code>, <code>127.0.0.1</code> are each refused; a response of <code>max + 1</code> bytes aborts at the cap with peak allocation below <code>2 × max</code>; an outbound request carrying the inbound bearer is aborted and logged.</li>
+        <li>A Write tool with a token whose <code>iat</code> is 6 minutes old is denied; an Irreversible tool without a confirmation is denied; a confirmation with a nonce for different arguments is denied.</li>
+        <li><code>new HttpClient()</code> inside <code>Providers/</code> fails the build.</li>
+      </ul>
+    </section>
+
+    <section class="phase" id="phase-3">
+      <header class="phase-head">
+        <span class="phase-num">3</span>
+        <div><h3>Audit pipeline</h3><p class="phase-meta"><span><b>4–6 days</b></span><span>Depends on Phase 2 (filter chain)</span></p></div>
+      </header>
+      <p class="goal"><strong>Goal.</strong> Every decision is recorded in a form a SIEM can alert on and an investigator can trust.</p>
+      <div class="chips"><span class="chip">GOAL-01</span><span class="chip">CS-06</span><span class="chip">LOG-01</span><span class="chip">LOG-02</span><span class="chip">MCP08</span><span class="chip inv-chip">I5</span><span class="chip inv-chip">I8</span></div>
+      <h4>Work</h4>
+      <ol class="work">
+        <li><span class="wid">P3.1</span><span><code>AuditEvent</code> per §3.5; <code>IAuditSink</code> with two implementations: an append-only JSONL file with daily rotation and a hash chain (<code>hash = SHA-256(prev_hash ‖ canonical(event))</code>), and an OpenTelemetry (OTLP) exporter to the SIEM.</span></li>
+        <li><span class="wid">P3.2</span><span>A <code>--verify-audit &lt;file&gt;</code> command that walks the chain and reports the first break.</span></li>
+        <li><span class="wid">P3.3</span><span>Redaction: arguments named in <code>SensitiveArgs</code> become <code>"[redacted:sha256:&lt;8 hex&gt;]"</code>; values matching secret patterns (JWT <code>eyJ…</code>, <code>Bearer </code>, <code>AKIA…</code>, <code>sk-…</code>) are always redacted; string arguments over 2 KB are truncated with a full-value hash; the token appears only as <code>jti_sha256</code>. Control characters are neutralized by JSON encoding; a test proves CR, LF, and ESC cannot forge a log line.</span></li>
+        <li><span class="wid">P3.4</span><span>Correlation: W3C <code>traceparent</code> accepted and propagated; <code>ActivitySource("McpServer")</code> spans for request, tool, and upstream call; <code>trace_id</code> and <code>request_id</code> in every event.</span></li>
+        <li><span class="wid">P3.5</span><span>Diagnostic logs (Serilog) stay for operations but may not contain arguments, tokens, or principal identifiers beyond <code>sub</code>. Remove the Debug-level full-arguments switch.</span></li>
+        <li><span class="wid">P3.6</span><span>Fail closed: when the audit sink cannot accept an event, Write and Irreversible tools are denied and <code>sys_monitor_disabled</code> is raised; Read tools follow <code>Audit:ReadWhenUnavailable</code> (default <code>deny</code>).</span></li>
+        <li><span class="wid">P3.7</span><span>Ship SIEM alert definitions with the repository: first use of a tool by a principal; more than N <code>authz_fail</code> in 10 minutes; any <code>mcp_prompt_injection</code>, <code>authn_token_reuse</code>, <code>mcp_egress_denied</code>, <code>mcp_revocation_failed</code>; a gap in the audit chain.</span></li>
+      </ol>
+      <h4>Exit criteria (all are tests)</h4>
+      <ul class="exit">
+        <li>A test enumerates every <code>decision.rule</code> the policy filter can produce, drives each, and asserts exactly one audit event with the correct name and level.</li>
+        <li>The chain verifier passes on a clean file and reports the exact line after a byte is flipped.</li>
+        <li>Redaction tests for a sensitive argument, a JWT-shaped string, and a 10 KB body.</li>
+        <li>Audit sink failure → a Write tool is denied and <code>sys_monitor_disabled</code> is emitted.</li>
+        <li><code>sys_startup</code> carries the build hash and the tool-lock hash; <code>sys_shutdown</code> is emitted on graceful stop.</li>
+      </ul>
+    </section>
+
+    <section class="phase" id="phase-4">
+      <header class="phase-head">
+        <span class="phase-num">4</span>
+        <div><h3>Guardrails, strikes, suspension, revocation</h3><p class="phase-meta"><span><b>6–10 days</b> + 1–3 per identity-provider adapter</span><span>Depends on Phases 1 and 3</span></p></div>
+      </header>
+      <p class="goal"><strong>Goal.</strong> A caller that violates the rules loses access automatically, on every instance, and the loss is enforced at the identity provider — with safeguards against punishing a user for content an upstream returned.</p>
+      <div class="chips"><span class="chip">GOAL-03</span><span class="chip">MCP01</span><span class="chip">MCP02</span><span class="chip">ASI10</span><span class="chip inv-chip">I6</span><span class="chip inv-chip">I7</span></div>
+      <h4>Work</h4>
+      <ol class="work">
+        <li><span class="wid">P4.1</span><span><code>StrikeEngine</code> subscribes to audit events in-process and applies the weights in §3.7 to a Redis hash <code>strikes:{idp}:{sub}</code> with a 10-minute window.</span></li>
+        <li><span class="wid">P4.2</span><span>Consequences per §3.7: throttle (halve L2/L3), suspend (denylist), revoke (identity provider) plus suspend.</span></li>
+        <li><span class="wid">P4.3</span><span><code>IPrincipalDenylist</code> backed by Redis keys <code>deny:{idp}:sub:{sub}</code> and <code>deny:{idp}:jti:{jti}</code> with TTL ≥ maximum token lifetime + clock skew. Checked in <code>OnTokenValidated</code> (fails authentication) and again in <code>PolicyFilter</code>. No local caching of denylist lookups: a cache is a revocation delay under another name.</span></li>
+        <li><span class="wid">P4.4</span><span><code>IGrantRevoker</code> with one adapter instance per identity provider, selected by the principal's <code>idp</code>. The operation must revoke the <strong>grant or refresh token</strong>, not the access token alone: RFC 7009 obliges a server to cascade only in the refresh-token direction, and revoking an access token by itself has been measured to change nothing. Adapters, each to be verified against the chosen tenant: Microsoft Entra ID (<code>POST /users/{id}/revokeSignInSessions</code> via Microsoft Graph, application permission <code>User.RevokeSessions.All</code>); Keycloak (<code>POST /admin/realms/{realm}/users/{id}/logout</code>); Auth0 (Management API <code>DELETE /api/v2/grants?user_id=…</code>); generic RFC 7009 only where this server is itself the OAuth client that obtained the token. Failures retry with backoff behind a circuit breaker; the suspension stays in place and <code>mcp_revocation_failed</code> is raised at CRITICAL.</span></li>
+        <li><span class="wid">P4.5</span><span>Freshness gates from §3.3: Write requires <code>iat</code> ≤ 5 min or an introspection result ≤ 60 s old; Irreversible introspects per request. Introspection endpoints are per identity provider; where one has none, document the fallback for the providers bound to it.</span></li>
+        <li><span class="wid">P4.6</span><span>The injection-versus-malice rule from §3.7, including <code>preceding_tool_output_hash</code> on every strike record.</span></li>
+        <li><span class="wid">P4.7</span><span>Administrative endpoints under <code>/admin</code> requiring the <code>mcp:admin</code> scope: suspend, reinstate, list strikes. Every call is audited as <code>authz_admin</code>.</span></li>
+        <li><span class="wid">P4.8</span><span>A revocation drill test: two server instances sharing one Redis and two identity providers; a scripted attacker at each; measure the time from the revoke decision to the first rejected request on each instance, per risk class. Publish the numbers in <code>docs/COMPLIANCE.md</code> as the achieved SLA.</span></li>
+      </ol>
+      <h4>Exit criteria (all are tests)</h4>
+      <ul class="exit">
+        <li>The scripted attacker is throttled after 3 strikes, suspended after 6, and revoked after 10; each transition emits its event.</li>
+        <li>A suspended principal's still-valid token is rejected on the next request on both instances.</li>
+        <li>Suspending <code>sub</code> X at identity provider A leaves <code>sub</code> X at identity provider B unaffected, and the revocation call goes to A's adapter only.</li>
+        <li>A revoked principal's token produces <code>authn_token_reuse</code> at CRITICAL.</li>
+        <li>A revoker outage leaves the suspension in force and raises <code>mcp_revocation_failed</code>.</li>
+        <li>A prompt-injection pattern in upstream output produces <code>mcp_prompt_injection</code> and zero strikes for the caller.</li>
+        <li>With Redis unreachable, Write tools are denied and Read tools follow configuration.</li>
+        <li><code>POST /admin/principals/{sub}/reinstate</code> without <code>mcp:admin</code> → <code>403</code>; with it → reinstated and <code>authz_admin</code> logged.</li>
+      </ul>
+    </section>
+
+    <section class="phase" id="phase-5">
+      <header class="phase-head">
+        <span class="phase-num">5</span>
+        <div><h3>Tool integrity and supply chain</h3><p class="phase-meta"><span><b>2–4 days</b></span><span>Depends on Phase 2 · runs alongside 3–4</span></p></div>
+      </header>
+      <p class="goal"><strong>Goal.</strong> What the server advertises is what was reviewed, and what it runs is what was built.</p>
+      <div class="chips"><span class="chip">CS-03</span><span class="chip">MCP03</span><span class="chip">MCP04</span><span class="chip">ASI04</span></div>
+      <h4>Work</h4>
+      <ol class="work">
+        <li><span class="wid">P5.1</span><span><code>tools.lock.json</code>: for every tool, SHA-256 over canonical JSON (sorted keys, no whitespace) of <code>{ name, title, description, inputSchema, annotations }</code>, plus the provider name. Startup recomputes and compares; a mismatch logs <code>mcp_tool_poisoning</code> at CRITICAL and exits 78. <code>dotnet run -- --update-tool-lock</code> rewrites the file in <code>Development</code> only. A <code>CODEOWNERS</code> rule requires a security reviewer on that file.</span></li>
+        <li><span class="wid">P5.2</span><span>The <code>ListToolsFilter</code> from Phase 2 serves the pinned definitions, so a runtime mutation of a description cannot reach a client.</span></li>
+        <li><span class="wid">P5.3</span><span>Central package management (<code>Directory.Packages.props</code>), committed lock files, <code>--locked-mode</code> in CI, <code>NuGetAudit</code> findings as errors, Dependabot or Renovate, an SBOM (CycloneDX) attached to every build, a container image scan, base images pinned by digest, and image signing (cosign) with verification at deploy time.</span></li>
+      </ol>
+      <h4>Exit criteria (tests or CI gates)</h4>
+      <ul class="exit">
+        <li>Changing one character of a tool description makes startup refuse with <code>mcp_tool_poisoning</code>.</li>
+        <li>CI fails on a seeded vulnerable package, on lock-file drift, and on a seeded secret.</li>
+        <li>The SBOM lists every runtime dependency with its version.</li>
+      </ul>
+    </section>
+
+    <section class="phase" id="phase-6">
+      <header class="phase-head">
+        <span class="phase-num">6</span>
+        <div><h3>Deployment hardening</h3><p class="phase-meta"><span><b>3–5 days</b></span><span>Depends on Phases 1 and 2 · runs alongside 5</span></p></div>
+      </header>
+      <p class="goal"><strong>Goal.</strong> The process runs with the fewest privileges that still work, and the network enforces the same egress allowance the application does, so a bug in one layer is caught by the other.</p>
+      <div class="chips"><span class="chip">CS-07</span><span class="chip">CS-09</span><span class="chip">CS-10</span><span class="chip">SPEC-06</span><span class="chip">SPEC-07</span><span class="chip">MCP01</span><span class="chip inv-chip">I8</span></div>
+      <h4>Work</h4>
+      <ol class="work">
+        <li><span class="wid">P6.1</span><span>Multi-stage Dockerfile on <code>mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled</code> (non-root, no shell), read-only root file system, <code>DOTNET_EnableDiagnostics=0</code>, no package managers in the final image.</span></li>
+        <li><span class="wid">P6.2</span><span>Network egress policy generated from the policy registry by a script in the repository (<code>tools/gen-egress-policy</code>), so the Kubernetes <code>NetworkPolicy</code> or egress-proxy allowlist can never drift from the provider policies. Allowed destinations are the union of provider hosts plus the identity provider, Redis, and the SIEM.</span></li>
+        <li><span class="wid">P6.3</span><span>Secrets mounted from the vault (Key Vault, Vault, or the platform's secret store) as files; no secret values in environment variables in any manifest.</span></li>
+        <li><span class="wid">P6.4</span><span>TLS terminated at the ingress with a trusted-proxy configuration, or in Kestrel; <code>AllowedHosts</code> set to the public name; HSTS enabled; mutual TLS between ingress and pod where the platform supports it.</span></li>
+        <li><span class="wid">P6.5</span><span>Liveness and readiness probes on the Phase 0 endpoints; CPU and memory limits; a pod disruption budget; <code>HostOptions.ShutdownTimeout</code> long enough to drain in-flight tool calls.</span></li>
+        <li><span class="wid">P6.6</span><span>Runbooks: revocation drill, JWKS and HMAC-nonce key rotation, audit chain verification, incident response for each CRITICAL event.</span></li>
+      </ol>
+      <h4>Exit criteria</h4>
+      <ul class="exit">
+        <li>The container runs as a non-root user; a write to <code>/</code> fails (test in CI against the built image).</li>
+        <li>With the application egress guard deliberately disabled in a test build, a request to a non-allowlisted host still fails at the network layer.</li>
+        <li><code>docker inspect</code> shows no secret values in the environment.</li>
+      </ul>
+    </section>
+
+    <section class="phase" id="phase-7">
+      <header class="phase-head">
+        <span class="phase-num">7</span>
+        <div><h3>Verification and compliance evidence</h3><p class="phase-meta"><span><b>5–8 days</b></span><span>Depends on all previous phases</span></p></div>
+      </header>
+      <p class="goal"><strong>Goal.</strong> Compliance is demonstrated, not asserted, and stays demonstrated as the code changes.</p>
+      <div class="chips"><span class="chip">Every ID in §2 gains a proof or a named owner</span></div>
+      <h4>Work</h4>
+      <ol class="work">
+        <li><span class="wid">P7.1</span><span><code>[Requirement("…")]</code> xUnit trait on every security test; a CI step generates <code>docs/COMPLIANCE.md</code> from the test results so the matrix in §5 is never edited by hand.</span></li>
+        <li><span class="wid">P7.2</span><span>Security test suite: one negative test per requirement; property-based tests (FsCheck) for the schema validator and <code>BoundedReadStream</code>; chaos tests for Redis, the audit sink, and the identity provider's JWKS endpoint being unavailable.</span></li>
+        <li><span class="wid">P7.3</span><span>Threat model (STRIDE over the §3.1 pipeline) reviewed with the security team; an external penetration test before go-live; findings become requirement IDs.</span></li>
+        <li><span class="wid">P7.4</span><span>The revocation drill from P4.8 runs in CI nightly and publishes the achieved SLA per risk class.</span></li>
+      </ol>
+      <h4>Exit criteria</h4>
+      <ul class="exit">
+        <li>Every requirement in §2 has at least one passing test or an entry in §7 with an owner.</li>
+        <li>Penetration-test findings rated high or critical are closed.</li>
+        <li><code>docs/COMPLIANCE.md</code> is generated, current, and linked from the README.</li>
+      </ul>
+    </section>
+
+    <p class="total"><strong>Total estimate: 36–58 working days for one engineer</strong>, excluding the external penetration test and identity-provider tenant work.</p>
+
+    <!-- ============================================================ -->
+    <h2 id="matrix">5 · Compliance matrix</h2>
+    <p>Requirement → control → where it lives → the test that proves it → the phase that delivers it. Once Phase 7 lands, this table is generated from test traits.</p>
+    <div class="table-wrap"><table class="compact">
+      <thead><tr><th>ID</th><th>Control</th><th>Where</th><th>Proof</th><th>Phase</th></tr></thead>
+      <tbody>
+        <tr><td class="id">SPEC-01</td><td>PRM document; <code>resource_metadata</code> challenge</td><td><code>AddMcp</code>, <code>Program.cs</code></td><td>No token → 401 with challenge; PRM contents</td><td class="num">1</td></tr>
+        <tr><td class="id">SPEC-02</td><td><code>ValidAudience</code> = resource URI</td><td><code>JwtBearerOptions</code></td><td>Wrong <code>aud</code> → 401</td><td class="num">1</td></tr>
+        <tr><td class="id">SPEC-03</td><td>Egress token-leak check; <code>IUpstreamCredentialProvider</code> for exchange</td><td><code>EgressGuardHandler</code></td><td>Inbound bearer on outbound → aborted</td><td class="num">2</td></tr>
+        <tr><td class="id">SPEC-04</td><td>Stateless transport; HMAC-bound handles</td><td>Transport options; confirmation nonce</td><td>Nonce for other args rejected</td><td class="num">1, 2</td></tr>
+        <tr><td class="id">SPEC-05</td><td>Scope catalog; <code>insufficient_scope</code> challenge; elevation logged</td><td><code>PolicyFilter</code>, <code>Program.cs</code></td><td>Missing scope → 403 with <code>scope=</code>; event</td><td class="num">1, 2</td></tr>
+        <tr><td class="id">SPEC-06</td><td>TLS or trusted proxy required in Production</td><td>Startup check</td><td>Production without TLS → exit 78</td><td class="num">1, 6</td></tr>
+        <tr><td class="id">SPEC-07</td><td>Origin guard; <code>AllowedHosts</code>; stdio gated</td><td><code>OriginGuardMiddleware</code>, hosting split</td><td>Bad Origin → 403; stdio in Production → 78</td><td class="num">0, 1</td></tr>
+        <tr><td class="id">SPEC-08</td><td><code>ConnectCallback</code> IP vetting; no redirects; HTTPS only</td><td><code>SocketsHttpHandler</code> config</td><td>Metadata IP refused; 302 not followed</td><td class="num">2</td></tr>
+        <tr><td class="id">MCP01</td><td>No secrets in repo; short tokens; hashed <code>jti</code>; vault</td><td>CI gitleaks; audit redaction; deployment</td><td>Seeded secret fails CI; redaction tests</td><td class="num">0, 3, 6</td></tr>
+        <tr><td class="id">MCP02</td><td>Catalog scopes; startup validation; per-tool scope</td><td><code>PolicyValidator</code></td><td>Unknown scope → 78; hidden tool → <code>authz_fail</code></td><td class="num">2</td></tr>
+        <tr><td class="id">MCP03</td><td><code>tools.lock.json</code>; pinned definitions served</td><td>Startup; <code>ListToolsFilter</code></td><td>Changed description → 78</td><td class="num">5</td></tr>
+        <tr><td class="id">MCP04</td><td>Lock files; audit; SBOM; signed images</td><td>CI</td><td>Seeded vulnerable package fails CI</td><td class="num">0, 5</td></tr>
+        <tr><td class="id">MCP05</td><td>No process execution; banned APIs; argument guard</td><td>Analyzer; <code>PolicyFilter</code></td><td><code>Process.Start</code> fails build</td><td class="num">2</td></tr>
+        <tr><td class="id">MCP06</td><td>Output guard: tag stripping, injection heuristics</td><td><code>OutputGuardFilter</code></td><td>Injected output → event, sanitized</td><td class="num">2, 3</td></tr>
+        <tr><td class="id">MCP07</td><td>JWT bearer; authorization filters; class-level <code>[Authorize]</code></td><td><code>Program.cs</code>, tool types</td><td>All Phase 1 negative tests</td><td class="num">1</td></tr>
+        <tr><td class="id">MCP08</td><td>Audit events; hash chain; SIEM export</td><td><code>AuditFilter</code>, sinks</td><td>Every deny rule → one event; chain verifier</td><td class="num">3</td></tr>
+        <tr><td class="id">MCP09</td><td>Owned by governance</td><td>—</td><td><code>sys_startup</code> with build hash aids inventory</td><td>§7</td></tr>
+        <tr><td class="id">MCP10</td><td>Per-provider cache and DI isolation; <code>sub</code> in principal-specific keys</td><td><code>AddProvider&lt;T&gt;()</code></td><td>Provider A cannot resolve B's client</td><td class="num">2</td></tr>
+        <tr><td class="id">CS-01</td><td>Schema validation; unknown-key rejection; length and finiteness</td><td><code>PolicyFilter</code></td><td>Extra arg → <code>malicious_extraneous</code>; NaN rejected</td><td class="num">2</td></tr>
+        <tr><td class="id">CS-02</td><td>Output guard</td><td><code>OutputGuardFilter</code></td><td>Tag stripped; event raised</td><td class="num">2</td></tr>
+        <tr><td class="id">CS-03</td><td>Tool lock</td><td>Startup</td><td>As MCP03</td><td class="num">5</td></tr>
+        <tr><td class="id">CS-04</td><td>Provider isolation</td><td>DI</td><td>As MCP10</td><td class="num">2</td></tr>
+        <tr><td class="id">CS-05</td><td>L1–L4 limits in Redis</td><td><code>PolicyFilter</code>, middleware</td><td>Limit exceeded → event; holds across instances</td><td class="num">2</td></tr>
+        <tr><td class="id">CS-06</td><td>Audit fields; SIEM alerts shipped</td><td>Audit schema</td><td>Field presence test; alert definitions in repo</td><td class="num">3</td></tr>
+        <tr><td class="id">CS-07</td><td>Chiseled non-root image; read-only FS; network egress policy</td><td>Dockerfile; manifests</td><td>Non-root and read-only tests; network-layer block</td><td class="num">6</td></tr>
+        <tr><td class="id">CS-08</td><td>Server-enforced confirmation for Irreversible</td><td><code>PolicyFilter</code></td><td>Missing confirmation → denied</td><td class="num">2</td></tr>
+        <tr><td class="id">CS-09</td><td><code>AllowedHosts</code>; loopback in Development</td><td>Configuration</td><td>Bad Host → 400</td><td class="num">1</td></tr>
+        <tr><td class="id">CS-10</td><td>Vault-mounted secrets; user-secrets in Development</td><td>Deployment</td><td>No secrets in image environment</td><td class="num">0, 6</td></tr>
+        <tr><td class="id">CS-11</td><td>HMAC-bound handles</td><td>Confirmation nonce</td><td>As SPEC-04</td><td class="num">2</td></tr>
+        <tr><td class="id">CS-12</td><td>Not adopted</td><td>—</td><td>See §7</td><td>—</td></tr>
+        <tr><td class="id">ASI02</td><td>Per-tool policy, quotas, argument guard</td><td><code>PolicyFilter</code></td><td>Phase 2 tests</td><td class="num">2</td></tr>
+        <tr><td class="id">ASI03</td><td>Per-principal identity; no passthrough; no service-account fallback</td><td>Phases 1–2</td><td>Token-leak test; identity tests</td><td class="num">1, 2</td></tr>
+        <tr><td class="id">ASI08</td><td>Circuit breaker; fail-closed rules</td><td>Resilience; <code>PolicyFilter</code></td><td>Redis down → Write denied</td><td class="num">2, 4</td></tr>
+        <tr><td class="id">ASI10</td><td>Strikes, suspension, revocation</td><td><code>StrikeEngine</code>, <code>IGrantRevoker</code></td><td>Attacker script; drill</td><td class="num">4</td></tr>
+        <tr><td class="id">LOG-01</td><td>OWASP event names</td><td><code>AuditEvent</code></td><td>Enumeration test</td><td class="num">3</td></tr>
+        <tr><td class="id">LOG-02</td><td>Required fields</td><td><code>AuditEvent</code></td><td>Field presence test</td><td class="num">3</td></tr>
+        <tr><td class="id">GOAL-01</td><td>Per-caller audit</td><td>Phase 3</td><td>Every event carries <code>principal.sub</code></td><td class="num">3</td></tr>
+        <tr><td class="id">GOAL-02</td><td>Limits per caller, tool, provider</td><td>L2, L3, L4</td><td>Phase 2 limit tests</td><td class="num">2</td></tr>
+        <tr><td class="id">GOAL-03</td><td>Automatic suspension and revocation</td><td>Phase 4</td><td>Drill measures SLA</td><td class="num">4</td></tr>
+        <tr><td class="id">GOAL-04</td><td>Framework-enforced allowances</td><td>Policy frame, egress guard, analyzer</td><td>Startup validation; egress tests; build failure</td><td class="num">2</td></tr>
+        <tr><td class="id">GOAL-05</td><td>One JWT scheme per identity provider; issuer routing; normalized principal; PRM lists every authorization server</td><td>Phase 1 authentication</td><td>Two-provider fixture: both accepted; unregistered issuer → 401 with no key lookup; cross-signed token → 401</td><td class="num">1</td></tr>
+        <tr><td class="id">GOAL-06</td><td>Binding in configuration, validated at startup; enforced in <code>ListToolsFilter</code> and <code>PolicyFilter</code>; keys namespaced <code>{idp}:{sub}</code>; administrative plane bound</td><td><code>PolicyValidator</code>, filters, strike engine</td><td>Token from B against a provider bound to A → hidden and <code>authz_fail</code>; unknown binding → 78; same <code>sub</code> at A and B are distinct</td><td class="num">1, 2, 4</td></tr>
+        <tr><td class="id">DEF-01…14</td><td>Fixed or removed</td><td>Phase 0</td><td>One regression test each</td><td class="num">0</td></tr>
+      </tbody>
+    </table></div>
+
+    <!-- ============================================================ -->
+    <h2 id="decisions">6 · Decisions needed before Phase 1</h2>
+    <p>Defaults are what the roadmap assumes if no decision is made.</p>
+    <div class="table-wrap"><table class="compact">
+      <thead><tr><th>#</th><th>Decision</th><th>Default assumed</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td class="id">D1</td><td>Identity providers to support (Entra ID, Keycloak, Auth0, other) and which provider binds to which</td><td>None — must be chosen</td><td>Each identity provider determines its revoker adapter, whether introspection exists, and the achievable SLA for the providers bound to it</td></tr>
+        <tr><td class="id">D2</td><td>Redis availability for shared limits and the denylist</td><td>Required in Production</td><td>Without it, limits and suspensions hold only per instance</td></tr>
+        <tr><td class="id">D3</td><td>Token lifetimes per risk class</td><td>Read 5 min; Write 60 s via step-up</td><td>Token lifetime is the revocation delay for Read tools</td></tr>
+        <tr><td class="id">D4</td><td>Keep the Development-only stdio mode</td><td>Yes</td><td>Removed entirely if the answer is no</td></tr>
+        <tr><td class="id">D5</td><td>Fate of the JSONPlaceholder provider</td><td>Kept as <code>Demo</code>, disabled in Production</td><td>It is the only provider with Write-class tools and carries those tests</td></tr>
+        <tr><td class="id">D6</td><td>Audit retention and SIEM target</td><td>400 days; OTLP</td><td>Storage sizing and alert wiring</td></tr>
+        <tr><td class="id">D7</td><td>Behaviour of Read tools when Redis or the audit sink is unavailable</td><td>Deny</td><td>Availability versus strictness</td></tr>
+        <tr><td class="id">D8</td><td>Human approval before permanent revocation on soft signals</td><td>Required</td><td>Prevents locking out a user whose agent was steered by injected content</td></tr>
+        <tr><td class="id">D9</td><td>Public resource URI for the <code>aud</code> claim</td><td>None — must be chosen</td><td>Fixed before tokens are issued; changing it invalidates every token</td></tr>
+        <tr><td class="id">D10</td><td>Which identity provider owns the administrative plane (<code>mcp:admin</code>)</td><td>None — must be chosen explicitly</td><td>The same scope from any other identity provider is ignored; the choice decides who can reinstate suspended principals</td></tr>
+      </tbody>
+    </table></div>
+
+    <!-- ============================================================ -->
+    <h2 id="out-of-scope">7 · Out of scope, owned elsewhere</h2>
+    <div class="table-wrap"><table class="compact">
+      <thead><tr><th>Item</th><th>Reason</th><th>Owner</th></tr></thead>
+      <tbody>
+        <tr><td>MCP09 shadow servers</td><td>An inventory problem, not a property of one server. This server helps by emitting <code>sys_startup</code> with its build hash and tool-lock hash to the SIEM.</td><td>Governance</td></tr>
+        <tr><td>CS-12 message-level signing and nonces</td><td>Not part of the MCP specification; TLS provides transport integrity, the JWT provides attribution, and the audit chain provides non-repudiation of decisions. Revisit if the specification adopts it.</td><td>—</td></tr>
+        <tr><td>Client-side approval UI (CS-08)</td><td>The server enforces a confirmation round-trip but cannot control how the client renders it or whether a human is present.</td><td>Client vendor</td></tr>
+        <tr><td>Identity-provider tenant configuration</td><td>Scope definitions, token lifetimes, introspection, and revocation permissions live in the tenant.</td><td>Identity team</td></tr>
+        <tr><td>Network egress policy enforcement</td><td>The repository generates the allowlist; the platform enforces it.</td><td>Platform team</td></tr>
+        <tr><td>Penetration test</td><td>External.</td><td>Security team</td></tr>
+      </tbody>
+    </table></div>
+
+    <!-- ============================================================ -->
+    <h2 id="sources">8 · Sources</h2>
+    <ul class="sources">
+      <li>MCP specification, Security Best Practices (2026-07-28) — <a href="https://modelcontextprotocol.io/docs/2026-07-28/tutorials/security/security_best_practices">modelcontextprotocol.io</a></li>
+      <li>MCP specification, Authorization — <a href="https://modelcontextprotocol.io/specification/draft/basic/authorization">modelcontextprotocol.io</a></li>
+      <li>OWASP MCP Top 10 — <a href="https://owasp.org/www-project-mcp-top-10/">owasp.org</a></li>
+      <li>OWASP MCP Security Cheat Sheet — <a href="https://cheatsheetseries.owasp.org/cheatsheets/MCP_Security_Cheat_Sheet.html">cheatsheetseries.owasp.org</a></li>
+      <li>OWASP Logging Vocabulary Cheat Sheet — <a href="https://cheatsheetseries.owasp.org/cheatsheets/Logging_Vocabulary_Cheat_Sheet.html">cheatsheetseries.owasp.org</a></li>
+      <li>OWASP, A Practical Guide for Secure MCP Server Development — <a href="https://genai.owasp.org/resource/a-practical-guide-for-secure-mcp-server-development/">genai.owasp.org</a></li>
+      <li>OWASP Top 10 for Agentic Applications 2026 — <a href="https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/">genai.owasp.org</a></li>
+      <li>MCP C# SDK 2.0 announcement (breaking changes, target frameworks, <code>Stateless</code> default) — <a href="https://devblogs.microsoft.com/dotnet/announcing-v20-of-the-official-mcp-csharp-sdk/">devblogs.microsoft.com</a></li>
+      <li>MCP C# SDK, ProtectedMcpServer sample — <a href="https://github.com/modelcontextprotocol/csharp-sdk/blob/main/samples/ProtectedMcpServer/Program.cs">github.com</a></li>
+      <li>MCP C# SDK, Filters — <a href="https://csharp.sdk.modelcontextprotocol.io/v1/concepts/filters.html">csharp.sdk.modelcontextprotocol.io</a></li>
+      <li>.NET 8 and .NET 9 end of support, 2026-11-10 — <a href="https://devblogs.microsoft.com/dotnet/dotnet-8-9-end-of-support/">devblogs.microsoft.com</a></li>
+      <li>ASP.NET Core, Authorize with a specific scheme (policy schemes and forwarding) — <a href="https://learn.microsoft.com/aspnet/core/security/authorization/limitingidentitybyscheme">learn.microsoft.com</a></li>
+      <li>RFC 7009 (revocation), RFC 7662 (introspection), RFC 8693 (token exchange), RFC 8707 (resource indicators), RFC 9728 (protected resource metadata)</li>
+      <li>Token lifetime as revocation SLA (measurements cited in §3.7 and P4.4) — <a href="https://mojoauth.com/blog/revoking-an-agents-access-mid-task-token-lifetime-design">mojoauth.com</a></li>
+    </ul>
+  </main>
+</div>
+
+</body>
+</html>
