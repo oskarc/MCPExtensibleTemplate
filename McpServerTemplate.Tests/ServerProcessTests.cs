@@ -241,17 +241,19 @@ public class ServerProcessTests
     }
 
     [Fact]
-    public async Task T3_http_without_an_api_key_is_a_configuration_failure()
+    public async Task T3_http_without_identity_configured_is_a_configuration_failure()
     {
+        // Replaces the API-key check this contract deleted. The guarantee is unchanged: a server
+        // that cannot authenticate anyone must refuse to start rather than come up and discover
+        // it on the first request.
         var (exitCode, stderr) = await RunToCompletionAsync(new Dictionary<string, string>
         {
             ["ASPNETCORE_ENVIRONMENT"] = "Production",
             ["Transport"] = "http",
-            ["Authentication__ApiKey"] = "",
         });
 
         Assert.Equal(78, exitCode);
-        Assert.Contains("Authentication:ApiKey", stderr, StringComparison.Ordinal);
+        Assert.Contains("Authentication:IdentityProviders", stderr, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -329,17 +331,29 @@ public class ServerProcessTests
         }
     }
 
-    private static async Task<HttpServer> StartHttpAsync(string apiKey)
+    /// <summary>
+    /// Identity as a deployment configures it. Nothing here reaches the authority: these tests
+    /// present no token, so no discovery is triggered.
+    /// </summary>
+    internal static Dictionary<string, string> IdentityEnvironment() => new()
+    {
+        ["Authentication__Resource"] = "https://mcp.example.com/mcp",
+        ["Authentication__IdentityProviders__corp__Authority"] = "https://login.example.com",
+        ["Authentication__IdentityProviders__corp__Issuer"] = "https://login.example.com/",
+        ["Authentication__IdentityProviders__corp__Algorithms__0"] = "RS256",
+        ["Authentication__IdentityProviders__corp__ScopeCatalog__0"] = "weather:read",
+    };
+
+    private static async Task<HttpServer> StartHttpAsync()
     {
         var port = FreePort();
-        var spawned = Start(new Dictionary<string, string>
-        {
-            ["ASPNETCORE_ENVIRONMENT"] = "Production",
-            ["Transport"] = "http",
-            ["Authentication__ApiKey"] = apiKey,
-            ["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["HttpTransport__BindAddress"] = "127.0.0.1",
-        });
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "127.0.0.1";
+
+        var spawned = Start(environment);
         var process = spawned.Process;
 
         var client = new HttpClient
@@ -374,7 +388,7 @@ public class ServerProcessTests
     [Fact]
     public async Task T8_liveness_and_readiness_answer_without_a_credential()
     {
-        await using var server = await StartHttpAsync("acceptance-test-key");
+        await using var server = await StartHttpAsync();
 
         using var liveness = await server.Client.GetAsync("/healthz");
         using var readiness = await server.Client.GetAsync("/readyz");
@@ -388,7 +402,7 @@ public class ServerProcessTests
     [Fact]
     public async Task T4_a_foreign_host_header_is_rejected_before_anything_else()
     {
-        await using var server = await StartHttpAsync("acceptance-test-key");
+        await using var server = await StartHttpAsync();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "/healthz");
         request.Headers.Host = "attacker.example.com";
@@ -401,22 +415,46 @@ public class ServerProcessTests
     }
 
     [Fact]
-    public async Task T4_the_mcp_endpoint_requires_the_api_key()
+    public async Task T4_the_mcp_endpoint_requires_a_verified_token()
     {
-        await using var server = await StartHttpAsync("acceptance-test-key");
+        // Replaces the shared-key gate. A key everyone copies could not say who was calling; a
+        // token can, and an unreadable one is refused exactly like an absent one.
+        await using var server = await StartHttpAsync();
 
-        using var missing = await server.Client.GetAsync("/");
+        using var missing = await Post(server, token: null);
         Assert.Equal(HttpStatusCode.Unauthorized, missing.StatusCode);
 
-        using var wrong = new HttpRequestMessage(HttpMethod.Get, "/");
-        wrong.Headers.Add("X-Api-Key", "not-the-key");
-        using var wrongResponse = await server.Client.SendAsync(wrong);
-        Assert.Equal(HttpStatusCode.Unauthorized, wrongResponse.StatusCode);
+        using var unreadable = await Post(server, token: "not-a-jwt");
+        Assert.Equal(HttpStatusCode.Unauthorized, unreadable.StatusCode);
 
-        using var correct = new HttpRequestMessage(HttpMethod.Get, "/");
-        correct.Headers.Add("X-Api-Key", "acceptance-test-key");
-        using var correctResponse = await server.Client.SendAsync(correct);
-        Assert.NotEqual(HttpStatusCode.Unauthorized, correctResponse.StatusCode);
+        // Both are told where to go, which a bare 401 never did.
+        foreach (var response in new[] { missing, unreadable })
+        {
+            var challenge = string.Join(" ", response.Headers.WwwAuthenticate.Select(h => h.ToString()));
+            Assert.Contains("resource_metadata", challenge, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Posts an initialize request, which is what a client sends. A GET is rejected as a bad
+    /// method before authorization is consulted at all.
+    /// </summary>
+    private static async Task<HttpResponseMessage> Post(HttpServer server, string? token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/")
+        {
+            Content = new StringContent(
+                """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"acceptance-test","version":"1"}}}""",
+                Encoding.UTF8,
+                "application/json"),
+        };
+        request.Headers.Accept.ParseAdd("application/json, text/event-stream");
+        if (token is not null)
+        {
+            request.Headers.Add("Authorization", $"Bearer {token}");
+        }
+
+        return await server.Client.SendAsync(request);
     }
 
     // ── G-4 / UC-3: a failing tool answers, and says what to do ───────────────

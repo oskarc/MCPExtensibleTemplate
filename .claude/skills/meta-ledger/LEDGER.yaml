@@ -668,6 +668,39 @@ observations:
     stewarded: n/a
 
 
+  - obs_id: O-021
+    date: 2026-09-19
+    source: drift
+    contract_id: contract-002
+    refs: [O-011, O-015, O-018]
+    statement: |
+      Every "run the tests, then commit" chain used across this session was ungated, and the
+      defect is the same one the session kept finding in the product.
+
+      The shape was `dotnet test ... | grep ... | head -3 && git commit ...`. A shell pipeline
+      exits with the status of its last stage, so the chain gated on head, which always succeeds.
+      The `&&` read as "commit only if the tests passed" and meant "commit". It surfaced when a
+      commit went through with a test failing; the failure was contract-002's deliberate red
+      test, so nothing bad was published, but that was luck rather than the gate.
+
+      The commits were in fact green because the output was read each time. That is the point: a
+      human-read check standing where a mechanical one appears to be is worse than no check,
+      because it is trusted like a mechanism and fails like attention.
+
+      The fix is `set -o pipefail`, or capturing the test exit status before filtering. The wider
+      shape, which is now four instances in two days: a check whose failure path was never
+      exercised. O-011 named it for tests, O-015 for test composition, O-018 for an exclusion
+      drawn around the example at hand. This one is the same claim about the tooling the agent
+      uses to verify its own work, which is the one place it was not being applied.
+    level_guess: principle
+    stated_confidence: 0.95
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17

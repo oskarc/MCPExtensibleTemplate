@@ -8,9 +8,8 @@ namespace McpServerTemplate.Tests.Identity;
 /// <summary>
 /// contract-002 · T-1 (G-1, G-2) — a caller with no credential is told where to get one.
 ///
-/// This is the contract's red test: on the tree as it stands there is no notion of a token, an
-/// authorization server or a resource. The API key middleware answers 401 with a sentence of
-/// prose, which tells a client nothing it can act on. RFC 9728 says the challenge must point at
+/// This was the contract's red test. Before G-1 and G-2 the 401 carried no WWW-Authenticate at
+/// all, so a client with no token had nowhere to go. RFC 9728 says the challenge must point at
 /// the metadata document, and that document is how a client discovers where to authenticate.
 /// </summary>
 public class ResourceMetadataTests
@@ -66,9 +65,13 @@ public class ResourceMetadataTests
         info.Environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
         info.Environment["HttpTransport__BindAddress"] = "127.0.0.1";
 
-        // Still required by the tree as it stands. Contract-002 · G-9 deletes it, and this line
-        // goes with it.
-        info.Environment["Authentication__ApiKey"] = "red-test-key";
+        // Identity as a deployment would configure it. The authority is never reached in this
+        // test: no token is presented, so nothing triggers discovery.
+        info.Environment["Authentication__Resource"] = "https://mcp.example.com/mcp";
+        info.Environment["Authentication__IdentityProviders__corp__Authority"] = "https://login.example.com";
+        info.Environment["Authentication__IdentityProviders__corp__Issuer"] = "https://login.example.com/";
+        info.Environment["Authentication__IdentityProviders__corp__Algorithms__0"] = "RS256";
+        info.Environment["Authentication__IdentityProviders__corp__ScopeCatalog__0"] = "weather:read";
 
         var process = Process.Start(info)!;
         var stderr = new StringBuilder();
@@ -122,7 +125,19 @@ public class ResourceMetadataTests
 
         try
         {
-            using var response = await client.GetAsync("/");
+            // What a client actually does. A GET here is 405 before authorization is ever
+            // consulted, because the endpoint is POST-only and routing rejects the method
+            // first — so a GET would have tested method matching, not the challenge.
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/")
+            {
+                Content = new StringContent(
+                    """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"acceptance-test","version":"1"}}}""",
+                    Encoding.UTF8,
+                    "application/json"),
+            };
+            request.Headers.Accept.ParseAdd("application/json, text/event-stream");
+
+            using var response = await client.SendAsync(request);
 
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
 

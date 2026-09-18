@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Threading.RateLimiting;
 using McpServerTemplate.Infrastructure;
+using McpServerTemplate.Infrastructure.Identity;
 using McpServerTemplate.Providers.JsonPlaceholder;
 using McpServerTemplate.Providers.Smhi;
 using McpServerTemplate.Providers.SmhiObs;
@@ -139,16 +140,11 @@ static async Task<int> RunHttpAsync(string[] args)
         because: "a TCP port");
     var bindAddress = configuration.GetValue("HttpTransport:BindAddress", "localhost") ?? "localhost";
 
-    // Fail before binding rather than serving unauthenticated: the middleware that enforces the
-    // key is constructed lazily, so without this the server would come up and only reject the
-    // first request.
-    if (string.IsNullOrWhiteSpace(configuration.GetValue<string>("Authentication:ApiKey")))
-    {
-        throw new ConfigurationException(
-            "Authentication:ApiKey must be configured when using HTTP transport. In development set it "
-            + "with 'dotnet user-secrets set Authentication:ApiKey <value>'; in a hosted environment "
-            + "supply it as the environment variable Authentication__ApiKey.");
-    }
+    // Identity is configured and validated before anything binds. A deployment that cannot
+    // verify a token must not come up and discover that on its first request.
+    var identity = IdentityConfigurationBinder.Bind(configuration);
+    builder.Services.AddIdentity(identity);
+    builder.Services.AddAuthorization();
 
     Log.Information("Starting MCP server with HTTP transport on {BindAddress}:{Port}", bindAddress, port);
     builder.WebHost.UseUrls($"http://{bindAddress}:{port}");
@@ -230,15 +226,17 @@ static async Task<int> RunHttpAsync(string[] args)
     //   CORS               — answers preflight before anything spends a rate-limit permit
     //   rate limiter       — partitions on the address forwarded headers established
     //   health endpoints   — probes carry no credential, and disclose nothing
-    //   authentication     — the last gate before any tool is reachable
+    //   authentication     — the last gate before any tool is reachable; a caller without a
+    //                        token is challenged with the metadata document rather than refused
     app.UseForwardedHeaders();
     app.UseHttpsRedirection();
     app.UseHostFiltering();
     app.UseCors();
     app.UseRateLimiter();
     app.UseHealthEndpoints(app.Lifetime);
-    app.UseMiddleware<ApiKeyMiddleware>();
-    app.MapMcp();
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.MapMcp().RequireAuthorization();
 
     await app.RunAsync();
     return ExitCode.Ok;
