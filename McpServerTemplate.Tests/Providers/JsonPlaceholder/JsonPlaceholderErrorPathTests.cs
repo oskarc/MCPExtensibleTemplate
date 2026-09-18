@@ -144,4 +144,39 @@ public class JsonPlaceholderErrorPathTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => FailingClient(new TaskCanceledException()).GetPostAsync(1, cancelled.Token));
     }
+
+    [Theory]
+    [MemberData(nameof(EveryTool))]
+    public async Task T5_an_open_circuit_names_a_recovery(string tool, Func<JsonPlaceholderApiClient, Task> call)
+    {
+        // Once the breaker opens, the pipeline stops calling the upstream and raises this
+        // instead. It is neither an HTTP failure nor a timeout, so it escaped the mapping and
+        // reached the caller as "An error occurred invoking 'get_blog_post'" — on every call
+        // after the first, which is exactly when a model most needs to be told to stop.
+        var ex = await Assert.ThrowsAsync<McpException>(
+            () => call(FailingClient(new Polly.CircuitBreaker.BrokenCircuitException(
+                "The circuit is now open and is not allowing calls."))));
+
+        Assert.DoesNotContain("circuit", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("unavailable", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(string.IsNullOrWhiteSpace(tool));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(101)]
+    [InlineData(-1)]
+    public async Task T5_an_out_of_range_id_names_the_valid_range(int postId)
+    {
+        // The tools file's own guidance says to throw McpException with a recovery hint. It threw
+        // ArgumentException, which the model receives as the generic failure text — so a caller
+        // that picked a bad id was never told what a good one looks like.
+        // The range check lives on the tool, which is the surface a model calls — not on the
+        // client underneath it.
+        var ex = await Assert.ThrowsAsync<McpException>(
+            () => JsonPlaceholderTools.GetBlogPost(Client(HttpStatusCode.OK), postId));
+
+        Assert.Contains("1", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("100", ex.Message, StringComparison.Ordinal);
+    }
 }

@@ -457,6 +457,42 @@ observations:
     stewarded: n/a
 
 
+  - obs_id: O-015
+    date: 2026-09-18
+    source: verification
+    contract_id: contract-001
+    refs: []
+    statement: |
+      Three passes of kit-verifier found three different real defects in the same two clauses,
+      and each one hid behind a test that passed. The pattern is what the test was allowed to
+      construct.
+
+      T-5's error cases build the provider as new JsonPlaceholderApiClient(new HttpClient(bare
+      handler)). That client has no resilience pipeline, so no failure the pipeline itself
+      produces can ever appear in it: not the retry timeout, not the open circuit. The test
+      covered the provider's error handling and could not reach half of the shapes the shipped
+      composition actually raises. It passed while the deployed server answered a model with
+      "An error occurred invoking 'get_blog_post'." on every call after the breaker tripped.
+
+      T-3 is the same shape one level up. It names a provider BaseUrl over http as its
+      configuration-error case, and its automated form covers unknown transport and a missing
+      API key. Both of those do raise ConfigurationException; the case the test is named after
+      raised InvalidOperationException and exited 70, telling an operator to go hunting for a
+      bug in the server. The test named the right case and exercised two others.
+
+      The transferable shape: a test that constructs its subject differently from the way the
+      program constructs it is testing a different program. Where a guarantee is about
+      behaviour under failure, the composition has to be the shipped one — wired through the
+      same registration — or the test can only see the failures it was already imagining.
+    level_guess: principle
+    stated_confidence: 0.9
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17

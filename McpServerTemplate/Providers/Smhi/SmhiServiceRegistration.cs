@@ -33,7 +33,7 @@ public static class SmhiServiceRegistration
         services.Configure<SmhiConfig>(section);
 
         var config = section.Get<SmhiConfig>()
-            ?? throw new InvalidOperationException(
+            ?? throw new ConfigurationException(
                 "Missing configuration section 'Providers:Smhi' in appsettings.json.");
 
         // Security: validate that BaseUrl is an absolute HTTPS URL to prevent
@@ -41,7 +41,7 @@ public static class SmhiServiceRegistration
         if (!Uri.TryCreate(config.BaseUrl, UriKind.Absolute, out var baseUri) ||
             baseUri.Scheme != "https")
         {
-            throw new InvalidOperationException(
+            throw new ConfigurationException(
                 $"Providers:Smhi:BaseUrl must be an absolute HTTPS URL, got: '{config.BaseUrl}'");
         }
 

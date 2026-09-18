@@ -20,14 +20,14 @@ public static class SmhiObsServiceRegistration
         services.Configure<SmhiObsConfig>(section);
 
         var config = section.Get<SmhiObsConfig>()
-            ?? throw new InvalidOperationException(
+            ?? throw new ConfigurationException(
                 "Missing configuration section 'Providers:SmhiObs' in appsettings.json.");
 
         // Security: validate that BaseUrl is an absolute HTTPS URL.
         if (!Uri.TryCreate(config.BaseUrl, UriKind.Absolute, out var baseUri) ||
             baseUri.Scheme != "https")
         {
-            throw new InvalidOperationException(
+            throw new ConfigurationException(
                 $"Providers:SmhiObs:BaseUrl must be an absolute HTTPS URL, got: '{config.BaseUrl}'");
         }
 

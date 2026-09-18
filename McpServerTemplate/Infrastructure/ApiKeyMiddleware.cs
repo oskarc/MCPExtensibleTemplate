@@ -27,7 +27,7 @@ public sealed class ApiKeyMiddleware
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            throw new InvalidOperationException(
+            throw new ConfigurationException(
                 "Authentication:ApiKey must be configured when using HTTP transport. "
                 + "Set it in appsettings.json or via environment variable Authentication__ApiKey.");
         }

@@ -33,7 +33,7 @@ public static class JsonPlaceholderServiceRegistration
         services.Configure<JsonPlaceholderConfig>(section);
 
         var config = section.Get<JsonPlaceholderConfig>()
-            ?? throw new InvalidOperationException(
+            ?? throw new ConfigurationException(
                 "Missing configuration section 'Providers:JsonPlaceholder' in appsettings.json.");
 
         // Security: validate that BaseUrl is an absolute HTTPS URL to prevent
@@ -41,7 +41,7 @@ public static class JsonPlaceholderServiceRegistration
         if (!Uri.TryCreate(config.BaseUrl, UriKind.Absolute, out var baseUri) ||
             baseUri.Scheme != "https")
         {
-            throw new InvalidOperationException(
+            throw new ConfigurationException(
                 $"Providers:JsonPlaceholder:BaseUrl must be an absolute HTTPS URL, got: '{config.BaseUrl}'");
         }
 

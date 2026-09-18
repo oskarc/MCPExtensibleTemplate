@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using McpServerTemplate.Providers.JsonPlaceholder.Models;
 
@@ -43,7 +44,8 @@ public static class JsonPlaceholderTools
         CancellationToken cancellationToken = default)
     {
         if (postId < 1 || postId > 100)
-            throw new ArgumentException("Post ID must be between 1 and 100.", nameof(postId));
+            throw new McpException(
+                $"Post ID {postId} is out of range. JSONPlaceholder serves posts 1-100; ask for an id in that range.");
 
         var post = await client.GetPostAsync(postId, cancellationToken);
         return JsonPlaceholderFormatters.FormatPost(post);
@@ -64,7 +66,8 @@ public static class JsonPlaceholderTools
         CancellationToken cancellationToken = default)
     {
         if (userId < 1 || userId > 10)
-            throw new ArgumentException("User ID must be between 1 and 10.", nameof(userId));
+            throw new McpException(
+                $"User ID {userId} is out of range. JSONPlaceholder serves users 1-10; ask for an id in that range.");
 
         var post = await client.CreatePostAsync(userId, title, body, cancellationToken);
         return JsonPlaceholderFormatters.FormatPostCreated(post);
@@ -81,7 +84,8 @@ public static class JsonPlaceholderTools
         CancellationToken cancellationToken = default)
     {
         if (postId < 1 || postId > 100)
-            throw new ArgumentException("Post ID must be between 1 and 100.", nameof(postId));
+            throw new McpException(
+                $"Post ID {postId} is out of range. JSONPlaceholder serves posts 1-100; ask for an id in that range.");
 
         var comments = await client.GetPostCommentsAsync(postId, cancellationToken);
         return JsonPlaceholderFormatters.FormatComments(comments, postId);
@@ -103,7 +107,8 @@ public static class JsonPlaceholderTools
         CancellationToken cancellationToken = default)
     {
         if (postId < 1 || postId > 100)
-            throw new ArgumentException("Post ID must be between 1 and 100.", nameof(postId));
+            throw new McpException(
+                $"Post ID {postId} is out of range. JSONPlaceholder serves posts 1-100; ask for an id in that range.");
 
         var comment = await client.CreateCommentAsync(postId, name, email, body, cancellationToken);
         return JsonPlaceholderFormatters.FormatCommentCreated(comment);
@@ -120,7 +125,8 @@ public static class JsonPlaceholderTools
         CancellationToken cancellationToken = default)
     {
         if (userId < 1 || userId > 10)
-            throw new ArgumentException("User ID must be between 1 and 10.", nameof(userId));
+            throw new McpException(
+                $"User ID {userId} is out of range. JSONPlaceholder serves users 1-10; ask for an id in that range.");
 
         var todos = await client.GetUserTodosAsync(userId, cancellationToken);
         return JsonPlaceholderFormatters.FormatTodos(todos, userId);
@@ -141,7 +147,8 @@ public static class JsonPlaceholderTools
         CancellationToken cancellationToken = default)
     {
         if (userId < 1 || userId > 10)
-            throw new ArgumentException("User ID must be between 1 and 10.", nameof(userId));
+            throw new McpException(
+                $"User ID {userId} is out of range. JSONPlaceholder serves users 1-10; ask for an id in that range.");
 
         var todo = await client.CreateTodoAsync(userId, title, completed, cancellationToken);
         return JsonPlaceholderFormatters.FormatTodoCreated(todo);

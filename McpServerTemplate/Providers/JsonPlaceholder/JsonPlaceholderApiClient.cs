@@ -55,6 +55,17 @@ public class JsonPlaceholderApiClient
                 $"Unable to reach the JSONPlaceholder API for {what}. Check network connectivity "
                 + "and try again; if it persists, confirm Providers:JsonPlaceholder:BaseUrl.", ex);
         }
+        catch (Polly.CircuitBreaker.BrokenCircuitException ex)
+        {
+            // The breaker has opened: the pipeline is no longer calling the upstream at all.
+            // This is the one failure where retrying is guaranteed to be useless, so it must not
+            // read like the transient ones above — and it is the failure a caller meets most
+            // often, since every call after the breaker trips arrives here.
+            throw new McpException(
+                $"The upstream is unavailable and this server has stopped calling it for {what} "
+                + "after repeated failures. Do not retry for a minute or so; nothing is reaching "
+                + "the API until it recovers.", ex);
+        }
         catch (Polly.Timeout.TimeoutRejectedException ex)
         {
             // The resilience pipeline exhausted its budget. This is neither an HTTP failure nor a

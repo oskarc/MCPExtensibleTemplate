@@ -255,6 +255,25 @@ public class ServerProcessTests
     }
 
     [Fact]
+    public async Task T3_a_plaintext_provider_url_exits_78()
+    {
+        // The case T-3 actually names. It exited 70 with a stack trace, because the provider
+        // registrations raised a type Program.cs maps to "unhandled" alongside genuine crashes.
+        var (exitCode, stderr) = await RunToCompletionAsync(new Dictionary<string, string>
+        {
+            ["ASPNETCORE_ENVIRONMENT"] = "Development",
+            ["Transport"] = "stdio",
+            ["Providers__JsonPlaceholder__BaseUrl"] = "http://jsonplaceholder.typicode.com",
+        });
+
+        Assert.Equal(78, exitCode);
+        Assert.Contains("HTTPS", stderr, StringComparison.OrdinalIgnoreCase);
+
+        // An operator reading this needs the setting to change, not a stack trace to read.
+        Assert.DoesNotContain("   at ", stderr, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task T3_a_configuration_failure_never_exits_zero()
     {
         // The regression this guards: every one of these used to log a fatal error and exit 0,
