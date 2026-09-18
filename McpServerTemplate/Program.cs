@@ -159,137 +159,28 @@ static async Task<int> RunHttpAsync(string[] args)
 
     ConfigureLogging(builder.Services, configuration);
 
-    // The HTTP transport's services must be registered before MapMcp can route to them;
-    // without this the host builds and then throws on the first route mapping.
-    ConfigureMcpServer(builder.Services, configuration)
-        // contract-002 · G-11 — stateless streamable HTTP: no session affinity, no
-        // Mcp-Session-Id, so any instance can serve any request.
-        .WithHttpTransport(options => options.Stateless = true)
-        // contract-002 · G-4 — the SDK filters list-tools and call-tool against the caller's
-        // authorization, so a principal is shown only what it may use.
-        .AddAuthorizationFilters();
-
+    // Transport settings are read first, so a mistyped port is reported as a mistyped port
+    // rather than behind whichever other configuration failure happens to be checked first.
     var port = ConfigurationGuard.IntegerInRange(
         configuration, "HttpTransport:Port", minimum: 1, maximum: 65535, fallback: 3001,
         because: "a TCP port");
     var bindAddress = configuration.GetValue("HttpTransport:BindAddress", "localhost") ?? "localhost";
 
-    // Identity is configured and validated before anything binds. A deployment that cannot
-    // verify a token must not come up and discover that on its first request.
-    TransportSecurityGuard.Validate(configuration, builder.Environment.IsProduction());
-
-    var identity = IdentityConfigurationBinder.Bind(configuration);
-    builder.Services.AddIdentity(identity);
-    builder.Services.AddAuthorization();
-
-    // contract-002 · G-5 — the binding needs the registered tools, so it is resolved from the
-    // container; it is forced below, at startup, rather than on the first call.
-    builder.Services.AddHttpContextAccessor();
-    builder.Services.AddSingleton(services => ProviderBinding.Create(
-        configuration, identity, services.GetServices<McpServerTool>()));
+    // The whole composition lives in HttpServerComposition so a test can build the same server
+    // in-process and reach the bearer handler's backchannel (contract-002 · G-10).
+    HttpServerComposition.AddHttpServer(builder, ConfigureMcpServer);
 
     Log.Information("Starting MCP server with HTTP transport on {BindAddress}:{Port}", bindAddress, port);
     builder.WebHost.UseUrls($"http://{bindAddress}:{port}");
 
-    // ── Kestrel hardening ──
-    builder.WebHost.ConfigureKestrel(kestrel =>
-    {
-        kestrel.Limits.MaxRequestBodySize = 1_048_576; // 1 MB
-        kestrel.Limits.MaxConcurrentConnections = 100;
-        kestrel.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
-        kestrel.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(120);
-    });
-
-    // ── Trust proxy headers only from a proxy ──
-    // Known networks and proxies default to loopback, so a forwarded header from anywhere else
-    // is ignored. Without that, any caller could set X-Forwarded-For and choose which bucket of
-    // the per-client rate limiter to spend.
-    builder.Services.Configure<ForwardedHeadersOptions>(options =>
-    {
-        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-        options.ForwardLimit = 1;
-    });
-
-    // ── Host allowlist ──
-    // Rejects requests whose Host header this server does not answer for, which is what stops
-    // DNS rebinding from turning a browser on the operator's machine into a client of it.
-    var allowedHosts = configuration.GetSection("HttpTransport:AllowedHosts").Get<string[]>();
-    if (allowedHosts is not { Length: > 0 })
-    {
-        allowedHosts = bindAddress is "localhost" or "127.0.0.1" or "::1"
-            ? ["localhost", "127.0.0.1", "[::1]"]
-            : [bindAddress];
-    }
-
-    builder.Services.AddHostFiltering(options =>
-    {
-        options.AllowedHosts = allowedHosts;
-        options.AllowEmptyHosts = false;
-        options.IncludeFailureMessage = false;
-    });
-
-    // ── Per-client (IP) rate limiting for HTTP transport ──
-    builder.Services.AddRateLimiter(options =>
-    {
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
-            RateLimitPartition.GetFixedWindowLimiter(
-                ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 60,
-                    Window = TimeSpan.FromMinutes(1),
-                    AutoReplenishment = true
-                }));
-    });
-
-    // ── Restrictive CORS — deny all cross-origin by default ──
-    var allowedOrigins = configuration.GetSection("HttpTransport:AllowedOrigins").Get<string[]>();
-    builder.Services.AddCors(options =>
-    {
-        options.AddDefaultPolicy(policy =>
-        {
-            if (allowedOrigins is { Length: > 0 })
-                policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
-            else
-                policy.SetIsOriginAllowed(_ => false);
-        });
-    });
-
     RegisterProviders(builder.Services, configuration);
 
-    var app = builder.Build();
+    var app = builder.Build().UseHttpServer();
 
-    // Resolved here on purpose: a provider that declares no identity provider, or a tool that
-    // declares no provider, stops the server now rather than when a call is wrongly allowed.
     var binding = app.Services.GetRequiredService<ProviderBinding>();
     Log.Information(
         "Trust domains bound: {Bindings}",
         string.Join(", ", binding.Providers.Select(p => $"{p} -> {binding.IdentityProviderOf(p)}")));
-
-
-    // ── Middleware order (contract-001 · G-3) ──
-    // Fixed, and each stage depends on the ones before it:
-    //   forwarded headers  — establishes the real client address and scheme
-    //   HTTPS redirection  — acts on that scheme (a no-op when no HTTPS port is configured)
-    //   host allowlist     — rejects a Host this server does not answer for
-    //   CORS               — answers preflight before anything spends a rate-limit permit
-    //   rate limiter       — partitions on the address forwarded headers established
-    //   health endpoints   — probes carry no credential, and disclose nothing
-    //   origin guard       — a browser-driven request is refused for being cross-origin,
-    //                        before any token is examined
-    //   authentication     — the last gate before any tool is reachable; a caller without a
-    //                        token is challenged with the metadata document rather than refused
-    app.UseForwardedHeaders();
-    app.UseHttpsRedirection();
-    app.UseHostFiltering();
-    app.UseCors();
-    app.UseRateLimiter();
-    app.UseHealthEndpoints(app.Lifetime);
-    app.UseMiddleware<OriginGuardMiddleware>();
-    app.UseAuthentication();
-    app.UseAuthorization();
-    app.MapMcp().RequireAuthorization();
 
     await app.RunAsync();
     return ExitCode.Ok;
