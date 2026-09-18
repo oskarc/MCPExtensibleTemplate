@@ -45,4 +45,130 @@
 #         observation: O-NNN
 #         human_decision: pending          # then: trial | adopt | caution | decline | hold | revise
 
-entries: []
+entries:
+
+- work_id: work-001
+  feature: phase-0-foundation
+  contract_id: contract-001
+  surfaced_in: 2026-09-19
+  states:
+    contracted:
+      approach: |
+        Twelve guardrails over a .NET MCP server's foundation: transport shape and exit codes,
+        a fixed middleware order, demo-provider correctness, provider resilience budgets, health
+        endpoints, platform currency with warnings as errors, CI, secrets, documented tool names,
+        and delivery on a remote branch.
+      principles_invoked: []
+      patterns_invoked: []
+      precedents_invoked: []
+      candidates_cited: []
+      assumptions:
+        - "A guarantee about error quality can be written about the demo provider and hold
+           (G-4, UC-3 name 'the demo provider')."
+        - "Tier 4's tests cover the guarantees they name (T-5 reads 'call each of its six tools')."
+        - "The untested: line names where verification will find things - G-3's full middleware
+           order, G-2's exit code 70, and G-8's 'resolved rather than suppressed'."
+    implemented:
+      approach: |
+        As contracted, with three recorded revisions.
+      deviations:
+        - what: "G-5's open choice (remove the climate tool or rebuild it on CSV) resolved as
+                 rebuild-on-CSV."
+          authorized: true
+        - what: "CA1305 and CA1848 held at suggestion in .editorconfig rather than fixed, so
+                 warnings-as-errors could be met without enlarging the contract."
+          authorized: false
+        - what: "SDK 2.2.0 requires WithHttpTransport() before MapMcp; not in the contract, found
+                 in flight, fixed under G-3."
+          authorized: false
+    verified:
+      method: mixed
+      verification_ref: contract-001 -> verification (2026-09-18, kit-verifier), closed
+                        2026-09-18 by pioneer-confirmation on G-4
+      result: partial
+      evidence: |
+        18 clauses verified, 3 corrected (UC-8, G-4, G-11), 0 open. Tests 13/13 recorded with
+        T-12 failing. corrections_from_tests: 2, corrections_from_reading: 1. The close records
+        two corrections resolved in e4dd588 and G-4's remaining half carried by pioneer
+        confirmation: SMHI and SmhiObs do not map timeout or open-circuit failures, so 7 of 13
+        tools answer a caller with a bare error once their upstream goes down.
+  diffs:
+    - dimension: principle
+      assumption: |
+        A guarantee about error quality can be written about one provider and hold. G-4 and UC-3
+        name "the demo provider".
+      discovery: |
+        G-4 is recorded corrected, and its evidence names a failure shape the clause did not
+        reach - blank required string arguments arriving at a caller unnamed. The close records a
+        further half carried rather than met, in two providers the clause never named.
+      learning: |
+        A guarantee written over an example is corrected once per shape the example did not
+        contain. What makes it verifiable is naming the space it ranges over - which providers,
+        which failure modes, which configurations - because a verifier can only check the clause
+        as written, and the clause was true of the provider it named every time it was checked.
+      node_impact:
+        - node_id: meta-contract-before-execution
+          action: update
+        - node_id: K-014
+          action: verify
+    - dimension: pattern
+      assumption: |
+        Tier 4's tests cover the guarantees they name. T-5 reads "call each of its six tools".
+      discovery: |
+        The verification block records T-5 passing in the same pass that records G-4 corrected,
+        and corrections_from_tests: 2 against corrections_from_reading: 1 - so two of three
+        corrections came from executing the built server, not from the suite.
+      learning: |
+        A test that constructs its subject differently from the way the program constructs it is
+        testing a different program, and will pass while the guarantee it names is false. This
+        restates K-010 from a second direction; it is named here, not counted, because
+        kit-consolidator counts the sighting from the same verification block.
+      node_impact:
+        - node_id: K-010
+          action: verify
+        - node_id: meta-contract-before-execution
+          action: update
+    - dimension: implementation
+      assumption: |
+        The untested: line names where verification will find things: G-3's full middleware
+        order, G-2's exit code 70, G-8's "resolved rather than suppressed".
+      discovery: |
+        All three are recorded verified. Every correction landed in clauses the untested: line
+        did not name - UC-8, G-4 and G-11.
+      learning: |
+        The untested: line is a prediction about where the contract is weak, and it was wrong in
+        both directions here: the flagged gaps held, and the corrections came from clauses
+        believed covered. Honest self-flagging locates what the author already doubts, which is
+        by construction not where the blind spot is. It remains worth writing - but it is not
+        evidence about where the risk is, and treating it as such is what left the covered
+        clauses unexamined.
+      node_impact:
+        - node_id: meta-contract-before-execution
+          action: update
+    - dimension: implementation
+      assumption: |
+        The platform half of the contract - transport shape, exit codes, framework currency,
+        CI, secrets, delivery - would hold once built.
+      discovery: |
+        Agreement. G-1, G-2, G-8, G-9, G-10 and G-12 are all recorded verified, as are UC-1,
+        UC-2 and UC-7. The bearing's claim that a defect would fail a build rather than reach a
+        user is borne out for that half.
+      learning: |
+        Guarantees whose subject is the build, the process or the repository verified cleanly
+        first time; every correction landed in guarantees whose subject was runtime behaviour
+        across a space. The difference is not difficulty - it is that the first kind has one
+        instance and the second has as many as the space has members.
+      node_impact:
+        - node_id: meta-contract-before-execution
+          action: update
+  elevation_proposal:
+    - target: meta-contract-before-execution
+      kind: principle
+      evidence: "diffs[0]; G-4's recorded correction and the carried half in the close"
+      observation: O-019
+      human_decision: pending
+    - target: meta-contract-before-execution
+      kind: pattern
+      evidence: "diffs[2]; the untested: line against the three corrected clauses"
+      observation: O-020
+      human_decision: pending

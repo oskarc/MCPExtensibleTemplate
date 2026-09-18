@@ -264,7 +264,7 @@ contracts:
         JsonPlaceholderRoundTripTests.cs
       date: 2026-09-17
     approval: approved-at-gate
-    status: verified
+    status: learned
     verification_state: closed
     verification:
       date: 2026-09-18
@@ -1675,7 +1675,7 @@ contracts:
           filters, where the behaviour does differ. Recorded rather than resolved.
     audited: true
     transcript: C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
-    observations: [O-009, O-010, O-011, O-012, O-013, O-014, O-015, O-016, O-017, O-018]
+    observations: [O-009, O-010, O-011, O-012, O-013, O-014, O-015, O-016, O-017, O-018, O-019, O-020]
     revisions:
       - what: |
           G-5 left the climate tool's fate open ("remove the climate tool or rebuild it on the
@@ -1719,5 +1719,5 @@ contracts:
         T-1 and T-12 were each checked for non-vacuity by breaking the code and seeing them fail.
     file: docs/contracts/contract-001-foundation.html
     artifact: https://claude.ai/artifact/26zNr2YEhyHsQJSLpoHTAi
-    work_id: null
+    work_id: work-001
 

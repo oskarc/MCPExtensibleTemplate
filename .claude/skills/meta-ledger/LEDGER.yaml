@@ -412,8 +412,8 @@ observations:
     stated_confidence: 0.9
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-012
     stewarded: n/a
 
 
@@ -452,8 +452,8 @@ observations:
     stated_confidence: 0.95
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-013
     stewarded: n/a
 
 
@@ -488,8 +488,8 @@ observations:
     stated_confidence: 0.9
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-014
     stewarded: n/a
 
 
@@ -538,8 +538,8 @@ observations:
     stated_confidence: 0.9
     loaded_candidates: []
     prompted: true
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-015
     stewarded: n/a
 
 
@@ -575,8 +575,8 @@ observations:
     stated_confidence: 0.9
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-016
     stewarded: n/a
 
 
@@ -607,6 +607,60 @@ observations:
       the test exists for and watch it go red, every time, not once.
     level_guess: principle
     stated_confidence: 0.95
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-010
+    stewarded: n/a
+
+
+  - obs_id: O-019
+    date: 2026-09-19
+    source: learning
+    contract_id: contract-001
+    refs: [work-001]
+    statement: |
+      From the contract-001 learning diff. A Tier 3 guardrail should name the space it ranges
+      over, not an example inside it.
+
+      G-4 and UC-3 were written about "the demo provider". Both are recorded corrected, and the
+      close carries a half that was never met in two providers the clause did not name. Each
+      verification pass checked the clause as written and found it true of the provider named,
+      which is why four passes could each find a different failure and none could find the
+      scoping.
+
+      What would have changed it: before the tiers, enumerate what the guarantee ranges over -
+      which providers, which failure shapes, which configurations - and write the clause against
+      that set. A guarantee whose subject is a set can be checked against the set; a guarantee
+      whose subject is an example can only be checked against the example.
+    level_guess: principle
+    stated_confidence: 0.85
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-020
+    date: 2026-09-19
+    source: learning
+    contract_id: contract-001
+    refs: [work-001]
+    statement: |
+      From the contract-001 learning diff. The untested: line is a prediction, and this contract
+      is one data point that it predicts badly.
+
+      Its three named gaps - G-3's full middleware order, G-2's exit code 70, G-8's "resolved
+      rather than suppressed" - are all recorded verified. All three corrections landed in
+      clauses it did not name.
+
+      The reason is structural rather than careless: the line records what the author already
+      doubts, and a blind spot is by definition not there. The line is still worth writing, since
+      a guarantee nothing reaches should be visible. But it should not be read as a map of where
+      the risk is, and a verifier that spends its budget on the flagged gaps is spending it where
+      the contract was already awake.
+    level_guess: pattern
+    stated_confidence: 0.75
     loaded_candidates: []
     prompted: false
     consolidated: false
@@ -924,14 +978,14 @@ candidates:
     contradicts: []
     review_due: false
     disposition_proposed: null
-    evidence_refs: ["O-011"]
+    evidence_refs: ["O-011", "O-018"]
     helpful: {independent: 0, loaded: 0}
     harmful: {independent: 0, loaded: 0}
     independent_uses: 0
     certainty: very-low
     certainty_codes: [self-generated, single-contract]
     stated_confidence: 0.85
-    restatements: 1
+    restatements: 2
     last_moved: 2026-09-18
     decision: null
     outcome: null
@@ -966,6 +1020,245 @@ candidates:
     decision: null
     outcome: null
 
+  - cand_id: K-012
+    created: 2026-09-18
+    statement: |
+      Verification of G-4 found the demo provider naming no recovery on an upstream failure.
+      Fixing that surfaced a larger defect underneath it, present since before contract-001 and
+      on the pushed branch: a tool throwing McpException produced no JSON-RPC response at all,
+      so the caller waited forever. Bisected by experiment — no filters, the logging filter
+      alone, the throttle alone, and two no-op filters all replied correctly; the logging filter
+      with any second call-tool filter beneath it did not. Not the number of registrations
+      (composing both into one behaved identically) and not the Serilog LogContext scopes.
+
+      Two things worth keeping from this. The first: the shallower defect masked the deeper one,
+      and fixing the shallow one made the product worse — the demo provider's errors moved from
+      an unhelpful reply to no reply, because they began throwing the exception type that hangs.
+      A fix that changes which failure mode a path takes has to be checked in the failure mode,
+      not only in the test.
+
+      The second: all 84 tests passed throughout. Every test for this guarantee exercised the
+      provider directly, and the defect lived in the server's filter composition, which no test
+      reached. A guarantee about what a client receives has to be tested from where a client
+      stands.
+
+      CORRECTED by O-014 (2026-09-18): the defect this observation is built on does not exist.
+      The missing response was the measuring probe's own doing — it redirected the server's
+      standard error and never drained it, so the pipe filled and the server blocked. The
+      bisection that looked so clean was measuring how much each configuration logged, not how
+      it handled an exception. The second lesson above still holds; the first is void, because
+      the failure mode it describes was never real. Left as written, per the ledger's rule that
+      nothing is rewritten silently.
+    level: principle
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: true
+    disposition_proposed: caution
+    evidence_refs: ["O-013", "O-014"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 1, loaded: 0}
+    independent_uses: 0
+    certainty: low
+    certainty_codes: [contradicted, single-contract]
+    stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
+  - cand_id: K-013
+    created: 2026-09-18
+    statement: |
+      O-013 reports that a tool throwing McpException produced no JSON-RPC response, and that the
+      cause lay in the filter composition. Both are wrong, and the error was mine.
+
+      The probe that established it started the server with its standard error redirected and
+      never read that pipe. A redirected pipe nobody drains fills, and the process then blocks on
+      its next write to it. The server did not mishandle the exception; it blocked while logging
+      one. The bisection across six configurations was consistent for the wrong reason: each
+      variant differed in how much it logged on the failure path, not in how it handled failure.
+      One filter stayed under the buffer, two crossed it.
+
+      Re-run with stderr drained, the original rethrowing filter answers correctly, message
+      intact. The same flaw was in the acceptance test written to prove the fix, which spawned
+      the server the same way — so that test passed against the changed filter and failed against
+      the correct one, confirming the wrong thing in both directions. The suite now runs in five
+      seconds where it took over a minute, which was the blocking all along.
+
+      What this cost: a false finding was reported to the pioneer as established fact, their
+      decision was asked for on it, and a change to approved structure was made on that basis.
+      The filter change is reverted. The provider's error mapping is kept — kit-verifier found
+      that gap independently, twice, and it is real.
+
+      The lesson worth keeping is narrower than O-013's and sharper: a harness that can stall the
+      thing it measures cannot be used to conclude that the thing stalled. Before reporting an
+      absence — no reply, no output, no call — the instrument has to be cleared first. That
+      scepticism was applied to an auditor's finding about me and not to my own.
+    level: principle
+    tier: undecided
+    target: [kit-verifier]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-014"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: moderate
+    certainty_codes: [single-contract]
+    stated_confidence: 0.95
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
+  - cand_id: K-014
+    created: 2026-09-18
+    statement: |
+      Three passes of kit-verifier found three different real defects in the same two clauses,
+      and each one hid behind a test that passed. The pattern is what the test was allowed to
+      construct.
+
+      T-5's error cases build the provider as new JsonPlaceholderApiClient(new HttpClient(bare
+      handler)). That client has no resilience pipeline, so no failure the pipeline itself
+      produces can ever appear in it: not the retry timeout, not the open circuit. The test
+      covered the provider's error handling and could not reach half of the shapes the shipped
+      composition actually raises. It passed while the deployed server answered a model with
+      "An error occurred invoking 'get_blog_post'." on every call after the breaker tripped.
+
+      T-3 is the same shape one level up. It names a provider BaseUrl over http as its
+      configuration-error case, and its automated form covers unknown transport and a missing
+      API key. Both of those do raise ConfigurationException; the case the test is named after
+      raised InvalidOperationException and exited 70, telling an operator to go hunting for a
+      bug in the server. The test named the right case and exercised two others.
+
+      The transferable shape: a test that constructs its subject differently from the way the
+      program constructs it is testing a different program. Where a guarantee is about
+      behaviour under failure, the composition has to be the shipped one — wired through the
+      same registration — or the test can only see the failures it was already imagining.
+    level: principle
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-015"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: moderate
+    certainty_codes: [single-contract]
+    stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
+  - cand_id: K-015
+    created: 2026-09-18
+    statement: |
+      A lay of the land run against contract-001 after implementation, at the pioneer's direction,
+      to find out whether the contract holds. It does not, and four of the five corrections are one
+      mistake made four times: a clause names a guarantee over a space that was never enumerated,
+      and is written against the example that happened to be in view.
+
+      Executed findings:
+      1. G-4 and UC-3 guarantee error quality for "the demo provider". JsonPlaceholder maps status,
+         transport, timeout and open-circuit failures; neither SMHI client maps timeout or open
+         circuit, and both have circuit breakers. Driven over stdio against a dead upstream,
+         get_forecast answers call 1 with a recovery sentence and calls 2-5 with bare "An error
+         occurred invoking 'get_forecast'." Seven of the thirteen tools carry the defect that was
+         fixed in the demo provider because the clause named only that provider.
+      2. G-2 claims the exit-code space entirely. Eight configurations executed: four exit 78 as
+         promised; HttpTransport:Port non-numeric, HttpTransport:Port out of range, and
+         RateLimit:MaxCallsPerToolPerMinute=0 all exit 70. The last is an ArgumentOutOfRangeException
+         written during this contract.
+      3. T-5 reads "call each of its six tools". The tests call the client underneath them. Exactly
+         one of thirteen tools is invoked by any test at the tool layer, where argument validation,
+         the McpException conversion and formatting live.
+      4. T-6, "enumerate registered tools and run each against a recorded response", was never
+         automated.
+      5. G-11 and UC-8: PascalCase method names still presented to a reader as tool names in
+         docs/03-TESTING-STRATEGY.md:27 and docs/05-USAGE-GUIDE-BEGINNERS.md:44.
+
+      Open, not executed: SmhiObs shows the same missing catches by inspection only.
+
+      The structural point is sharper than the list. G-4 attaches the guarantee to one provider's
+      code rather than to the frame every provider passes through, so a provider added tomorrow
+      inherits nothing. The founding statement says the core is the frame that governs the
+      providers, with no loopholes — a guarantee written per-provider is the loophole, and no
+      amount of verification of that clause would have found it, because the clause was true of
+      the provider it named.
+
+      Every one of these was discoverable before a line was written. That is what the lay of the
+      land is for; here it was run afterwards, to restore order.
+    level: principle
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-016"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: moderate
+    certainty_codes: [single-contract]
+    stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
+  - cand_id: K-016
+    created: 2026-09-18
+    statement: |
+      What the re-alignment was worth, stated as a mechanism rather than as relief.
+
+      Before the lay of the land, five defects had been found across four verification passes and
+      each had been fixed where it was found. The next move looked obvious: two more providers
+      carry the same missing catches, so patch them. That move would have been wrong, and nothing
+      in the verification loop could have said so — every pass verifies clauses against the code,
+      and the clause was true of the provider it named.
+
+      The survey changed the action, not only the count. Laid out as a space rather than a list,
+      four of the five corrections were one mistake: a guarantee attached to a provider instead of
+      to the boundary every provider passes through. Read against the roadmap, that boundary is
+      already designed (Phase 2, IProviderModule and AddProviders with a PolicyValidator that
+      exits 78, resilience built from EgressPolicy, new HttpClient() in Providers/ a build error).
+      So the per-provider catch blocks written in Phase 0 are code Phase 2 deletes, and patching
+      two more providers would have tripled the thing to delete while re-teaching the habit that
+      produced it.
+
+      The transferable shape: verification asks whether the code matches the clause. It cannot ask
+      whether the clause is scoped to the right space, because it takes the clause as given. Only a
+      survey of the territory can, and if it is not run before the contract it has to be run after
+      — which is the same work at a worse price, paid in defects that shipped and fixes that must
+      be unwound.
+    level: principle
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-017"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: very-low
+    certainty_codes: [self-generated, single-contract]
+    stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
 batches: []
 
 map_proposals: []
@@ -992,11 +1285,19 @@ scores:
   updated: 2026-09-18
   contracts:
     - contract_id: contract-001
-      observations: 8
-      candidates_created: 7
+      observations: 14
+      candidates_created: 12
       audited: true
-      verified: false
+      verified: true
       cost: {turns: null, tokens: null, pioneer_minutes: null}
+      corrections_from_tests: 2
+      corrections_from_reading: 1
+    - contract_id: contract-002
+      observations: 0
+      candidates_created: 0
+      audited: false
+      verified: false
+      cost: null
       corrections_from_tests: null
       corrections_from_reading: null
   coincidence:
