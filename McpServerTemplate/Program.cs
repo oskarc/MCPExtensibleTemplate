@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using ModelContextProtocol.Server;
 using Serilog;
 using Serilog.Events;
 
@@ -125,12 +126,27 @@ static async Task<int> RunStdioAsync(string[] args, string environmentName)
 
     builder.Services.AddSingleton(DevelopmentPrincipal.Create(builder.Configuration, configuredIdentity));
 
+    // contract-002 · G-5 — when a developer has configured identity, stdio enforces the same
+    // trust-domain binding HTTP does, so a local run meets the refusals a deployed one would.
+    // With no identity configured there is nothing to bind against, and a plain local run for an
+    // IDE is left unencumbered rather than shown an empty tool list.
+    if (configuredIdentity is not null)
+    {
+        builder.Services.AddSingleton(services => ProviderBinding.Create(
+            builder.Configuration, configuredIdentity, services.GetServices<McpServerTool>()));
+    }
+
     ConfigureLogging(builder.Services, builder.Configuration);
     var mcpBuilder = ConfigureMcpServer(builder.Services, builder.Configuration);
     mcpBuilder.WithStdioServerTransport();
     RegisterProviders(builder.Services, builder.Configuration);
 
     var host = builder.Build();
+
+    // Forced at startup for the same reason as the HTTP path: a binding that cannot be honoured
+    // stops the server rather than surfacing when a call is wrongly allowed.
+    host.Services.GetService<ProviderBinding>();
+
     await host.RunAsync();
     return ExitCode.Ok;
 }
@@ -165,6 +181,12 @@ static async Task<int> RunHttpAsync(string[] args)
     var identity = IdentityConfigurationBinder.Bind(configuration);
     builder.Services.AddIdentity(identity);
     builder.Services.AddAuthorization();
+
+    // contract-002 · G-5 — the binding needs the registered tools, so it is resolved from the
+    // container; it is forced below, at startup, rather than on the first call.
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddSingleton(services => ProviderBinding.Create(
+        configuration, identity, services.GetServices<McpServerTool>()));
 
     Log.Information("Starting MCP server with HTTP transport on {BindAddress}:{Port}", bindAddress, port);
     builder.WebHost.UseUrls($"http://{bindAddress}:{port}");
@@ -237,6 +259,14 @@ static async Task<int> RunHttpAsync(string[] args)
     RegisterProviders(builder.Services, configuration);
 
     var app = builder.Build();
+
+    // Resolved here on purpose: a provider that declares no identity provider, or a tool that
+    // declares no provider, stops the server now rather than when a call is wrongly allowed.
+    var binding = app.Services.GetRequiredService<ProviderBinding>();
+    Log.Information(
+        "Trust domains bound: {Bindings}",
+        string.Join(", ", binding.Providers.Select(p => $"{p} -> {binding.IdentityProviderOf(p)}")));
+
 
     // ── Middleware order (contract-001 · G-3) ──
     // Fixed, and each stage depends on the ones before it:
@@ -313,6 +343,13 @@ static IMcpServerBuilder ConfigureMcpServer(IServiceCollection services, IConfig
         {
             filters.AddCallToolFilter(ToolCallLoggingFilter.Create());
             filters.AddCallToolFilter(throttle.AsFilter());
+
+            // contract-002 · G-5 — checked on both paths. Hiding a tool from the listing is
+            // discretion; refusing the call is enforcement, and a caller can name a tool it was
+            // never shown.
+            filters.AddListToolsFilter(TrustDomainFilters.List());
+            filters.AddCallToolFilter(TrustDomainFilters.Call());
+
         });
 }
 

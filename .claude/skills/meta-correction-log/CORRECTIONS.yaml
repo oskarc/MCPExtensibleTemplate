@@ -341,8 +341,8 @@ corrections:
       not asked
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-010, S-006"
     clerk_note: null
 
 
@@ -357,4 +357,8 @@ trajectory:
       corrections: 3
       bearing_reevaluations: 0
       interventions: {did-it: 0, redirected: 3, hinted: 0, reviewed-after: 0}
-  moments: {M-27: 3, M-07: 1, M-14: 2, M-04: 1, M-12: 1, M-03: 1}
+    - contract_id: contract-002
+      corrections: 1
+      bearing_reevaluations: 0
+      interventions: {did-it: 0, redirected: 1, hinted: 0, reviewed-after: 0}
+  moments: {M-27: 3, M-07: 1, M-14: 2, M-04: 2, M-12: 1, M-03: 1}

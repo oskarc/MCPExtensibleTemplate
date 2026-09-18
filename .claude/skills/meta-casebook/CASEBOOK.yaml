@@ -273,6 +273,31 @@ precedents:
     overruled_by: null
     check: "not checkable — whether a given omission is a novel pattern or a lapse in an already-documented practice is judgement, not a fixed shape a script could verify"
 
+  - prec_id: P-010
+    date: 2026-09-19
+    from: [C-010, contract-002]
+    moments: [M-04, M-18]
+    tier: project
+    facts: |
+      contract-002 was approved with twelve guardrails and thirteen acceptance tests. When the pioneer
+      asked what to look at next, six guardrails were done, one partial, five untouched, and two of
+      thirteen tests written. The agent offered three readings of the question — survey Phase 2 now,
+      draw contract-003 now, or finish contract-002 first — and recommended surveying Phase 2 alongside
+      finishing contract-002, deferring contract-003 until contract-002 was verified.
+    question: |
+      Whether to survey or scope work beyond contract-002 (Phase 2, contract-003) while contract-002
+      remained mostly unimplemented, or to finish the approved contract first.
+    holding: |
+      That was very sloppy — add a driftlog entry about not completing the contract, then do 3: finish
+      contract-002 before anything beyond it.
+    reasons: |
+      (carried in the statement: the contract was not completed)
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "P-010.sh: passes"
+
 scenarios:
   - card_id: S-001
     date: 2026-09-17
@@ -379,6 +404,29 @@ scenarios:
           I think this is an effect of a to limited lay of the land before the contract begins, the
           issue is not that we cant know what to do, but that we dont ground our work properly before we
           begin.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-006
+    date: 2026-09-19
+    from: [C-010]
+    moment: M-04
+    situation: |
+      Seven guardrails and ten tests of the approved contract-002 remained undone. The pioneer asked
+      what to look at next, and the agent weighed whether to survey Phase 2 now, draw contract-003 now,
+      or finish contract-002 first.
+    options:
+      - key: A
+        text: |
+          Which do you mean by "look at"? Three readings, materially different:
+          1. Survey Phase 2 now [...] 2. Draw contract-003 now [...] 3. Finish contract-002 first —
+          seven guardrails and ten tests remain.
+          I'd do 1 alongside 3, and draw contract-003 once contract-002 is verified.
+      - key: B
+        text: |
+          That was very sloppy, add a driftlog about not completing the contract.
+          then do 3
     pioneer_ranking: pending
     rationale: ""
     dissent: ""

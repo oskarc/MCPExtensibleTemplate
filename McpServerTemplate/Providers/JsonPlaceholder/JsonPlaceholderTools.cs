@@ -1,3 +1,4 @@
+using McpServerTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
 using System.ComponentModel;
 using ModelContextProtocol;
@@ -34,6 +35,7 @@ namespace McpServerTemplate.Providers.JsonPlaceholder;
 // contract-002 · G-4 — defence in depth beneath the policy filter of Phase 2. If a
 // future endpoint is mapped without RequireAuthorization, these types are still closed.
 [Authorize]
+[McpProvider("JsonPlaceholder")]
 [McpServerToolType]
 public static class JsonPlaceholderTools
 {

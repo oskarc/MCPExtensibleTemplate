@@ -791,6 +791,24 @@ observations:
     merged_into: K-024
     stewarded: n/a
 
+  - obs_id: O-027
+    date: 2026-09-19
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-010]
+    statement: |
+      M-04
+
+      That was very sloppy, add a driftlog about not completing the contract.
+      then do 3
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
 
 candidates:
   - cand_id: K-001

@@ -207,3 +207,18 @@
 2026-09-18T22:32:45Z|prompt|
 2026-09-18T22:33:38Z|stop-gate|Pioneer-owned items are waiting: candidates, map proposals, unratified e
 2026-09-18T22:35:03Z|prompt|
+2026-09-18T22:41:25Z|stop-gate|1 pioneer correction(s) are not yet clerked. Launch the kit-case-clerk s
+2026-09-18T22:41:40Z|loaded-agent|meta-casebook/SKILL.md
+2026-09-18T22:41:41Z|loaded-agent|meta-correction-log/SKILL.md
+2026-09-18T22:41:45Z|loaded-agent|meta-correction-log/CORRECTIONS.yaml
+2026-09-18T22:41:48Z|loaded-agent|meta-casebook/CASEBOOK.yaml
+2026-09-18T22:42:19Z|loaded-agent|meta-mechanisms/checks/G1-size.sh
+2026-09-18T22:42:20Z|loaded-agent|meta-contract-before-execution/CONTRACT-LOG.yaml
+2026-09-18T22:42:46Z|loaded-agent|meta-drift-eventlog/DRIFTLOG.yaml
+2026-09-18T22:43:05Z|loaded-agent|meta-contract-before-execution/CONTRACT-LOG.yaml
+2026-09-18T22:43:29Z|loaded-agent|meta-ledger/LEDGER.yaml
+2026-09-18T22:43:59Z|loaded-agent|meta-ledger/LEDGER.yaml
+2026-09-18T22:44:02Z|loaded-agent|meta-ledger/LEDGER.yaml
+2026-09-18T22:44:43Z|subagent|kit-case-clerk
+2026-09-18T22:45:06Z|prompt|
+2026-09-18T22:45:07Z|prompt|

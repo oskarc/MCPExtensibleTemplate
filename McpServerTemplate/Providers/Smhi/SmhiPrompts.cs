@@ -1,3 +1,4 @@
+using McpServerTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
 using System.ComponentModel;
 using System.Globalization;
@@ -24,6 +25,7 @@ namespace McpServerTemplate.Providers.Smhi;
 // contract-002 · G-4 — defence in depth beneath the policy filter of Phase 2. If a
 // future endpoint is mapped without RequireAuthorization, these types are still closed.
 [Authorize]
+[McpProvider("Smhi")]
 [McpServerPromptType]
 public static class SmhiPrompts
 {
