@@ -201,241 +201,522 @@ contracts:
       date: 2026-09-17
     approval: approved-at-gate
     status: implemented
-    verification_state: none
+    verification_state: reported
     verification:
       date: 2026-09-18
       by: kit-verifier
       method: mixed
-      tests: {T-1: pass, T-2: pass, T-3: pass, T-4: pass, T-5: fail, T-6: pass, T-7: pass,
+      tests: {T-1: pass, T-2: pass, T-3: pass, T-4: pass, T-5: pass, T-6: pass, T-7: pass,
               T-8: pass, T-9: pass, T-10: pass, T-11: pass, T-12: pass, T-13: pass}
-      corrections_from_tests: 2
-      corrections_from_reading: 0
+      corrections_from_tests: 0
+      corrections_from_reading: 1
       tests_note: |
-        dotnet test McpServerTemplate.sln --configuration Release was run twice by the verifier:
-        71 passed, 0 failed, both before and after commit 66e8477 landed mid-verification.
-        Five Tier 4 tests carry a half that no automated test reaches; the verifier executed each
-        of those halves rather than reading them: T-3's exit 70, T-4's throttle key set, T-7's
-        attempt count, T-8's no-upstream-call-at-startup, T-10's three CI fixtures. Only T-5's
-        second half failed when executed.
-        The tree moved during verification: at the delivery commit 9b604f8 the CI run
-        (35283605000) FAILED at "Build (warnings are errors)" with 3x CA1873 in
-        ToolCallLoggingFilter.cs; commit 66e8477 (global.json plus a guarded logging filter) was
-        pushed at 22:47 and its run (35283792912) passed. Every verdict below is against 66e8477,
-        the current head of origin/epic/security-hardening.
+        Second report, at head 33bb5ae (origin/epic/security-hardening), after the evidence named
+        in verification_history arrived. dotnet build McpServerTemplate.sln -warnaserror: 0
+        warnings, 0 errors. dotnet test McpServerTemplate.sln --configuration Release: 85 passed,
+        0 failed, run per-test so each T-x id was read off its own result.
+        Five Tier 4 tests carry a half no automated test reaches; this verifier executed each of
+        those halves rather than reading them:
+          T-3 exit 70   - HTTP transport started on an occupied port (127.0.0.1:54117): exit 70,
+                          stack trace from RunHttpAsync.
+          T-4 key set   - 85 tool calls to invented names (40 distinct + 45 repeats of one) over
+                          stdio: all 85 answered "Unknown tool", none rate-limited, so no limiter
+                          was minted for an unregistered name. Non-vacuity: 14 calls to the
+                          registered get_blog_post produced "Rate limit: 'get_blog_post' has
+                          exceeded 10 calls per minute" from the 10th.
+          T-7 attempts  - an out-of-tree probe on the shipped budget shape (2s attempt, 2 retries,
+                          30s total, HttpClient.Timeout = InfiniteTimeSpan) behind a 4s stall:
+                          3 attempts reached the handler, TimeoutRejectedException after 7.2s.
+          T-8 startup   - /healthz 200 "alive" and /readyz 200 "ready" with no credential; no
+                          IHostedService, BackgroundService or startup probe exists in the project.
+          T-10 CI       - all three fixtures run in an out-of-tree clone of 33bb5ae: planted AKIA
+                          key -> secret scan exit 1; an ApiKey value committed in appsettings.json
+                          -> secret scan exit 1; Newtonsoft.Json 9.0.1 -> NU1903 Warning As Error,
+                          Build FAILED; a package added without updating the lock -> NU1004 under
+                          --locked-mode.
+        Independent of the tests, this verifier drove the built server over stdio: tools/list gave
+        13 tools, and all 13 returned real data from their real upstreams.
       clauses:
         - clause: UC-1
           verdict: verified
           evidence: |
-            T-1 and T-2 (ServerProcessTests) pass. T-1 spawns the built exe with Transport=stdio
-            in Development, hands it ASPNETCORE_URLS on a reserved port, gets a JSON-RPC
-            initialize result on stdout and finds the port unbound. T-2 exits 78 in both
-            Production and Staging. The verifier's own stdio sessions (13 live tool calls)
-            confirm the protocol side.
+            T-1 and T-2 pass (ServerProcessTests): stdio in Development answers initialize on
+            stdout and binds no TCP port; Production and Staging both exit 78. Independently, this
+            verifier ran nine stdio sessions against the Release build and drove 13 live tool
+            calls through stdin/stdout with no port involved.
         - clause: UC-2
           verdict: verified
           evidence: |
-            Program.cs:241 UseUrls("http://{bindAddress}:{port}") and the fixed pipeline at
-            Program.cs:209-216. T-4's host-header half returns 400 for a foreign Host even on
-            /healthz, which needs no credential, so the allowlist precedes both health and
-            authentication. "A failure to bind is a failure": the verifier occupied
-            127.0.0.1:54004 and started the server on that port - exit code 70, stack trace from
-            RunHttpAsync. Not a silent success.
+            Executed: the server started with HttpTransport__BindAddress=127.0.0.1 and port 54223
+            listed exactly one listener for its pid - TCP 127.0.0.1:54223 - so it listens only on
+            the configured address. Fixed order observed end to end: a foreign Host header gets
+            400 even on /healthz, which needs no credential (so the allowlist precedes both health
+            and authentication), while /mcp and / without a key get 401. Failure to bind is a
+            failure: started on an occupied port 54117 the process exited 70 with a stack trace,
+            not 0. Order read at Program.cs:232-239.
         - clause: UC-3
           verdict: corrected
           evidence: |
-            First half holds: T-5's six round-trip tests pass, and a live call to each of the six
-            demo tools over stdio returned real records (post #1 with its title and body, 5
-            comments, 20 todos, created ids 101/501/201).
-            Second half does not. On an upstream failure the caller is told nothing. The verifier
-            ran the demo provider against an out-of-tree handler returning HTTP 500: all six
-            client methods throw HttpRequestException "Response status code does not indicate
-            success: 500 (Internal Server Error)." - no recovery named. End to end over stdio,
-            with Providers__JsonPlaceholder__BaseUrl pointed at a host that does not serve
-            /posts/1, an MCP client sees exactly: "An error occurred invoking 'get_blog_post'."
-            The same probe against the SMHI provider returns a full recovery sentence, so the
-            shape is reachable; the demo provider does not use it.
-            JsonPlaceholderApiClient.cs calls EnsureSuccessStatusCode() before any hint-bearing
-            path, and the recovery hints it does carry sit on the null-deserialisation branch
-            only.
+            Half of this clause is now met, and one class of upstream error is still not.
+            Met: the actual record comes back - all six demo tools returned real data live
+            (post #1 with title and body, 5 comments, 20 todos, created ids 101/501/201). And an
+            upstream error *status* now names a recovery all the way to the client. Executed over
+            stdio with Providers__JsonPlaceholder__BaseUrl pointed at a host that 404s: "post 1
+            does not exist upstream. Do not retry; check the id. JSONPlaceholder serves posts
+            1-100 and users 1-10." - and 405 on the three write tools: "The upstream returned HTTP
+            405 for the new post. Try again; if it persists, ...". isError=true, the message
+            intact through the filter pipeline. This is the close the previous report asked for.
+            What is actually true, and not met: a transport-level upstream failure names nothing.
+            With Providers__JsonPlaceholder__BaseUrl set to an unresolvable host, get_blog_post
+            answers the client in 1.1s with exactly "An error occurred invoking 'get_blog_post'."
+            The client throws HttpRequestException there, which
+            JsonPlaceholderApiClient.EnsureSuccess never sees - it maps status codes only. The
+            shape exists in the same tree: SmhiApiClient.cs:107-115 catches HttpRequestException
+            and TaskCanceledException, and the same probe against the SMHI provider returns
+            "Unable to reach the SMHI API. Check network connectivity and try again."
+            (This also resolves the point verification_history recorded as disputed: on this head
+            get_current_weather with coordinates (999, 999) replies with its full recovery
+            sentence over stdio - no hang, no missing reply.)
+            What would close it: the demo provider catching connect/DNS/TLS and timeout failures
+            the way the SMHI client does, and a test that drives one - T-5's six error cases are
+            status codes only, so no Tier 4 test reaches this path.
         - clause: UC-4
           verdict: verified
           evidence: |
-            T-6's six MetObsArchiveCsv tests pass, judged against the pioneer-authorised revision
-            of 2026-09-18 (the climate tool rebuilt on the CSV endpoint, not removed). The
-            verifier enumerated the live surface: 13 registered tools, and called every one of
-            them against its real upstream - all 13 returned data, get_monthly_climate included
-            ("Station: Stockholm-Observatoriekullen A, Month: July, 2025: min 10.8, max 29.5,
-            mean 20.0 celsius (744 readings)"). No registered tool lacks a path to success.
+            Judged against the pioneer-authorised revision of 2026-09-18 (climate tool rebuilt on
+            the CSV endpoint, not removed). T-6's six MetObsArchiveCsv tests pass. Independently:
+            tools/list gives 13 tools and this verifier called every one of them against its real
+            upstream - all 13 returned data, get_monthly_climate included ("SMHI Corrected Archive
+            - Lufttemperatur, Station: Stockholm-Observatoriekullen A, Month: July", with per-year
+            climatology rows). No registered tool lacks a path to success.
         - clause: UC-5
           verdict: verified
           evidence: |
-            T-7's eight ResilienceBudget tests pass. The half no test covers was executed by the
-            verifier: a counting handler stalling 4s behind a 2s attempt timeout, budget 2
-            retries / 30s total, produced attempts=3 (1 + 2 retries) in 7.0s and ended in
-            TimeoutRejectedException, with ResilienceBudget.ClientTimeout = InfiniteTimeSpan.
-            The retries configured are the retries made.
+            T-7's eight ResilienceBudget tests pass. The half no test covers was executed: an
+            out-of-tree probe with the shipped pipeline shape (attempt 2s, 2 retries, total 30s,
+            client timeout InfiniteTimeSpan) behind a handler stalling 4s made exactly 3 attempts
+            (1 + 2 retries) and ended in TimeoutRejectedException after 7.2s. The configured
+            retries are the retries made, and the client timeout did not cut them short.
         - clause: UC-6
           verdict: verified
           evidence: |
-            T-8 passes: /healthz returns 200 "alive" and /readyz 200 "ready", neither carrying a
-            credential. No upstream call at startup: a grep over McpServerTemplate/ finds no
-            IHostedService, no BackgroundService and no startup probe; the only lifetime
-            reference is HealthEndpoints.cs:43 reading ApplicationStarted. Live stdio runs issue
-            upstream requests only when a tool is called.
+            T-8 passes; independently /healthz returned 200 "alive" and /readyz 200 "ready", both
+            without a credential and both immediately. Startup makes no upstream call: a grep over
+            McpServerTemplate/ finds no IHostedService, no BackgroundService, no AddHostedService
+            and no health check registration; HealthEndpoints.cs answers from process lifetime
+            state alone. In the live stdio sessions the first upstream request happened only when
+            a tool was called.
         - clause: UC-7
           verdict: verified
           evidence: |
-            dotnet build McpServerTemplate.sln -warnaserror and dotnet test both succeed at
-            66e8477 (0 warnings, 0 errors; 71 tests). The same commands run on push
-            (.github/workflows/ci.yml, on: push) - CI run 35283792912 for 66e8477: success.
-            The three failure modes were seeded in an out-of-tree clone and all three fail the
-            pipeline: a planted AKIA key -> secret scan exit 1; Newtonsoft.Json 9.0.1 -> NU1903
-            as an error, build fails; a lock file out of step -> NU1004 on --locked-mode.
-            Recorded because it bears on "the same runs on every push": at the delivery commit
-            9b604f8 it did not. CI run 35283605000 failed on 3x CA1873 that a developer's SDK did
-            not raise. Pinning the band in global.json (66e8477) is what makes this clause true.
+            One command each: dotnet build McpServerTemplate.sln -warnaserror (0 warnings,
+            0 errors) and dotnet test McpServerTemplate.sln (85 passed, 0 failed) at 33bb5ae. The
+            same runs on every push: .github/workflows/ci.yml has "on: push", and CI run
+            35287967682 for head 33bb5ae succeeded with every step green (Restore locked, Build
+            warnings-are-errors, Test, Audit packages, Secret scan). All three failure modes were
+            seeded in an out-of-tree clone and all three fail the pipeline - a planted AKIA key
+            and a committed appsettings ApiKey value each exit the scan 1, Newtonsoft.Json 9.0.1
+            fails the build with NU1903 as an error, and a lock file out of step fails
+            --locked-mode with NU1004.
         - clause: UC-8
           verdict: verified
           evidence: |
-            T-12 passes in both directions. Independently: the server exposes 13 snake_case tool
-            names over tools/list, every one of which appears in the docs, and no snake_case name
-            in docs/ or README.md is absent from that list.
+            T-12 passes both ways. Independently: the server's own tools/list gives 13 snake_case
+            names and each appears in README.md or docs/ (between 2 and 7 files each); a regex
+            sweep for tool-shaped snake_case identifiers across README.md and docs/**.md returns
+            no name the server does not expose.
         - clause: UC-9
           verdict: verified
           evidence: |
-            T-13 run by the verifier: git ls-remote origin gives
-            66e8477c5daff6f2c18e9962a3bbfed382d5a15c for refs/heads/epic/security-hardening,
-            which is the local head. No project file is modified in the working tree; the only
-            dirty paths are the kit's own records (CONTRACT-LOG.yaml, LEDGER.yaml, telemetry.log)
-            being written by the live session.
+            git ls-remote origin gives 33bb5aec8e9e1980b5ea24c690ccd7d053569df4 for
+            refs/heads/epic/security-hardening, which is the local HEAD, and CI is green on it.
+            The working tree carries one modified path, .claude/skills/meta-ledger/telemetry.log
+            - a kit record written by the live session, no project file.
         - clause: G-1
           verdict: verified
           evidence: |
-            T-1, T-2 (pass). Program.cs:100-121 builds Host.CreateApplicationBuilder for stdio
-            and throws ConfigurationException outside Development; the guard reads both
-            ASPNETCORE_ENVIRONMENT and DOTNET_ENVIRONMENT, so setting only one does not escape
-            it.
+            T-1, T-2 (pass). Program.cs:102-123: stdio builds Host.CreateApplicationBuilder - no
+            web host, no Kestrel - and throws ConfigurationException unless the environment is
+            Development; the environment is read from ASPNETCORE_ENVIRONMENT or DOTNET_ENVIRONMENT
+            (Program.cs:54-57), so setting only one does not escape the guard. T-2 covers both
+            Production and Staging.
         - clause: G-2
           verdict: verified
           evidence: |
-            Exit 78: three T-3 tests pass (unknown transport, http without an API key, and a loop
-            asserting neither exits 0). Exit 70 - the half Tier 4 marked possibly untestable -
-            was observed twice by the verifier: running the exe from a directory without
-            appsettings.json (unhandled InvalidOperationException) exits 70, and starting the
-            HTTP transport on an occupied port exits 70. Program.cs:83-92 maps
-            ConfigurationException to 78 and everything else to 70.
+            Exit 78: T-3's three tests pass (unknown transport, http without an API key, and a
+            loop asserting neither exits 0). Exit 70 - the half Tier 4 flagged as possibly
+            untestable - was executed: the HTTP transport started on an occupied 127.0.0.1:54117
+            exited 70 with the bind failure's stack trace. Program.cs:83-94 maps
+            ConfigurationException to ExitCode.Configuration and every other exception to
+            ExitCode.Software.
         - clause: G-3
           verdict: verified
           evidence: |
-            Order read at Program.cs:209-216: UseForwardedHeaders, UseHttpsRedirection,
+            Order read at Program.cs:232-239: UseForwardedHeaders, UseHttpsRedirection,
             UseHostFiltering, UseCors, UseRateLimiter, UseHealthEndpoints, ApiKeyMiddleware,
-            MapMcp - the contract's order, with health inserted before authentication. T-4 holds
-            the load-bearing part: a foreign Host is refused 400 before an endpoint that needs no
-            key. Throttle key set, which no test reaches: the verifier called 40 distinct
-            invented tool names and then one invented name 45 times against a limit of 10 per
-            minute - all 85 replies were "Unknown tool", none was rate-limited, so no limiter was
-            minted for an unregistered name. Non-vacuity: 36 calls to the registered
-            get_blog_post gave 10 through and 26 "Rate limit: 'get_blog_post' has exceeded ...",
-            so the filter is live and keys on ToolCallThrottleFilter.MatchedToolName
-            (MatchedPrimitive).
+            MapMcp - the contract's order with health inserted before authentication. T-4 passes
+            and the load-bearing part was observed directly: a foreign Host is refused 400 ahead
+            of /healthz, an endpoint that needs no credential. Throttle key set, which no test
+            reaches: 85 calls to invented tool names minted no limiter - every one answered
+            "Unknown tool", none was rate-limited - while the registered get_blog_post was limited
+            from its 10th call in the same minute. ToolCallThrottleFilter.MatchedToolName reads
+            context.MatchedPrimitive, never the caller's string.
         - clause: G-4
-          verdict: corrected
+          verdict: verified
           evidence: |
-            Half met, half not. Deserialisation is fixed: JsonSerializerDefaults.Web plus an
-            explicit [JsonPropertyName] on every model property, and T-5's six tests pass against
-            the recorded camelCase payload (ids 1 and 101, populated titles and collections).
-            "or throws with a recovery hint" is not met. Executed by the verifier against an HTTP
-            500 upstream, all six tools fail as HttpRequestException "Response status code does
-            not indicate success: 500 (Internal Server Error)."; over MCP the client is shown
-            only "An error occurred invoking 'get_blog_post'." What is actually true: the demo
-            provider names a recovery only when deserialisation returns null, never when the
-            upstream returns an error status - which is the case UC-3 describes. What would close
-            it: the demo provider's client or tools translating a non-success status into an
-            McpException that names the recovery, as the SMHI provider already does.
+            Verified by T-5, which passes in full: six round-trip tests bind a recorded camelCase
+            payload (ids 1 and 101, populated titles and collections) with
+            JsonSerializerDefaults.Web plus an explicit JsonPropertyName on every model property,
+            and six error-path tests assert that a 500 names a recovery, a 404 says the record is
+            not there, and a 429 is distinguishable from being broken. Confirmed end to end rather
+            than at the client only: against a 404/405 upstream, all six demo tools deliver their
+            recovery sentence to an MCP client over stdio.
+            Named because T-5 does not reach it: every error case T-5 covers is an HTTP status. A
+            connect/DNS/TLS failure throws HttpRequestException, which EnsureSuccess never sees,
+            and the caller gets "An error occurred invoking 'get_blog_post'." That is recorded as
+            the correction on UC-3, whose words cover it ("an upstream error returns a message
+            naming the recovery").
         - clause: G-5
           verdict: verified
           evidence: |
             Judged against the pioneer-authorised revision (2026-09-18, tests_changed [T-6]):
-            rebuild on the CSV endpoint. MetObsArchiveCsv.cs reads the CSV archive and T-6's
-            tests pass, including "filters by month before applying the cap" and "reports an
-            unrecognisable archive rather than returning nothing". Live: all 13 registered tools
-            answered their real upstreams, so no tool without a path to success remains.
+            rebuild on the CSV endpoint. T-6's six tests pass, including "filters by month before
+            applying the cap" and "reports an unrecognisable archive rather than returning
+            nothing", and MetObsArchiveCsv.cs reads the CSV archive. Live, all 13 registered tools
+            answered their real upstreams, so no tool without a path to success remains
+            registered.
         - clause: G-6
           verdict: verified
           evidence: |
-            T-7 passes: Create() refuses a total timeout at or below attempt x (1 + retries) and
-            is called during service registration (SmhiObsServiceRegistration.cs:39-46, and the
-            same shape in the other two providers), so the refusal lands at startup; a theory
-            holds the three shipped budgets (10/2/35, 20/2/70, 5/2/20). ClientTimeout is
-            InfiniteTimeSpan and every provider assigns it to HttpClient.Timeout. The verifier's
-            stall probe made all 3 attempts.
+            T-7 passes, including the theory over the three shipped budgets (10/2/35, 20/2/70,
+            5/2/20). ResilienceBudget.Create refuses a total timeout at or below attempt x
+            (1 + retries) and is called during service registration in all three providers
+            (SmhiServiceRegistration.cs:50, SmhiObsServiceRegistration.cs:38,
+            JsonPlaceholderServiceRegistration.cs:49), so the refusal lands at startup, not on the
+            first call. All three assign ResilienceBudget.ClientTimeout (InfiniteTimeSpan) to
+            HttpClient.Timeout. The executed stall probe made all 3 attempts.
         - clause: G-7
           verdict: verified
           evidence: |
-            T-8 passes. HealthEndpoints.cs answers /healthz and /readyz from process state alone
-            (ApplicationStarted / ApplicationStopping); no upstream client is touched, and no
-            startup probe exists anywhere in the project.
+            T-8 passes and was reproduced directly: /healthz 200 "alive", /readyz 200 "ready", no
+            credential. HealthEndpoints.cs answers from IHostApplicationLifetime state alone and
+            touches no upstream client; no startup probe, hosted service or background service
+            exists anywhere in McpServerTemplate/.
         - clause: G-8
           verdict: verified
           evidence: |
-            At 66e8477: one solution file; dotnet build -warnaserror gives 0 warnings, 0 errors;
-            Directory.Build.props sets net10.0 and TreatWarningsAsErrors for both projects and
+            T-9's three repository-invariant tests pass. One solution file; dotnet build
+            McpServerTemplate.sln -warnaserror gives 0 warnings and 0 errors;
+            Directory.Build.props sets net10.0 and TreatWarningsAsErrors for every project and
             neither csproj overrides TargetFramework; ModelContextProtocol and
-            ModelContextProtocol.AspNetCore are both 2.2.0 (T-9's three tests pass). No
-            suppression anywhere: a grep over the tree finds no "#pragma warning", no <NoWarn>
-            and no SuppressMessage. The .editorconfig lowers CA1305 and CA1848 to suggestion
-            (agent revision of 2026-09-18) - analyser severities, not silenced SDK deprecations.
-            Named because it is true and unpleasant: this property did not hold at the delivery
-            commit. 9b604f8 built clean locally and failed CI on 3x CA1873. It holds now only
-            because global.json pins the SDK band for both.
+            ModelContextProtocol.AspNetCore are both 2.2.0. No suppression in the tree: a grep
+            over .cs, .csproj and .props finds no "#pragma warning", no NoWarn element and no
+            SuppressMessage - the only hit is the invariant test asserting their absence.
+            Stated plainly rather than left implicit: .editorconfig lowers dotnet_diagnostic
+            CA1305 and CA1848 to suggestion and CA1707 to none. Those are analyser severities, not
+            silenced SDK deprecations, and the choice is recorded as the agent revision of
+            2026-09-18 which the contract itself says was surfaced to be judged. On the clause's
+            own words the guarantee holds; whether that revision should stand is a pioneer
+            judgement, not a verification finding.
         - clause: G-9
           verdict: verified
           evidence: |
-            ci.yml runs on: push (and pull_request) with locked restore, build -warnaserror, test,
-            package audit and secret scan. The verifier ran all three failure fixtures in an
-            out-of-tree clone: an AKIA key in a tracked file -> scan exit 1; "ApiKey":
-            "super-secret-value" in appsettings.json -> scan exit 1; System.Net.Http added without
-            updating the lock -> NU1004 refuses --locked-mode; Newtonsoft.Json 9.0.1 -> NU1903
-            Warning As Error and the build fails. Both real CI runs behaved correctly: failing
-            where the build was broken, passing where it was not.
-            Noted, not a defect in the clause: the "Audit packages" step's grep for "has the
-            following vulnerable packages" never fires, because dotnet list package --vulnerable
-            performs its own restore and that restore fails first on NU1903. The step still fails
-            the job (bash -e), and the build step has already failed by then.
+            ci.yml runs on push (and pull_request) with locked restore, build -warnaserror, test,
+            package audit and secret scan - and the run for head 33bb5ae (35287967682) executed
+            every one of those steps to success. Executed against fixtures in an out-of-tree
+            clone: an AKIA key in a tracked file -> scan exit 1; an ApiKey holding a value in
+            appsettings.json -> scan exit 1; Newtonsoft.Json 9.0.1 -> NU1903 Warning As Error,
+            Build FAILED; a package reference added without updating packages.lock.json -> NU1004,
+            restore refuses --locked-mode.
+            Carried forward from the previous report and still true, not a defect in the clause:
+            the Audit packages step's grep for "has the following vulnerable packages" never
+            fires, because dotnet list package --vulnerable performs its own restore and that
+            restore fails first on NU1903. The job still fails, and the build step has already
+            failed by then.
         - clause: G-10
           verdict: verified
           evidence: |
-            The verifier ran scripts/secret-scan.sh over the tree: 198 tracked files, 3
-            appsettings files, "PASS: no credential found in tracked files." T-11's two tests
-            pass: no credential-shaped key holds a value in any appsettings file, and
+            scripts/secret-scan.sh run over the tree at 33bb5ae: 200 tracked files, 3 appsettings
+            files, "PASS: no credential found in tracked files." T-11's two tests pass - no
+            credential-shaped key holds a value in any appsettings file, and
             McpServerTemplate.csproj carries UserSecretsId mcp-server-template-4f2a1c7e, so the
-            user-secrets advice is followable.
+            user-secrets route the error messages recommend actually exists. Both halves of the
+            scan were shown non-vacuous by the planted fixtures (see G-9).
         - clause: G-11
           verdict: verified
           evidence: |
-            T-12 passes both ways. The verifier's own tools/list gives 13 names -
-            add_post_comment, create_blog_post, create_user_todo, get_blog_post,
-            get_current_weather, get_forecast, get_forecast_model_info, get_monthly_climate,
-            get_post_comments, get_precipitation_history, get_recent_temperature,
-            get_temperature_history, get_user_todos - each of which the docs name, with no
-            PascalCase spelling in a tool table.
+            T-12's two tests pass. Independently: tools/list over stdio gives add_post_comment,
+            create_blog_post, create_user_todo, get_blog_post, get_current_weather, get_forecast,
+            get_forecast_model_info, get_monthly_climate, get_post_comments,
+            get_precipitation_history, get_recent_temperature, get_temperature_history,
+            get_user_todos - each named in the docs, and no tool-shaped snake_case identifier in
+            README.md or docs/ is absent from that list.
         - clause: G-12
           verdict: verified
           evidence: |
-            T-13: origin/epic/security-hardening is at 66e8477, which is the local head, and no
-            project file is uncommitted. The phase is on the remote for review. The head is one
-            commit past the contract's delivery commit; that commit is the CI repair described
-            under G-8.
-      summary: {verified: 19, corrected: 2, open: 0}
+            origin/epic/security-hardening is 33bb5ae, identical to the local HEAD, with CI green
+            on it. The only uncommitted path is the kit's own telemetry log. The remote head is
+            two commits past the contract's delivery commit: 66e8477 (the CI repair, see G-8 and
+            UC-7) and addc334 (the demo provider's error mapping, see UC-3).
+      summary: {verified: 20, corrected: 1, open: 0}
       open_needs: []
     verification_history:
+      - superseded_report: kit-verifier, 2026-09-18 (first report)
+        superseded_on: 2026-09-18
+        superseded_by: |
+          The kit-verifier report above: the same contract re-verified at head 33bb5ae after
+          the evidence recorded below arrived. T-5 passes there, so the first report's
+          corrections_from_tests of 2 no longer stand; UC-3 is corrected again, for a different
+          reason (a transport-level upstream failure still names no recovery), and G-4 is
+          verified by T-5. The first report's block is kept verbatim here.
+        block: |
+              verification:
+                date: 2026-09-18
+                by: kit-verifier
+                method: mixed
+                tests: {T-1: pass, T-2: pass, T-3: pass, T-4: pass, T-5: fail, T-6: pass, T-7: pass,
+                        T-8: pass, T-9: pass, T-10: pass, T-11: pass, T-12: pass, T-13: pass}
+                corrections_from_tests: 2
+                corrections_from_reading: 0
+                tests_note: |
+                  dotnet test McpServerTemplate.sln --configuration Release was run twice by the verifier:
+                  71 passed, 0 failed, both before and after commit 66e8477 landed mid-verification.
+                  Five Tier 4 tests carry a half that no automated test reaches; the verifier executed each
+                  of those halves rather than reading them: T-3's exit 70, T-4's throttle key set, T-7's
+                  attempt count, T-8's no-upstream-call-at-startup, T-10's three CI fixtures. Only T-5's
+                  second half failed when executed.
+                  The tree moved during verification: at the delivery commit 9b604f8 the CI run
+                  (35283605000) FAILED at "Build (warnings are errors)" with 3x CA1873 in
+                  ToolCallLoggingFilter.cs; commit 66e8477 (global.json plus a guarded logging filter) was
+                  pushed at 22:47 and its run (35283792912) passed. Every verdict below is against 66e8477,
+                  the current head of origin/epic/security-hardening.
+                clauses:
+                  - clause: UC-1
+                    verdict: verified
+                    evidence: |
+                      T-1 and T-2 (ServerProcessTests) pass. T-1 spawns the built exe with Transport=stdio
+                      in Development, hands it ASPNETCORE_URLS on a reserved port, gets a JSON-RPC
+                      initialize result on stdout and finds the port unbound. T-2 exits 78 in both
+                      Production and Staging. The verifier's own stdio sessions (13 live tool calls)
+                      confirm the protocol side.
+                  - clause: UC-2
+                    verdict: verified
+                    evidence: |
+                      Program.cs:241 UseUrls("http://{bindAddress}:{port}") and the fixed pipeline at
+                      Program.cs:209-216. T-4's host-header half returns 400 for a foreign Host even on
+                      /healthz, which needs no credential, so the allowlist precedes both health and
+                      authentication. "A failure to bind is a failure": the verifier occupied
+                      127.0.0.1:54004 and started the server on that port - exit code 70, stack trace from
+                      RunHttpAsync. Not a silent success.
+                  - clause: UC-3
+                    verdict: corrected
+                    evidence: |
+                      First half holds: T-5's six round-trip tests pass, and a live call to each of the six
+                      demo tools over stdio returned real records (post #1 with its title and body, 5
+                      comments, 20 todos, created ids 101/501/201).
+                      Second half does not. On an upstream failure the caller is told nothing. The verifier
+                      ran the demo provider against an out-of-tree handler returning HTTP 500: all six
+                      client methods throw HttpRequestException "Response status code does not indicate
+                      success: 500 (Internal Server Error)." - no recovery named. End to end over stdio,
+                      with Providers__JsonPlaceholder__BaseUrl pointed at a host that does not serve
+                      /posts/1, an MCP client sees exactly: "An error occurred invoking 'get_blog_post'."
+                      The same probe against the SMHI provider returns a full recovery sentence, so the
+                      shape is reachable; the demo provider does not use it.
+                      JsonPlaceholderApiClient.cs calls EnsureSuccessStatusCode() before any hint-bearing
+                      path, and the recovery hints it does carry sit on the null-deserialisation branch
+                      only.
+                  - clause: UC-4
+                    verdict: verified
+                    evidence: |
+                      T-6's six MetObsArchiveCsv tests pass, judged against the pioneer-authorised revision
+                      of 2026-09-18 (the climate tool rebuilt on the CSV endpoint, not removed). The
+                      verifier enumerated the live surface: 13 registered tools, and called every one of
+                      them against its real upstream - all 13 returned data, get_monthly_climate included
+                      ("Station: Stockholm-Observatoriekullen A, Month: July, 2025: min 10.8, max 29.5,
+                      mean 20.0 celsius (744 readings)"). No registered tool lacks a path to success.
+                  - clause: UC-5
+                    verdict: verified
+                    evidence: |
+                      T-7's eight ResilienceBudget tests pass. The half no test covers was executed by the
+                      verifier: a counting handler stalling 4s behind a 2s attempt timeout, budget 2
+                      retries / 30s total, produced attempts=3 (1 + 2 retries) in 7.0s and ended in
+                      TimeoutRejectedException, with ResilienceBudget.ClientTimeout = InfiniteTimeSpan.
+                      The retries configured are the retries made.
+                  - clause: UC-6
+                    verdict: verified
+                    evidence: |
+                      T-8 passes: /healthz returns 200 "alive" and /readyz 200 "ready", neither carrying a
+                      credential. No upstream call at startup: a grep over McpServerTemplate/ finds no
+                      IHostedService, no BackgroundService and no startup probe; the only lifetime
+                      reference is HealthEndpoints.cs:43 reading ApplicationStarted. Live stdio runs issue
+                      upstream requests only when a tool is called.
+                  - clause: UC-7
+                    verdict: verified
+                    evidence: |
+                      dotnet build McpServerTemplate.sln -warnaserror and dotnet test both succeed at
+                      66e8477 (0 warnings, 0 errors; 71 tests). The same commands run on push
+                      (.github/workflows/ci.yml, on: push) - CI run 35283792912 for 66e8477: success.
+                      The three failure modes were seeded in an out-of-tree clone and all three fail the
+                      pipeline: a planted AKIA key -> secret scan exit 1; Newtonsoft.Json 9.0.1 -> NU1903
+                      as an error, build fails; a lock file out of step -> NU1004 on --locked-mode.
+                      Recorded because it bears on "the same runs on every push": at the delivery commit
+                      9b604f8 it did not. CI run 35283605000 failed on 3x CA1873 that a developer's SDK did
+                      not raise. Pinning the band in global.json (66e8477) is what makes this clause true.
+                  - clause: UC-8
+                    verdict: verified
+                    evidence: |
+                      T-12 passes in both directions. Independently: the server exposes 13 snake_case tool
+                      names over tools/list, every one of which appears in the docs, and no snake_case name
+                      in docs/ or README.md is absent from that list.
+                  - clause: UC-9
+                    verdict: verified
+                    evidence: |
+                      T-13 run by the verifier: git ls-remote origin gives
+                      66e8477c5daff6f2c18e9962a3bbfed382d5a15c for refs/heads/epic/security-hardening,
+                      which is the local head. No project file is modified in the working tree; the only
+                      dirty paths are the kit's own records (CONTRACT-LOG.yaml, LEDGER.yaml, telemetry.log)
+                      being written by the live session.
+                  - clause: G-1
+                    verdict: verified
+                    evidence: |
+                      T-1, T-2 (pass). Program.cs:100-121 builds Host.CreateApplicationBuilder for stdio
+                      and throws ConfigurationException outside Development; the guard reads both
+                      ASPNETCORE_ENVIRONMENT and DOTNET_ENVIRONMENT, so setting only one does not escape
+                      it.
+                  - clause: G-2
+                    verdict: verified
+                    evidence: |
+                      Exit 78: three T-3 tests pass (unknown transport, http without an API key, and a loop
+                      asserting neither exits 0). Exit 70 - the half Tier 4 marked possibly untestable -
+                      was observed twice by the verifier: running the exe from a directory without
+                      appsettings.json (unhandled InvalidOperationException) exits 70, and starting the
+                      HTTP transport on an occupied port exits 70. Program.cs:83-92 maps
+                      ConfigurationException to 78 and everything else to 70.
+                  - clause: G-3
+                    verdict: verified
+                    evidence: |
+                      Order read at Program.cs:209-216: UseForwardedHeaders, UseHttpsRedirection,
+                      UseHostFiltering, UseCors, UseRateLimiter, UseHealthEndpoints, ApiKeyMiddleware,
+                      MapMcp - the contract's order, with health inserted before authentication. T-4 holds
+                      the load-bearing part: a foreign Host is refused 400 before an endpoint that needs no
+                      key. Throttle key set, which no test reaches: the verifier called 40 distinct
+                      invented tool names and then one invented name 45 times against a limit of 10 per
+                      minute - all 85 replies were "Unknown tool", none was rate-limited, so no limiter was
+                      minted for an unregistered name. Non-vacuity: 36 calls to the registered
+                      get_blog_post gave 10 through and 26 "Rate limit: 'get_blog_post' has exceeded ...",
+                      so the filter is live and keys on ToolCallThrottleFilter.MatchedToolName
+                      (MatchedPrimitive).
+                  - clause: G-4
+                    verdict: corrected
+                    evidence: |
+                      Half met, half not. Deserialisation is fixed: JsonSerializerDefaults.Web plus an
+                      explicit [JsonPropertyName] on every model property, and T-5's six tests pass against
+                      the recorded camelCase payload (ids 1 and 101, populated titles and collections).
+                      "or throws with a recovery hint" is not met. Executed by the verifier against an HTTP
+                      500 upstream, all six tools fail as HttpRequestException "Response status code does
+                      not indicate success: 500 (Internal Server Error)."; over MCP the client is shown
+                      only "An error occurred invoking 'get_blog_post'." What is actually true: the demo
+                      provider names a recovery only when deserialisation returns null, never when the
+                      upstream returns an error status - which is the case UC-3 describes. What would close
+                      it: the demo provider's client or tools translating a non-success status into an
+                      McpException that names the recovery, as the SMHI provider already does.
+                  - clause: G-5
+                    verdict: verified
+                    evidence: |
+                      Judged against the pioneer-authorised revision (2026-09-18, tests_changed [T-6]):
+                      rebuild on the CSV endpoint. MetObsArchiveCsv.cs reads the CSV archive and T-6's
+                      tests pass, including "filters by month before applying the cap" and "reports an
+                      unrecognisable archive rather than returning nothing". Live: all 13 registered tools
+                      answered their real upstreams, so no tool without a path to success remains.
+                  - clause: G-6
+                    verdict: verified
+                    evidence: |
+                      T-7 passes: Create() refuses a total timeout at or below attempt x (1 + retries) and
+                      is called during service registration (SmhiObsServiceRegistration.cs:39-46, and the
+                      same shape in the other two providers), so the refusal lands at startup; a theory
+                      holds the three shipped budgets (10/2/35, 20/2/70, 5/2/20). ClientTimeout is
+                      InfiniteTimeSpan and every provider assigns it to HttpClient.Timeout. The verifier's
+                      stall probe made all 3 attempts.
+                  - clause: G-7
+                    verdict: verified
+                    evidence: |
+                      T-8 passes. HealthEndpoints.cs answers /healthz and /readyz from process state alone
+                      (ApplicationStarted / ApplicationStopping); no upstream client is touched, and no
+                      startup probe exists anywhere in the project.
+                  - clause: G-8
+                    verdict: verified
+                    evidence: |
+                      At 66e8477: one solution file; dotnet build -warnaserror gives 0 warnings, 0 errors;
+                      Directory.Build.props sets net10.0 and TreatWarningsAsErrors for both projects and
+                      neither csproj overrides TargetFramework; ModelContextProtocol and
+                      ModelContextProtocol.AspNetCore are both 2.2.0 (T-9's three tests pass). No
+                      suppression anywhere: a grep over the tree finds no "#pragma warning", no <NoWarn>
+                      and no SuppressMessage. The .editorconfig lowers CA1305 and CA1848 to suggestion
+                      (agent revision of 2026-09-18) - analyser severities, not silenced SDK deprecations.
+                      Named because it is true and unpleasant: this property did not hold at the delivery
+                      commit. 9b604f8 built clean locally and failed CI on 3x CA1873. It holds now only
+                      because global.json pins the SDK band for both.
+                  - clause: G-9
+                    verdict: verified
+                    evidence: |
+                      ci.yml runs on: push (and pull_request) with locked restore, build -warnaserror, test,
+                      package audit and secret scan. The verifier ran all three failure fixtures in an
+                      out-of-tree clone: an AKIA key in a tracked file -> scan exit 1; "ApiKey":
+                      "super-secret-value" in appsettings.json -> scan exit 1; System.Net.Http added without
+                      updating the lock -> NU1004 refuses --locked-mode; Newtonsoft.Json 9.0.1 -> NU1903
+                      Warning As Error and the build fails. Both real CI runs behaved correctly: failing
+                      where the build was broken, passing where it was not.
+                      Noted, not a defect in the clause: the "Audit packages" step's grep for "has the
+                      following vulnerable packages" never fires, because dotnet list package --vulnerable
+                      performs its own restore and that restore fails first on NU1903. The step still fails
+                      the job (bash -e), and the build step has already failed by then.
+                  - clause: G-10
+                    verdict: verified
+                    evidence: |
+                      The verifier ran scripts/secret-scan.sh over the tree: 198 tracked files, 3
+                      appsettings files, "PASS: no credential found in tracked files." T-11's two tests
+                      pass: no credential-shaped key holds a value in any appsettings file, and
+                      McpServerTemplate.csproj carries UserSecretsId mcp-server-template-4f2a1c7e, so the
+                      user-secrets advice is followable.
+                  - clause: G-11
+                    verdict: verified
+                    evidence: |
+                      T-12 passes both ways. The verifier's own tools/list gives 13 names -
+                      add_post_comment, create_blog_post, create_user_todo, get_blog_post,
+                      get_current_weather, get_forecast, get_forecast_model_info, get_monthly_climate,
+                      get_post_comments, get_precipitation_history, get_recent_temperature,
+                      get_temperature_history, get_user_todos - each of which the docs name, with no
+                      PascalCase spelling in a tool table.
+                  - clause: G-12
+                    verdict: verified
+                    evidence: |
+                      T-13: origin/epic/security-hardening is at 66e8477, which is the local head, and no
+                      project file is uncommitted. The phase is on the remote for review. The head is one
+                      commit past the contract's delivery commit; that commit is the CI repair described
+                      under G-8.
+                summary: {verified: 19, corrected: 2, open: 0}
+                open_needs: []
       - superseded: 2026-09-18
         by_evidence: |
           commit addc334 — the demo provider maps every non-success status to an McpException
           naming a recovery, which is the close kit-verifier itself named; and the logging filter
           now converts McpException into a CallToolResult instead of rethrowing it, fixing a
           defect the report did not reach: a throwing tool sent no JSON-RPC response at all, so
-          the caller waited forever. New test T5_a_tool_that_fails_still_answers_the_client calls
+          the caller waited forever.
+
+          CORRECTED 2026-09-18: the defect described above does not exist. The "no JSON-RPC
+          response" was an artifact of the probe used to find it, which redirected the server's
+          standard error and never read it. The pipe filled, the server blocked on its next write,
+          and the call went silent. Re-run with stderr drained, the original rethrowing filter
+          answers correctly. The filter change was reverted; the provider's error mapping, which
+          kit-verifier found independently, was kept. See O-014.
+
+          CORRECTED 2026-09-18: the defect described above does not exist. The "no JSON-RPC
+          response" was an artifact of the probe used to find it, which redirected the server's
+          standard error and never read it. The pipe filled, the server blocked on its next write,
+          and the call went silent. Re-run with stderr drained, the original rethrowing filter
+          answers correctly. The filter change was reverted; the provider's error mapping, which
+          kit-verifier found independently, was kept. See O-014. New test T5_a_tool_that_fails_still_answers_the_client calls
           a failing tool over stdio and reads what a client receives. 85 tests pass in Release;
           CI green on addc334.
         note: |
@@ -449,7 +730,7 @@ contracts:
           filters, where the behaviour does differ. Recorded rather than resolved.
     audited: true
     transcript: C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
-    observations: [O-009, O-010, O-011, O-012, O-013]
+    observations: [O-009, O-010, O-011, O-012, O-013, O-014]
     revisions:
       - what: |
           G-5 left the climate tool's fate open ("remove the climate tool or rebuild it on the

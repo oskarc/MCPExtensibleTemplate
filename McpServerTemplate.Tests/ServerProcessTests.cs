@@ -47,7 +47,47 @@ public class ServerProcessTests
         return path;
     }
 
-    private static Process Start(IDictionary<string, string> environment, bool redirectStdin = false)
+    /// <summary>
+    /// A started server, with its standard error being drained.
+    ///
+    /// The draining is the point. A redirected pipe that nobody reads fills up, and the process
+    /// then blocks on its next write to it. The server goes quiet mid-request and the symptom is
+    /// indistinguishable from a hung tool call — which is exactly how it was first misread here.
+    /// Anything that logs heavily on a failure path (a retrying resilience pipeline, a stack
+    /// trace) crosses the buffer; anything quieter does not, so the same test passes or hangs
+    /// depending on how much the server had to say.
+    /// </summary>
+    private sealed class Spawned
+    {
+        private readonly StringBuilder _stderr = new();
+
+        public Spawned(Process process)
+        {
+            Process = process;
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data is null)
+                    return;
+
+                lock (_stderr)
+                    _stderr.AppendLine(e.Data);
+            };
+            process.BeginErrorReadLine();
+        }
+
+        public Process Process { get; }
+
+        public string Stderr
+        {
+            get
+            {
+                lock (_stderr)
+                    return _stderr.ToString();
+            }
+        }
+    }
+
+    private static Spawned Start(IDictionary<string, string> environment, bool redirectStdin = false)
     {
         var exe = ServerExecutable();
         var info = new ProcessStartInfo(exe)
@@ -68,17 +108,22 @@ public class ServerProcessTests
             info.Environment[key] = value;
         }
 
-        return Process.Start(info)!;
+        return new Spawned(Process.Start(info)!);
     }
 
     private static async Task<(int ExitCode, string Stderr)> RunToCompletionAsync(
         IDictionary<string, string> environment)
     {
-        using var process = Start(environment);
-        var stderr = await process.StandardError.ReadToEndAsync();
+        var spawned = Start(environment);
+        using var process = spawned.Process;
+
         var exited = await Task.Run(() => process.WaitForExit(60_000));
         Assert.True(exited, "the server did not exit; it was expected to refuse to start");
-        return (process.ExitCode, stderr);
+
+        // WaitForExit(int) does not wait for the redirected readers to finish; this overload does,
+        // so the buffer is complete before it is read.
+        process.WaitForExit();
+        return (process.ExitCode, spawned.Stderr);
     }
 
     private static int FreePort()
@@ -108,7 +153,7 @@ public class ServerProcessTests
                 ["Transport"] = "stdio",
                 ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{webPort}",
             },
-            redirectStdin: true);
+            redirectStdin: true).Process;
 
         try
         {
@@ -245,7 +290,7 @@ public class ServerProcessTests
     private static async Task<HttpServer> StartHttpAsync(string apiKey)
     {
         var port = FreePort();
-        var process = Start(new Dictionary<string, string>
+        var spawned = Start(new Dictionary<string, string>
         {
             ["ASPNETCORE_ENVIRONMENT"] = "Production",
             ["Transport"] = "http",
@@ -253,6 +298,7 @@ public class ServerProcessTests
             ["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["HttpTransport__BindAddress"] = "127.0.0.1",
         });
+        var process = spawned.Process;
 
         var client = new HttpClient
         {
@@ -265,8 +311,7 @@ public class ServerProcessTests
         {
             if (process.HasExited)
             {
-                var stderr = await process.StandardError.ReadToEndAsync();
-                Assert.Fail($"the server exited during startup ({process.ExitCode}): {stderr}");
+                Assert.Fail($"the server exited during startup ({process.ExitCode}): {spawned.Stderr}");
             }
 
             try
@@ -367,7 +412,7 @@ public class ServerProcessTests
                 ["ASPNETCORE_ENVIRONMENT"] = "Development",
                 ["Transport"] = "stdio",
             },
-            redirectStdin: true);
+            redirectStdin: true).Process;
 
         try
         {
@@ -513,7 +558,7 @@ public class ServerProcessTests
                 ["ASPNETCORE_ENVIRONMENT"] = "Development",
                 ["Transport"] = "stdio",
             },
-            redirectStdin: true);
+            redirectStdin: true).Process;
 
         try
         {

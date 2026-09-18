@@ -89,4 +89,59 @@ public class JsonPlaceholderErrorPathTests
 
         Assert.Contains("too many", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// A handler that fails before any response exists — the upstream is unreachable, or the
+    /// attempt ran out of time. No status code is involved, so status mapping never sees it.
+    private sealed class FailingTransport : HttpMessageHandler
+    {
+        private readonly Exception _failure;
+
+        public FailingTransport(Exception failure) => _failure = failure;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromException<HttpResponseMessage>(_failure);
+    }
+
+    private static JsonPlaceholderApiClient FailingClient(Exception failure) =>
+        new(new HttpClient(new FailingTransport(failure))
+        {
+            BaseAddress = new Uri("https://jsonplaceholder.typicode.com"),
+        });
+
+    [Theory]
+    [MemberData(nameof(EveryTool))]
+    public async Task T5_an_unreachable_upstream_names_a_recovery(string tool, Func<JsonPlaceholderApiClient, Task> call)
+    {
+        // The gap the status mapping left: a host that does not resolve never produces a status,
+        // so the caller was told only "An error occurred invoking 'get_blog_post'".
+        var ex = await Assert.ThrowsAsync<McpException>(
+            () => call(FailingClient(new HttpRequestException("No such host is known."))));
+
+        Assert.Contains("reach", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(string.IsNullOrWhiteSpace(tool));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryTool))]
+    public async Task T5_an_upstream_that_runs_out_of_time_names_a_recovery(
+        string tool, Func<JsonPlaceholderApiClient, Task> call)
+    {
+        var ex = await Assert.ThrowsAsync<McpException>(
+            () => call(FailingClient(new TaskCanceledException("The request timed out."))));
+
+        Assert.Contains("timed out", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(string.IsNullOrWhiteSpace(tool));
+    }
+
+    [Fact]
+    public async Task T5_a_caller_who_cancels_is_not_told_the_upstream_failed()
+    {
+        // Cancellation is the caller's own doing; dressing it up as an upstream fault would
+        // send the model chasing a problem that does not exist.
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => FailingClient(new TaskCanceledException()).GetPostAsync(1, cancelled.Token));
+    }
 }

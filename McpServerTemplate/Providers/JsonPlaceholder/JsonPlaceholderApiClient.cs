@@ -27,6 +27,51 @@ public class JsonPlaceholderApiClient
         _httpClient = httpClient;
     }
 
+    /// <summary>
+    /// Sends a request and returns the body, turning every way the call can fail into an error
+    /// that names a recovery.
+    ///
+    /// contract-001 · UC-3 — a call fails in two shapes, and both reach the model. Either the
+    /// upstream answered with a status that is not success, or it never answered at all: the
+    /// host does not resolve, the connection drops, the attempt runs out of time. Mapping only
+    /// the first shape left the second reaching a caller as "An error occurred invoking
+    /// 'get_blog_post'", which names nothing to do. Both are mapped here, in one place, so a
+    /// new call cannot be written that handles one and forgets the other.
+    /// </summary>
+    private static async Task<string> SendAsync(
+        Func<CancellationToken, Task<HttpResponseMessage>> send,
+        string what,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await send(cancellationToken).ConfigureAwait(false);
+            EnsureSuccess(response, what);
+            return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new McpException(
+                $"Unable to reach the JSONPlaceholder API for {what}. Check network connectivity "
+                + "and try again; if it persists, confirm Providers:JsonPlaceholder:BaseUrl.", ex);
+        }
+        catch (Polly.Timeout.TimeoutRejectedException ex)
+        {
+            // The resilience pipeline exhausted its budget. This is neither an HTTP failure nor a
+            // cancellation, so it reaches here as its own type and would otherwise escape unnamed.
+            throw new McpException(
+                $"The upstream did not answer for {what} within the time this server allows, "
+                + "including retries. Try again shortly; if it persists the upstream is degraded.", ex);
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Guarded on the token: a caller who cancelled gets their own cancellation back,
+            // not a story about the upstream having failed.
+            throw new McpException(
+                $"The request for {what} timed out. Try again; if it keeps timing out the "
+                + "upstream is overloaded and a smaller request may succeed.", ex);
+        }
+    }
 
     /// <summary>
     /// Turns a non-success response into an error a model can act on.
@@ -61,19 +106,21 @@ public class JsonPlaceholderApiClient
         });
     }
 
+    private static StringContent JsonBody<T>(T value) =>
+        new(JsonSerializer.Serialize(value, JsonOptions), System.Text.Encoding.UTF8, "application/json");
+
     /// <summary>
     /// Retrieve a single post by ID.
     /// </summary>
     public async Task<Post> GetPostAsync(int postId, CancellationToken cancellationToken = default)
     {
-        var response = await _httpClient.GetAsync($"/posts/{postId}", cancellationToken);
-        EnsureSuccess(response, $"post {postId}");
+        var body = await SendAsync(
+            ct => _httpClient.GetAsync($"/posts/{postId}", ct), $"post {postId}", cancellationToken);
 
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        return JsonSerializer.Deserialize<Post>(content, JsonOptions)
-            ?? throw new InvalidOperationException(
-                $"The upstream returned no post for id {postId}. Retry; if it persists, confirm " +
-                "JsonPlaceholder:BaseUrl points at the JSONPlaceholder API and that the id exists.");
+        return JsonSerializer.Deserialize<Post>(body, JsonOptions)
+            ?? throw new McpException(
+                $"The upstream returned no post for id {postId}. Retry; if it persists, confirm "
+                + "JsonPlaceholder:BaseUrl points at the JSONPlaceholder API and that the id exists.");
     }
 
     /// <summary>
@@ -99,17 +146,14 @@ public class JsonPlaceholderApiClient
             Body = body
         };
 
-        var json = JsonSerializer.Serialize(post, JsonOptions);
-        var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+        using var payload = JsonBody(post);
+        var response = await SendAsync(
+            ct => _httpClient.PostAsync("/posts", payload, ct), "the new post", cancellationToken);
 
-        var response = await _httpClient.PostAsync("/posts", content, cancellationToken);
-        EnsureSuccess(response, "the new post");
-
-        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        return JsonSerializer.Deserialize<Post>(responseContent, JsonOptions)
-            ?? throw new InvalidOperationException(
-                "The upstream accepted the post but returned no record of it. The post may or may not " +
-                "have been created: read it back before retrying, or the retry will duplicate it.");
+        return JsonSerializer.Deserialize<Post>(response, JsonOptions)
+            ?? throw new McpException(
+                "The upstream accepted the post but returned no record of it. The post may or may not "
+                + "have been created: read it back before retrying, or the retry will duplicate it.");
     }
 
     /// <summary>
@@ -117,14 +161,15 @@ public class JsonPlaceholderApiClient
     /// </summary>
     public async Task<List<Comment>> GetPostCommentsAsync(int postId, CancellationToken cancellationToken = default)
     {
-        var response = await _httpClient.GetAsync($"/posts/{postId}/comments", cancellationToken);
-        EnsureSuccess(response, $"the comments on post {postId}");
+        var body = await SendAsync(
+            ct => _httpClient.GetAsync($"/posts/{postId}/comments", ct),
+            $"the comments on post {postId}",
+            cancellationToken);
 
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        return JsonSerializer.Deserialize<List<Comment>>(content, JsonOptions)
-            ?? throw new InvalidOperationException(
-                $"The upstream returned no comment list for post {postId} — not an empty list, but no " +
-                "list at all. Retry; if it persists, confirm the post id exists.");
+        return JsonSerializer.Deserialize<List<Comment>>(body, JsonOptions)
+            ?? throw new McpException(
+                $"The upstream returned no comment list for post {postId} — not an empty list, but no "
+                + "list at all. Retry; if it persists, confirm the post id exists.");
     }
 
     /// <summary>
@@ -154,17 +199,14 @@ public class JsonPlaceholderApiClient
             Body = body
         };
 
-        var json = JsonSerializer.Serialize(comment, JsonOptions);
-        var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+        using var payload = JsonBody(comment);
+        var response = await SendAsync(
+            ct => _httpClient.PostAsync("/comments", payload, ct), "the new comment", cancellationToken);
 
-        var response = await _httpClient.PostAsync("/comments", content, cancellationToken);
-        EnsureSuccess(response, "the new comment");
-
-        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        return JsonSerializer.Deserialize<Comment>(responseContent, JsonOptions)
-            ?? throw new InvalidOperationException(
-                "The upstream accepted the comment but returned no record of it. The comment may or may " +
-                "not have been created: read the post's comments back before retrying.");
+        return JsonSerializer.Deserialize<Comment>(response, JsonOptions)
+            ?? throw new McpException(
+                "The upstream accepted the comment but returned no record of it. The comment may or may "
+                + "not have been created: read the post's comments back before retrying.");
     }
 
     /// <summary>
@@ -172,14 +214,15 @@ public class JsonPlaceholderApiClient
     /// </summary>
     public async Task<List<Todo>> GetUserTodosAsync(int userId, CancellationToken cancellationToken = default)
     {
-        var response = await _httpClient.GetAsync($"/todos?userId={userId}", cancellationToken);
-        EnsureSuccess(response, $"the todos for user {userId}");
+        var body = await SendAsync(
+            ct => _httpClient.GetAsync($"/todos?userId={userId}", ct),
+            $"the todos for user {userId}",
+            cancellationToken);
 
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        return JsonSerializer.Deserialize<List<Todo>>(content, JsonOptions)
-            ?? throw new InvalidOperationException(
-                $"The upstream returned no todo list for user {userId} — not an empty list, but no list " +
-                "at all. Retry; if it persists, confirm the user id exists.");
+        return JsonSerializer.Deserialize<List<Todo>>(body, JsonOptions)
+            ?? throw new McpException(
+                $"The upstream returned no todo list for user {userId} — not an empty list, but no list "
+                + "at all. Retry; if it persists, confirm the user id exists.");
     }
 
     /// <summary>
@@ -201,16 +244,13 @@ public class JsonPlaceholderApiClient
             Completed = completed
         };
 
-        var json = JsonSerializer.Serialize(todo, JsonOptions);
-        var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+        using var payload = JsonBody(todo);
+        var response = await SendAsync(
+            ct => _httpClient.PostAsync("/todos", payload, ct), "the new todo", cancellationToken);
 
-        var response = await _httpClient.PostAsync("/todos", content, cancellationToken);
-        EnsureSuccess(response, "the new todo");
-
-        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        return JsonSerializer.Deserialize<Todo>(responseContent, JsonOptions)
-            ?? throw new InvalidOperationException(
-                "The upstream accepted the todo but returned no record of it. The todo may or may not " +
-                "have been created: read the user's todos back before retrying.");
+        return JsonSerializer.Deserialize<Todo>(response, JsonOptions)
+            ?? throw new McpException(
+                "The upstream accepted the todo but returned no record of it. The todo may or may not "
+                + "have been created: read the user's todos back before retrying.");
     }
 }

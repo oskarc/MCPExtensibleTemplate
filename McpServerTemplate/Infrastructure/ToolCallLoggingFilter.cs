@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Serilog.Context;
@@ -49,32 +48,6 @@ public static class ToolCallLoggingFilter
                     stopwatch.Stop();
                     LogToolCallResult(logger, correlationId, toolName, stopwatch.ElapsedMilliseconds, result);
                     return result;
-                }
-                catch (McpException ex)
-                {
-                    // contract-001 · G-4 / UC-3 — answer the caller rather than rethrowing.
-                    //
-                    // A tool that threw McpException through this filter produced no JSON-RPC
-                    // response at all once any second call-tool filter was registered, and the
-                    // client waited forever. Each filter alone was fine; the two together were
-                    // not. Rather than depend on that composition behaving, the failure is
-                    // converted here into the result the protocol defines for it.
-                    //
-                    // Only McpException is converted. Its message is the one the SDK documents
-                    // as safe to send to a caller — tools raise it deliberately, carrying the
-                    // recovery the model should follow. Every other exception is rethrown
-                    // untouched, so an unexpected failure still reaches the caller as a generic
-                    // message and its detail stays in the log where it belongs.
-                    stopwatch.Stop();
-                    logger?.LogWarning(ex,
-                        "[{CorrelationId}] Tool {ToolName} failed after {ElapsedMs}ms: {Reason}",
-                        correlationId, toolName, stopwatch.ElapsedMilliseconds, ex.Message);
-
-                    return new CallToolResult
-                    {
-                        IsError = true,
-                        Content = [new TextContentBlock { Text = ex.Message }],
-                    };
                 }
                 catch (Exception ex)
                 {

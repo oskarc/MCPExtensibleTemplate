@@ -400,8 +400,56 @@ observations:
       provider directly, and the defect lived in the server's filter composition, which no test
       reached. A guarantee about what a client receives has to be tested from where a client
       stands.
+
+      CORRECTED by O-014 (2026-09-18): the defect this observation is built on does not exist.
+      The missing response was the measuring probe's own doing — it redirected the server's
+      standard error and never drained it, so the pipe filled and the server blocked. The
+      bisection that looked so clean was measuring how much each configuration logged, not how
+      it handled an exception. The second lesson above still holds; the first is void, because
+      the failure mode it describes was never real. Left as written, per the ledger's rule that
+      nothing is rewritten silently.
     level_guess: principle
     stated_confidence: 0.9
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
+  - obs_id: O-014
+    date: 2026-09-18
+    source: verification
+    contract_id: contract-001
+    refs: [O-013]
+    statement: |
+      O-013 reports that a tool throwing McpException produced no JSON-RPC response, and that the
+      cause lay in the filter composition. Both are wrong, and the error was mine.
+
+      The probe that established it started the server with its standard error redirected and
+      never read that pipe. A redirected pipe nobody drains fills, and the process then blocks on
+      its next write to it. The server did not mishandle the exception; it blocked while logging
+      one. The bisection across six configurations was consistent for the wrong reason: each
+      variant differed in how much it logged on the failure path, not in how it handled failure.
+      One filter stayed under the buffer, two crossed it.
+
+      Re-run with stderr drained, the original rethrowing filter answers correctly, message
+      intact. The same flaw was in the acceptance test written to prove the fix, which spawned
+      the server the same way — so that test passed against the changed filter and failed against
+      the correct one, confirming the wrong thing in both directions. The suite now runs in five
+      seconds where it took over a minute, which was the blocking all along.
+
+      What this cost: a false finding was reported to the pioneer as established fact, their
+      decision was asked for on it, and a change to approved structure was made on that basis.
+      The filter change is reverted. The provider's error mapping is kept — kit-verifier found
+      that gap independently, twice, and it is real.
+
+      The lesson worth keeping is narrower than O-013's and sharper: a harness that can stall the
+      thing it measures cannot be used to conclude that the thing stalled. Before reporting an
+      absence — no reply, no output, no call — the instrument has to be cleared first. That
+      scepticism was applied to an auditor's finding about me and not to my own.
+    level_guess: principle
+    stated_confidence: 0.95
     loaded_candidates: []
     prompted: false
     consolidated: false

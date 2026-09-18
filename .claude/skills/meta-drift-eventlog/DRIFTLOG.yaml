@@ -90,3 +90,32 @@ entries:
     recurrence_count: 0
     related_drifts: []
 
+  - drift_id: drift-003
+    surfaced_in: 2026-09-18 / contract-001 verification follow-up
+    surfaced_by: self
+    aspect: evidence-as-work
+    description: |
+      A finding was reported to the pioneer as established fact — that any tool throwing
+      McpException produced no JSON-RPC response, hanging the client — and their decision was
+      asked for and given on it. The finding was an artifact of the probe used to establish it:
+      it redirected the server's standard error and never drained it, so the pipe filled and the
+      server blocked mid-request. A change to approved structure (the call-tool filter pipeline)
+      was made on that basis.
+
+      The bisection presented alongside it looked rigorous and was not: six configurations, each
+      differing in how much it logged on the failure path rather than in how it handled failure.
+      Consistency across variants was read as confirmation when it was one artifact recurring.
+    evidence: |
+      Observation O-014. Re-run of the same probe with stderr drained, against the original
+      rethrowing filter restored from 66e8477: the server answers with the message intact. The
+      acceptance test written to prove the fix carried the same flaw and has been corrected; the
+      suite now runs in about five seconds where it took over a minute.
+    reaction: |
+      The filter change was reverted, the test harness fixed to drain stderr, and the ledger and
+      contract entries carrying the false claim corrected rather than rewritten. The provider's
+      error mapping was kept, on kit-verifier's independent finding.
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 0
+    related_drifts: []
