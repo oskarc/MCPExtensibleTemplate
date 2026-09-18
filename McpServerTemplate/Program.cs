@@ -113,6 +113,18 @@ static async Task<int> RunStdioAsync(string[] args, string environmentName)
 
     var builder = Host.CreateApplicationBuilder(args);
 
+    // contract-002 · G-6 — stdio has no token to verify, so the principal it runs as is declared
+    // in configuration and validated against the identity provider it claims to come from. It is
+    // built here, at startup, so a wrong development identity stops the process rather than
+    // surfacing as a puzzling refusal later.
+    // Identity providers are bound only if a deployment configured them; stdio serves a local
+    // IDE and calls none of them.
+    var configuredIdentity = builder.Configuration.GetSection("Authentication:IdentityProviders").GetChildren().Any()
+        ? IdentityConfigurationBinder.Bind(builder.Configuration)
+        : null;
+
+    builder.Services.AddSingleton(DevelopmentPrincipal.Create(builder.Configuration, configuredIdentity));
+
     ConfigureLogging(builder.Services, builder.Configuration);
     var mcpBuilder = ConfigureMcpServer(builder.Services, builder.Configuration);
     mcpBuilder.WithStdioServerTransport();
@@ -133,7 +145,13 @@ static async Task<int> RunHttpAsync(string[] args)
 
     // The HTTP transport's services must be registered before MapMcp can route to them;
     // without this the host builds and then throws on the first route mapping.
-    ConfigureMcpServer(builder.Services, configuration).WithHttpTransport();
+    ConfigureMcpServer(builder.Services, configuration)
+        // contract-002 · G-11 — stateless streamable HTTP: no session affinity, no
+        // Mcp-Session-Id, so any instance can serve any request.
+        .WithHttpTransport(options => options.Stateless = true)
+        // contract-002 · G-4 — the SDK filters list-tools and call-tool against the caller's
+        // authorization, so a principal is shown only what it may use.
+        .AddAuthorizationFilters();
 
     var port = ConfigurationGuard.IntegerInRange(
         configuration, "HttpTransport:Port", minimum: 1, maximum: 65535, fallback: 3001,
@@ -142,6 +160,8 @@ static async Task<int> RunHttpAsync(string[] args)
 
     // Identity is configured and validated before anything binds. A deployment that cannot
     // verify a token must not come up and discover that on its first request.
+    TransportSecurityGuard.Validate(configuration, builder.Environment.IsProduction());
+
     var identity = IdentityConfigurationBinder.Bind(configuration);
     builder.Services.AddIdentity(identity);
     builder.Services.AddAuthorization();
@@ -226,6 +246,8 @@ static async Task<int> RunHttpAsync(string[] args)
     //   CORS               — answers preflight before anything spends a rate-limit permit
     //   rate limiter       — partitions on the address forwarded headers established
     //   health endpoints   — probes carry no credential, and disclose nothing
+    //   origin guard       — a browser-driven request is refused for being cross-origin,
+    //                        before any token is examined
     //   authentication     — the last gate before any tool is reachable; a caller without a
     //                        token is challenged with the metadata document rather than refused
     app.UseForwardedHeaders();
@@ -234,6 +256,7 @@ static async Task<int> RunHttpAsync(string[] args)
     app.UseCors();
     app.UseRateLimiter();
     app.UseHealthEndpoints(app.Lifetime);
+    app.UseMiddleware<OriginGuardMiddleware>();
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapMcp().RequireAuthorization();

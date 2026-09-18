@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 
@@ -10,6 +11,9 @@ namespace McpServerTemplate.Providers.SmhiObs;
 /// network of weather stations across Sweden and the Nordic region. The API automatically
 /// finds the nearest active station to the requested coordinates.
 /// </summary>
+// contract-002 · G-4 — defence in depth beneath the policy filter of Phase 2. If a
+// future endpoint is mapped without RequireAuthorization, these types are still closed.
+[Authorize]
 [McpServerToolType]
 public static class SmhiObsTools
 {

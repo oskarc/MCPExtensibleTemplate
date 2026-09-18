@@ -73,6 +73,10 @@ public class ResourceMetadataTests
         info.Environment["Authentication__IdentityProviders__corp__Algorithms__0"] = "RS256";
         info.Environment["Authentication__IdentityProviders__corp__ScopeCatalog__0"] = "weather:read";
 
+        // contract-002 · G-12 — Production over loopback plaintext is refused unless a trusted
+        // proxy is declared. Here the harness is that proxy.
+        info.Environment["HttpTransport__KnownNetworks__0"] = "127.0.0.0/8";
+
         var process = Process.Start(info)!;
         var stderr = new StringBuilder();
         process.ErrorDataReceived += (_, e) =>

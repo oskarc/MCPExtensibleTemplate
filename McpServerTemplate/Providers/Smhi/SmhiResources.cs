@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using System.ComponentModel;
 using System.Text;
 using McpServerTemplate.Providers.Smhi.Models;
@@ -21,6 +22,9 @@ namespace McpServerTemplate.Providers.Smhi;
 ///
 /// Resources are OPTIONAL — a minimal provider only needs Tools.
 /// </summary>
+// contract-002 · G-4 — defence in depth beneath the policy filter of Phase 2. If a
+// future endpoint is mapped without RequireAuthorization, these types are still closed.
+[Authorize]
 [McpServerResourceType]
 public static class SmhiResources
 {

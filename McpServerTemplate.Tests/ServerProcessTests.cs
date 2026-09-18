@@ -246,10 +246,14 @@ public class ServerProcessTests
         // Replaces the API-key check this contract deleted. The guarantee is unchanged: a server
         // that cannot authenticate anyone must refuse to start rather than come up and discover
         // it on the first request.
+        // Valid in every respect except the one under test, so the refusal that comes back is
+        // the one this asserts. Without the trusted network declared, the transport guard refuses
+        // first and the test would pass on the wrong message.
         var (exitCode, stderr) = await RunToCompletionAsync(new Dictionary<string, string>
         {
             ["ASPNETCORE_ENVIRONMENT"] = "Production",
             ["Transport"] = "http",
+            ["HttpTransport__KnownNetworks__0"] = "127.0.0.0/8",
         });
 
         Assert.Equal(78, exitCode);
@@ -337,11 +341,16 @@ public class ServerProcessTests
     /// </summary>
     internal static Dictionary<string, string> IdentityEnvironment() => new()
     {
+        // (loopback declared below for G-12)
         ["Authentication__Resource"] = "https://mcp.example.com/mcp",
         ["Authentication__IdentityProviders__corp__Authority"] = "https://login.example.com",
         ["Authentication__IdentityProviders__corp__Issuer"] = "https://login.example.com/",
         ["Authentication__IdentityProviders__corp__Algorithms__0"] = "RS256",
         ["Authentication__IdentityProviders__corp__ScopeCatalog__0"] = "weather:read",
+        // contract-002 · G-12 — these run as Production over loopback plaintext, which the
+        // transport guard refuses unless the deployment says a proxy is in front. Declaring the
+        // loopback network is the honest form of that here: the test harness is the proxy.
+        ["HttpTransport__KnownNetworks__0"] = "127.0.0.0/8",
     };
 
     private static async Task<HttpServer> StartHttpAsync()
@@ -541,6 +550,28 @@ public class ServerProcessTests
         {
             process.Kill(entireProcessTree: true);
         }
+    }
+
+    [Fact]
+    public async Task T8_a_foreign_origin_is_refused_before_the_token_is_examined()
+    {
+        // contract-002 · G-7. The C# SDK does not validate Origin and the specification requires
+        // it: without this a page in a browser drives this server using a session the browser
+        // already holds, and every downstream control sees a valid principal.
+        await using var server = await StartHttpAsync();
+
+        using var foreign = new HttpRequestMessage(HttpMethod.Post, "/");
+        foreign.Headers.Add("Origin", "https://evil.example");
+        using var refused = await server.Client.SendAsync(foreign);
+
+        // 403 rather than 401: refused for being cross-origin, not told whether a token would
+        // have helped.
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+
+        // A caller that sends no Origin at all — a CLI, a native client, server to server — is
+        // the ordinary case and is not affected.
+        using var native = await Post(server, token: null);
+        Assert.Equal(HttpStatusCode.Unauthorized, native.StatusCode);
     }
 
     // ── G-11: documented names are the names the server exposes ───────────────

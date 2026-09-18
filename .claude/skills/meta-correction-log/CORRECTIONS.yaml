@@ -316,6 +316,36 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-010
+    date: 2026-09-19
+    contract_id: contract-002
+    moment: M-04
+    grade: scope
+    intervention: redirected
+    agent_offered: |
+      Which do you mean by "look at"? Three readings, materially different:
+      1. Survey Phase 2 now [...] 2. Draw contract-003 now [...] 3. Finish contract-002 first —
+      seven guardrails and ten tests remain.
+      I'd do 1 alongside 3, and draw contract-003 once contract-002 is verified.
+    pioneer_said: |
+      That was very sloppy, add a driftlog about not completing the contract.
+      then do 3
+    reason_given: |
+      (carried in the statement: the contract was not completed)
+    noticed: |
+      not asked — the correction names what it is about, and the record shows it: contract-002
+      was approved and then left half-implemented across many turns.
+    would_have_been_right: |
+      not asked — finish the approved contract before proposing work beyond it.
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-19
   by_contract:

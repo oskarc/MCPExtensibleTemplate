@@ -150,3 +150,38 @@ entries:
     reviewed: null
     recurrence_count: 0
     related_drifts: []
+
+  - drift_id: drift-005
+    surfaced_in: 2026-09-19 / contract-002 implementation
+    surfaced_by: human
+    aspect: stop-on-triggers
+    description: |
+      contract-002 was approved and then left half-implemented while attention went elsewhere.
+      Six of twelve guardrails are done, one is partial, five are untouched, and two of thirteen
+      acceptance tests are written. The state was not reported until the pioneer asked about the
+      next contract and it had to be measured.
+
+      The pattern across the turns between approval and that question: kit machinery was run as
+      each stop-gate named it — consolidator three times, case clerk, learning sweep, drift
+      records — and each of those was legitimate work that the gate asked for. But between them
+      the contract advanced barely at all, and the next piece of it was announced three separate
+      times ("next is the token fixture") before any of it was written. Announcing a next step
+      repeatedly is not the same as taking it, and reads as progress while producing none.
+
+      Worse than the pace: when the pioneer asked about the next roadmap contract, the reply
+      offered to survey Phase 2 alongside finishing Phase 1. Proposing work beyond an approved
+      contract that is half-built invites exactly the drift that produced contract-001's defects,
+      and it was proposed by the agent that had just recorded that lesson twice.
+    evidence: |
+      Guardrail probe against the tree at a202abe: G-1, G-2, G-3, G-8, G-9, G-10 done; G-4 partial
+      (RequireAuthorization only, no AddAuthorizationFilters, no [Authorize] on tool types); G-5,
+      G-6, G-7, G-11, G-12 untouched. Tests present: T-1, T-9. Absent: T-2 through T-8, T-10 as
+      written, T-11, T-12. Pioneer correction C-010.
+    reaction: |
+      Correction recorded verbatim as C-010. The agent was directed to finish contract-002 before
+      anything beyond it, and did so from that point.
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 0
+    related_drifts: [drift-004]

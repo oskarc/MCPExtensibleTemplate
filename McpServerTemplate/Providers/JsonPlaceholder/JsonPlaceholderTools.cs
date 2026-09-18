@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using System.ComponentModel;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
@@ -30,6 +31,9 @@ namespace McpServerTemplate.Providers.JsonPlaceholder;
 /// DI NOTE: The SDK automatically resolves registered services as method parameters.
 /// <c>JsonPlaceholderApiClient</c> is injected because it was registered in <c>JsonPlaceholderServiceRegistration</c>.
 /// </summary>
+// contract-002 · G-4 — defence in depth beneath the policy filter of Phase 2. If a
+// future endpoint is mapped without RequireAuthorization, these types are still closed.
+[Authorize]
 [McpServerToolType]
 public static class JsonPlaceholderTools
 {
