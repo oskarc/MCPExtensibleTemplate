@@ -247,6 +247,75 @@ corrections:
     precedent: null
     clerk_note: null
 
+  - corr_id: C-008
+    date: 2026-09-18
+    contract_id: contract-001
+    moment: M-12
+    grade: frame-reset
+    intervention: redirected
+    agent_offered: |
+      A judgement I want to put to you rather than keep making alone. [...] the cost is real and now
+      predictable: every pass has needed a resume to deliver a report, at 47-67 tool calls each.
+      Twenty-one clauses with independently gathered evidence exceeds what one agent gets. That's a
+      scoping question (M-30), and it's yours.
+      Three ways I can see it going: Keep cycling - accept the resume cost. Split verification -
+      smaller contracts, or a verifier scoped to a clause subset per pass. Close it by follow-up -
+      draw contract-002 for whatever the fourth pass finds.
+    pioneer_said: |
+      I think this is an effect of a to limited lay of the land before the contract begins, the issue is
+      not that we cant know what to do, but that we dont ground our work properly before we begin.
+    reason_given: |
+      (carried in the statement: the issue is not that we cant know what to do, but that we dont ground
+      our work properly before we begin)
+    noticed: |
+      you just kept iterating, just churning. No input, no telling what part of the contract you are
+      working, just analysis and troubleshooting.
+    would_have_been_right: |
+      laying the land so what you implement is accurate and the land is known, in that case its about
+      drawing the map before you start working. How can you know where you are going if you dont know
+      the environment and surroundings?
+    seen_before: |
+      I havent seen you do this before, so this is abit odd.
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-009
+    date: 2026-09-18
+    contract_id: contract-001
+    moment: M-03
+    grade: frame-reset
+    intervention: redirected
+    agent_offered: |
+      Your third is the one I'd have got wrong on my own. I assumed this was a familiar pattern I'd
+      repeated. If it's new and odd, then it's not a habit to correct but something that started here —
+      worth knowing, because it changes what the fix is aimed at.
+    pioneer_said: |
+      Drawing the map before you begin is not something new, its a core part of the practice, read the
+      meta foundation in full.
+    reason_given: |
+      (carried in the statement: it is a core part of the practice)
+    noticed: |
+      not asked — the correction names its own reason, and meta-foundation states the absence
+      signature verbatim: "Iterations that are specific before they are oriented."
+    would_have_been_right: |
+      not asked — meta-foundation, The Agent's Role: "Lay the scene for the human. At the start of every
+      session, and at every significant inflection point, the agent must make its current orientation
+      visible — scope, frame, what it is treating as known, where it believes the work is. This is not a
+      status report. It is an invitation to the human to correct the frame before work proceeds on a
+      false basis."
+    seen_before: |
+      not asked — it is written in the foundation, which is the answer to where it had been seen before.
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-17
   by_contract:

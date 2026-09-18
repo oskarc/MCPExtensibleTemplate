@@ -493,6 +493,93 @@ observations:
     stewarded: n/a
 
 
+  - obs_id: O-016
+    date: 2026-09-18
+    source: verification
+    contract_id: contract-001
+    refs: [O-015]
+    statement: |
+      A lay of the land run against contract-001 after implementation, at the pioneer's direction,
+      to find out whether the contract holds. It does not, and four of the five corrections are one
+      mistake made four times: a clause names a guarantee over a space that was never enumerated,
+      and is written against the example that happened to be in view.
+
+      Executed findings:
+      1. G-4 and UC-3 guarantee error quality for "the demo provider". JsonPlaceholder maps status,
+         transport, timeout and open-circuit failures; neither SMHI client maps timeout or open
+         circuit, and both have circuit breakers. Driven over stdio against a dead upstream,
+         get_forecast answers call 1 with a recovery sentence and calls 2-5 with bare "An error
+         occurred invoking 'get_forecast'." Seven of the thirteen tools carry the defect that was
+         fixed in the demo provider because the clause named only that provider.
+      2. G-2 claims the exit-code space entirely. Eight configurations executed: four exit 78 as
+         promised; HttpTransport:Port non-numeric, HttpTransport:Port out of range, and
+         RateLimit:MaxCallsPerToolPerMinute=0 all exit 70. The last is an ArgumentOutOfRangeException
+         written during this contract.
+      3. T-5 reads "call each of its six tools". The tests call the client underneath them. Exactly
+         one of thirteen tools is invoked by any test at the tool layer, where argument validation,
+         the McpException conversion and formatting live.
+      4. T-6, "enumerate registered tools and run each against a recorded response", was never
+         automated.
+      5. G-11 and UC-8: PascalCase method names still presented to a reader as tool names in
+         docs/03-TESTING-STRATEGY.md:27 and docs/05-USAGE-GUIDE-BEGINNERS.md:44.
+
+      Open, not executed: SmhiObs shows the same missing catches by inspection only.
+
+      The structural point is sharper than the list. G-4 attaches the guarantee to one provider's
+      code rather than to the frame every provider passes through, so a provider added tomorrow
+      inherits nothing. The founding statement says the core is the frame that governs the
+      providers, with no loopholes — a guarantee written per-provider is the loophole, and no
+      amount of verification of that clause would have found it, because the clause was true of
+      the provider it named.
+
+      Every one of these was discoverable before a line was written. That is what the lay of the
+      land is for; here it was run afterwards, to restore order.
+    level_guess: principle
+    stated_confidence: 0.9
+    loaded_candidates: []
+    prompted: true
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
+  - obs_id: O-017
+    date: 2026-09-18
+    source: ser
+    contract_id: contract-001
+    refs: [O-016]
+    statement: |
+      What the re-alignment was worth, stated as a mechanism rather than as relief.
+
+      Before the lay of the land, five defects had been found across four verification passes and
+      each had been fixed where it was found. The next move looked obvious: two more providers
+      carry the same missing catches, so patch them. That move would have been wrong, and nothing
+      in the verification loop could have said so — every pass verifies clauses against the code,
+      and the clause was true of the provider it named.
+
+      The survey changed the action, not only the count. Laid out as a space rather than a list,
+      four of the five corrections were one mistake: a guarantee attached to a provider instead of
+      to the boundary every provider passes through. Read against the roadmap, that boundary is
+      already designed (Phase 2, IProviderModule and AddProviders with a PolicyValidator that
+      exits 78, resilience built from EgressPolicy, new HttpClient() in Providers/ a build error).
+      So the per-provider catch blocks written in Phase 0 are code Phase 2 deletes, and patching
+      two more providers would have tripled the thing to delete while re-teaching the habit that
+      produced it.
+
+      The transferable shape: verification asks whether the code matches the clause. It cannot ask
+      whether the clause is scoped to the right space, because it takes the clause as given. Only a
+      survey of the territory can, and if it is not run before the contract it has to be run after
+      — which is the same work at a worse price, paid in defects that shipped and fixes that must
+      be unwound.
+    level_guess: principle
+    stated_confidence: 0.9
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17

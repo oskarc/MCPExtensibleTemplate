@@ -273,6 +273,29 @@ public class ServerProcessTests
         Assert.DoesNotContain("   at ", stderr, StringComparison.Ordinal);
     }
 
+    [Theory]
+    // A malformed setting is the operator's mistake, not the server's fault. Each of these exited
+    // 70 with a stack trace, which sends whoever is on call looking for a bug in the code.
+    [InlineData("HttpTransport__Port", "notanumber", "http")]
+    [InlineData("HttpTransport__Port", "999999", "http")]
+    [InlineData("RateLimit__MaxCallsPerToolPerMinute", "0", "stdio")]
+    public async Task T3_a_malformed_setting_exits_78(string key, string value, string transport)
+    {
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPNETCORE_ENVIRONMENT"] = transport == "stdio" ? "Development" : "Production",
+            ["Transport"] = transport,
+            ["Authentication__ApiKey"] = "acceptance-test-key",
+            [key] = value,
+        };
+
+        var (exitCode, stderr) = await RunToCompletionAsync(environment);
+
+        Assert.Equal(78, exitCode);
+        Assert.Contains(key.Replace("__", ":", StringComparison.Ordinal), stderr, StringComparison.Ordinal);
+        Assert.DoesNotContain("   at ", stderr, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task T3_a_configuration_failure_never_exits_zero()
     {

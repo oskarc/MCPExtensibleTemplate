@@ -134,7 +134,9 @@ static async Task<int> RunHttpAsync(string[] args)
     // without this the host builds and then throws on the first route mapping.
     ConfigureMcpServer(builder.Services, configuration).WithHttpTransport();
 
-    var port = configuration.GetValue("HttpTransport:Port", 3001);
+    var port = ConfigurationGuard.IntegerInRange(
+        configuration, "HttpTransport:Port", minimum: 1, maximum: 65535, fallback: 3001,
+        because: "a TCP port");
     var bindAddress = configuration.GetValue("HttpTransport:BindAddress", "localhost") ?? "localhost";
 
     // Fail before binding rather than serving unauthenticated: the middleware that enforces the
@@ -266,7 +268,11 @@ static IMcpServerBuilder ConfigureMcpServer(IServiceCollection services, IConfig
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
         ?? "1.0.0";
 
-    var maxCallsPerToolPerMinute = configuration.GetValue("RateLimit:MaxCallsPerToolPerMinute", 10);
+    // A limit below 1 would reject every call to every tool; an operator who meant "unlimited"
+    // and typed 0 would take the whole server down with no error to read.
+    var maxCallsPerToolPerMinute = ConfigurationGuard.IntegerInRange(
+        configuration, "RateLimit:MaxCallsPerToolPerMinute", minimum: 1, maximum: 1_000_000,
+        fallback: 10, because: "calls per tool per minute");
     var throttle = new ToolCallThrottleFilter(maxCallsPerToolPerMinute);
     services.AddSingleton(throttle);
 

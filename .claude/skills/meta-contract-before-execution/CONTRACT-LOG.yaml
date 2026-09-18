@@ -207,307 +207,419 @@ contracts:
       by: kit-verifier
       method: mixed
       tests: {T-1: pass, T-2: pass, T-3: pass, T-4: pass, T-5: pass, T-6: pass, T-7: pass,
-              T-8: pass, T-9: pass, T-10: pass, T-11: pass, T-12: pass, T-13: pass}
-      corrections_from_tests: 0
-      corrections_from_reading: 3
+              T-8: pass, T-9: pass, T-10: pending, T-11: pass, T-12: fail, T-13: pending}
+      corrections_from_tests: 1
+      corrections_from_reading: 1
       tests_note: |
-        Third report, at head 373c462 (= origin/epic/security-hardening), after the evidence in
-        verification_history arrived. dotnet build McpServerTemplate.sln -warnaserror: 0 warnings,
-        0 errors. dotnet test McpServerTemplate.sln --configuration Release: 98 passed, 0 failed,
-        read off a trx so each T-x id was taken from its own named test. CI run 35291401076 for
-        this head: every step green (Restore locked, Build warnings-are-errors, Test, Audit
-        packages, Secret scan).
-        None of the three corrections below came from a red test; all came from driving the built
-        server. corrections_from_tests is therefore 0 and they are counted in the other bucket.
-        Halves of Tier 4 that no automated test reaches were executed here rather than read:
-          T-3 both halves - a provider BaseUrl over http, which T-3 itself calls the configuration
-                            error, exits 70 with a stack trace, not 78; the HTTP transport started
-                            on an occupied 127.0.0.1:54311 exits 70. Neither exits 0, which is the
-                            stated failure condition of T-3, so T-3 is recorded pass - but its
-                            stated expectation of 78 for the configuration error is not met, and
-                            that is the correction on G-2. No automated T-3 test drives the
-                            BaseUrl case.
-          T-4 key set     - 85 calls to invented tool names over stdio (40 distinct + 45 repeats
-                            of one): all 85 answered Unknown tool, none rate-limited, so no
-                            limiter is minted for an unregistered name. Non-vacuity: 14 calls to
-                            the registered get_blog_post gave 10 through and 4 rate-limited.
-          T-8 startup     - /healthz 200 alive and /readyz 200 ready without a credential; a grep
-                            over McpServerTemplate/ finds no IHostedService, BackgroundService,
-                            AddHostedService or health-check registration.
-          T-10 CI         - all three fixtures in an out-of-tree clone of 373c462: a planted AKIA
-                            key gives secret scan exit 1; an ApiKey value in appsettings.json
-                            gives secret scan exit 1; Newtonsoft.Json 9.0.1 gives NU1903 Warning
-                            As Error and Build FAILED; the same package added without updating the
-                            lock gives NU1004 and restore refuses --locked-mode.
-          T-13            - git ls-remote origin: refs/heads/epic/security-hardening is
-                            373c4622d8444611967fdd442b9ad3be366c5faa, identical to local HEAD; the
-                            only modified path is .claude/skills/meta-ledger/telemetry.log.
-        Not executed here: the T-7 half that stalls an upstream and counts attempts. The automated
-        T-7 tests cover the budget arithmetic and the InfiniteTimeSpan client timeout only; the
-        attempt count was not re-run in this pass (see UC-5).
-        Independent of the tests, this verifier drove the Release build over stdio in several
-        sessions: tools/list gives 13 tools and all 13 returned real data from their real
-        upstreams. Probe method: stderr drained on its own thread as raw bytes, so a blocked pipe
-        could not be mistaken for a hang - the drain died once on a non-UTF-8 byte and was
-        repaired before any finding was taken from it.
+        FOURTH REPORT - IN PROGRESS. Clauses are written as they are established, so a partial
+        list means the pass was cut short, not that the missing clauses passed.
       clauses:
-        - clause: UC-1
-          verdict: verified
-          evidence: |
-            T-1 and T-2 pass (ServerProcessTests): stdio in Development answers initialize on
-            stdout and binds no TCP port; Production and Staging exit 78. Independently, this
-            verifier ran nine stdio sessions against the Release build at 373c462 and drove 13
-            live tool calls through stdin/stdout, with no listening socket involved.
-        - clause: UC-2
-          verdict: verified
-          evidence: |
-            Executed at 373c462: started with HttpTransport__BindAddress=127.0.0.1 and port 54312,
-            netstat showed exactly one listener for the pid - TCP 127.0.0.1:54312 - so it listens
-            only on the configured address. Order observed end to end on the running server: a
-            foreign Host header gets 400 even on /healthz, which needs no credential, while / and
-            /mcp without a key get 401 Missing API key, and / with the key gets 405. Failure to
-            bind is a failure: started on an occupied 127.0.0.1:54311 the process exited 70 with a
-            stack trace, not 0. Order read at Program.cs:232-239.
         - clause: UC-3
-          verdict: corrected
+          verdict: verified
           evidence: |
-            Most of this clause holds, and one upstream-failure shape still reaches the caller
-            naming nothing. It is a different shape from the two earlier reports.
-            Holds: all six demo tools returned real records live (post #1 with title and body, 5
-            comments, 20 todos, created ids 101/501/201). With BaseUrl pointed at a host that
-            404s, the first failing call carries its recovery to the client over stdio - "post 1
-            does not exist upstream. Do not retry; check the id. JSONPlaceholder serves posts
-            1-100 and users 1-10." - and HTTP 405 on a write tool; against an unresolvable host,
-            "Unable to reach the JSONPlaceholder API for post 1. Check network connectivity and
-            try again; if it persists, confirm Providers:JsonPlaceholder:BaseUrl." isError=true,
-            the message intact through the filter pipeline.
-            What is actually true, and not met: once the upstream keeps failing, the Polly circuit
-            breaker inside the standard resilience handler opens, and BrokenCircuitException is
-            not one of the types JsonPlaceholderApiClient.SendAsync maps
-            (JsonPlaceholderApiClient.cs:51-72 catches HttpRequestException,
-            TimeoutRejectedException and TaskCanceledException only). Executed over stdio with
-            Providers__JsonPlaceholder__BaseUrl=https://no-such-host-verifier-xyz.invalid: call 1
-            answers with the recovery sentence, and every call after the breaker opens answers
-            "An error occurred invoking get_blog_post." - or the same for get_post_comments and
-            get_user_todos - which names nothing to act on. Server stderr for those calls reads
-            "Polly.CircuitBreaker.BrokenCircuitException: The circuit is now open and is not
-            allowing calls." A persistently failing upstream is the ordinary case this clause is
-            about, so during an outage most calls name no recovery.
-            Recorded beside it, same shape, smaller: an out-of-range argument also reaches the
-            client as "An error occurred invoking get_blog_post." - the tool throws
-            ArgumentException with the text "Post ID must be between 1 and 100."
-            (JsonPlaceholderTools.cs:46), and the SDK surfaces only McpException messages, so the
-            hint the tool wrote never leaves the process.
-            What would close it: SendAsync mapping BrokenCircuitException, and any other
-            pipeline-level failure, to an McpException that names a recovery; tools raising
-            McpException rather than ArgumentException for argument errors; and a test that drives
-            a failing upstream through the registered resilience pipeline rather than a bare
-            HttpClient.
+            Returns the actual record: all six demo tools called live over stdio at ed2f25f
+            returned real data (post #1 with title and body, 5 comments, 20 todos, created ids
+            101/501/201). An upstream error names the recovery in all three shapes this verifier
+            could produce, which is the close the third report asked for:
+              status error   - BaseUrl at a host that 404s: "post 1 does not exist upstream. Do
+                               not retry; check the id." and HTTP 405 on the three write tools,
+                               each naming what to do.
+              unreachable    - BaseUrl at an unresolvable host: call 1 answers "Unable to reach
+                               the JSONPlaceholder API for post 1. Check network connectivity..."
+              circuit open   - calls 2 to 7 in the same session, after the breaker trips, answer
+                               "The upstream is unavailable and this server has stopped calling
+                               it for post 1 after repeated failures. Do not retry for a minute
+                               or so." Server stderr confirms BrokenCircuitException underneath.
+                               This is the shape the third report corrected; it is closed.
+            Every reply carried isError=true with the message intact to the client. No empty
+            shell was reported as success. T-5 passes (13 round-trip and error-path tests,
+            including T5_an_open_circuit_names_a_recovery and T5_an_unreachable_upstream_names_
+            a_recovery).
+            Named because it bears on how this clause was closed rather than on the verdict: the
+            T-5 error cases still build the client over a bare HttpMessageHandler
+            (JsonPlaceholderErrorPathTests.cs:33-36, 105-108) and inject the exception types by
+            hand, so no Tier 4 test drives a failure through the registered resilience pipeline.
+            The circuit-open behaviour above was established by this verifier against the running
+            server, not by a test.
         - clause: UC-4
           verdict: verified
           evidence: |
             Judged against the pioneer-authorised revision of 2026-09-18 (climate tool rebuilt on
-            the CSV endpoint, not removed; tests_changed [T-6], dated no later than this report,
-            so it is applied). The six MetObsArchiveCsv tests of T-6 pass. Independently:
-            tools/list gives 13 tools and this verifier called every one against its real
-            upstream - all 13 returned data, get_monthly_climate included (SMHI Corrected Archive
-            - Lufttemperatur, Station: Stockholm-Observatoriekullen A, Month: July). No registered
-            tool lacks a path to success.
-        - clause: UC-5
-          verdict: verified
-          evidence: |
-            T-7 passes (eight ResilienceBudget tests), including the theory over the three shipped
-            budgets (10/2/35, 20/2/70, 5/2/20) and T7_the_client_timeout_never_caps_the_pipeline,
-            which pins ResilienceBudget.ClientTimeout to InfiniteTimeSpan. All three providers
-            assign it to HttpClient.Timeout (SmhiServiceRegistration.cs:67,
-            SmhiObsServiceRegistration.cs:52, JsonPlaceholderServiceRegistration.cs:63), so no
-            client-level timeout caps the pipeline. Retries are live rather than theoretical:
-            against an unresolvable host a single tool call logged repeated HttpRequestException
-            attempts and then opened the circuit breaker, which only trips on repeated failures.
-            Named rather than implied: this pass did not re-run the stall-and-count-attempts half
-            of T-7, and no automated test counts attempts. The exact attempt count rests on the
-            out-of-tree probe recorded in verification_history, not on evidence gathered here.
-        - clause: UC-6
-          verdict: verified
-          evidence: |
-            T-8 passes; independently, on a running server at 127.0.0.1:54312, /healthz returned
-            200 alive and /readyz 200 ready, both without a credential and both immediately.
-            Startup makes no upstream call: a grep over McpServerTemplate/ finds zero hits for
-            IHostedService, BackgroundService, AddHostedService or AddHealthChecks, and
-            HealthEndpoints.cs answers from process lifetime state alone. In the live stdio
-            sessions the first upstream request happened only when a tool was called.
-        - clause: UC-7
-          verdict: verified
-          evidence: |
-            One command each at 373c462: dotnet build McpServerTemplate.sln -warnaserror (0
-            warnings, 0 errors) and dotnet test McpServerTemplate.sln --configuration Release (98
-            passed, 0 failed). The same runs on every push: .github/workflows/ci.yml carries
-            on: push, and CI run 35291401076 for this head reports every step successful (Restore
-            locked, Build warnings-are-errors, Test, Audit packages, Secret scan). All three
-            failure modes were seeded in an out-of-tree clone of this head and all three fail the
-            pipeline: planted AKIA key gives scan exit 1; a committed appsettings ApiKey value
-            gives scan exit 1; Newtonsoft.Json 9.0.1 gives NU1903 Warning As Error and Build
-            FAILED; a lock file out of step gives NU1004 under --locked-mode.
+            the CSV endpoint rather than removed; tests_changed [T-6], dated no later than any
+            verification.date, so it is applied). T-6 passes: six MetObsArchiveCsv tests.
+            Independently at ed2f25f: tools/list gives 13 tools and this verifier called every one
+            against its real upstream - all 13 returned data, get_monthly_climate included ("SMHI
+            Corrected Archive - Lufttemperatur, Station: Stockholm-Observatoriekullen A, Month:
+            July, 2025: min 10.8, max 29.5, mean 20.0 celsius (744 readings)"). No registered tool
+            lacks a path to success.
         - clause: UC-8
-          verdict: verified
-          evidence: |
-            T-12 passes both ways. Independently: the tools/list of the server gives 13 snake_case
-            names and each appears in README.md or docs/ (between 2 and 9 files each, counted per
-            name).
-        - clause: UC-9
-          verdict: verified
-          evidence: |
-            git ls-remote origin gives 373c4622d8444611967fdd442b9ad3be366c5faa for
-            refs/heads/epic/security-hardening, identical to local HEAD, and CI is green on it.
-            The working tree carries one modified path,
-            .claude/skills/meta-ledger/telemetry.log - a kit record, no project file.
-        - clause: G-1
-          verdict: verified
-          evidence: |
-            T-1, T-2 pass. Program.cs:102-123: stdio builds Host.CreateApplicationBuilder - no web
-            host, no Kestrel - and throws ConfigurationException unless the environment is
-            Development; the environment is read from ASPNETCORE_ENVIRONMENT or
-            DOTNET_ENVIRONMENT (Program.cs:54-57), so setting only one does not escape the guard.
-            T-2 covers Production and Staging.
-        - clause: G-2
           verdict: corrected
           evidence: |
-            Never 0 holds, and exit 70 for an unhandled failure holds. Configuration failure exits
-            78 does not hold for every configuration failure.
-            What is actually true: the case T-3 itself names as the configuration error - a
-            provider BaseUrl over http - exits 70, not 78. Executed at 373c462 with
-            Providers__JsonPlaceholder__BaseUrl=http://jsonplaceholder.typicode.com,
-            Transport=stdio, Development: exit 70 with a stack trace through
-            JsonPlaceholderServiceRegistration.AddJsonPlaceholderProvider (line 44) and
-            Program.cs:297. The provider registrations throw InvalidOperationException, not
-            ConfigurationException (JsonPlaceholderServiceRegistration.cs:39-46, and the same
-            shape in the two SMHI registrations), and Program.cs:83-94 maps only
-            ConfigurationException to 78. An operator who mistypes a provider URL gets a stack
-            trace and a software-failure code instead of the configuration code this guarantee
-            promises.
-            The three automated T-3 tests never reach this: they cover an unknown transport and
-            http without an API key, both of which do raise ConfigurationException, plus a loop
-            asserting neither exits 0. Exit 70 for an unhandled failure was executed here: the
-            HTTP transport on an occupied 127.0.0.1:54311 exits 70.
-            What would close it: the provider registrations raising ConfigurationException for a
-            malformed or non-HTTPS BaseUrl, and a test that starts the server with one.
-        - clause: G-3
-          verdict: verified
-          evidence: |
-            Order read at Program.cs:232-239: UseForwardedHeaders, UseHttpsRedirection,
-            UseHostFiltering, UseCors, UseRateLimiter, UseHealthEndpoints, ApiKeyMiddleware,
-            MapMcp - the order of the contract with health inserted before authentication (Tier 4
-            lists the full order as untested; the load-bearing part was observed). T-4 passes, and
-            on a running server a foreign Host is refused 400 ahead of /healthz, an endpoint that
-            needs no credential, while /mcp without a key is 401. Throttle key set, which no test
-            reaches: 85 calls to invented tool names over stdio minted no limiter - all 85
-            answered Unknown tool, none was rate-limited - while the registered get_blog_post was
-            limited from its 11th call in the same minute. ToolCallThrottleFilter.MatchedToolName
-            reads context.MatchedPrimitive, never the string the caller sent
-            (ToolCallThrottleFilter.cs:72-77, 95-99).
-        - clause: G-4
-          verdict: corrected
-          evidence: |
-            The deserialisation half is verified by T-5, which passes: six round-trip tests bind a
-            recorded camelCase payload (ids 1 and 101, populated titles and collections) with
-            JsonSerializerDefaults.Web plus an explicit JsonPropertyName on every model property.
-            The second half - or throws with a recovery hint - does not hold for every failure.
-            What is actually true: when the upstream keeps failing, the circuit breaker in the
-            resilience pipeline opens and the tool throws Polly BrokenCircuitException, which
-            SendAsync does not map, so the caller is shown "An error occurred invoking
-            get_blog_post." Executed over stdio at 373c462 against an unresolvable host: call 1
-            named a recovery, calls 2 to 4 named nothing, with BrokenCircuitException in the
-            server log.
-            Why T-5 passes anyway, which is the part worth keeping: every T-5 error test builds
-            the client as new JsonPlaceholderApiClient(new HttpClient(new StatusHandler(status)))
-            at JsonPlaceholderErrorPathTests.cs:32-36 - a bare handler with no resilience
-            pipeline, so no BrokenCircuitException can arise in the test. The guarantee is tested
-            in a composition the server does not ship.
-            What would close it: mapping BrokenCircuitException in SendAsync, and an error-path
-            test that goes through the registered pipeline.
+            One direction holds and the other does not, and T-12 run as written is what separates
+            them.
+            Holds: every one of the 13 names the server exposes appears in README.md or docs/
+            (between 2 and 9 files each, counted per name), and every snake_case tool-shaped
+            identifier in the docs is a name the server exposes. Both automated T-12 tests pass.
+            What is actually true, and not met: T-12's second stated failure condition - "a
+            PascalCase spelling of a tool name appears in the docs" - is met by the tree. A sweep
+            of README.md and docs/**.md for the PascalCase form of each of the 13 names returns 13
+            occurrences in 6 files. Five of them are presented to a reader as tool names, not as
+            C# identifiers:
+              README.md:45  "SmhiTools.cs  # MCP tools (GetForecast, GetCurrentWeather, etc.)"
+              README.md:49  "SmhiObsTools.cs  # GetRecentTemperature, GetTemperatureHistory, etc."
+              README.md:36  "JsonPlaceholderTools.cs  # MCP tools (Get/CreateBlogPost, etc.)"
+              docs/05-USAGE-GUIDE-BEGINNERS.md:44  "Claude: (uses GetCurrentWeather tool)"
+              docs/03-TESTING-STRATEGY.md:27  "Test that `GetForecast()` tool ..."
+            A reader wiring a client from the beginners' guide or the README tree is told the tool
+            is GetCurrentWeather; the callable name is get_current_weather. The remaining eight
+            occurrences are plainly C# call sites (docs/01-ARCHITECTURE.md:75, 143, 198, 200 and
+            docs/06-SECURITY-ROADMAP.md:117, 334).
+            Why the automated test passes anyway: T12_every_documented_tool_name_is_one_the_server
+            _exposes implements the PascalCase half only inside markdown tool tables
+            (ServerProcessTests.cs:516-548, anchored on a "| Tool |" header), which is narrower
+            than the condition Tier 4 states. None of the five occurrences above is in a table.
+            What would close it: those five lines spelling the wire names, and T-12's PascalCase
+            check applied to the whole of a document rather than to tool tables only.
         - clause: G-5
           verdict: verified
           evidence: |
             Judged against the pioneer-authorised revision (2026-09-18, tests_changed [T-6]):
-            rebuild on the CSV endpoint. The six T-6 tests pass, including filters by month before
-            applying the cap and reports an unrecognisable archive rather than returning nothing,
-            and MetObsArchiveCsv.cs reads the CSV archive. Live, all 13 registered tools answered
-            their real upstreams, so no tool without a path to success remains registered.
-        - clause: G-6
-          verdict: verified
-          evidence: |
-            T-7 passes, including the theory over the three shipped budgets (10/2/35, 20/2/70,
-            5/2/20) and the refusal cases: ResilienceBudget.Create refuses a total timeout at or
-            below attempt x (1 + retries), and it is called during service registration
-            (SmhiServiceRegistration.cs:50, SmhiObsServiceRegistration.cs:38,
-            JsonPlaceholderServiceRegistration.cs:50), so the refusal lands at startup rather than
-            on the first call. All three assign ResilienceBudget.ClientTimeout (InfiniteTimeSpan)
-            to HttpClient.Timeout.
-        - clause: G-7
-          verdict: verified
-          evidence: |
-            T-8 passes and was reproduced directly on a running server: /healthz 200 alive,
-            /readyz 200 ready, no credential, answered immediately. HealthEndpoints.cs answers
-            from IHostApplicationLifetime state alone; no startup probe, hosted service or
-            background service exists anywhere in McpServerTemplate/ (grep: zero hits).
-        - clause: G-8
-          verdict: verified
-          evidence: |
-            The three repository-invariant tests of T-9 pass. One solution file; dotnet build
-            McpServerTemplate.sln -warnaserror gives 0 warnings and 0 errors;
-            Directory.Build.props:8,11 sets net10.0 and TreatWarningsAsErrors for every project
-            and neither csproj overrides TargetFramework; ModelContextProtocol and
-            ModelContextProtocol.AspNetCore are both 2.2.0 (McpServerTemplate.csproj:11-12). No
-            suppression in the tree: a grep over .cs, .csproj and .props for pragma warning,
-            NoWarn and SuppressMessage returns one hit, the invariant test asserting their
-            absence. The .editorconfig analyser severities (CA1305, CA1848, CA1707) are the agent
-            revision of 2026-09-18 recorded in this entry - analyser severities, not silenced SDK
-            deprecations; whether that revision should stand is a pioneer judgement, not a
-            verification finding.
-        - clause: G-9
-          verdict: verified
-          evidence: |
-            ci.yml runs on push (and pull_request) with locked restore, build -warnaserror, test,
-            package audit and secret scan, and run 35291401076 for head 373c462 executed every one
-            of those steps to success. Executed against fixtures in an out-of-tree clone of this
-            head: an AKIA key in a tracked file gives scan exit 1; an ApiKey holding a value in
-            appsettings.json gives scan exit 1; Newtonsoft.Json 9.0.1 gives NU1903 Warning As
-            Error and Build FAILED; the same package added without updating packages.lock.json
-            gives NU1004 and restore refuses --locked-mode.
-            Carried forward and still true, not a defect in the clause: the grep in the Audit
-            packages step for the phrase about vulnerable packages never fires, because dotnet
-            list package --vulnerable performs its own restore and that restore fails first on
-            NU1903. The job still fails, and the build step has already failed by then.
-        - clause: G-10
-          verdict: verified
-          evidence: |
-            scripts/secret-scan.sh run over the tree at 373c462: 200 tracked files, 3 appsettings
-            files, PASS with no credential found, exit 0. The two T-11 tests pass - no
-            credential-shaped key holds a value in any appsettings file (Authentication:ApiKey in
-            appsettings.json is the empty string), and McpServerTemplate.csproj:6 carries
-            UserSecretsId mcp-server-template-4f2a1c7e, so the user-secrets route the error
-            messages recommend exists. Both passes of the scan were shown non-vacuous by the
-            planted fixtures (see G-9).
+            rebuild on the CSV endpoint. T-6's six tests pass, including
+            T6_ReadAsync_filters_by_month_before_applying_the_cap and
+            T6_ReadAsync_reports_an_unrecognisable_archive_rather_than_returning_nothing, and
+            MetObsArchiveCsv.cs reads the CSV archive. Live at ed2f25f all 13 registered tools
+            answered their real upstreams, so no tool without a path to success remains
+            registered.
         - clause: G-11
-          verdict: verified
+          verdict: corrected
           evidence: |
-            The two T-12 tests pass. Independently: tools/list over stdio gives add_post_comment,
-            create_blog_post, create_user_todo, get_blog_post, get_current_weather, get_forecast,
-            get_forecast_model_info, get_monthly_climate, get_post_comments,
-            get_precipitation_history, get_recent_temperature, get_temperature_history,
-            get_user_todos, and every one of the 13 is named in README.md or docs/.
-        - clause: G-12
-          verdict: verified
-          evidence: |
-            origin/epic/security-hardening is 373c4622d8444611967fdd442b9ad3be366c5faa, identical
-            to the local HEAD, with CI green on it (run 35291401076). The only uncommitted path is
-            the telemetry log of the kit itself. The remote head is three commits past the
-            delivery commit of the contract: 66e8477 (CI repair), addc334 (demo provider error
-            mapping) and 57806f1 (transport-level error mapping, with the earlier filter change
-            reverted).
-      summary: {verified: 18, corrected: 3, open: 0}
+            Same finding as UC-8, stated against this clause's words. "Documented tool names equal
+            the names the server exposes" holds for every snake_case name in both directions (13
+            exposed, all documented; no documented snake_case name the server does not expose;
+            both T-12 tests pass). It does not hold for the PascalCase spellings T-12's own
+            failure condition names: README.md:36, 45, 49, docs/05-USAGE-GUIDE-BEGINNERS.md:44 and
+            docs/03-TESTING-STRATEGY.md:27 present GetForecast, GetCurrentWeather,
+            Get/CreateBlogPost, GetRecentTemperature and GetTemperatureHistory as tools, and none
+            of those five is a name the server exposes.
+            What would close it: those five lines rewritten to the wire names, and the automated
+            PascalCase check widened past tool tables.
+      summary: {verified: 3, corrected: 2, open: 0}
       open_needs: []
     verification_history:
+      - superseded_report: kit-verifier, 2026-09-18 (third report, head 373c462)
+        superseded_on: 2026-09-18
+        superseded_by: |
+          The kit-verifier report above, the fourth pass, at head ed2f25f. Commit a433cfe
+          closed the three clauses this third report corrected: T-3 now has a test for its own
+          named case (a plaintext provider URL exits 78), and the circuit-open failure names a
+          recovery. UC-3 and G-2 move to verified; G-4 is corrected again, for a fourth and
+          different reason (an empty required string argument on the three write tools).
+        block: |
+          verification:
+            date: 2026-09-18
+            by: kit-verifier
+            method: mixed
+            tests: {T-1: pass, T-2: pass, T-3: pass, T-4: pass, T-5: pass, T-6: pass, T-7: pass,
+                    T-8: pass, T-9: pass, T-10: pass, T-11: pass, T-12: pass, T-13: pass}
+            corrections_from_tests: 0
+            corrections_from_reading: 3
+            tests_note: |
+              Third report, at head 373c462 (= origin/epic/security-hardening), after the evidence in
+              verification_history arrived. dotnet build McpServerTemplate.sln -warnaserror: 0 warnings,
+              0 errors. dotnet test McpServerTemplate.sln --configuration Release: 98 passed, 0 failed,
+              read off a trx so each T-x id was taken from its own named test. CI run 35291401076 for
+              this head: every step green (Restore locked, Build warnings-are-errors, Test, Audit
+              packages, Secret scan).
+              None of the three corrections below came from a red test; all came from driving the built
+              server. corrections_from_tests is therefore 0 and they are counted in the other bucket.
+              Halves of Tier 4 that no automated test reaches were executed here rather than read:
+                T-3 both halves - a provider BaseUrl over http, which T-3 itself calls the configuration
+                                  error, exits 70 with a stack trace, not 78; the HTTP transport started
+                                  on an occupied 127.0.0.1:54311 exits 70. Neither exits 0, which is the
+                                  stated failure condition of T-3, so T-3 is recorded pass - but its
+                                  stated expectation of 78 for the configuration error is not met, and
+                                  that is the correction on G-2. No automated T-3 test drives the
+                                  BaseUrl case.
+                T-4 key set     - 85 calls to invented tool names over stdio (40 distinct + 45 repeats
+                                  of one): all 85 answered Unknown tool, none rate-limited, so no
+                                  limiter is minted for an unregistered name. Non-vacuity: 14 calls to
+                                  the registered get_blog_post gave 10 through and 4 rate-limited.
+                T-8 startup     - /healthz 200 alive and /readyz 200 ready without a credential; a grep
+                                  over McpServerTemplate/ finds no IHostedService, BackgroundService,
+                                  AddHostedService or health-check registration.
+                T-10 CI         - all three fixtures in an out-of-tree clone of 373c462: a planted AKIA
+                                  key gives secret scan exit 1; an ApiKey value in appsettings.json
+                                  gives secret scan exit 1; Newtonsoft.Json 9.0.1 gives NU1903 Warning
+                                  As Error and Build FAILED; the same package added without updating the
+                                  lock gives NU1004 and restore refuses --locked-mode.
+                T-13            - git ls-remote origin: refs/heads/epic/security-hardening is
+                                  373c4622d8444611967fdd442b9ad3be366c5faa, identical to local HEAD; the
+                                  only modified path is .claude/skills/meta-ledger/telemetry.log.
+              Not executed here: the T-7 half that stalls an upstream and counts attempts. The automated
+              T-7 tests cover the budget arithmetic and the InfiniteTimeSpan client timeout only; the
+              attempt count was not re-run in this pass (see UC-5).
+              Independent of the tests, this verifier drove the Release build over stdio in several
+              sessions: tools/list gives 13 tools and all 13 returned real data from their real
+              upstreams. Probe method: stderr drained on its own thread as raw bytes, so a blocked pipe
+              could not be mistaken for a hang - the drain died once on a non-UTF-8 byte and was
+              repaired before any finding was taken from it.
+            clauses:
+              - clause: UC-1
+                verdict: verified
+                evidence: |
+                  T-1 and T-2 pass (ServerProcessTests): stdio in Development answers initialize on
+                  stdout and binds no TCP port; Production and Staging exit 78. Independently, this
+                  verifier ran nine stdio sessions against the Release build at 373c462 and drove 13
+                  live tool calls through stdin/stdout, with no listening socket involved.
+              - clause: UC-2
+                verdict: verified
+                evidence: |
+                  Executed at 373c462: started with HttpTransport__BindAddress=127.0.0.1 and port 54312,
+                  netstat showed exactly one listener for the pid - TCP 127.0.0.1:54312 - so it listens
+                  only on the configured address. Order observed end to end on the running server: a
+                  foreign Host header gets 400 even on /healthz, which needs no credential, while / and
+                  /mcp without a key get 401 Missing API key, and / with the key gets 405. Failure to
+                  bind is a failure: started on an occupied 127.0.0.1:54311 the process exited 70 with a
+                  stack trace, not 0. Order read at Program.cs:232-239.
+              - clause: UC-3
+                verdict: corrected
+                evidence: |
+                  Most of this clause holds, and one upstream-failure shape still reaches the caller
+                  naming nothing. It is a different shape from the two earlier reports.
+                  Holds: all six demo tools returned real records live (post #1 with title and body, 5
+                  comments, 20 todos, created ids 101/501/201). With BaseUrl pointed at a host that
+                  404s, the first failing call carries its recovery to the client over stdio - "post 1
+                  does not exist upstream. Do not retry; check the id. JSONPlaceholder serves posts
+                  1-100 and users 1-10." - and HTTP 405 on a write tool; against an unresolvable host,
+                  "Unable to reach the JSONPlaceholder API for post 1. Check network connectivity and
+                  try again; if it persists, confirm Providers:JsonPlaceholder:BaseUrl." isError=true,
+                  the message intact through the filter pipeline.
+                  What is actually true, and not met: once the upstream keeps failing, the Polly circuit
+                  breaker inside the standard resilience handler opens, and BrokenCircuitException is
+                  not one of the types JsonPlaceholderApiClient.SendAsync maps
+                  (JsonPlaceholderApiClient.cs:51-72 catches HttpRequestException,
+                  TimeoutRejectedException and TaskCanceledException only). Executed over stdio with
+                  Providers__JsonPlaceholder__BaseUrl=https://no-such-host-verifier-xyz.invalid: call 1
+                  answers with the recovery sentence, and every call after the breaker opens answers
+                  "An error occurred invoking get_blog_post." - or the same for get_post_comments and
+                  get_user_todos - which names nothing to act on. Server stderr for those calls reads
+                  "Polly.CircuitBreaker.BrokenCircuitException: The circuit is now open and is not
+                  allowing calls." A persistently failing upstream is the ordinary case this clause is
+                  about, so during an outage most calls name no recovery.
+                  Recorded beside it, same shape, smaller: an out-of-range argument also reaches the
+                  client as "An error occurred invoking get_blog_post." - the tool throws
+                  ArgumentException with the text "Post ID must be between 1 and 100."
+                  (JsonPlaceholderTools.cs:46), and the SDK surfaces only McpException messages, so the
+                  hint the tool wrote never leaves the process.
+                  What would close it: SendAsync mapping BrokenCircuitException, and any other
+                  pipeline-level failure, to an McpException that names a recovery; tools raising
+                  McpException rather than ArgumentException for argument errors; and a test that drives
+                  a failing upstream through the registered resilience pipeline rather than a bare
+                  HttpClient.
+              - clause: UC-4
+                verdict: verified
+                evidence: |
+                  Judged against the pioneer-authorised revision of 2026-09-18 (climate tool rebuilt on
+                  the CSV endpoint, not removed; tests_changed [T-6], dated no later than this report,
+                  so it is applied). The six MetObsArchiveCsv tests of T-6 pass. Independently:
+                  tools/list gives 13 tools and this verifier called every one against its real
+                  upstream - all 13 returned data, get_monthly_climate included (SMHI Corrected Archive
+                  - Lufttemperatur, Station: Stockholm-Observatoriekullen A, Month: July). No registered
+                  tool lacks a path to success.
+              - clause: UC-5
+                verdict: verified
+                evidence: |
+                  T-7 passes (eight ResilienceBudget tests), including the theory over the three shipped
+                  budgets (10/2/35, 20/2/70, 5/2/20) and T7_the_client_timeout_never_caps_the_pipeline,
+                  which pins ResilienceBudget.ClientTimeout to InfiniteTimeSpan. All three providers
+                  assign it to HttpClient.Timeout (SmhiServiceRegistration.cs:67,
+                  SmhiObsServiceRegistration.cs:52, JsonPlaceholderServiceRegistration.cs:63), so no
+                  client-level timeout caps the pipeline. Retries are live rather than theoretical:
+                  against an unresolvable host a single tool call logged repeated HttpRequestException
+                  attempts and then opened the circuit breaker, which only trips on repeated failures.
+                  Named rather than implied: this pass did not re-run the stall-and-count-attempts half
+                  of T-7, and no automated test counts attempts. The exact attempt count rests on the
+                  out-of-tree probe recorded in verification_history, not on evidence gathered here.
+              - clause: UC-6
+                verdict: verified
+                evidence: |
+                  T-8 passes; independently, on a running server at 127.0.0.1:54312, /healthz returned
+                  200 alive and /readyz 200 ready, both without a credential and both immediately.
+                  Startup makes no upstream call: a grep over McpServerTemplate/ finds zero hits for
+                  IHostedService, BackgroundService, AddHostedService or AddHealthChecks, and
+                  HealthEndpoints.cs answers from process lifetime state alone. In the live stdio
+                  sessions the first upstream request happened only when a tool was called.
+              - clause: UC-7
+                verdict: verified
+                evidence: |
+                  One command each at 373c462: dotnet build McpServerTemplate.sln -warnaserror (0
+                  warnings, 0 errors) and dotnet test McpServerTemplate.sln --configuration Release (98
+                  passed, 0 failed). The same runs on every push: .github/workflows/ci.yml carries
+                  on: push, and CI run 35291401076 for this head reports every step successful (Restore
+                  locked, Build warnings-are-errors, Test, Audit packages, Secret scan). All three
+                  failure modes were seeded in an out-of-tree clone of this head and all three fail the
+                  pipeline: planted AKIA key gives scan exit 1; a committed appsettings ApiKey value
+                  gives scan exit 1; Newtonsoft.Json 9.0.1 gives NU1903 Warning As Error and Build
+                  FAILED; a lock file out of step gives NU1004 under --locked-mode.
+              - clause: UC-8
+                verdict: verified
+                evidence: |
+                  T-12 passes both ways. Independently: the tools/list of the server gives 13 snake_case
+                  names and each appears in README.md or docs/ (between 2 and 9 files each, counted per
+                  name).
+              - clause: UC-9
+                verdict: verified
+                evidence: |
+                  git ls-remote origin gives 373c4622d8444611967fdd442b9ad3be366c5faa for
+                  refs/heads/epic/security-hardening, identical to local HEAD, and CI is green on it.
+                  The working tree carries one modified path,
+                  .claude/skills/meta-ledger/telemetry.log - a kit record, no project file.
+              - clause: G-1
+                verdict: verified
+                evidence: |
+                  T-1, T-2 pass. Program.cs:102-123: stdio builds Host.CreateApplicationBuilder - no web
+                  host, no Kestrel - and throws ConfigurationException unless the environment is
+                  Development; the environment is read from ASPNETCORE_ENVIRONMENT or
+                  DOTNET_ENVIRONMENT (Program.cs:54-57), so setting only one does not escape the guard.
+                  T-2 covers Production and Staging.
+              - clause: G-2
+                verdict: corrected
+                evidence: |
+                  Never 0 holds, and exit 70 for an unhandled failure holds. Configuration failure exits
+                  78 does not hold for every configuration failure.
+                  What is actually true: the case T-3 itself names as the configuration error - a
+                  provider BaseUrl over http - exits 70, not 78. Executed at 373c462 with
+                  Providers__JsonPlaceholder__BaseUrl=http://jsonplaceholder.typicode.com,
+                  Transport=stdio, Development: exit 70 with a stack trace through
+                  JsonPlaceholderServiceRegistration.AddJsonPlaceholderProvider (line 44) and
+                  Program.cs:297. The provider registrations throw InvalidOperationException, not
+                  ConfigurationException (JsonPlaceholderServiceRegistration.cs:39-46, and the same
+                  shape in the two SMHI registrations), and Program.cs:83-94 maps only
+                  ConfigurationException to 78. An operator who mistypes a provider URL gets a stack
+                  trace and a software-failure code instead of the configuration code this guarantee
+                  promises.
+                  The three automated T-3 tests never reach this: they cover an unknown transport and
+                  http without an API key, both of which do raise ConfigurationException, plus a loop
+                  asserting neither exits 0. Exit 70 for an unhandled failure was executed here: the
+                  HTTP transport on an occupied 127.0.0.1:54311 exits 70.
+                  What would close it: the provider registrations raising ConfigurationException for a
+                  malformed or non-HTTPS BaseUrl, and a test that starts the server with one.
+              - clause: G-3
+                verdict: verified
+                evidence: |
+                  Order read at Program.cs:232-239: UseForwardedHeaders, UseHttpsRedirection,
+                  UseHostFiltering, UseCors, UseRateLimiter, UseHealthEndpoints, ApiKeyMiddleware,
+                  MapMcp - the order of the contract with health inserted before authentication (Tier 4
+                  lists the full order as untested; the load-bearing part was observed). T-4 passes, and
+                  on a running server a foreign Host is refused 400 ahead of /healthz, an endpoint that
+                  needs no credential, while /mcp without a key is 401. Throttle key set, which no test
+                  reaches: 85 calls to invented tool names over stdio minted no limiter - all 85
+                  answered Unknown tool, none was rate-limited - while the registered get_blog_post was
+                  limited from its 11th call in the same minute. ToolCallThrottleFilter.MatchedToolName
+                  reads context.MatchedPrimitive, never the string the caller sent
+                  (ToolCallThrottleFilter.cs:72-77, 95-99).
+              - clause: G-4
+                verdict: corrected
+                evidence: |
+                  The deserialisation half is verified by T-5, which passes: six round-trip tests bind a
+                  recorded camelCase payload (ids 1 and 101, populated titles and collections) with
+                  JsonSerializerDefaults.Web plus an explicit JsonPropertyName on every model property.
+                  The second half - or throws with a recovery hint - does not hold for every failure.
+                  What is actually true: when the upstream keeps failing, the circuit breaker in the
+                  resilience pipeline opens and the tool throws Polly BrokenCircuitException, which
+                  SendAsync does not map, so the caller is shown "An error occurred invoking
+                  get_blog_post." Executed over stdio at 373c462 against an unresolvable host: call 1
+                  named a recovery, calls 2 to 4 named nothing, with BrokenCircuitException in the
+                  server log.
+                  Why T-5 passes anyway, which is the part worth keeping: every T-5 error test builds
+                  the client as new JsonPlaceholderApiClient(new HttpClient(new StatusHandler(status)))
+                  at JsonPlaceholderErrorPathTests.cs:32-36 - a bare handler with no resilience
+                  pipeline, so no BrokenCircuitException can arise in the test. The guarantee is tested
+                  in a composition the server does not ship.
+                  What would close it: mapping BrokenCircuitException in SendAsync, and an error-path
+                  test that goes through the registered pipeline.
+              - clause: G-5
+                verdict: verified
+                evidence: |
+                  Judged against the pioneer-authorised revision (2026-09-18, tests_changed [T-6]):
+                  rebuild on the CSV endpoint. The six T-6 tests pass, including filters by month before
+                  applying the cap and reports an unrecognisable archive rather than returning nothing,
+                  and MetObsArchiveCsv.cs reads the CSV archive. Live, all 13 registered tools answered
+                  their real upstreams, so no tool without a path to success remains registered.
+              - clause: G-6
+                verdict: verified
+                evidence: |
+                  T-7 passes, including the theory over the three shipped budgets (10/2/35, 20/2/70,
+                  5/2/20) and the refusal cases: ResilienceBudget.Create refuses a total timeout at or
+                  below attempt x (1 + retries), and it is called during service registration
+                  (SmhiServiceRegistration.cs:50, SmhiObsServiceRegistration.cs:38,
+                  JsonPlaceholderServiceRegistration.cs:50), so the refusal lands at startup rather than
+                  on the first call. All three assign ResilienceBudget.ClientTimeout (InfiniteTimeSpan)
+                  to HttpClient.Timeout.
+              - clause: G-7
+                verdict: verified
+                evidence: |
+                  T-8 passes and was reproduced directly on a running server: /healthz 200 alive,
+                  /readyz 200 ready, no credential, answered immediately. HealthEndpoints.cs answers
+                  from IHostApplicationLifetime state alone; no startup probe, hosted service or
+                  background service exists anywhere in McpServerTemplate/ (grep: zero hits).
+              - clause: G-8
+                verdict: verified
+                evidence: |
+                  The three repository-invariant tests of T-9 pass. One solution file; dotnet build
+                  McpServerTemplate.sln -warnaserror gives 0 warnings and 0 errors;
+                  Directory.Build.props:8,11 sets net10.0 and TreatWarningsAsErrors for every project
+                  and neither csproj overrides TargetFramework; ModelContextProtocol and
+                  ModelContextProtocol.AspNetCore are both 2.2.0 (McpServerTemplate.csproj:11-12). No
+                  suppression in the tree: a grep over .cs, .csproj and .props for pragma warning,
+                  NoWarn and SuppressMessage returns one hit, the invariant test asserting their
+                  absence. The .editorconfig analyser severities (CA1305, CA1848, CA1707) are the agent
+                  revision of 2026-09-18 recorded in this entry - analyser severities, not silenced SDK
+                  deprecations; whether that revision should stand is a pioneer judgement, not a
+                  verification finding.
+              - clause: G-9
+                verdict: verified
+                evidence: |
+                  ci.yml runs on push (and pull_request) with locked restore, build -warnaserror, test,
+                  package audit and secret scan, and run 35291401076 for head 373c462 executed every one
+                  of those steps to success. Executed against fixtures in an out-of-tree clone of this
+                  head: an AKIA key in a tracked file gives scan exit 1; an ApiKey holding a value in
+                  appsettings.json gives scan exit 1; Newtonsoft.Json 9.0.1 gives NU1903 Warning As
+                  Error and Build FAILED; the same package added without updating packages.lock.json
+                  gives NU1004 and restore refuses --locked-mode.
+                  Carried forward and still true, not a defect in the clause: the grep in the Audit
+                  packages step for the phrase about vulnerable packages never fires, because dotnet
+                  list package --vulnerable performs its own restore and that restore fails first on
+                  NU1903. The job still fails, and the build step has already failed by then.
+              - clause: G-10
+                verdict: verified
+                evidence: |
+                  scripts/secret-scan.sh run over the tree at 373c462: 200 tracked files, 3 appsettings
+                  files, PASS with no credential found, exit 0. The two T-11 tests pass - no
+                  credential-shaped key holds a value in any appsettings file (Authentication:ApiKey in
+                  appsettings.json is the empty string), and McpServerTemplate.csproj:6 carries
+                  UserSecretsId mcp-server-template-4f2a1c7e, so the user-secrets route the error
+                  messages recommend exists. Both passes of the scan were shown non-vacuous by the
+                  planted fixtures (see G-9).
+              - clause: G-11
+                verdict: verified
+                evidence: |
+                  The two T-12 tests pass. Independently: tools/list over stdio gives add_post_comment,
+                  create_blog_post, create_user_todo, get_blog_post, get_current_weather, get_forecast,
+                  get_forecast_model_info, get_monthly_climate, get_post_comments,
+                  get_precipitation_history, get_recent_temperature, get_temperature_history,
+                  get_user_todos, and every one of the 13 is named in README.md or docs/.
+              - clause: G-12
+                verdict: verified
+                evidence: |
+                  origin/epic/security-hardening is 373c4622d8444611967fdd442b9ad3be366c5faa, identical
+                  to the local HEAD, with CI green on it (run 35291401076). The only uncommitted path is
+                  the telemetry log of the kit itself. The remote head is three commits past the
+                  delivery commit of the contract: 66e8477 (CI repair), addc334 (demo provider error
+                  mapping) and 57806f1 (transport-level error mapping, with the earlier filter change
+                  reverted).
+            summary: {verified: 18, corrected: 3, open: 0}
+            open_needs: []
       - superseded: 2026-09-18
         by_evidence: |
           commit a433cfe — all three clauses the third report corrected are closed, each with a
@@ -1079,7 +1191,7 @@ contracts:
           filters, where the behaviour does differ. Recorded rather than resolved.
     audited: true
     transcript: C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
-    observations: [O-009, O-010, O-011, O-012, O-013, O-014, O-015]
+    observations: [O-009, O-010, O-011, O-012, O-013, O-014, O-015, O-016, O-017]
     revisions:
       - what: |
           G-5 left the climate tool's fate open ("remove the climate tool or rebuild it on the
