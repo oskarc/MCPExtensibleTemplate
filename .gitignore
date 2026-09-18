@@ -17,3 +17,6 @@ logs/
 
 # Kit review-batch keys (runtime, never committed)
 .claude/kit-sealed/
+
+# Test run artifacts (trx, coverage) — produced by dotnet test, never source.
+TestResults/
