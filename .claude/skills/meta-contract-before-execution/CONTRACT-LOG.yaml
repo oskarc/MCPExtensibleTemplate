@@ -112,6 +112,121 @@ contracts:
       test sites in contract-001's suite (ServerProcessTests lines 250, 254, 288, 339, 412, 417).
       Precedent check (M-04): casebook holds P-001..P-004; P-002 governs presentation; none bear
       technically on identity. Nothing cited or distinguished.
+    tier_1: |
+      Who. An organisation running this server centrally, the teams whose tools it exposes, and the
+      security function that has to answer "who called this?"
+
+      What they are trying to do. Let each person's own sign-in decide what they can reach, instead
+      of a shared key that everybody copies into their config.
+
+      Success. Someone signed in through one team's identity system cannot reach another team's
+      tools, even with a perfectly valid login. When someone leaves, turning off their account
+      turns off their access here, without redeploying. Every call can be attributed to a person
+      and an application.
+
+      Cost of skipping. Today one shared key opens all thirteen tools. It cannot be attributed,
+      cannot be revoked for one caller, and is sitting in every developer's environment.
+    tier_2: |
+      UC-1 A caller with no credential is told where to get one -> 401 naming the resource metadata
+           document. Edge: a caller with a malformed Authorization header is treated as having no
+           credential, not as an error.
+      UC-2 A client discovers how to authenticate -> /.well-known/oauth-protected-resource returns
+           the resource, its authorization servers and the scopes that may be asked for. Edge: the
+           document is reachable without a credential, since it is what a caller with none reads.
+      UC-3 A caller presents a bad token -> refused. Wrong audience, wrong issuer, expired,
+           unsigned, HMAC-signed and missing jti are each refused separately.
+      UC-4 A caller from an unregistered issuer -> refused before any key fetch. Edge: an oversized
+           token is refused before it is parsed.
+      UC-5 A caller sees only what their scopes allow -> tools/list hides the rest, and calling a
+           hidden tool is refused by name. Edge: a token with no scopes sees an empty listing
+           rather than an error.
+      UC-6 A caller from team B cannot reach a provider bound to team A -> the provider's tools are
+           absent from tools/list, and a direct call is refused with rule idp-binding.
+      UC-7 A developer works locally over stdio with a synthetic principal; any environment but
+           Development refuses to start.
+      UC-8 A browser page cannot drive the server -> a foreign Origin is refused, and one
+           malicious_cors event is logged. Edge: a caller sending no Origin is unaffected.
+      UC-9 An operator misconfigures identity -> the server refuses to start and names the setting.
+    tier_3: |
+      G-1  (UC-1, UC-3) One AddJwtBearer scheme per configured identity provider; audience pinned
+           to the canonical resource URI; ValidateLifetime, RequireExpirationTime,
+           RequireSignedTokens; algorithms an allowlisted subset of RS256, PS256, ES256;
+           MapInboundClaims = false; ClockSkew 30s.
+      G-2  (UC-2) AddAuthentication().AddMcp(...) publishes the RFC 9728 metadata document built
+           from configuration, never a literal.
+      G-3  (UC-4) A policy scheme routes on the unvalidated iss claim, refuses tokens over 8 KB,
+           and refuses an unregistered issuer before any key lookup.
+      G-4  (UC-5) MapMcp().RequireAuthorization(), AddAuthorizationFilters(), and [Authorize] on
+           every tool, resource and prompt type as defence beneath them.
+      G-5  (UC-6) Every provider declares exactly one identity provider; the binding is checked in
+           both the list and the call path.
+      G-6  (UC-7) stdio builds a synthetic principal from Development:DevPrincipal and exits 78
+           anywhere but Development.
+      G-7  (UC-8) The origin guard runs before authentication; the per-IP limit runs before
+           authentication.
+      G-8  (UC-9) A missing or unknown identity provider, an absent scope catalog, or an unknown
+           scope exits 78 naming the setting.
+      G-9  (all) ApiKeyMiddleware is deleted, and contract-001's six API-key test sites are
+           replaced, not disabled.
+      G-10 (all) Every test runs in-process against a backchannel; no test reaches the network.
+      G-11 (all) Stateless streamable HTTP; no session affinity.
+      G-12 (UC-9) In Production the server refuses to start unless Kestrel serves HTTPS with a
+           configured certificate, or ForwardedHeaders is restricted to known proxies or networks.
+
+      Precedents (M-04, checked against CASEBOOK.yaml):
+        applies P-007 - Tier 4 is written by default from what each guardrail already reads, and
+          the pioneer adjusts or confirms, rather than being elicited clause by clause.
+        applies P-008 - the work is grounded and the map drawn before the contract begins; this
+          contract's `ground` field is that map.
+        applies P-010 - the approved contract is finished before work beyond it is proposed.
+        P-001 to P-006 and P-009 do not bear: they govern other moments (M-27, M-14, M-03) or the
+          agent's rules of engagement rather than this contract's subject.
+      Candidates (M-29): no candidate is in trial or adopt, so none is cited. K-022 is due for
+        review and contradicts this skill's Tier 4 authorship passage; it is named here because
+        P-007 above is the pioneer's instruction that the candidate records.
+      Novel guardrails, candidates for observations once built: G-3's routing on an unvalidated
+        claim, G-5's binding enforced on two paths, and G-12's refusal to serve without TLS.
+    tier_4: |
+      T-1  (G-1, G-2) Post an initialize request with no token. Fails unless the response is 401
+           and its WWW-Authenticate header contains resource_metadata.
+      T-2  (G-1) Six tokens, each wrong in one way - wrong audience, wrong issuer, expired,
+           alg=none, HS256, missing jti - each its own case. Fails if any is accepted. A control
+           in the same class asserts a well-formed token is accepted; six refusals from a server
+           that refuses everything would prove nothing.
+      T-3  (G-2) GET /.well-known/oauth-protected-resource. Fails unless the document's resource,
+           authorization servers and scopes equal what was configured, and unless it is served
+           without a credential.
+      T-4  (G-3) Present a token from an issuer nobody registered. Fails unless the response is
+           401 and the stranger's own endpoint recorded zero requests of any kind.
+      T-5  (G-3) Present a token naming issuer A but signed with B's key. Fails unless it is 401.
+      T-6  (G-4, G-5) A token with no scopes sees an empty tools/list; a token from identity
+           provider B calling a tool of a provider bound to A is refused with rule idp-binding, and
+           that tool is absent from B's listing. Fails if either is allowed or either is listed.
+      T-7  (G-6) Start with Transport=stdio in Production. Fails unless the exit code is 78. Start
+           in Development: fails unless initialize is answered as the declared principal.
+      T-8  (G-7) Send a request with Origin: https://evil.example. Fails unless it is 403 and one
+           malicious_cors event is logged, and unless a request with no Origin is unaffected.
+      T-9  (G-8) Four misconfigurations - no identity provider, an unknown admin identity provider,
+           an algorithm outside the allowlist, a wildcard scope. Fails unless each exits 78 naming
+           the setting, with no stack trace.
+      T-10 (G-9) Grep the tree. Fails if ApiKeyMiddleware exists or any test references X-Api-Key.
+      T-11 (G-11) Two calls on separate connections. Fails unless both succeed and no
+           Mcp-Session-Id is issued.
+      T-12 (G-12) Start in Production with neither a certificate nor a trusted proxy configured:
+           fails unless it exits 78. With each configured in turn: fails unless it starts, and
+           fails unless a certificate configured means the server actually serves HTTPS.
+      untested: G-10 is a property of the suite rather than of the server, and is checked by
+           reading the test fixtures. Every other guarantee has a test above.
+    tiers_recorded: |
+      The tiers above were drawn in the conversation on 2026-09-18 and approved in substance at
+      the gate that day: the pioneer gave the pre-mortem and the disappointment line against them,
+      and their challenge to the TLS clause caused G-12 to be withdrawn and then reinstated before
+      approval. They were never written to this entry. The omission was found by kit-verifier on
+      2026-09-19 and is recorded as drift-006.
+      They are recorded here on 2026-09-19, verbatim from the draw plus the TLS correction, with
+      this note so that no later reader mistakes the recording date for the approval date, or
+      reads the text as having been available to the verification pass of 2026-09-19 - it was not.
+      That pass reconstructed clauses from doc comments and the roadmap and said so.
     premortem: |
       pre mortem: if the tests didnt cover loop holes, if the hardening has flaws.
     disappointment: |
@@ -130,7 +245,16 @@ contracts:
       date: 2026-09-18
     approval: approved-at-gate
     status: implemented
-    verification_state: reported
+    verification_state: none
+    verification_history:
+      - superseded: 2026-09-19
+        by_evidence: |
+          The verification block below judged clauses reconstructed from doc comments in the source
+          and the roadmap's Phase 1 exit criteria, because contract-002's tiers had never been
+          written to this entry. It said so itself. The tiers are now recorded, so the contract can
+          be verified against its own text rather than against a reconstruction of it, and the
+          pass is re-run. The findings stand as findings - G-12 corrected, G-5 half-evidenced,
+          UC-5 unbuilt - and are being closed before re-verification.
     audited: false
     transcript: C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
     observations: [O-028]

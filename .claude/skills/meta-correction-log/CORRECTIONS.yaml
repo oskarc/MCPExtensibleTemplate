@@ -346,6 +346,104 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-011
+    date: 2026-09-19
+    contract_id: contract-002
+    moment: M-12
+    grade: frame-reset
+    intervention: redirected
+    agent_offered: |
+      (no offer — the agent ran six verification passes on contract-001 and resumes on
+      contract-002, reporting findings after each, without ever stopping to align on whether the
+      loop itself was the right thing)
+    pioneer_said: |
+      number 1 is a foundational drift, one of the most central parts is the contract and you
+      didnt actually write it. How could this have happened? What influenced that drift?
+
+      And you also didnt tell me but ran verification agents in many iterations instead of
+      producing a moment to align
+    reason_given: |
+      (carried in the statement: the contract is one of the most central parts, and iterating
+      agents replaced producing a moment to align)
+    noticed: |
+      not asked — the correction names both: a central artifact was never written, and repeated
+      agent iterations stood in for an alignment moment.
+    would_have_been_right: |
+      not asked — stop and create the moment to align rather than run the next pass.
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-012
+    date: 2026-09-19
+    contract_id: contract-002
+    moment: M-03
+    grade: frame-reset
+    intervention: redirected
+    agent_offered: |
+      (the agent had treated the MCP server as the product and the contract as the record of it:
+      contract-002's tiers were never written, changes were made without contracts, and the
+      omission was reported as a bookkeeping failure — "it is not that I forgot a YAML field")
+    pioneer_said: |
+      if we dont have a contract you dont have anything to run the lay of the land for, and we
+      have no plan. the roadmap exist to be broken down into contracts, to feed the standard
+      development. the point is not to produce a mcp server, the point is to build the standard.
+
+      The meta approach has skills that enforces a contract for every change whatever it is.
+    reason_given: |
+      (carried in the statement: the roadmap exists to be broken into contracts that feed the
+      standard's development; the point is the standard, not the server)
+    noticed: |
+      not asked — the correction names it: without a contract there is nothing to lay the land
+      for and no plan, and changes were being made with no contract at all.
+    would_have_been_right: |
+      not asked — a contract for every change, whatever it is, written before the change.
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-013
+    date: 2026-09-19
+    contract_id: contract-002
+    moment: M-06
+    grade: frame-reset
+    intervention: redirected
+    agent_offered: |
+      (the agent had been reading kit skills by grep and excerpt — meta-contract-before-execution
+      was consulted with targeted greps for tier definitions and the approval gate, never read in
+      full — and drew and recorded contracts on that basis)
+    pioneer_said: |
+      I approve the contract, now commit it to the contract log, complete the contract in full.
+      Adhere to the meta skills, when in doubt, when you miss your mark and try to fix yourself,
+      alway read the meta skills and not from memory, not exerpts or only looking at the names. if
+      you dont read them you dont understand the practice and cant deliver or meet the gate.
+    reason_given: |
+      if you dont read them you dont understand the practice and cant deliver or meet the gate
+    noticed: |
+      not asked — the correction names it: skills were consulted by memory, excerpt and name
+      rather than read.
+    would_have_been_right: |
+      not asked — read the meta skill in full before acting under it, and whenever correcting
+      course.
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-19
   by_contract:
