@@ -715,8 +715,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-020
     stewarded: n/a
 
   - obs_id: O-023
@@ -733,8 +733,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-021
     stewarded: n/a
 
   - obs_id: O-024
@@ -751,8 +751,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-022
     stewarded: n/a
 
   - obs_id: O-025
@@ -769,8 +769,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-023
     stewarded: n/a
 
   - obs_id: O-026
@@ -787,8 +787,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-024
     stewarded: n/a
 
 
@@ -1492,6 +1492,138 @@ candidates:
     decision: null
     outcome: null
 
+  - cand_id: K-020
+    created: 2026-09-17
+    statement: |
+      M-27
+
+      i dont understand what you are asking. You need to include me in the context, instead of only asking
+      for input.
+    level: principle
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-022"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-17
+    decision: null
+    outcome: null
+
+  - cand_id: K-021
+    created: 2026-09-17
+    statement: |
+      M-14
+
+      OK, follow the rule from memory but dont take it further. Commit and push, then lets look at the
+      roadmap for the hardenings.
+    level: pattern
+    tier: undecided
+    target: [meta-ledger]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-023"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-17
+    decision: null
+    outcome: null
+
+  - cand_id: K-022
+    created: 2026-09-17
+    statement: |
+      M-04
+
+      Same as it reads, id like you to write tier 4 by default and i can adjust those or confirm your
+      question that they hold, same as usecases and the other.
+    level: pattern
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts:
+      - file: meta-contract-before-execution/SKILL.md
+        passage: "The pioneer authors the disappointment; the agent authors the command."
+    review_due: true
+    disposition_proposed: update
+    evidence_refs: ["O-024"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-17
+    decision: null
+    outcome: null
+
+  - cand_id: K-023
+    created: 2026-09-18
+    statement: |
+      M-12
+
+      I think this is an effect of a to limited lay of the land before the contract begins, the issue is
+      not that we cant know what to do, but that we dont ground our work properly before we begin.
+    level: principle
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-025"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
+  - cand_id: K-024
+    created: 2026-09-18
+    statement: |
+      M-03
+
+      Drawing the map before you begin is not something new, its a core part of the practice, read the
+      meta foundation in full.
+    level: principle
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-026"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-18
+    decision: null
+    outcome: null
+
 batches: []
 
 map_proposals: []
@@ -1518,8 +1650,8 @@ scores:
   updated: 2026-09-19
   contracts:
     - contract_id: contract-001
-      observations: 16
-      candidates_created: 14
+      observations: 19
+      candidates_created: 17
       audited: true
       verified: true
       cost: {turns: null, tokens: null, pioneer_minutes: null}
