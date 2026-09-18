@@ -201,7 +201,7 @@ contracts:
       date: 2026-09-17
     approval: approved-at-gate
     status: implemented
-    verification_state: reported
+    verification_state: none
     verification:
       date: 2026-09-18
       by: kit-verifier
@@ -461,6 +461,22 @@ contracts:
       summary: {verified: 20, corrected: 1, open: 0}
       open_needs: []
     verification_history:
+      - superseded: 2026-09-18
+        by_evidence: |
+          commit 57806f1 — the one clause the second report corrected (UC-3, transport-level
+          failure naming no recovery) is addressed: JsonPlaceholderApiClient.SendAsync maps an
+          unreachable host, a timeout, and the resilience pipeline exhausting its budget
+          (Polly TimeoutRejectedException) to an McpException that names a recovery, alongside
+          the status mapping already there. Thirteen theory cases cover the six tools across
+          both new failure shapes, and the caller-cancellation case asserts a cancelling caller
+          is not told the upstream failed. 98 tests pass in Release with warnings as errors.
+
+          The same commit corrects a false finding the previous round rested on, and the
+          correction bears on how this contract's evidence should be read: the "no JSON-RPC
+          response" defect reported earlier did not exist — the probe that found it left the
+          server's stderr pipe undrained, so the server blocked while logging. The call-tool
+          filter change made on that basis is reverted, and ServerProcessTests now drains
+          stderr. See O-014 and drift-003.
       - superseded_report: kit-verifier, 2026-09-18 (first report)
         superseded_on: 2026-09-18
         superseded_by: |
