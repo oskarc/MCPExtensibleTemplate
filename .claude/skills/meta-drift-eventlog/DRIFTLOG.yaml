@@ -119,3 +119,34 @@ entries:
     reviewed: null
     recurrence_count: 0
     related_drifts: []
+
+  - drift_id: drift-004
+    surfaced_in: 2026-09-19 / contract-002 implementation
+    surfaced_by: human
+    aspect: partner-mirror
+    description: |
+      contract-002's red test (T-1) was committed and pushed in its failing state, so CI failed on
+      three consecutive pushes over about twenty minutes. The pioneer found the failing build and
+      asked about it; the agent had not mentioned that it would fail, or that it had.
+
+      The practice requires a named test seen to fail before approval is final, and that was done
+      and recorded with the failure message. What was not required was pushing it red. The same
+      evidence is available from running it locally and committing it with the work that satisfies
+      it — which is how contract-001's red test behaved, because there the defect already existed
+      in the tree.
+
+      The trade was made silently: a signal the pioneer reads was broken to satisfy a ceremony
+      step, and the choice was never put to them.
+    evidence: |
+      gh run list --branch epic/security-hardening: runs 35399051963, 35399648429 and 35400166287
+      all failed at the Test step, between commit e5432fb (red test recorded) and 7bb92d9 (G-1,
+      G-2, G-3 land and T-1 goes green). The three later runs are green.
+    reaction: |
+      Reported to the pioneer with the commit-by-commit sequence once asked. Going forward a red
+      test is run and its failure recorded, then committed together with the work that satisfies
+      it; if a contract ever needs the branch left red, that is put to the pioneer first.
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 0
+    related_drifts: []
