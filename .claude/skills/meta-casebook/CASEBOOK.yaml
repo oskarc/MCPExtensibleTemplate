@@ -149,6 +149,130 @@ precedents:
     overruled_by: null
     check: "not checkable — deciding whether a directive bears on the founding statement's subject is judgement, not a shape a script could verify"
 
+  - prec_id: P-005
+    date: 2026-09-17
+    from: [C-005]
+    moments: [M-14]
+    tier: project
+    facts: |
+      During ledger consolidation (M-14), the agent referred to a prior casebook precedent by id alone
+      ("The useful one is P-004, which turns your last message into a standing rule...") without first
+      stating what P-004 says, where it came from, or why it was being raised, although the pioneer had
+      not seen it before.
+    question: |
+      Whether the agent may cite a kit artifact (a precedent) by id when presenting it to the pioneer,
+      or must first give the pioneer the context needed to understand what it is and why it matters.
+    holding: |
+      You need to present with context. The pioneer has never seen the artifact and does not know in
+      what regard it matters or why it is being raised — that context must be given, not assumed.
+    reasons: |
+      i have never seen P-004 and dont know in what regard it matters or why you are telling me.
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — deciding whether a given presentation includes sufficient context for the pioneer is judgement, not a fixed shape a script could verify"
+
+  - prec_id: P-006
+    date: 2026-09-17
+    from: [C-006]
+    moments: [M-14]
+    tier: project
+    facts: |
+      During ledger consolidation (M-14), immediately after being corrected for presenting an artifact
+      without context (C-005), the agent offered two ways to handle a duplicate/redundant precedent
+      concerning the no-other-repos rule: do nothing and keep following the rule as recorded, or retire
+      the first of the two precedents and keep the second, which states the boundary correctly.
+    question: |
+      Whether to retire/consolidate the redundant precedent now, mid-consolidation, or defer that
+      cleanup and move on to other work.
+    holding: |
+      Follow the rule from memory but don't take it further — do not retire or consolidate now. Commit
+      and push, then move to the roadmap for the hardening work.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — a one-off prioritisation decision (defer housekeeping, move to other work), not a fixed shape a script could verify"
+
+  - prec_id: P-007
+    date: 2026-09-17
+    from: [C-007]
+    moments: [M-04]
+    tier: project
+    facts: |
+      While drawing contract-001's guardrails and acceptance tests (M-04), the agent asked, per
+      guardrail, what result would make the pioneer say it wasn't met, noting "same as it says" was a
+      real answer it would record as one. The pioneer answered for the guardrails generally, not one at
+      a time.
+    question: |
+      When Tier 4 disappointment content (and similarly the use cases and other tiers) is open, should
+      the agent draw it out clause-by-clause from the pioneer, or draft defaults for the pioneer to
+      adjust or confirm?
+    holding: |
+      Same as it reads. Write Tier 4 by default, and the use cases and other tiers the same way — the
+      pioneer adjusts them or confirms your question that they hold, rather than answering individually.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — choosing whether to elicit answers individually or draft defaults for confirmation is judgement, not a fixed shape a script could verify"
+
+  - prec_id: P-008
+    date: 2026-09-18
+    from: [C-008]
+    moments: [M-12, M-04]
+    tier: project
+    facts: |
+      Four verification passes into contract-001 (M-12), each needing a resume to deliver a report at
+      47-67 tool calls, the agent put a scoping choice to the pioneer among keeping the cycling cost,
+      splitting verification into smaller scopes, or closing out via a follow-up contract.
+    question: |
+      What was causing the repeated-iteration cost during contract-001's verification, and what should
+      change because of it.
+    holding: |
+      The cause was not that the work could not be figured out, but that the work was not grounded
+      properly before it began — a symptom of too limited a lay of the land before the contract begins.
+      What would have been right is laying the land first, drawing the map before starting, so what is
+      implemented is accurate and the environment and surroundings are known.
+    reasons: |
+      (carried in the statement: the issue is not that we cant know what to do, but that we dont ground
+      our work properly before we begin)
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — judging whether a contract's lay-of-the-land was adequate before it began is judgement about investigation quality, not a fixed shape a script could verify"
+
+  - prec_id: P-009
+    date: 2026-09-18
+    from: [C-009]
+    moments: [M-03]
+    tier: project
+    facts: |
+      Reflecting on C-008's frame-reset (contract-001), the agent suggested the missing lay-of-the-land
+      might be a new, session-specific pattern rather than a repeated habit. The pioneer corrected this:
+      the practice of drawing the map before beginning work is written in meta-foundation's INTENT.md as
+      a core part of the practice ("Lay of the land" among the agent's five aspects), not something new
+      to this session.
+    question: |
+      Whether the requirement to lay the land / draw the map before beginning work was a new pattern
+      that started in this session, or an existing, already-documented core practice.
+    holding: |
+      It is not new. Drawing the map before you begin is a core part of the practice — read
+      meta-foundation in full.
+    reasons: |
+      (carried in the statement: it is a core part of the practice)
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — whether a given omission is a novel pattern or a lapse in an already-documented practice is judgement, not a fixed shape a script could verify"
+
 scenarios:
   - card_id: S-001
     date: 2026-09-17
@@ -187,6 +311,74 @@ scenarios:
         text: |
           Me telling you to not read other repos is not part of the STANDARD BUILDING KIT for a mcp server, it
           has nothing to do with that, so i disagree and it should not be part of the learning.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-003
+    date: 2026-09-17
+    from: [C-006]
+    moment: M-14
+    situation: |
+      During ledger consolidation (M-14), after being corrected for presenting a precedent without
+      context (C-005), the agent weighed whether to retire a redundant precedent about the
+      no-other-repos rule now, or leave it and move on to other work.
+    options:
+      - key: A
+        text: |
+          If you do nothing: I still follow your rule. If you want it clean: say so and I retire the
+          first one, leaving the second, which states your boundary correctly.
+      - key: B
+        text: |
+          OK, follow the rule from memory but dont take it further. Commit and push, then lets look at
+          the roadmap for the hardenings.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-004
+    date: 2026-09-17
+    from: [C-007]
+    moment: M-04
+    situation: |
+      While drawing contract-001's guardrails (M-04), the agent asked, per guardrail, what result would
+      show it wasn't met, noting that "same as it says" was itself a real, recordable answer.
+    options:
+      - key: A
+        text: |
+          So, per guardrail: what result would make you say this wasn't met? You don't need twelve
+          answers. "Same as it says" is a real answer and I'll record it as one.
+      - key: B
+        text: |
+          Same as it reads, id like you to write tier 4 by default and i can adjust those or confirm
+          your question that they hold, same as usecases and the other.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-005
+    date: 2026-09-18
+    from: [C-008]
+    moment: M-12
+    situation: |
+      Four verification passes into contract-001, each needing a resume to deliver a report at 47-67
+      tool calls, the agent put a scoping judgement to the pioneer: twenty-one clauses with
+      independently gathered evidence exceeds what one agent gets in a pass.
+    options:
+      - key: A
+        text: |
+          A judgement I want to put to you rather than keep making alone. [...] the cost is real and now
+          predictable: every pass has needed a resume to deliver a report, at 47-67 tool calls each.
+          Twenty-one clauses with independently gathered evidence exceeds what one agent gets. That's a
+          scoping question (M-30), and it's yours.
+          Three ways I can see it going: Keep cycling - accept the resume cost. Split verification -
+          smaller contracts, or a verifier scoped to a clause subset per pass. Close it by follow-up -
+          draw contract-002 for whatever the fourth pass finds.
+      - key: B
+        text: |
+          I think this is an effect of a to limited lay of the land before the contract begins, the
+          issue is not that we cant know what to do, but that we dont ground our work properly before we
+          begin.
     pioneer_ranking: pending
     rationale: ""
     dissent: ""

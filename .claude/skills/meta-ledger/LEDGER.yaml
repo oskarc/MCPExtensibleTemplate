@@ -637,8 +637,8 @@ observations:
     stated_confidence: 0.85
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-017
     stewarded: n/a
 
   - obs_id: O-020
@@ -663,8 +663,8 @@ observations:
     stated_confidence: 0.75
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-018
     stewarded: n/a
 
 
@@ -694,6 +694,97 @@ observations:
       uses to verify its own work, which is the one place it was not being applied.
     level_guess: principle
     stated_confidence: 0.95
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-019
+    stewarded: n/a
+
+
+  - obs_id: O-022
+    date: 2026-09-17
+    source: pioneer
+    contract_id: null
+    refs: [C-005]
+    statement: |
+      M-14
+
+      you need to present with context, i have never seen P-004 and dont know in what regard it matters
+      or why you are telling me.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-023
+    date: 2026-09-17
+    source: pioneer
+    contract_id: null
+    refs: [C-006]
+    statement: |
+      M-14
+
+      OK, follow the rule from memory but dont take it further. Commit and push, then lets look at the
+      roadmap for the hardenings.
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-024
+    date: 2026-09-17
+    source: pioneer
+    contract_id: contract-001
+    refs: [C-007]
+    statement: |
+      M-04
+
+      Same as it reads, id like you to write tier 4 by default and i can adjust those or confirm your
+      question that they hold, same as usecases and the other.
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-025
+    date: 2026-09-18
+    source: pioneer
+    contract_id: contract-001
+    refs: [C-008]
+    statement: |
+      M-12
+
+      I think this is an effect of a to limited lay of the land before the contract begins, the issue is
+      not that we cant know what to do, but that we dont ground our work properly before we begin.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-026
+    date: 2026-09-18
+    source: pioneer
+    contract_id: contract-001
+    refs: [C-009]
+    statement: |
+      M-03
+
+      Drawing the map before you begin is not something new, its a core part of the practice, read the
+      meta foundation in full.
+    level_guess: principle
+    stated_confidence: null
     loaded_candidates: []
     prompted: false
     consolidated: false
@@ -1292,6 +1383,115 @@ candidates:
     decision: null
     outcome: null
 
+  - cand_id: K-017
+    created: 2026-09-19
+    statement: |
+      From the contract-001 learning diff. A Tier 3 guardrail should name the space it ranges
+      over, not an example inside it.
+
+      G-4 and UC-3 were written about "the demo provider". Both are recorded corrected, and the
+      close carries a half that was never met in two providers the clause did not name. Each
+      verification pass checked the clause as written and found it true of the provider named,
+      which is why four passes could each find a different failure and none could find the
+      scoping.
+
+      What would have changed it: before the tiers, enumerate what the guarantee ranges over -
+      which providers, which failure shapes, which configurations - and write the clause against
+      that set. A guarantee whose subject is a set can be checked against the set; a guarantee
+      whose subject is an example can only be checked against the example.
+    level: principle
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: true
+    disposition_proposed: trial
+    evidence_refs: ["O-019"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: moderate
+    certainty_codes: [single-contract]
+    stated_confidence: 0.85
+    restatements: 1
+    last_moved: 2026-09-19
+    decision: null
+    outcome: null
+
+  - cand_id: K-018
+    created: 2026-09-19
+    statement: |
+      From the contract-001 learning diff. The untested: line is a prediction, and this contract
+      is one data point that it predicts badly.
+
+      Its three named gaps - G-3's full middleware order, G-2's exit code 70, G-8's "resolved
+      rather than suppressed" - are all recorded verified. All three corrections landed in
+      clauses it did not name.
+
+      The reason is structural rather than careless: the line records what the author already
+      doubts, and a blind spot is by definition not there. The line is still worth writing, since
+      a guarantee nothing reaches should be visible. But it should not be read as a map of where
+      the risk is, and a verifier that spends its budget on the flagged gaps is spending it where
+      the contract was already awake.
+    level: pattern
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: true
+    disposition_proposed: trial
+    evidence_refs: ["O-020"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: moderate
+    certainty_codes: [single-contract]
+    stated_confidence: 0.75
+    restatements: 1
+    last_moved: 2026-09-19
+    decision: null
+    outcome: null
+
+  - cand_id: K-019
+    created: 2026-09-19
+    statement: |
+      Every "run the tests, then commit" chain used across this session was ungated, and the
+      defect is the same one the session kept finding in the product.
+
+      The shape was `dotnet test ... | grep ... | head -3 && git commit ...`. A shell pipeline
+      exits with the status of its last stage, so the chain gated on head, which always succeeds.
+      The `&&` read as "commit only if the tests passed" and meant "commit". It surfaced when a
+      commit went through with a test failing; the failure was contract-002's deliberate red
+      test, so nothing bad was published, but that was luck rather than the gate.
+
+      The commits were in fact green because the output was read each time. That is the point: a
+      human-read check standing where a mechanical one appears to be is worse than no check,
+      because it is trusted like a mechanism and fails like attention.
+
+      The fix is `set -o pipefail`, or capturing the test exit status before filtering. The wider
+      shape, which is now four instances in two days: a check whose failure path was never
+      exercised. O-011 named it for tests, O-015 for test composition, O-018 for an exclusion
+      drawn around the example at hand. This one is the same claim about the tooling the agent
+      uses to verify its own work, which is the one place it was not being applied.
+    level: principle
+    tier: undecided
+    target: [meta-mechanisms]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-021"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: low
+    certainty_codes: [single-contract]
+    stated_confidence: 0.95
+    restatements: 1
+    last_moved: 2026-09-19
+    decision: null
+    outcome: null
+
 batches: []
 
 map_proposals: []
@@ -1315,19 +1515,19 @@ audits:
     findings: [O-005, O-006, O-007, O-008]
 
 scores:
-  updated: 2026-09-18
+  updated: 2026-09-19
   contracts:
     - contract_id: contract-001
-      observations: 14
-      candidates_created: 12
+      observations: 16
+      candidates_created: 14
       audited: true
       verified: true
       cost: {turns: null, tokens: null, pioneer_minutes: null}
       corrections_from_tests: 2
       corrections_from_reading: 1
     - contract_id: contract-002
-      observations: 0
-      candidates_created: 0
+      observations: 1
+      candidates_created: 1
       audited: false
       verified: false
       cost: null

@@ -191,8 +191,8 @@ corrections:
       prose rule recorded as P-002 did not hold
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-005
     clerk_note: null
 
   - corr_id: C-006
@@ -217,8 +217,8 @@ corrections:
       not asked
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-006, S-003"
     clerk_note: null
 
   - corr_id: C-007
@@ -243,8 +243,8 @@ corrections:
       not asked
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-007, S-004"
     clerk_note: null
 
   - corr_id: C-008
@@ -278,8 +278,8 @@ corrections:
       I havent seen you do this before, so this is abit odd.
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-008, S-005"
     clerk_note: null
 
 
@@ -311,16 +311,20 @@ corrections:
       not asked — it is written in the foundation, which is the answer to where it had been seen before.
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-009
     clerk_note: null
 
 
 trajectory:
-  updated: 2026-09-17
+  updated: 2026-09-19
   by_contract:
     - contract_id: null
-      corrections: 4
+      corrections: 6
       bearing_reevaluations: 0
-      interventions: {did-it: 0, redirected: 4, hinted: 0, reviewed-after: 0}
-  moments: {M-27: 3, M-07: 1}
+      interventions: {did-it: 0, redirected: 6, hinted: 0, reviewed-after: 0}
+    - contract_id: contract-001
+      corrections: 3
+      bearing_reevaluations: 0
+      interventions: {did-it: 0, redirected: 3, hinted: 0, reviewed-after: 0}
+  moments: {M-27: 3, M-07: 1, M-14: 2, M-04: 1, M-12: 1, M-03: 1}
