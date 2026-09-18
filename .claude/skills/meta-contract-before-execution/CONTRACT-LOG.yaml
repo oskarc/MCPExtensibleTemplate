@@ -89,7 +89,7 @@ contracts:
     feature: phase-1-identity
     type: contract
     date_proposed: 2026-09-18
-    date_approved: null
+    date_approved: 2026-09-18
     bearing: |
       After this contract the server refuses any HTTP request that does not carry a verified
       principal, and each provider answers only to the one identity provider it is bound to. The bet
@@ -117,11 +117,22 @@ contracts:
     disappointment: |
       same as it reads
       (Given for all guardrails, in answer to "what result would make you say this was not met?")
-    approval: pending
-    status: proposed
+    red_test:
+      broke: G-1
+      went_red: T-1
+      note: |
+        Not staged. The guarantee is broken in the tree as it stands - there is no notion of a
+        token, an authorization server or a resource - so T-1 went red against the current code on
+        first run, on the assertion that matters: "401 carried no WWW-Authenticate header at all".
+        The API key middleware answers 401 with a sentence of prose, which tells a client nothing
+        it can act on and gives it nowhere to go. Test file:
+        McpServerTemplate.Tests/Identity/ResourceMetadataTests.cs
+      date: 2026-09-18
+    approval: approved-at-gate
+    status: approved
     verification_state: none
     audited: false
-    transcript: null
+    transcript: C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
     observations: []
     revisions:
       - what: |
@@ -253,8 +264,8 @@ contracts:
         JsonPlaceholderRoundTripTests.cs
       date: 2026-09-17
     approval: approved-at-gate
-    status: implemented
-    verification_state: reported
+    status: verified
+    verification_state: closed
     verification:
       date: 2026-09-18
       by: kit-verifier
@@ -648,6 +659,25 @@ contracts:
       open_needs:
         []
     verification_history:
+      - closed: 2026-09-18
+        by: pioneer-confirmation
+        clauses_confirmed: [G-4]
+        pioneer_said: |
+          then we proceed with contract-002
+        note: |
+          The fifth pass reached all 21 clauses: 18 verified, 3 corrected, 0 open, T-12 the only
+          failing test. Two corrections were closed in e4dd588 — G-4's write-tool argument guards
+          (six blank-argument cases that reached a caller unnamed) and UC-8/G-11's five
+          documentation lines, with the check that missed them widened and proven to bite.
+          G-4's remaining half is carried, not met: SMHI and SmhiObs do not map timeout or
+          open-circuit failures, so 7 of 13 tools answer a caller with a bare error once their
+          upstream goes down. The pioneer agreed to carry it rather than hand-patch two providers,
+          because Phase 2 builds resilience at the boundary every provider passes through and
+          those catch blocks are code it deletes (O-016, O-017).
+          On the attribution: the agent asked the pioneer to confirm that last row per clause and
+          named the alternative (a sixth pass). The pioneer answered "then we proceed with
+          contract-002". That is recorded here verbatim rather than paraphrased as a per-clause
+          sign-off, so a later reader can judge the inference rather than inherit it.
       - superseded_report: kit-verifier, 2026-09-18 (fourth report, heads ed2f25f and ea9b51d, partial)
         superseded_on: 2026-09-18
         superseded_by: |

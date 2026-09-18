@@ -1,0 +1,146 @@
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+
+namespace McpServerTemplate.Tests.Identity;
+
+/// <summary>
+/// contract-002 · T-1 (G-1, G-2) — a caller with no credential is told where to get one.
+///
+/// This is the contract's red test: on the tree as it stands there is no notion of a token, an
+/// authorization server or a resource. The API key middleware answers 401 with a sentence of
+/// prose, which tells a client nothing it can act on. RFC 9728 says the challenge must point at
+/// the metadata document, and that document is how a client discovers where to authenticate.
+/// </summary>
+public class ResourceMetadataTests
+{
+    private static string RepositoryRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "McpServerTemplate.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.True(dir is not null, "could not locate the repository root");
+        return dir!.FullName;
+    }
+
+    private static int FreePort()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
+
+    /// Starts the server over HTTP and drains its stderr, which a redirected pipe requires —
+    /// an undrained one fills and the server blocks mid-request (drift-003).
+    private static async Task<(Process Process, HttpClient Client, StringBuilder Stderr)> StartAsync()
+    {
+        var exe = Path.Combine(
+            RepositoryRoot(), "McpServerTemplate", "bin",
+#if DEBUG
+            "Debug",
+#else
+            "Release",
+#endif
+            "net10.0", OperatingSystem.IsWindows() ? "McpServerTemplate.exe" : "McpServerTemplate");
+
+        Assert.True(File.Exists(exe), $"server executable not found at {exe}; build the solution first");
+
+        var port = FreePort();
+        var info = new ProcessStartInfo(exe)
+        {
+            WorkingDirectory = Path.GetDirectoryName(exe)!,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        info.Environment.Remove("ASPNETCORE_ENVIRONMENT");
+        info.Environment.Remove("DOTNET_ENVIRONMENT");
+        info.Environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        info.Environment["Transport"] = "http";
+        info.Environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        info.Environment["HttpTransport__BindAddress"] = "127.0.0.1";
+
+        // Still required by the tree as it stands. Contract-002 · G-9 deletes it, and this line
+        // goes with it.
+        info.Environment["Authentication__ApiKey"] = "red-test-key";
+
+        var process = Process.Start(info)!;
+        var stderr = new StringBuilder();
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is null)
+                return;
+
+            lock (stderr)
+                stderr.AppendLine(e.Data);
+        };
+        process.BeginErrorReadLine();
+
+        var client = new HttpClient
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{port}"),
+            Timeout = TimeSpan.FromSeconds(15),
+        };
+
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (process.HasExited)
+            {
+                string text;
+                lock (stderr)
+                    text = stderr.ToString();
+
+                Assert.Fail($"the server exited during startup ({process.ExitCode}): {text}");
+            }
+
+            try
+            {
+                using var probe = await client.GetAsync("/healthz");
+                return (process, client, stderr);
+            }
+            catch (HttpRequestException)
+            {
+                await Task.Delay(300);
+            }
+        }
+
+        process.Kill(entireProcessTree: true);
+        throw new TimeoutException("the server did not start within 60 seconds");
+    }
+
+    [Fact]
+    public async Task T1_a_caller_without_a_token_is_told_where_to_get_one()
+    {
+        var (process, client, _) = await StartAsync();
+
+        try
+        {
+            using var response = await client.GetAsync("/");
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+            // The whole point of the challenge: a client that has no token must be able to find
+            // the authorization server without being told out of band.
+            var challenge = string.Join(" ", response.Headers.WwwAuthenticate.Select(h => h.ToString()));
+
+            Assert.False(
+                string.IsNullOrWhiteSpace(challenge),
+                "401 carried no WWW-Authenticate header at all");
+            Assert.Contains("resource_metadata", challenge, StringComparison.Ordinal);
+        }
+        finally
+        {
+            client.Dispose();
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+            process.Dispose();
+        }
+    }
+}
