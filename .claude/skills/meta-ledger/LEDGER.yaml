@@ -805,6 +805,41 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
+    consolidated: true
+    merged_into: K-025
+    stewarded: n/a
+
+
+  - obs_id: O-028
+    date: 2026-09-19
+    source: ser
+    contract_id: contract-002
+    refs: []
+    statement: |
+      Three things in contract-002 were found by running the server and could not have been found
+      any other way, and they share a shape: each was a security control behaving correctly and
+      costing something nobody had priced.
+
+      The router forwarded unattributable requests to the MCP challenge scheme, whose handler
+      authenticates through the default scheme — the router. The server died of a stack overflow
+      on its first unauthenticated request. It compiled, and every unit test passed.
+
+      Requiring identity configuration for stdio was correct and would have made the template
+      unrunnable for a local IDE without a production-shaped config file. The guarantee was right;
+      its reach was wrong.
+
+      G-12 refused the contract's own HTTP tests, because they run as Production over loopback
+      plaintext. The guardrail was working on its first day, against its author.
+
+      The transferable point: a security control's cost lands on whoever is nearest, and that is
+      usually the developer, the test harness, or the local workflow — none of which appear in the
+      threat model that justified the control. Writing the guarantee is not the hard part. Finding
+      out who pays for it requires running it, and the three cases here were all paid by someone
+      other than the attacker it was aimed at.
+    level_guess: principle
+    stated_confidence: 0.85
+    loaded_candidates: []
+    prompted: false
     consolidated: false
     merged_into: null
     stewarded: n/a
@@ -1642,6 +1677,32 @@ candidates:
     decision: null
     outcome: null
 
+  - cand_id: K-025
+    created: 2026-09-19
+    statement: |
+      M-04
+
+      That was very sloppy, add a driftlog about not completing the contract.
+      then do 3
+    level: pattern
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-027"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-19
+    decision: null
+    outcome: null
+
 batches: []
 
 map_proposals: []
@@ -1676,8 +1737,8 @@ scores:
       corrections_from_tests: 2
       corrections_from_reading: 1
     - contract_id: contract-002
-      observations: 1
-      candidates_created: 1
+      observations: 2
+      candidates_created: 2
       audited: false
       verified: false
       cost: null

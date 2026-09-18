@@ -185,3 +185,77 @@ entries:
     reviewed: null
     recurrence_count: 0
     related_drifts: [drift-004]
+
+  - drift_id: drift-006
+    surfaced_in: 2026-09-19 / contract-002 verification
+    surfaced_by: post-hoc
+    aspect: evidence-as-work
+    description: |
+      contract-002 was drawn, approved, implemented and reported complete without its tiers ever
+      being written into the contract log. tier_1, tier_2, tier_3 and tier_4 are absent from the
+      entry and absent from every commit of that file. The bearing, ground, premortem,
+      disappointment, red test and revisions were all recorded; the specification itself was not.
+
+      The consequence is not bookkeeping. kit-verifier could name only the clauses it could read,
+      so nine use cases came back open for want of any recorded text, and every guardrail verdict
+      rests on reconstruction from doc comments in the source and the roadmap's Phase 1 exit
+      criteria. The agent's own claims of "twelve of twelve guardrails" and "thirteen of thirteen
+      tests" were made against a specification that existed only in conversation — and the test
+      count was wrong: eleven test ids exist, the drawn tier_4 had twelve.
+
+      The launch brief given to the verifier compounded it, asserting "the contract's tier_4 lists
+      T-1 … T-12" and a UC-1..UC-9 clause set. Both describe contract-001's entry. The verifier
+      caught it and said so.
+    evidence: |
+      CONTRACT-LOG.yaml contract-002: keys present are bearing, ground, premortem, disappointment,
+      red_test, revisions, tests_run, verification and lifecycle fields; tier_1..tier_4 absent.
+      Test ids present in McpServerTemplate.Tests: T1..T9, T11, T12 — eleven, no T10 or T13.
+      kit-verifier report of 2026-09-19: 9 verified, 1 corrected, 11 open.
+    reaction: |
+      Reported to the pioneer in full. The drawn tiers are recoverable verbatim from the session
+      transcript and will be written into the entry, marked as recorded after the fact so no later
+      reader mistakes them for text the pioneer approved in place.
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 0
+    related_drifts: [drift-005]
+
+  - drift_id: drift-007
+    surfaced_in: 2026-09-19 / contract-002 verification
+    surfaced_by: post-hoc
+    aspect: evidence-as-work
+    description: |
+      G-12 refuses to start in Production without TLS or a declared proxy, and the server has no
+      HTTPS listener at all. Program.cs binds http:// unconditionally. HttpTransport:Certificate:Path
+      and :Subject are read by the guard and by nothing else, as are KnownProxies and KnownNetworks —
+      ForwardedHeadersOptions never assigns them.
+
+      So an operator who satisfies the guard gets a server that still serves bearer tokens over
+      plaintext, and a declared trusted proxy that the forwarded-headers middleware does not trust.
+      A control that answers "configured" when nothing is configured is worse than an absent one:
+      it converts an open question into a false answer.
+
+      T-12 passes because it calls TransportSecurityGuard.Validate in isolation and asserts only
+      that it throws or does not. The same shape as O-015, O-018 and O-021 — a check exercised in
+      a composition the program never uses. Fourth instance.
+
+      G-5 carries the same flaw one level down: the trust-domain filters are registered in
+      Program.cs, and the in-process harness builds its own MCP server without them, so the
+      enforcement path is executed by no test. Both filter bodies fail open when the binding
+      cannot be resolved.
+    evidence: |
+      kit-verifier report of 2026-09-19, G-12 corrected: the Release binary started in Production
+      with Certificate__Path set to a non-existent file and no trusted proxy, served the metadata
+      document over http with 200, and issued a challenge naming an http resource_metadata URI.
+      Program.cs:174 UseUrls($"http://..."). TransportSecurityGuard.cs:37-42 the only readers.
+      InProcessServer.cs:88 calls AddMcpServer directly; Program.cs:241-242 register the filters.
+    reaction: |
+      Reported to the pioneer. Not yet fixed: the remedies differ in size — serving HTTPS is real
+      work, and wiring KnownProxies into ForwardedHeadersOptions is small — and the contract's
+      tiers must be recorded before its clauses are changed.
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 0
+    related_drifts: [drift-006]

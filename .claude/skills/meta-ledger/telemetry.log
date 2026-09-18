@@ -228,3 +228,29 @@
 2026-09-18T22:57:52Z|loaded-agent|meta-ledger/LEDGER.yaml
 2026-09-18T22:57:54Z|loaded-agent|meta-ledger/LEDGER.yaml
 2026-09-18T22:58:32Z|loaded-agent|meta-contract-before-execution/SKILL.md
+2026-09-18T22:59:20Z|prompt|
+2026-09-18T22:59:21Z|subagent|kit-consolidator
+2026-09-18T22:59:36Z|stop-gate|Pioneer-owned items are waiting: candidates, map proposals, unratified e
+2026-09-18T22:59:45Z|prompt|
+2026-09-18T22:59:55Z|stop-gate|Pioneer-owned items are waiting: candidates, map proposals, unratified e
+2026-09-18T23:09:12Z|prompt|
+2026-09-18T23:10:07Z|stop-gate|Contract contract-002 is implemented and its session is unaudited. Launc
+2026-09-18T23:15:08Z|prompt|
+2026-09-18T23:15:38Z|stop-gate|Contract contract-002 is implemented and its session is unaudited. Launc
+2026-09-18T23:18:34Z|prompt|
+2026-09-18T23:18:35Z|subagent|kit-verifier
+2026-09-18T23:18:55Z|prompt|
+2026-09-18T23:20:04Z|stop-gate|Contract contract-002 is implemented and its session is unaudited. Launc
+2026-09-18T23:20:14Z|loaded-agent|meta-antidrift/SKILL.md
+2026-09-18T23:20:14Z|loaded-agent|meta-correction-log/SKILL.md
+2026-09-18T23:20:15Z|loaded-agent|meta-ledger/SKILL.md
+2026-09-18T23:20:18Z|loaded-agent|meta-ledger/LEDGER.yaml
+2026-09-18T23:20:21Z|loaded-agent|meta-contract-before-execution/CONTRACT-LOG.yaml
+2026-09-18T23:20:25Z|loaded-agent|meta-contract-before-execution/CONTRACT-LOG.yaml
+2026-09-18T23:22:06Z|prompt|
+2026-09-18T23:22:25Z|stop-gate|Contract contract-002 is implemented and its session is unaudited. Launc
+2026-09-18T23:25:58Z|loaded-agent|meta-ledger/LEDGER.yaml
+2026-09-18T23:26:14Z|loaded-agent|meta-casebook/CASEBOOK.yaml
+2026-09-18T23:26:33Z|loaded-agent|meta-ledger/LEDGER.yaml
+2026-09-18T23:26:58Z|loaded-agent|meta-correction-log/CORRECTIONS.yaml
+2026-09-18T23:26:59Z|prompt|
