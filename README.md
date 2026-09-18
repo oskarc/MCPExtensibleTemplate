@@ -33,7 +33,7 @@ McpServerTemplate/
 │   │   ├── JsonPlaceholderConfig.cs          # Strongly-typed config
 │   │   ├── JsonPlaceholderFormatters.cs      # LLM-optimized output
 │   │   ├── JsonPlaceholderServiceRegistration.cs # DI registration
-│   │   ├── JsonPlaceholderTools.cs           # MCP tools (Get/CreateBlogPost, etc.)
+│   │   ├── JsonPlaceholderTools.cs           # MCP tools (get_blog_post, create_blog_post, etc.)
 │   │   └── Models/                           # DTOs (Post, Comment, Todo)
 │   ├── Smhi/                         # Weather forecast provider (example)
 │   │   ├── SmhiApiClient.cs          # Typed HTTP client with resilience
@@ -42,11 +42,11 @@ McpServerTemplate/
 │   │   ├── SmhiPrompts.cs            # MCP prompt templates
 │   │   ├── SmhiResources.cs          # MCP resources (symbol codes, coverage)
 │   │   ├── SmhiServiceRegistration.cs# DI registration
-│   │   ├── SmhiTools.cs              # MCP tools (GetForecast, GetCurrentWeather, etc.)
+│   │   ├── SmhiTools.cs              # MCP tools (get_forecast, get_current_weather, etc.)
 │   │   └── Models/                   # API response DTOs
 │   └── SmhiObs/                      # Historical observations provider (example)
 │       ├── SmhiObsApiClient.cs
-│       ├── SmhiObsTools.cs           # GetRecentTemperature, GetTemperatureHistory, etc.
+│       ├── SmhiObsTools.cs           # get_recent_temperature, get_temperature_history, etc.
 │       └── ...
 ├── appsettings.json                  # Base configuration
 ├── appsettings.Development.json      # Debug logging, relaxed rate limits

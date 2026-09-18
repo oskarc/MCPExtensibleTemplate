@@ -114,7 +114,7 @@ IDs are used throughout this document and as xUnit traits on tests (`[Requiremen
 | DEF-01 | Kestrel listener starts in stdio mode | Unauthenticated socket; startup fails when port 5000 is taken |
 | DEF-02 | Fatal errors exit with code 0 | Supervisors cannot detect failure |
 | DEF-03 | JSONPlaceholder deserialization is case-sensitive; all six tools return wrong data | Wrong data returned to the model with no error |
-| DEF-04 | `GetMonthlyClimate` requests `corrected-archive` as JSON; SMHI publishes it only as CSV | Tool cannot succeed |
+| DEF-04 | `get_monthly_climate` requests `corrected-archive` as JSON; SMHI publishes it only as CSV | Tool cannot succeed |
 | DEF-05 | Climatology takes the first 50 000 readings before filtering by month | Wrong answer from the oldest years |
 | DEF-06 | `HttpClient.Timeout` (15 s) caps the resilience pipeline's 30 s total; retries are cut off | Documented resilience does not happen |
 | DEF-07 | API-key middleware runs before CORS; preflight requests fail | CORS configuration is inert |
@@ -331,7 +331,7 @@ Phases are ordered by dependency: identity before policy (policy is keyed on the
 - P0.3 Split hosting. `Transport=http` builds a `WebApplication`. `Transport=stdio` builds a plain `Host.CreateApplicationBuilder` with no Kestrel, and only when `IHostEnvironment.IsDevelopment()`; otherwise log `sys_startup` failure and exit 78. (DEF-01)
 - P0.4 Exit codes: unhandled fatal → 70 (`EX_SOFTWARE`) with `sys_crash`; configuration error → 78 (`EX_CONFIG`). (DEF-02)
 - P0.5 Replace `HealthProbe` with ASP.NET Core health checks (`/healthz` liveness, `/readyz` readiness). No upstream calls before the server is serving. (DEF-10)
-- P0.6 Provider fixes: JSONPlaceholder uses `JsonSerializerOptions.Web` and `[JsonPropertyName]`, throws `McpException` with recovery hints, gains a size cap and timeout mapping (DEF-03). Remove `GetMonthlyClimate`, or re-implement it on the CSV endpoint with a streaming parser and a hard row cap (DEF-04). Filter by month before capping (DEF-05). Set `HttpClient.Timeout = Timeout.InfiniteTimeSpan` so the resilience pipeline's total timeout governs, and assert `Total > Attempt × (1 + retries)` (DEF-06).
+- P0.6 Provider fixes: JSONPlaceholder uses `JsonSerializerOptions.Web` and `[JsonPropertyName]`, throws `McpException` with recovery hints, gains a size cap and timeout mapping (DEF-03). Remove `get_monthly_climate`, or re-implement it on the CSV endpoint with a streaming parser and a hard row cap (DEF-04). Filter by month before capping (DEF-05). Set `HttpClient.Timeout = Timeout.InfiniteTimeSpan` so the resilience pipeline's total timeout governs, and assert `Total > Attempt × (1 + retries)` (DEF-06).
 - P0.7 Middleware order: forwarded headers → HTTPS → hosts → CORS → rate limiter → authentication. Key the throttle on registered tool names only, resolved from `IEnumerable<McpServerTool>` at startup. (DEF-07, DEF-08; both superseded by Phase 2 but fixed now so the base is safe.)
 - P0.8 Remove `Authentication:ApiKey` from every `appsettings*.json`; development uses `dotnet user-secrets`; add gitleaks to CI. (DEF-14)
 - P0.9 Documentation: tool names in snake_case; remove the troubleshooting line that calls immediate exit "normal". (DEF-13)

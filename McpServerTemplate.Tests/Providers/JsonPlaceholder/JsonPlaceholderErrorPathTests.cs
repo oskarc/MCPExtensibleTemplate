@@ -179,4 +179,28 @@ public class JsonPlaceholderErrorPathTests
         Assert.Contains("1", ex.Message, StringComparison.Ordinal);
         Assert.Contains("100", ex.Message, StringComparison.Ordinal);
     }
+
+    public static TheoryData<string, Func<JsonPlaceholderApiClient, Task>> EveryWriteToolWithABlankRequiredArgument() => new()
+    {
+        { "create_blog_post/title", c => c.CreatePostAsync(1, "", "body") },
+        { "create_blog_post/body", c => c.CreatePostAsync(1, "title", "   ") },
+        { "add_post_comment/name", c => c.CreateCommentAsync(1, "", "e@example.com", "body") },
+        { "add_post_comment/email", c => c.CreateCommentAsync(1, "name", "  ", "body") },
+        { "add_post_comment/body", c => c.CreateCommentAsync(1, "name", "e@example.com", "") },
+        { "create_user_todo/title", c => c.CreateTodoAsync(1, "  ") },
+    };
+
+    [Theory]
+    [MemberData(nameof(EveryWriteToolWithABlankRequiredArgument))]
+    public async Task T5_a_blank_required_argument_names_what_is_missing(
+        string which, Func<JsonPlaceholderApiClient, Task> call)
+    {
+        // These threw ArgumentException, which a model receives as the bare "An error occurred
+        // invoking 'create_blog_post'." — telling it nothing about which argument to supply, on
+        // the one class of failure it can actually fix by itself.
+        var ex = await Assert.ThrowsAsync<McpException>(() => call(Client(HttpStatusCode.OK)));
+
+        var argument = which.Split('/')[1];
+        Assert.Contains(argument, ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

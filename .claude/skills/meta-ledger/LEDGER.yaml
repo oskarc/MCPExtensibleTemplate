@@ -580,6 +580,40 @@ observations:
     stewarded: n/a
 
 
+  - obs_id: O-018
+    date: 2026-09-18
+    source: verification
+    contract_id: contract-001
+    refs: [O-015]
+    statement: |
+      Third instance in one contract of a test that passed because of how it was scoped, and this
+      one was written an hour after the lesson was recorded.
+
+      T-12's widened PascalCase check excluded every fenced block, reasoning that a fence holds
+      code and PascalCase is correct in code. README's project tree sits in a bare fence, so the
+      check could not see the three lines it had just been written to catch. It passed against the
+      exact regression it existed for — found only because the restore-and-break step was run, and
+      run a second time after the first attempt also came back green.
+
+      The rule that was wrong: "a fence holds code". A bare fence holds file trees, transcripts and
+      sample output, which is precisely where a PascalCase name reads to a caller as the name to
+      call. Only a language-tagged C# fence earns the exemption, because only there is PascalCase
+      the method rather than the tool.
+
+      The pattern across all three instances (O-015, and both halves here): each exclusion was
+      drawn around the case in front of me at the time — the provider I had fixed, the tables I had
+      rewritten, the fences I assumed were code. An exclusion written from the example at hand
+      fits the example and nothing else. The check for it is cheap and mechanical: break the thing
+      the test exists for and watch it go red, every time, not once.
+    level_guess: principle
+    stated_confidence: 0.95
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17

@@ -145,10 +145,12 @@ public class JsonPlaceholderApiClient
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(title))
-            throw new ArgumentException("Title cannot be empty", nameof(title));
+            throw new McpException(
+                "The 'title' argument is required and was blank. Supply a title and call again.");
 
         if (string.IsNullOrWhiteSpace(body))
-            throw new ArgumentException("Body cannot be empty", nameof(body));
+            throw new McpException(
+                "The 'body' argument is required and was blank. Supply a body and call again.");
 
         var post = new Post
         {
@@ -194,13 +196,16 @@ public class JsonPlaceholderApiClient
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Name cannot be empty", nameof(name));
+            throw new McpException(
+                "The 'name' argument is required and was blank. Supply a name and call again.");
 
         if (string.IsNullOrWhiteSpace(email))
-            throw new ArgumentException("Email cannot be empty", nameof(email));
+            throw new McpException(
+                "The 'email' argument is required and was blank. Supply an email and call again.");
 
         if (string.IsNullOrWhiteSpace(body))
-            throw new ArgumentException("Body cannot be empty", nameof(body));
+            throw new McpException(
+                "The 'body' argument is required and was blank. Supply a body and call again.");
 
         var comment = new Comment
         {
@@ -246,7 +251,8 @@ public class JsonPlaceholderApiClient
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(title))
-            throw new ArgumentException("Title cannot be empty", nameof(title));
+            throw new McpException(
+                "The 'title' argument is required and was blank. Supply a title and call again.");
 
         var todo = new Todo
         {

@@ -24,7 +24,7 @@ The testing strategy covers **4 layers**:
 - Moderate execution time (seconds)
 - Verify data flows between layers
 
-**Example**: Test that `GetForecast()` tool correctly receives config, calls API client, and formats output
+**Example**: Test that the `get_forecast` tool correctly receives config, calls API client, and formats output
 
 ### 3. **E2E Tests** (full system scope)
 - Test the complete request lifecycle

@@ -570,6 +570,60 @@ public class ServerProcessTests
             }
         }
 
+        // T-12's failure condition is "a PascalCase spelling of a tool name appears in the docs",
+        // which is wider than the tables. Five such lines sat outside them — a file-tree comment,
+        // a testing example, a transcript — each reading to a caller as the name to call. The
+        // exception is a genuine C# reference: Type.Method(), or a fenced code block.
+        var pascalOfExposed = exposed
+            .ToDictionary(
+                name => string.Concat(name.Split('_').Select(part => char.ToUpperInvariant(part[0]) + part[1..])),
+                name => name,
+                StringComparer.Ordinal);
+
+        var pascalOutsideTables = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var file in documents)
+        {
+            var inCodeFence = false;
+            var lineNumber = 0;
+            foreach (var line in File.ReadLines(file))
+            {
+                lineNumber++;
+                var trimmed = line.TrimStart();
+                if (trimmed.StartsWith("```", StringComparison.Ordinal))
+                {
+                    // Only a C# fence is exempt, and only because PascalCase there is the method
+                    // and is correct. A bare fence holds file trees, transcripts and sample output
+                    // — where a PascalCase name reads as the name to call, which is the defect.
+                    // Excluding every fence made this check blind to three README lines it was
+                    // written to catch.
+                    var language = trimmed[3..].Trim();
+                    inCodeFence = !inCodeFence &&
+                        (language.Equals("csharp", StringComparison.OrdinalIgnoreCase) ||
+                         language.Equals("cs", StringComparison.OrdinalIgnoreCase));
+                    continue;
+                }
+
+                if (inCodeFence)
+                    continue;
+
+                foreach (var (pascal, wire) in pascalOfExposed)
+                {
+                    if (!line.Contains(pascal, StringComparison.Ordinal))
+                        continue;
+
+                    // A qualified C# reference is the method, and is correct as written.
+                    if (line.Contains($".{pascal}", StringComparison.Ordinal))
+                        continue;
+
+                    pascalOutsideTables.Add($"{Path.GetFileName(file)}:{lineNumber} {pascal} (wire name: {wire})");
+                }
+            }
+        }
+
+        Assert.True(
+            pascalOutsideTables.Count == 0,
+            "PascalCase tool names presented to a reader: " + string.Join("; ", pascalOutsideTables));
+
         Assert.True(
             wrongInTables.Count == 0,
             "tool tables list names the server does not expose: " + string.Join(", ", wrongInTables));

@@ -41,7 +41,7 @@ Claude: "I don't have access to real-time weather data."
 With MCP: Claude can fetch real data
 ```
 You: "What's the weather in Stockholm?"
-Claude: (uses GetCurrentWeather tool)
+Claude: (uses get_current_weather tool)
 Claude: "It's 15°C and cloudy."
 ✅ Works!
 ```
