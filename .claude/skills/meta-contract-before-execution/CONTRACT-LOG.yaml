@@ -201,7 +201,7 @@ contracts:
       date: 2026-09-17
     approval: approved-at-gate
     status: implemented
-    verification_state: reported
+    verification_state: none
     verification:
       date: 2026-09-18
       by: kit-verifier
@@ -508,6 +508,26 @@ contracts:
       summary: {verified: 18, corrected: 3, open: 0}
       open_needs: []
     verification_history:
+      - superseded: 2026-09-18
+        by_evidence: |
+          commit a433cfe — all three clauses the third report corrected are closed, each with a
+          test seen to fail first.
+          G-2: every configuration refusal now raises ConfigurationException, so T-3's own named
+          case (a provider BaseUrl over http) exits 78 with an operator message and no stack
+          trace, where it exited 70. Covered by nine registration tests across the three
+          providers and by a process-level test asserting the exit code and the absence of a
+          stack trace.
+          UC-3 and G-4: BrokenCircuitException is mapped, so calls after the breaker opens name
+          a recovery instead of arriving as bare "An error occurred invoking". Driven over stdio
+          five consecutive calls deep against an unresolvable host. The six ArgumentException
+          throws in JsonPlaceholderTools, which the file's own header forbids, now raise
+          McpException naming the valid range.
+          117 tests pass in Release with warnings as errors; CI green on a433cfe.
+
+          Recorded as O-015: all three defects hid behind passing tests, and for one reason —
+          T-5's error cases construct the client with a bare handler and no resilience pipeline,
+          so no failure that pipeline raises can appear in them, and T-3's automated form
+          exercises two cases other than the one it is named for.
       - superseded_report: kit-verifier, 2026-09-18 (second report, head 33bb5ae)
         superseded_on: 2026-09-18
         superseded_by: |
