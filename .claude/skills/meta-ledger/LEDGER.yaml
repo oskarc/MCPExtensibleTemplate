@@ -1059,6 +1059,122 @@ observations:
     merged_into: null
     stewarded: n/a
 
+  - obs_id: O-034
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-011]
+    statement: |
+      M-12
+
+      number 1 is a foundational drift, one of the most central parts is the contract and you
+      didnt actually write it. How could this have happened? What influenced that drift?
+
+      And you also didnt tell me but ran verification agents in many iterations instead of
+      producing a moment to align
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-035
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-012]
+    statement: |
+      M-03
+
+      if we dont have a contract you dont have anything to run the lay of the land for, and we
+      have no plan. the roadmap exist to be broken down into contracts, to feed the standard
+      development. the point is not to produce a mcp server, the point is to build the standard.
+
+      The meta approach has skills that enforces a contract for every change whatever it is.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-036
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-013]
+    statement: |
+      M-06
+
+      I approve the contract, now commit it to the contract log, complete the contract in full.
+      Adhere to the meta skills, when in doubt, when you miss your mark and try to fix yourself,
+      alway read the meta skills and not from memory, not exerpts or only looking at the names. if
+      you dont read them you dont understand the practice and cant deliver or meet the gate.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-037
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-014]
+    statement: |
+      M-25
+
+      What are you doing now? you have been iterating for quite abit after i asked you how we best
+      solve this
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-038
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-015]
+    statement: |
+      M-04
+
+      the workflow should be i ask you to propose a solution, you present the solution in a clear,
+      structured and accessible way, i steer on it, if i say we do the solution, you draw a
+      contract, nothing is ever superceded, you draw a contract before any implementation work.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-039
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-016]
+    statement: |
+      M-24
+
+      you have lost direction here, that is why you ask me
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
 
 candidates:
   - cand_id: K-001

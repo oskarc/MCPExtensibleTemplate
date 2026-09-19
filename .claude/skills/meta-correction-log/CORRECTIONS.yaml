@@ -375,8 +375,8 @@ corrections:
       not asked
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-011
     clerk_note: null
 
 
@@ -408,8 +408,8 @@ corrections:
       not asked
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-012
     clerk_note: null
 
 
@@ -440,8 +440,8 @@ corrections:
       not asked
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-013
     clerk_note: null
 
 
@@ -473,8 +473,8 @@ corrections:
       not answered
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-014
     clerk_note: null
 
 
@@ -504,8 +504,8 @@ corrections:
       C-014, same turn — the alignment moment that was skipped there is the one this defines.
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-015, S-007"
     clerk_note: null
 
 
@@ -533,13 +533,13 @@ corrections:
       not answered
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-016, S-008"
     clerk_note: null
 
 
 trajectory:
-  updated: 2026-09-19
+  updated: 2026-09-20
   by_contract:
     - contract_id: null
       corrections: 6
@@ -550,7 +550,7 @@ trajectory:
       bearing_reevaluations: 0
       interventions: {did-it: 0, redirected: 3, hinted: 0, reviewed-after: 0}
     - contract_id: contract-002
-      corrections: 1
+      corrections: 7
       bearing_reevaluations: 0
-      interventions: {did-it: 0, redirected: 1, hinted: 0, reviewed-after: 0}
-  moments: {M-27: 3, M-07: 1, M-14: 2, M-04: 2, M-12: 1, M-03: 1}
+      interventions: {did-it: 0, redirected: 7, hinted: 0, reviewed-after: 0}
+  moments: {M-27: 3, M-07: 1, M-14: 2, M-04: 3, M-12: 2, M-03: 2, M-06: 1, M-25: 1, M-24: 1}

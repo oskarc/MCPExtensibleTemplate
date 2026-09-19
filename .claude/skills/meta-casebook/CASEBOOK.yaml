@@ -299,6 +299,154 @@ precedents:
     overruled_by: null
     check: "P-010.sh: passes"
 
+  - prec_id: P-011
+    date: 2026-09-19
+    from: [C-011, contract-002]
+    moments: [M-12]
+    tier: project
+    facts: |
+      Verification of contract-002 (M-12) followed six verification passes that began on contract-001 and
+      resumed onto contract-002, reporting findings after each pass, without the agent stopping to align
+      with the pioneer on whether the loop itself was the right thing to be doing — and contract-002's
+      contract had not actually been written.
+    question: |
+      What caused a central kit artifact — the contract — to go unwritten while verification iterated, and
+      what the agent should have done instead of running the next pass.
+    holding: |
+      Running verification agents in many iterations instead of producing a moment to align is itself the
+      drift, alongside not writing the contract — one of the kit's most central parts.
+    reasons: |
+      (carried in the statement: the contract is one of the most central parts, and iterating agents
+      replaced producing a moment to align)
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — whether a run of verification passes substituted for a moment to align is judgement about process, not a fixed shape a script could verify"
+
+  - prec_id: P-012
+    date: 2026-09-19
+    from: [C-012, contract-002]
+    moments: [M-03, M-04]
+    tier: project
+    facts: |
+      During contract-002 (M-03), the agent had treated the MCP server as the product and the contract as
+      the record of it: contract-002's tiers were never written, changes were made without contracts, and
+      the omission was reported as a bookkeeping failure rather than a missing plan.
+    question: |
+      Whether a contract must exist before a change is made, and what the contract is for.
+    holding: |
+      Without a contract there is nothing to run the lay of the land for, and no plan. The roadmap exists
+      to be broken down into contracts that feed the standard's development — the point is not to produce
+      an MCP server, the point is to build the standard. The meta approach enforces a contract for every
+      change, whatever it is.
+    reasons: |
+      (carried in the statement: the roadmap exists to be broken into contracts that feed the standard's
+      development; the point is the standard, not the server)
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — judging whether a given change is the kind that requires a contract, or distinguishing building the standard from producing the server, is judgement, not a fixed shape a script could verify"
+
+  - prec_id: P-013
+    date: 2026-09-19
+    from: [C-013, contract-002]
+    moments: [M-06]
+    tier: project
+    facts: |
+      The agent had consulted meta-contract-before-execution by targeted greps for tier definitions and the
+      approval gate, never reading it in full, and drew and recorded contracts on that basis. The pioneer
+      approved the contract at hand and, in doing so, corrected how the kit's skills are to be consulted.
+    question: |
+      Whether consulting a meta skill by targeted excerpt or grep is sufficient before drawing on it, or
+      whether the skill must be read in full.
+    holding: |
+      Adhere to the meta skills: when in doubt, or when trying to fix a missed mark, always read the meta
+      skills in full — not from memory, not excerpts, not by looking only at the names. Reading them only
+      by excerpt means the practice is not understood and the gate cannot be met.
+    reasons: |
+      if you dont read them you dont understand the practice and cant deliver or meet the gate
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — whether a skill was read in full rather than by excerpt is a fact about the agent's own reading, and leaves no artifact a script could inspect"
+
+  - prec_id: P-014
+    date: 2026-09-19
+    from: [C-014, contract-002]
+    moments: [M-25]
+    tier: project
+    facts: |
+      After the pioneer asked how best to solve a problem, the agent kept acting — naming its next kit task
+      as assembling the batch, then, a turn later, proposing to run the unblocked M-12 verification path —
+      without stopping to let the pioneer align on the solution.
+    question: |
+      Whether the agent may keep acting toward its own next step after the pioneer asks how a problem
+      should be solved, or must stop and propose solutions for the pioneer's input first.
+    holding: |
+      You should have proposed solutions and waited for my input.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — whether the agent stopped to propose a solution rather than continuing to act is a fact about conversational conduct, not a fixed shape a script could verify"
+
+  - prec_id: P-015
+    date: 2026-09-19
+    from: [C-015, contract-002]
+    moments: [M-04]
+    tier: project
+    facts: |
+      In the same turn as C-014, the agent presented three options via AskUserQuestion for what to draw
+      next — the M-30 mechanism contract, a different contract first, or nothing yet — for the pioneer to
+      align on before anything was built.
+    question: |
+      What the workflow between proposal and implementation should be: whether an AskUserQuestion menu of
+      options satisfies "propose a solution", and when a contract is drawn relative to implementation.
+    holding: |
+      The workflow should be: the pioneer asks the agent to propose a solution, the agent presents the
+      solution in a clear, structured and accessible way, the pioneer steers on it, and if the pioneer says
+      to do the solution, the agent draws a contract — nothing is ever superseded, and a contract is drawn
+      before any implementation work.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — distinguishing a structured proposal from a menu of options, and judging what counts as implementation work needing a contract first, is judgement, not a fixed shape a script could verify"
+
+  - prec_id: P-016
+    date: 2026-09-19
+    from: [C-016, contract-002]
+    moments: [M-24]
+    tier: project
+    facts: |
+      Guardrail G-12 accepted a certificate setting that nothing read, while the server bound plaintext. In
+      the same turn as C-014 and C-015, the agent asked how the guardrail should be made true, offering
+      four options: rename what it asserts, delete the certificate branch, build the HTTPS listener, or
+      leave it for now.
+    question: |
+      Whether the agent may put the question of how to resolve a guardrail that promises protection it
+      does not provide to the pioneer as an open menu, when the founding statement already decides the
+      direction.
+    holding: |
+      You have lost direction here, that is why you ask me. The bearing must be read against the founding
+      statement, which already decides it: the frame must hold integrity with no loopholes or workarounds.
+      A branch that satisfies a check without providing the protection is that loophole, so the direction
+      was not the pioneer's to supply.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — judging whether a guardrail's claim is a loophole the founding statement already forecloses is judgement about the code's semantics against the founding statement, not a fixed shape a script could verify"
+
 scenarios:
   - card_id: S-001
     date: 2026-09-17
@@ -428,6 +576,49 @@ scenarios:
         text: |
           That was very sloppy, add a driftlog about not completing the contract.
           then do 3
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-007
+    date: 2026-09-19
+    from: [C-015]
+    moment: M-04
+    situation: |
+      Unless redirected, the agent's next step was assembling the review batch, then proposing to run the
+      unblocked M-12 verification path (C-014). Asked how best to solve the problem, the agent put three
+      readings to the pioneer via AskUserQuestion for what to draw next, before anything was built.
+    options:
+      - key: A
+        text: |
+          [AskUserQuestion] What should I draw next, in chat, for you to align on before anything is
+          built? — options: the M-30 mechanism contract (Recommended) / a different contract first /
+          nothing yet, discuss further
+      - key: B
+        text: |
+          the workflow should be i ask you to propose a solution, you present the solution in a clear,
+          structured and accessible way, i steer on it, if i say we do the solution, you draw a contract,
+          nothing is ever superceded, you draw a contract before any implementation work.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-008
+    date: 2026-09-19
+    from: [C-016]
+    moment: M-24
+    situation: |
+      Guardrail G-12 accepted a certificate setting that nothing read, while the server bound plaintext.
+      The agent asked how the guardrail should be made true.
+    options:
+      - key: A
+        text: |
+          [AskUserQuestion] G-12 currently accepts a certificate setting that nothing reads, while the
+          server binds plaintext. How should the guardrail be made true? — options: rename what it
+          asserts / delete the certificate branch / build the HTTPS listener / leave it for now
+      - key: B
+        text: |
+          you have lost direction here, that is why you ask me
     pioneer_ranking: pending
     rationale: ""
     dissent: ""
