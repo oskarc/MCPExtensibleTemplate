@@ -1176,6 +1176,52 @@ observations:
     stewarded: n/a
 
 
+  - obs_id: O-040
+    date: 2026-09-20
+    source: ser
+    contract_id: contract-002
+    refs: [O-029, O-030, C-017]
+    statement: |
+      M-30
+
+      The pioneer asked why they had to ask for the consolidator manually when a hook exists for it.
+      The answer is that the hook exists, is correct, and has never fired.
+
+      stop-gate.sh hands one task per turn in a fixed order of twelve. The session audit is fourth.
+      It cannot complete (O-029), so in twenty consecutive turns the gate has handed over the same
+      task and has never reached position seven, consolidation — nor eight, the learning diff, nor
+      nine, the clerk, nor ten, the batch. Every one of those hooks works. None of them has run
+      this session except the clerk, which ran because the pioneer said "run the clerk".
+
+      report-001 F-4 said nothing detects a gate task that never completes. That understated it.
+      The cost is not the repetition, which is merely noise; it is that one uncompletable task at
+      position four silently disabled six working mechanisms below it. The kit's own failure-modes
+      text names this exactly — "a task with no exit repeats every turn and blocks every step below
+      it" — and nothing measures it.
+
+      The priority order is deliberate and tested: walk.sh carries a state named "36 audit outranks
+      verify and consolidate". The walk verifies that the right task wins. It cannot verify that
+      the winner can finish, because its fixture supplies every state directly and never runs an
+      agent. So the test that proves the ordering correct is structurally incapable of noticing
+      that the ordering is fatal.
+
+      The transferable point, for any queue whose items are handed out one at a time by priority:
+      a strict priority order converts one stuck item into a silent outage of everything beneath
+      it, and the symptom is indistinguishable from a quiet backlog. Either the scheduler must be
+      able to tell that the head of the queue is not progressing and pass over it, or every item
+      in it must be guaranteed completable. This kit assumes the second and checks neither.
+
+      In practice the pioneer has been the scheduler for this entire session, dispatching by hand
+      the tasks the gate could not reach.
+    level_guess: principle
+    stated_confidence: 0.9
+    loaded_candidates: []
+    prompted: true
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17

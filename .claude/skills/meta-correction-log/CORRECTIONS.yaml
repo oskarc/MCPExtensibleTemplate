@@ -538,6 +538,37 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-017
+    date: 2026-09-20
+    contract_id: contract-002
+    moment: M-28
+    grade: detail
+    intervention: redirected
+    agent_offered: |
+      The backlog is now shorter by one: M-15 is clear. What remains is M-14 (consolidation,
+      unblocked but its output queues behind the blocked batch), M-12 (verification, retryable),
+      and the two blocked by mechanism.
+    pioneer_said: |
+      none of that means anything
+    reason_given: |
+      none given
+    noticed: |
+      The line names records by their map ids and their status words and says nothing about what
+      any of them is. "M-15 is clear" and "the two blocked by mechanism" carry no content for a
+      reader who is not holding the map.
+    would_have_been_right: |
+      Say what each thing is in plain words — six observations not yet merged into candidates, a
+      contract never independently verified, a session audit that cannot read a transcript this
+      size, a batch whose key cannot be written — and drop the ids unless they add something.
+    seen_before: |
+      asked this turn, awaiting answer
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-20
   by_contract:
