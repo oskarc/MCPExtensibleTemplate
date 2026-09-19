@@ -189,6 +189,13 @@ public static class HttpServerComposition
         app.Services.GetRequiredService<ProviderBinding>();
 
         app.UseForwardedHeaders();
+
+        // contract-002 revision, 2026-09-20 — roadmap P1.6 names UseHsts() and it was absent from
+        // the source entirely: in no clause, no test and no verification pass. It emits
+        // Strict-Transport-Security on HTTPS responses only, so a deployment terminating TLS at a
+        // proxy tells the browser never to try plaintext again, and the loopback tests that run
+        // Production over http are unaffected.
+        app.UseHsts();
         app.UseHttpsRedirection();
         app.UseHostFiltering();
         app.UseCors();

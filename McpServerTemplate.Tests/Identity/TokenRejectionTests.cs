@@ -34,6 +34,11 @@ public class TokenRejectionTests
     public static TheoryData<string> RejectionCases() =>
     [
         "wrong audience", "wrong issuer", "expired", "unsigned", "hmac signed", "no jti",
+
+        // contract-002 revision, 2026-09-20 — roadmap P1.1 requires sub, jti, client_id (or azp)
+        // and iat. Only jti was enforced, so a token naming no subject and no client was accepted
+        // and became an audit entry attributable to nobody.
+        "no sub", "no client_id", "no iat",
     ];
 
     [Theory]
@@ -55,6 +60,9 @@ public class TokenRejectionTests
             "unsigned" => UnsignedToken(corp),
             "hmac signed" => corp.MintHmacToken(Resource),
             "no jti" => corp.MintToken(Resource, jti: null),
+            "no sub" => corp.MintToken(Resource, subject: null),
+            "no client_id" => corp.MintToken(Resource, clientId: null),
+            "no iat" => corp.MintTokenWithout("iat", Resource),
             _ => throw new ArgumentOutOfRangeException(nameof(flaw), flaw, "unknown case"),
         };
 

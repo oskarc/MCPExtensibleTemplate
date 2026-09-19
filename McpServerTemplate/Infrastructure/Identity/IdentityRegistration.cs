@@ -129,13 +129,31 @@ public static class IdentityRegistration
                 {
                     OnTokenValidated = context =>
                     {
-                        // A token without jti cannot be revoked individually or de-duplicated in
-                        // an audit trail, so it is refused here rather than accepted and logged
-                        // as unattributable.
-                        var jti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
-                        if (string.IsNullOrWhiteSpace(jti))
+                        // contract-002 revision, 2026-09-20 — roadmap P1.1 requires sub, jti,
+                        // client_id (or azp) and iat. Only jti was enforced; a token missing the
+                        // others was accepted and became an audit entry naming nobody.
+                        //
+                        // Each is refused for its own reason, and the reason is in the message
+                        // because a caller who cannot see which claim is missing cannot fix it:
+                        //   sub        — no subject, so nothing to attribute the call to
+                        //   jti        — cannot be revoked individually or de-duplicated
+                        //   client_id  — no client, so a compromised one cannot be scoped out
+                        //   iat        — no issue time, so age cannot be reasoned about
+                        static string? Claim(TokenValidatedContext c, params string[] names) =>
+                            names.Select(n => c.Principal?.FindFirst(n)?.Value)
+                                 .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+                        var missing = new List<string>();
+                        if (Claim(context, JwtRegisteredClaimNames.Sub) is null) missing.Add("sub");
+                        if (Claim(context, JwtRegisteredClaimNames.Jti) is null) missing.Add("jti");
+                        if (Claim(context, "client_id", "azp") is null) missing.Add("client_id (or azp)");
+                        if (Claim(context, JwtRegisteredClaimNames.Iat) is null) missing.Add("iat");
+
+                        if (missing.Count > 0)
                         {
-                            context.Fail("The token carries no jti claim, so it cannot be attributed or revoked.");
+                            context.Fail(
+                                "The token is missing " + string.Join(", ", missing)
+                                + ", so it cannot be attributed, revoked or aged.");
                             return Task.CompletedTask;
                         }
 
@@ -148,6 +166,25 @@ public static class IdentityRegistration
                             identity.AddClaims(
                                 TrustDomainFilters.NormalizedClaims(name, provider, context.Principal));
                         }
+
+                        return Task.CompletedTask;
+                    },
+
+                    // contract-002 revision, 2026-09-20 — roadmap P1.1 maps a failed
+                    // authentication to authn_login_fail. Without it the one event a SIEM
+                    // correlates for credential attacks was the only stage of this pipeline that
+                    // said nothing. Follows the malicious_cors precedent in OriginGuardMiddleware.
+                    //
+                    // The exception message is logged and the token is not: a token in a log is a
+                    // credential in a log (roadmap I8).
+                    OnAuthenticationFailed = context =>
+                    {
+                        context.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("McpServerTemplate.Identity")
+                            .LogWarning(
+                                "authn_login_fail: {Scheme} refused a token for {Path} — {Reason}",
+                                scheme, context.HttpContext.Request.Path, context.Exception.Message);
 
                         return Task.CompletedTask;
                     },

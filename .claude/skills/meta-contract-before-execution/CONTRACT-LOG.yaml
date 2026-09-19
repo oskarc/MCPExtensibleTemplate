@@ -631,6 +631,51 @@ contracts:
            contain. Recording tier_4 would say what they were meant to check."
     revisions:
       - what: |
+          P1.6 gap, first half. UseHsts() is named in the roadmap's Phase 1 and is absent from the
+          source entirely — it appears in no contract clause, no test and no verification. Added
+          beside UseHttpsRedirection in the middleware order P0.7 fixes. Over plaintext it changes
+          no behaviour: the header is emitted on HTTPS responses only, so the loopback tests that
+          run Production over http are untouched.
+        authorised_by: pioneer
+        date: 2026-09-20
+        tests_changed: []
+      - what: |
+          P1.1 gap. OnTokenValidated refuses a token with no jti and stops there; the roadmap also
+          requires sub, client_id (or azp) and iat. And OnAuthenticationFailed -> authn_login_fail
+          does not exist, so an authentication failure produces no named audit event in a project
+          whose roadmap cites the OWASP Logging Vocabulary. Both added, the log event following the
+          malicious_cors precedent in OriginGuardMiddleware.
+          Blast radius measured before approval, and the measurement was wrong in the safe
+          direction: the first pass grepped for `new Claim(` and concluded TestIdentityProvider
+          minted only Sub and Jti. It already mints client_id and IssuedAt, so none of the 25
+          MintToken call sites needed changing. DevelopmentPrincipal did carry no iat, and gained
+          one.
+          One real surprise, caught by a test: JsonWebTokenHandler stamps iat whether or not the
+          descriptor asks for it, so the first `no iat` case minted a token that still carried the
+          claim and was rightly accepted. The fixture gained MintTokenWithout, which strips a claim
+          and re-signs — the only way to present a token a standard library would not produce.
+          All three new cases were seen to fail with the enforcement removed and pass with it
+          restored, each bound to its own check.
+        authorised_by: pioneer
+        date: 2026-09-20
+        tests_changed: [T-2]
+      - what: |
+          P1.6 gap, second half, RECORDED BUT NOT EXECUTED. Kestrel serving HTTPS with a certificate
+          from the vault is unbuilt; TransportSecurityGuard accepts HttpTransport:Certificate:Path
+          or :Subject as evidence that it is, and nothing reads either key, so the branch is a claim
+          the server cannot honour. This was nearly removed as a loophole (O-031) before the roadmap
+          showed it to be a Phase 1 deliverable.
+          Not executed because the lay of the land is incomplete and saying otherwise would be the
+          third guess this session at something the roadmap underspecifies. Two unknowns, neither
+          resolvable by reading: what "from the vault" means at Phase 1, when I8 allows a vault or
+          dotnet user-secrets and the vault proper is P6.3 in Phase 6; and where a certificate
+          password comes from, there being no config key for one. A third question follows from
+          either answer — whether the listener is opt-in, since ResourceMetadataTests and
+          ServerProcessTests spawn the shipped executable over http.
+        authorised_by: pioneer — execution awaiting a decision on what "from the vault" means here
+        date: 2026-09-20
+        tests_changed: []
+      - what: |
           Drawn with TLS moved out of Phase 1 into Phase 6, on the reasoning that it is a deployment
           concern untested by Phase 1's exit criteria. Withdrawn before approval when the pioneer
           asked for the reasoning: a bearer token over plaintext makes the rest of the phase theatre;

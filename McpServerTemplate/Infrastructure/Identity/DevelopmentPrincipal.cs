@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using Microsoft.IdentityModel.JsonWebTokens;
 
@@ -76,6 +77,14 @@ public static class DevelopmentPrincipal
             // A jti, because everything downstream expects a token to be identifiable — and a
             // fixed one, so a development trace reads the same across runs.
             new(JwtRegisteredClaimNames.Jti, $"dev-{subject}"),
+
+            // An iat, because the bearer path now requires one (roadmap P1.1) and a development
+            // principal that could not satisfy the rule it stands in for would be a stub that
+            // proves nothing. Seconds since the epoch, as a real token carries it.
+            new(
+                JwtRegisteredClaimNames.Iat,
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+                ClaimValueTypes.Integer64),
         };
 
         if (scopes.Length > 0)

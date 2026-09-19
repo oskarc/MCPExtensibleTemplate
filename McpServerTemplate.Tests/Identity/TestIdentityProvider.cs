@@ -57,8 +57,8 @@ public sealed class TestIdentityProvider : IDisposable
     public string MintToken(
         string audience,
         string? issuer = null,
-        string subject = "user-1",
-        string clientId = "client-1",
+        string? subject = "user-1",
+        string? clientId = "client-1",
         string? jti = "token-1",
         string[]? scopes = null,
         string scopeClaim = "scope",
@@ -66,11 +66,19 @@ public sealed class TestIdentityProvider : IDisposable
         DateTime? notBefore = null,
         SigningCredentials? signingCredentials = null)
     {
-        var claims = new Dictionary<string, object>
+        // Each required claim is omissible on its own, so a rejection test names exactly the one
+        // claim it is making wrong (contract-002 revision, 2026-09-20 — roadmap P1.1).
+        var claims = new Dictionary<string, object>();
+
+        if (subject is not null)
         {
-            [JwtRegisteredClaimNames.Sub] = subject,
-            ["client_id"] = clientId,
-        };
+            claims[JwtRegisteredClaimNames.Sub] = subject;
+        }
+
+        if (clientId is not null)
+        {
+            claims["client_id"] = clientId;
+        }
 
         if (jti is not null)
         {
@@ -95,6 +103,34 @@ public sealed class TestIdentityProvider : IDisposable
         };
 
         return new JsonWebTokenHandler().CreateToken(descriptor);
+    }
+
+    /// <summary>
+    /// A validly signed token with one claim removed from its payload.
+    ///
+    /// <see cref="MintToken"/> cannot omit <c>iat</c>: <see cref="JsonWebTokenHandler"/> stamps one
+    /// whether or not the descriptor asks for it, so passing <c>issuedAt: false</c> produced a
+    /// token that still carried the claim and was rightly accepted — the test caught it. Stripping
+    /// the claim and re-signing is the only way to present a token a standard library would not
+    /// have produced, which is exactly the token a hand-rolled issuer might send.
+    /// </summary>
+    public string MintTokenWithout(string claim, string audience, string[]? scopes = null)
+    {
+        var parts = MintToken(audience, scopes: scopes).Split('.');
+
+        var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+            Base64UrlEncoder.DecodeBytes(parts[1]))!;
+        payload.Remove(claim);
+
+        var header = parts[0];
+        var body = Base64UrlEncoder.Encode(JsonSerializer.SerializeToUtf8Bytes(payload));
+        var signature = Base64UrlEncoder.Encode(
+            _rsa.SignData(
+                Encoding.ASCII.GetBytes($"{header}.{body}"),
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1));
+
+        return $"{header}.{body}.{signature}";
     }
 
     /// <summary>Signing credentials for this provider's key, for minting on another's behalf.</summary>
