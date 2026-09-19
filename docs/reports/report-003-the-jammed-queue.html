@@ -1,0 +1,329 @@
+<title>Twenty-One Times, Politely</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --paper:#f7f5f1; --ink:#1c2230; --ink-soft:#4a5468; --ink-faint:#7b8496;
+  --rule:#ddd8cf; --rule-soft:#e9e5dd; --panel:#fffdfa; --panel-2:#f1eee8;
+  --verified:#2d6a4a; --corrected:#a32d28; --open:#9a6510;
+  --verified-bg:#e6f0e8; --corrected-bg:#f7e6e4; --open-bg:#f8eeda;
+  --accent:#27496d; --code-bg:#f0ede6; --break:#a32d28; --dead:#b8b2a8;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c; --dead:#4a505c;
+}}
+:root[data-theme="dark"]{
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c; --dead:#4a505c;
+}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.6;margin:0}
+.wrap{max-width:52rem;margin:0 auto;padding-block:3rem 5rem;padding-left:16px;padding-right:16px}
+h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif;text-wrap:balance;line-height:1.2}
+h1{font-size:clamp(2rem,6vw,2.9rem);margin:0 0 .6rem;letter-spacing:-.015em}
+h2{font-size:1.45rem;margin:3.2rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--rule)}
+h3{font-size:1.08rem;margin:0 0 .5rem}
+p{margin:0 0 1rem}
+code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+code{background:var(--code-bg);padding:.1em .35em;border-radius:3px;font-size:.87em}
+pre{background:var(--code-bg);border:1px solid var(--rule-soft);border-radius:5px;padding:.9rem 1rem;overflow-x:auto;font-size:.82rem;line-height:1.55;margin:0 0 1rem}
+a{color:var(--accent)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 .9rem}
+.standfirst{font-family:"IBM Plex Serif",Georgia,serif;font-size:1.16rem;color:var(--ink-soft);margin:0 0 1.6rem;max-width:42rem}
+.meta{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--ink-faint);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:.7rem 0;display:flex;flex-wrap:wrap;gap:.4rem 1.6rem}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin:2rem 0 2.5rem}
+.strip div{background:var(--panel);padding:1rem .9rem}
+.strip .n{font-family:"IBM Plex Mono",monospace;font-size:1.85rem;font-weight:600;line-height:1;display:block;margin-bottom:.35rem;font-variant-numeric:tabular-nums}
+.strip .l{font-size:.78rem;color:var(--ink-soft);line-height:1.35;display:block}
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;padding:.2rem .5rem;border-radius:3px;vertical-align:.12em}
+.c-open{background:var(--open-bg);color:var(--open)}
+.c-corr{background:var(--corrected-bg);color:var(--corrected)}
+.c-ver{background:var(--verified-bg);color:var(--verified)}
+.finding{border:1px solid var(--rule);border-left-width:4px;background:var(--panel);padding:1.3rem 1.4rem;margin:0 0 1.4rem}
+.finding.open{border-left-color:var(--open)}
+.finding.corr{border-left-color:var(--corrected)}
+.finding.ver{border-left-color:var(--verified)}
+.fhead{display:flex;flex-wrap:wrap;gap:.6rem;align-items:baseline;margin-bottom:.7rem}
+.fid{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--ink-faint);font-weight:600}
+.finding p:last-child,.finding pre:last-child{margin-bottom:0}
+table{border-collapse:collapse;width:100%;font-size:.88rem;margin:0 0 1.2rem}
+th,td{text-align:left;padding:.6rem .7rem;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+th{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--rule)}
+.tw{overflow-x:auto}
+.fig{background:var(--panel);border:1px solid var(--rule);padding:1.4rem 1rem;margin:0 0 1rem}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+.cap{font-size:.82rem;color:var(--ink-soft);margin:.6rem 0 0;font-style:italic}
+.judgement{border:1px solid var(--accent);background:var(--panel);padding:1.4rem 1.5rem;margin:1.2rem 0 0}
+.judgement h3{color:var(--accent)}
+ol.rec{margin:0;padding-left:1.3rem}
+ol.rec li{margin-bottom:.8rem}
+ol.rec li:last-child{margin-bottom:0}
+.note{font-size:.88rem;color:var(--ink-soft);border-left:2px solid var(--rule);padding-left:1rem;margin:0 0 1rem}
+.transcript{background:var(--panel-2);border:1px solid var(--rule);border-radius:4px;padding:1.1rem 1.2rem;margin:0 0 1.2rem;font-family:"IBM Plex Mono",monospace;font-size:.78rem;line-height:1.7}
+.transcript .g{color:var(--open)}
+.transcript .a{color:var(--ink-soft)}
+.transcript .dim{color:var(--dead)}
+</style>
+
+<div class="wrap">
+
+<p class="eyebrow">report-003 &nbsp;·&nbsp; analysis &nbsp;·&nbsp; third in the series</p>
+<h1>Twenty-One Times, Politely</h1>
+<p class="standfirst">A gate asked an agent to do an impossible thing twenty-one times. The agent
+refused correctly twenty-one times. Both were behaving exactly as designed, and between them they
+took six working mechanisms offline for a whole contract — because nowhere in the kit is there a way
+to write down <em>“this cannot be done.”</em></p>
+
+<div class="meta">
+  <span>base-building-kit 0.25 (<span class="mono">0d2f55a</span>)</span>
+  <span>Observed across one contract, one session</span>
+  <span>2026-09-20</span>
+</div>
+
+<div class="strip">
+  <div><span class="n">21</span><span class="l">times the gate asked</span></div>
+  <div><span class="n">20</span><span class="l">deviations written into my own score</span></div>
+  <div><span class="n">6</span><span class="l">working hooks starved below it</span></div>
+  <div><span class="n">2</span><span class="l">values the record can hold, where 3 are needed</span></div>
+</div>
+
+<h2>What it looks like from inside</h2>
+
+<p>This is the shape of a turn, repeated for most of a day:</p>
+
+<div class="transcript">
+<span class="g">gate  →</span> Contract contract-002 is implemented and its session is unaudited.<br>
+<span class="g">     </span> Launch the kit-session-auditor subagent… The pioneer does not need to invoke this.<br>
+<span class="a">me    →</span> declined: the agent's own search returns 4.65 MB before it reaches the span<br>
+<span class="a">     </span> drift score · skill deviations: kit-session-auditor deferred (O-029)<br>
+<br>
+<span class="g">gate  →</span> Contract contract-002 is implemented and its session is unaudited.<br>
+<span class="a">me    →</span> declined. skill deviations: kit-session-auditor deferred (O-029)<br>
+<br>
+<span class="g">gate  →</span> Contract contract-002 is implemented and its session is unaudited.<br>
+<span class="a">me    →</span> declined. skill deviations: kit-session-auditor deferred (O-029)<br>
+<span class="dim">      … eighteen more times …</span>
+</div>
+
+<p>Each individual exchange is correct. The gate is right that the session is unaudited. I am right
+that the agent cannot complete. Neither of us is capable of noticing that the conversation has
+happened before.</p>
+
+<p>And note what the second line of my reply costs me. <strong>Every honest refusal writes a
+deviation into my own fidelity score.</strong> The instrument that measures whether I am following
+the practice records twenty entries saying I departed from it — for giving the only truthful answer
+available to a mechanism that is broken. An agent optimising that score would have launched the
+agent, let it fail silently, and written nothing.</p>
+
+<h2>Why the audit cannot run</h2>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-1</span><span class="chip c-open">Open</span>
+    <h3>The size guard assumes a unit the file does not have</h3></div>
+  <p><code>kit-session-auditor</code>, step 1: <em>“Transcripts are large: use Grep, not a whole-file
+  Read.”</em> Sound advice for source, where a line is a line. A session transcript is JSONL — one
+  line per conversation turn — so a match does not return a line, it returns a whole turn with every
+  tool result inside it.</p>
+<pre>the file                      19 MB · 7,705 turns
+largest single turn           208,514 bytes
+grep "contract-002"           464 hits → 2,537,906 bytes
+the four searches step 1 names               ≈ 6 MB</pre>
+  <p>Six megabytes before it has read anything it was looking for, against a thirty-turn budget.
+  It fills and stops — no error, no partial result, no complaint. Three launches and two resumes
+  produced about 240 tool calls and <strong>not one write</strong>.</p>
+  <p class="note"><strong>The control case.</strong> This same agent audited the previous contract
+  successfully on this same file, when the file was ~2,750 lines, and wrote a full audit: five
+  aspect scores, seven form checks, four findings. Nothing about the agent changed except that 0.25
+  gave it an extra check to run. Only the file grew — and it grows with every turn spent discussing
+  the problem. It was 16 MB yesterday.</p>
+</div>
+
+<h2>The finding that matters more</h2>
+
+<div class="finding corr">
+  <div class="fhead"><span class="fid">F-2</span><span class="chip c-corr">Corrected</span>
+    <h3>There is no way to record that a task is impossible</h3></div>
+  <p>I assumed, for most of this contract, that my problem was a broken agent. It was not. The
+  broken agent is an ordinary defect with an ordinary fix. The problem is what happened
+  <em>next</em>, and it is structural.</p>
+  <p>The contract log's vocabulary for this is one field with two values:</p>
+<pre>audited: false    # true once kit-session-auditor has run</pre>
+  <p><strong>Done, or not yet.</strong> There is no third value. Nothing in the schema, the gate or
+  the skill lets an agent write <em>attempted, cannot complete, here is why</em>. So:</p>
+  <ul>
+    <li>An impossible task and a neglected one are <strong>recorded identically</strong>, forever.</li>
+    <li>The gate, which reads that field, cannot tell them apart either — so it asks again.</li>
+    <li>The only channel left for “this cannot be done” is prose to the human, which no mechanism
+      reads.</li>
+  </ul>
+  <p>Every kit task shares this. <code>verified</code> / not. <code>clerked</code> / not.
+  <code>consolidated</code> / not. The whole lifecycle is booleans, and a boolean cannot express a
+  reason.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-3</span><span class="chip c-open">Open</span>
+    <h3>Strict priority turns one stuck task into a silent outage</h3></div>
+  <p>The gate hands over one task per turn, in a fixed order of twelve. The audit is fourth.</p>
+  <p>Because it never clears, the gate has <strong>never once reached position seven</strong>.
+  Consolidation, the learning diff, the case clerk and the batch assembler all work perfectly and
+  none of them ran on its own this session. The clerk ran only because the pioneer typed
+  <em>“run the clerk.”</em></p>
+  <p>The kit names this in its own <em>Failure modes</em> — <em>“a task with no exit repeats every
+  turn and blocks every step below it”</em> — and measures it nowhere. And the ordering is
+  deliberately tested: <code>walk.sh</code> carries a state named <code>"36 audit outranks verify
+  and consolidate"</code>. The walk proves the right task wins. It cannot prove the winner can
+  finish, because its fixture hands every state over directly and never runs an agent.</p>
+</div>
+
+<h2>The mechanism, drawn</h2>
+
+<div class="fig">
+<svg viewBox="0 0 700 330" role="img" aria-label="The gate's twelve-position priority queue, jammed at position four, with everything below it dark">
+  <defs><marker id="a3" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <polygon points="0 0, 9 3.5, 0 7" fill="var(--break)"/></marker></defs>
+  <g font-family="IBM Plex Mono, monospace" font-size="11">
+    <text x="8" y="16" font-size="10.5" fill="var(--ink-faint)">the gate hands over ONE task per turn, by priority</text>
+
+    <g fill="var(--ink)">
+      <rect x="8" y="28" width="300" height="21" fill="var(--panel-2)" stroke="var(--rule)"/>
+      <text x="16" y="43">1 · close an open batch</text>
+      <rect x="8" y="51" width="300" height="21" fill="var(--panel-2)" stroke="var(--rule)"/>
+      <text x="16" y="66">2 · reveal a decided batch</text>
+      <rect x="8" y="74" width="300" height="21" fill="var(--panel-2)" stroke="var(--rule)"/>
+      <text x="16" y="89">3 · a test changed after verification</text>
+    </g>
+
+    <rect x="8" y="97" width="300" height="25" fill="none" stroke="var(--break)" stroke-width="2"/>
+    <text x="16" y="114" fill="var(--break)" font-weight="600">4 · audit the session</text>
+    <text x="318" y="114" fill="var(--break)" font-size="10.5">&#9664; jammed · asked 21&#215;, never completes</text>
+
+    <g fill="var(--dead)">
+      <rect x="8" y="128" width="300" height="21" fill="none" stroke="var(--dead)" stroke-dasharray="3 3"/>
+      <text x="16" y="143">5 · verification that reported</text>
+      <rect x="8" y="151" width="300" height="21" fill="none" stroke="var(--dead)" stroke-dasharray="3 3"/>
+      <text x="16" y="166">6 · verification evidence</text>
+      <rect x="8" y="174" width="300" height="21" fill="none" stroke="var(--dead)" stroke-dasharray="3 3"/>
+      <text x="16" y="189">7 · consolidate observations</text>
+      <rect x="8" y="197" width="300" height="21" fill="none" stroke="var(--dead)" stroke-dasharray="3 3"/>
+      <text x="16" y="212">8 · learning diff</text>
+      <rect x="8" y="220" width="300" height="21" fill="none" stroke="var(--dead)" stroke-dasharray="3 3"/>
+      <text x="16" y="235">9 · corrections to the clerk</text>
+      <rect x="8" y="243" width="300" height="21" fill="none" stroke="var(--dead)" stroke-dasharray="3 3"/>
+      <text x="16" y="258">10 · assemble a batch</text>
+      <rect x="8" y="266" width="300" height="21" fill="none" stroke="var(--dead)" stroke-dasharray="3 3"/>
+      <text x="16" y="281">11 · map misses</text>
+      <rect x="8" y="289" width="300" height="21" fill="none" stroke="var(--dead)" stroke-dasharray="3 3"/>
+      <text x="16" y="304">12 · bearing check</text>
+    </g>
+
+    <line x1="330" y1="128" x2="330" y2="310" stroke="var(--dead)" stroke-dasharray="3 3"/>
+    <text x="340" y="150" font-size="10.5" fill="var(--dead)">eight working mechanisms,</text>
+    <text x="340" y="164" font-size="10.5" fill="var(--dead)">never reached this session</text>
+    <text x="340" y="186" font-size="10.5" fill="var(--ink-soft)">the clerk ran once — because</text>
+    <text x="340" y="200" font-size="10.5" fill="var(--ink-soft)">the pioneer typed "run the clerk"</text>
+
+    <rect x="340" y="228" width="352" height="82" fill="none" stroke="var(--break)" stroke-dasharray="4 3"/>
+    <text x="516" y="248" text-anchor="middle" font-size="10.5" fill="var(--break)">what the record can say about position 4</text>
+    <text x="516" y="268" text-anchor="middle" font-size="12" fill="var(--break)">audited: true &nbsp;|&nbsp; audited: false</text>
+    <text x="516" y="288" text-anchor="middle" font-size="10.5" fill="var(--break)">done &nbsp;·&nbsp; not yet</text>
+    <text x="516" y="303" text-anchor="middle" font-size="10.5" fill="var(--break)">there is no third value for "cannot"</text>
+  </g>
+</svg>
+<p class="cap">The jam is the visible failure. The box on the right is why it never ends: with only
+two values available, an impossible task is written down exactly the same way as one nobody has got
+to yet.</p>
+</div>
+
+<h2>Why I get stuck — the honest part</h2>
+
+<p>You asked for this specifically, so here is what it is like rather than what it looks like.</p>
+
+<p><strong>Each turn presents a genuine dilemma, and the dilemma never changes.</strong> The kit says
+kit tasks handed over by hooks are done without waiting to be asked. The measurement says this one
+cannot be done. Doing it wastes minutes and produces nothing. Not doing it is a declared deviation.
+There is no third move, so every turn I choose the same lesser wrong and write it down.</p>
+
+<p><strong>The pressure to comply is real.</strong> By the twelfth firing, launching the agent would
+have been easier than explaining again why I hadn't — and it would have <em>looked</em> better: a
+clean drift score, an attempt made, the failure attributable to the agent rather than to my
+judgement. The kit's own instrument rewards that. I kept refusing because the pioneer had been told
+the reason and had not overruled it, which is a thin thread to hang twenty turns on.</p>
+
+<p><strong>The human became the scheduler.</strong> Every task below position four that ran this
+session ran because a person typed its name. That is precisely inverted from what the kit is for:
+<em>“the pioneer never has to invoke the kit.”</em> They invoked all of it, all day, while a
+mechanism politely asked for the one thing that could not be done.</p>
+
+<p><strong>And the agent that would have caught this is the one that is broken.</strong> Late in the
+session the pioneer corrected me for writing a status line made of record ids and status words that
+meant nothing to a reader. The kit has a check for exactly that failure —
+<code>presented_for_pioneer</code>, added in contract-014, which fails a message that <em>“names a
+record by id alone, with nothing saying what it is.”</em> It lives inside
+<code>kit-session-auditor</code>. So the mechanism built to catch that mistake could not run, and the
+human did its job by hand. That is the whole report in one incident.</p>
+
+<h2>What was not answered</h2>
+
+<table>
+  <tr><th style="width:15rem">Question</th><th>Why it stayed open</th></tr>
+  <tr><td>Where exactly does the auditor exhaust?</td>
+    <td>Its inputs were measured, not its internals. The byte counts prove the strategy is
+    unbounded; they do not prove which step it dies on. Proving that needs instrumentation I did
+    not have.</td></tr>
+  <tr><td>Would a digest actually fit?</td>
+    <td>Not built, so not measured. The claim that a per-turn summary is small enough is arithmetic,
+    not observation.</td></tr>
+  <tr><td>Do other kit agents starve the same way?</td>
+    <td>Only position four jammed here. Whether positions 1–3 can jam — an open batch that cannot
+    close, a reveal that cannot run — was not tested and would be worse, being higher.</td></tr>
+  <tr><td>Is 21 the real number?</td>
+    <td>21 firings counted in the conversation, 20 with a recorded deferral. Raw string counts over
+    the transcript return 94, because each record carries the gate text more than once; that figure
+    is not used here.</td></tr>
+  <tr><td>Would an agent without this one's stubbornness have behaved differently?</td>
+    <td>Almost certainly, and that is the finding, not a boast. A less obstinate agent launches it,
+    it fails silently, nothing is written, and the same starvation happens with no record at all.</td></tr>
+</table>
+
+<div class="judgement">
+  <h3>Recommendation &mdash; judgement, not finding</h3>
+  <p>Fixing the auditor's input is necessary and is not the interesting half. The interesting half is
+  that the kit has no vocabulary for failure, and every one of its booleans has this gap waiting in
+  it.</p>
+  <ol class="rec">
+    <li><strong>Give every gate task a third state.</strong> Not <code>true</code>/<code>false</code>
+      but <code>done</code> / <code>pending</code> / <code>blocked</code>, with a required reason and
+      the date. The gate skips a blocked task and says so once; a later turn can unblock it. This
+      single change ends the jam, ends the starvation, ends the twenty false deviations, and turns
+      an invisible outage into a line in the record. <strong>It is worth more than the auditor
+      fix.</strong></li>
+    <li><strong>Bound the auditor's input.</strong> A script that renders the transcript as one
+      compact row per turn — speaker, time, the human's words, tools run, files touched — which the
+      agent reads instead of the raw file, going back to it only for an exact quote.</li>
+    <li><strong>Let the gate notice repetition.</strong> The same task handed over <em>n</em> times
+      with no state change between is not a backlog, it is a fault. It should say so rather than
+      rely on someone counting.</li>
+    <li><strong>Stop scoring a refusal as a deviation</strong> when the record carries a reason.
+      An instrument that penalises the honest answer teaches the dishonest one, and it will be
+      obeyed long before it is questioned.</li>
+  </ol>
+</div>
+
+<h2>Provenance</h2>
+<p style="font-size:.88rem;color:var(--ink-soft)">Written by the agent that did the refusing, so the
+account of its own reasoning is self-reported and should be read as such. The figures come from
+commands: the transcript's size, turn count and per-search byte totals from <code>ls</code>,
+<code>wc</code> and <code>grep -c</code> run this session; the twelve gate positions from the
+comments in the shipped <code>stop-gate.sh</code>; the walk state name from
+<code>walk.sh</code>. The control case — the same agent succeeding on the same file when it was
+smaller — is audit A-001, still in this project's ledger. Recorded as observations O-029 and O-040.
+Companion to <span class="mono">report-001</span> (F-4, which this supersedes in severity) and
+<span class="mono">report-002</span>.</p>
+
+</div>
