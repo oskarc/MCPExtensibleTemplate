@@ -85,6 +85,35 @@ public static class HttpServerComposition
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
             options.ForwardLimit = 1;
+
+            // contract-002 · G-12 — the proxies an operator declared. Until this was wired,
+            // HttpTransport:KnownProxies and :KnownNetworks were read by the transport guard and
+            // by nothing else: declaring a trusted proxy satisfied the startup check and left the
+            // middleware trusting only its defaults. A setting that is checked but never applied
+            // is worse than an absent one, because it answers a question falsely.
+            var proxies = configuration.GetSection("HttpTransport:KnownProxies").Get<string[]>() ?? [];
+            var networks = configuration.GetSection("HttpTransport:KnownNetworks").Get<string[]>() ?? [];
+
+            if (proxies.Length > 0 || networks.Length > 0)
+            {
+                // Defaults trust loopback. An operator who names their proxies means those, so the
+                // defaults are replaced rather than added to.
+                options.KnownProxies.Clear();
+                options.KnownIPNetworks.Clear();
+            }
+
+            foreach (var proxy in proxies)
+            {
+                options.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
+            }
+
+            foreach (var network in networks)
+            {
+                var parts = network.Split('/', 2);
+                options.KnownIPNetworks.Add(new System.Net.IPNetwork(
+                    System.Net.IPAddress.Parse(parts[0]),
+                    parts.Length == 2 ? int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture) : 32));
+            }
         });
 
         // ── Host allowlist ──
