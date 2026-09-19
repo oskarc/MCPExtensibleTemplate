@@ -53,7 +53,11 @@ id=$(first_id "$ct" '$2=="implemented" && $4=="false"')
 if [ -n "$id" ]; then
   t=$(contract_field "$id" transcript)
   [ -n "$t" ] || t="(none recorded on the entry — say in the audit which session you read)"
-  gate "Contract $id is implemented and its session is unaudited. Launch the kit-session-auditor subagent with the contract id $id and transcript path: $t. Give it no account of how the work went (M-11)."
+  # A value with no slash in it is a session id (contract-015 G-2): say what it is and how the file is found.
+  case "$t" in
+    */*|"("*) gate "Contract $id is implemented and its session is unaudited. Launch the kit-session-auditor subagent with the contract id $id and transcript path: $t. Give it no account of how the work went (M-11)." ;;
+    *) gate "Contract $id is implemented and its session is unaudited. Launch the kit-session-auditor subagent with the contract id $id and the session id $t - the transcript is the file named $t.jsonl under the Claude projects folder in the user's home, which the auditor finds by that name. Give it no account of how the work went (M-11)." ;;
+  esac
 fi
 
 # 5. A verification that reported corrected or open clauses, with the contract still implemented.
@@ -76,9 +80,10 @@ gate "$id contract(s) are verified and awaiting a learning diff. Run the meta-le
 count_gate "$(count_matches '^[[:space:]]+clerked:[[:space:]]*false' "$CORRECTIONS")" 1
 gate "$id pioneer correction(s) are not yet clerked. Launch the kit-case-clerk subagent (M-15)."
 
-# 10. Pioneer-owned items are due and no batch is open. The count is deliberately not named: knowing how
+# 10. Pioneer-owned items are due and no batch is open — and no install or upgrade ended in this session (in_grace,
+#     contract-011): the first batch after one waits for the next session start. The count is deliberately not named: knowing how
 #    many real items are due would let the re-presented items be counted out.
-if ! has_open_batch; then
+if ! has_open_batch && ! in_grace; then
   due=$(count_matches '^[[:space:]]+review_due:[[:space:]]*true' "$LEDGER")
   pend=$(count_matches '^[[:space:]]+state:[[:space:]]*pending' "$LEDGER")
   cards=$(count_matches '^[[:space:]]+pioneer_ranking:[[:space:]]*pending' "$CASEBOOK")

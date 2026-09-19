@@ -40,7 +40,7 @@ The spec lock turn does this, in order:
 2. **Precedent check** — retrieve precedents for this moment (see The Precedent Check below). A design decided before, on matching facts, is decided.
 3. **Full spec proposal** — present the feature's design at concept level: the headline mechanic, the structure (modules / sections / sub-features), the magnitudes/numbers, the user-facing surface. Use tables when the spec spans many enumerable items; use narrative when the spec is a single mechanism.
 4. **`AskUserQuestion` for 3-4 blocking decisions** — every spec has a few load-bearing choices the user must make. Ask these explicitly via the question tool, with options the user can pick from rather than synthesizing the answer themselves. Mark the option you recommend.
-5. **User verdict captured inline** — when answers come back, restate the resulting locked spec in one block. This is the artifact the next turn (three-tier) builds against. **Every answer that departs from your recommended option, or writes its own, is a correction** — record it verbatim before continuing (`grade: option-override`, M-07). Those departures are the most precise record of the pioneer's judgement the lock produces.
+5. **User verdict captured inline** — when answers come back, restate the resulting locked spec in one block. This is the artifact the next turn (the tiers) builds against. **Every answer that departs from your recommended option, or writes its own, is a correction** — record it verbatim before continuing (`grade: option-override`, M-07). Those departures are the most precise record of the pioneer's judgement the lock produces.
 6. **THEN the tiers on execution.** With the spec locked, Tier 1 becomes "what the user experiences when this lands"; Tier 2 becomes "what the system must support to deliver that experience"; Tier 3 becomes "how we build it"; Tier 4 becomes "how we would know it held." The tiers are purely about *how*, not *what*.
 
 **Never recommend an option that waives the pioneer's own gate.** An option like "build straight from the lock" may be offered when the pioneer asks for it, but recommending it puts the agent's convenience above the gate the practice exists to hold. If the pioneer chooses it, the contract records `approval: waived-at-spec-lock` so the record does not claim tiers they never saw.
@@ -51,8 +51,8 @@ Every Tier 1 / 2 / 3 / 4 entry must be derivable from the locked spec. If a Tier
 
 ### Anti-patterns
 
-- **"Three options" disguised as three-tier.** Presenting three competing designs to choose between is a spec-lock activity, not a three-tier. The three-tier has one design (the locked spec) and three layers (User Scenario / Use Cases / Guardrails).
-- **Mid-three-tier design questions.** If the three-tier turn surfaces a question like "should this cost 50 or 100" — the spec wasn't locked. Pause, return to spec-lock, then re-enter three-tier.
+- **"Three options" disguised as the tiers.** Presenting three competing designs to choose between is a spec-lock activity, not the tiers. The tiers have one design (the locked spec) and four layers (User Scenario / Use Cases / Guardrails / Acceptance Tests).
+- **Mid-tier design questions.** If the tiers turn surfaces a question like "should this cost 50 or 100" — the spec wasn't locked. Pause, return to spec-lock, then re-enter the tiers.
 - **Skipping the spec lock for "I'll just propose and see."** This collapses design and execution into one turn, and the user either approves something half-baked or redirects late.
 
 ---
@@ -80,6 +80,8 @@ Before drawing the tiers — and before locking a spec — retrieve casebook pre
 - A precedent that seems to match but should not decide this case is **distinguished** in Tier 3: `distinguished from P-007: {how the facts differ}`. The pioneer sees the distinction at the gate, and it is appended to the precedent's `distinguished_by` on approval.
 - Two active precedents with matching facts and different holdings are a conflict the pioneer resolves (`meta-casebook`). Until they do, distinguish whichever one you depart from; never pick between them silently.
 - A trial or adopted candidate that bears on a guardrail is cited by id: `trial K-012`, `adopted K-004`. Those citations are what later let the ledger tell loaded evidence from independent evidence, and what makes an adopted candidate's uses countable.
+
+**In the draw the pioneer reads, a precedent or a candidate is named by what it says** — "you ruled that acceptance tests come after the guardrails (P-007)" — the holding first, in words, the id after. The short forms above are the log's. An id alone sends the pioneer to a file only the agent has read (C-019; `meta-foundation` → The Agent's Role).
 
 With no casebook entries yet, say so in one line and move on. While a review batch is open the ledger and casebook are closed to this session; say that instead, and draw the contract without them.
 
@@ -132,12 +134,12 @@ Flag any guardrail that is novel — not covered by existing kit. These are cand
 ---
 
 ### Tier 4 — Acceptance Tests
-**The pioneer authors the disappointment; the agent authors the command.** Before any test is written, ask the pioneer, per guarantee: *what result would make you say this was not met?* Record each answer verbatim under `disappointment:` — "same as it says" is an answer, and is recorded as one. Then derive each test from those words: a command or a check, and the exact result expected, each with an id and the guarantees it covers — `T-1 (G-2, G-3)`. Every ancestor of this tier put the acceptance test in the hands of the party who will be disappointed, and the record of tests written by the builder alone is that they pass while the work is wrong (contract-006 G-5).
+**The agent drafts the tests with the tiers; the pioneer's disappointment decides them.** Tier 4 is drafted and presented with Tiers 1–3, in the same message (contract-012, C-017): each test carries an id and the guarantees it covers — `T-1 (G-2, G-3)` — a command or a check, and the exact result expected. The draft exists to show the agent's reading of the work: **a drafted test is drawn from the lay of the land after implementation** — what will be true of the records, the hooks and the pioneer's next session once the work is done, and how that would be seen — not from the text the agent intends to write; a test that only greps for the agent's own future sentences is the agent checking its typing, and a test that names what will be true can be wrong in the useful way, before any code is (C-018). At the gate, ask the pioneer, per guarantee: *what result would make you say this was not met?* Record each answer verbatim under `disappointment:` — "same as it says" is an answer, and is recorded as one — and **realign** every test whose guarantee the pioneer reads differently from the draft, before approval; the realigned test is the one frozen. Every ancestor of this tier put the acceptance test in the hands of the party who will be disappointed, and the record of tests written by the builder alone is that they pass while the work is wrong (contract-006 G-5): the draft anchors, which is why the pioneer's line is still asked and still wins, and a pioneer who only ever answers "same as it says" is the sign to watch for in the correction log.
 
 - **A test can fail mechanically.** A grep with an expected count, a script run over a fixture with its expected output, a build that must pass, a walk of a lifecycle through named states. "Read the code and see that it is fine" is not a test; it is an untested guarantee, and is listed as one.
-- **A test is seen to fail before it is trusted.** Before final approval, break one guarantee on purpose and confirm a named `T-x` goes red; restore it; record `red_test: {broke: G-N, went_red: T-N}` on the entry. A suite that has never failed carries no information, however many passes it shows.
+- **A test is seen to fail before it is trusted.** After the build and before the entry reads `implemented`, break one guarantee on purpose and confirm a named `T-x` goes red; restore it; record `red_test: {broke: G-N, went_red: T-N}` on the entry — the tests a contract drafts cannot be run until the work they test exists. A suite that has never failed carries no information, however many passes it shows.
 - **A test is legible to the pioneer.** As Tier 1 must be readable by a non-developer, each Tier 4 line must be readable by the pioneer who authored its disappointment: what is checked and what result means failure, in words, before the command.
-- **Every guarantee is covered or listed.** Close the tier with an `untested:` line naming each guarantee no test reaches, and why. An empty `untested:` line is a claim the verifier will check. A contract that explores how a nuance should hold will have a long `untested:` line; that is honest, and better than a test that cannot fail.
+- **Every guarantee is covered or listed.** Close the tier with an `untested:` line naming each guarantee no test reaches, and why, and a `realigned:` line naming the tests the pioneer's disappointment lines moved from the draft, or `none` — the log then shows where the agent's reading and the pioneer's parted (contract-012). An empty `untested:` line is a claim the verifier will check. A contract that explores how a nuance should hold will have a long `untested:` line; that is honest, and better than a test that cannot fail.
 - **Tests are frozen with the contract.** A revision while the work runs may change a test and must say so (`tests_changed`). After the verifier has reported, a test is never changed — a test found wrong at that point is a new contract that `follows` this one.
 
 The verifier runs Tier 4 first and judges from prose only what Tier 4 leaves untested (kit-verifier, M-12), and records how many of its corrections came from a red test and how many from reading. A contract with no Tier 4 is verified entirely by reading, which is the weaker kind of evidence and is recorded as such.
@@ -146,7 +148,9 @@ The verifier runs Tier 4 first and judges from prose only what Tier 4 leaves unt
 
 ## The Approval Gate
 
-After presenting the bearing and Tiers 1–3, stop and ask for the disappointment lines (Tier 4 above). After presenting Tier 4, stop again. Do not proceed.
+After presenting the bearing and Tiers 1–4 — Tier 4 drafted, as the tier says — stop once: ask for the disappointment lines per guarantee, the pre-mortem below, and the approval, in one reply; realign the drafted tests to the lines before recording the entry (contract-012). Do not proceed on silence.
+
+**Where the reply gives the pre-mortem and the approval and no line for a guarantee, the pre-mortem's words stand as that guarantee's line.** Record it so on the entry — that none was given and that the pre-mortem stands — and do not ask again. The pioneer's default, 2026-09-19: *"that is fine, the pioneer still has the opportunity to realign at that point."* A line the pioneer does give always wins (contract-015).
 
 Ask the pre-mortem first, and record the answer verbatim under `premortem:`:
 > "It is some weeks on. This contract shipped, and it turned out to be a mistake. What went wrong?"
@@ -154,7 +158,7 @@ Ask the pre-mortem first, and record the answer verbatim under `premortem:`:
 The question exists to make it safe to voice the objection before commitment hardens; a pioneer who has just read four tiers has one. Then ask explicitly:
 > "Does this proposal align with your intent? Approve to proceed, or give input to revise."
 
-Final approval comes after the red test (Tier 4): one guarantee broken, a named test seen to fail, both recorded.
+The red test comes after the build, before the entry reads `implemented` (Tier 4): one guarantee broken, a named test seen to fail, both recorded.
 
 **If approved** — implement strictly against the approved proposal. Do not deviate. If a deviation becomes necessary during implementation, stop and surface it before continuing (M-08). If the human authorizes the deviation explicitly, record it against the contract's log entry — see Contract Log below. If implementation proceeds past a deviation without that authorising statement, it is a stop-on-triggers violation, not a contract revision — it belongs in `meta-drift-eventlog/DRIFTLOG.yaml`, not in the contract's own record. A deviation the pioneer authorises **after** it happened is recorded in the drift entry's `reaction` as a dated authorisation, and the entry stays.
 
@@ -186,7 +190,7 @@ Every approved contract is persisted to `meta-contract-before-execution/CONTRACT
 | Status | Set when | Set by |
 |---|---|---|
 | `approved` | The entry is created at the approval gate. `bearing`, `tier_1`, `tier_2`, `tier_3`, `disappointment`, `premortem`, `tier_4` are recorded in full — the full text is the evidence, not a summary of it. `red_test` is written when the red test is run. `verification_state: none`, `audited: false`. | main agent |
-| `implemented` | Implementation is complete, its observations are recorded in the ledger, the session's `transcript` path is recorded on the entry so the audit reads the right session, and `cost` is written: turns, tokens where known, the pioneer's minutes where reported — `null` where not measured, never estimated. | main agent |
+| `implemented` | Implementation is complete, its observations are recorded in the ledger, the session's id is recorded on the entry as `transcript` — the id alone, which the session-start hook names, never a path — so the audit reads the right session, and `cost` is written: turns, tokens where known, the pioneer's minutes where reported — `null` where not measured, never estimated. | main agent |
 | `verified` | kit-verifier reported every clause verified; or the pioneer's confirmation is recorded in the `verification` block, per clause, naming which clauses it covers. | kit-verifier, or the main agent writing the pioneer's confirmation into the block |
 | `learned` | `meta-learning` has produced the matching diff in `LEARNINGLOG.yaml` and back-filled `work_id`. | meta-learning |
 
@@ -199,6 +203,8 @@ A blanket "looks good" is not a per-clause confirmation. Record which clauses it
 | confirm the clauses as they stand | `status: verified`, with their confirmation recorded per clause in the `verification` block |
 | draw the follow-up work as its own contract | `verification_state: closed-by-follow-up` and `led_to: contract-NNN` on this entry; the new contract carries `follows: contract-NNN` back — the same direction as the artifact cross-links below: `follows` sits on the later entry, `led_to` on the earlier |
 | wait for better evidence | `verification_state: none` once that evidence exists, which relaunches the verifier |
+
+**Putting the report to the pioneer** (`meta-foundation` → The Agent's Role): each corrected or open clause is given as what the contract promised, what the verifier found instead — its own words quoted where they carry the finding — and what is asked: one of the three ways out above, each with what it writes and what follows from it. Every such clause is put, none merged and none left out; a line of counts is not a hand-over.
 
 Nothing else clears it — a contract left in this state blocks its own learning diff, which is the point.
 
@@ -264,7 +270,7 @@ contracts:
       summary: {verified: 6, corrected: 0, open: 0}
       open_needs: []
     audited: true
-    transcript: ~/.claude/projects/example/8f2c.jsonl
+    transcript: 8f2c1e9a-3b7d-4c55-9a10-6e2f0d4b7c31    # the session's id, as the session-start hook named it
     observations: [O-EX1]
     revisions:
       - what: "G-2 changed from cookie to header with refresh rotation"
@@ -298,7 +304,9 @@ One observation per learning. Do not bundle.
 
 **While a review batch is open** the ledger is closed to this session, so you cannot write these yourself. Hand them, in full, to the **kit-recorder** subagent: it writes nothing but observations, assigns their ids, and reports the ids back. Build work does not wait for the pioneer to finish reviewing, and the presenting session still never reads the ledger.
 
-Then flip the contract's entry from `approved` to `implemented`, record the session's `transcript` path, add the observation ids to `observations`, and tell the pioneer in one short block: the observations recorded, one line each with its stated confidence, and that they will return in a review batch once evidence accumulates. Do not ask for decisions on them now.
+**Commit each contract alone.** One commit holds one contract's changes and nothing else, so a test of the form *the diff names only the paths this contract lists* can always be run; two contracts sharing a commit left that test unrunnable twice (contract-013).
+
+Then flip the contract's entry from `approved` to `implemented`, record the session's id as `transcript` (the session-start hook named it; the id alone, never a path — contract-015), add the observation ids to `observations`, and tell the pioneer in one short block what the work taught: each observation as one plain sentence — what was noticed and where, not its id, and not its confidence figure, which is a forecast kept for the ledger and asks nothing of them — then, in words, that nothing is asked of them now, and that any of these which gathers evidence from outside this session comes back to them in a review batch (`meta-foundation` → The Agent's Role). Do not ask for decisions on them now.
 
 The stop-gate takes it from there: the session auditor, then the verifier, then the consolidator (M-11, M-12, M-14).
 

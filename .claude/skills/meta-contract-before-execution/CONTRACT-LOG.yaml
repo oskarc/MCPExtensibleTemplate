@@ -6,7 +6,8 @@
 # In a consumer project: .claude/skills/meta-contract-before-execution/CONTRACT-LOG.yaml
 #
 # AGENT INSTRUCTIONS:
-# meta-bootstrap copies this file as the empty seed. Contract history does not travel via meta-extract.
+# Seeded from templates/CONTRACT-LOG.template.yaml by meta-bootstrap; this header is refreshed from the template at
+# each upgrade (instruction, never record). Contract history does not travel via meta-extract.
 # MARKER KEYS read by the mechanisms — do not rename, and keep their values to the listed words:
 #   contract_id, status, verification_state, audited, bearing, transcript, type,
 #   verification.date, and per revision: date, tests_changed
@@ -29,14 +30,15 @@
 #     tier_3: |
 #       [full technical guardrails text, as approved — each with an id and the use cases it holds: G-1 (UC-1) …;
 #        precedents applied or distinguished, trial and adopted candidates cited by id]
-#     disappointment: |                      # the pioneer's words, per guarantee, BEFORE tier_4 is written:
+#     disappointment: |                      # the pioneer's words, per guarantee, asked at the gate against the drafted tier_4:
 #       G-1 "…" · G-2 "…"                    # what result would make them say the guarantee was not met
 #     premortem: |                           # the pioneer's answer, verbatim, to "this shipped and failed — why?"
 #       "…"
 #     tier_4: |
-#       [full acceptance tests text, as approved — derived from the disappointment lines; each with an id and
+#       [full acceptance tests text, as approved — drafted with the tiers, realigned to the disappointment lines; each with an id and
 #        the guarantees it covers: T-1 (G-1, G-2) …; a command or check and its expected result, legible to the
-#        pioneer; closing with an untested: line naming every guarantee no test reaches. Frozen with the
+#        pioneer; closing with an untested: line naming every guarantee no test reaches, and a realigned: line
+#        naming the tests the disappointment lines moved from the agent's draft, or none. Frozen with the
 #        contract: changed only by a revision dated before the verification report]
 #     red_test: {broke: G-N, went_red: T-N}  # written before final approval: one guarantee deliberately broken,
 #                                            # the named test seen to fail, then restored (contract-006 G-5)
@@ -58,7 +60,8 @@
 #       open_needs: []                      # what evidence would close each open clause
 #     verification_history: []              # earlier verification blocks, kept rather than overwritten
 #     audited: false                        # true once kit-session-auditor has run; legacy before v0.14
-#     transcript: null                      # the implementing session's transcript, recorded at implemented
+#     transcript: null                      # the implementing session's id, recorded at implemented - the id the
+#                                           # session-start hook names, never a path (contract-015)
 #     observations: []                      # O-NNN recorded after implementation
 #     revisions: []                         # authorized mid-run changes only: {what, authorised_by, date, tests_changed}
 #                                           # tests_changed: the T-x ids the change alters, or []. A revision with
@@ -107,6 +110,12 @@ contracts:
     findings_against: base-building-kit v0.24 (60c98eb), re-checked at v0.25 (0d2f55a) — all five still open; observed in this project at v0.16
     observations: [O-029, O-030, O-031]
     led_to: null
+    verification_state: legacy
+    audited: legacy
+    disappointment: legacy
+    premortem: legacy
+    red_test: legacy
+    cost: legacy
   - contract_id: contract-002
     feature: phase-1-identity
     type: contract

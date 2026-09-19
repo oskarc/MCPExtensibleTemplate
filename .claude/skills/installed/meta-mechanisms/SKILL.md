@@ -21,8 +21,8 @@ The kit's own history is the evidence. In the downstream projects, drift inciden
 
 | Script | Event | Reads | Does |
 |---|---|---|---|
-| `hooks/session-start.sh` | SessionStart | contract log, ledger, corrections, drift log, map, casebook, founding | Puts the backlog in context: one line per due item, each naming its map entry |
-| `hooks/prompt-submit.sh` | UserPromptSubmit | the prompt | Forces the situation assessment (name the moment); flags wording that may be a correction |
+| `hooks/session-start.sh` | SessionStart | contract log, ledger, corrections, drift log, map, casebook, founding | Puts the backlog in context: one line per due item, each naming its map entry; names the session's id, so a contract can record which session to audit without a path; on `startup` or `resume` leaves the mark the hold on the first batch is measured against (contract-015) |
+| `hooks/prompt-submit.sh` | UserPromptSubmit | the prompt | Forces the situation assessment (name the moment); flags wording that may be a correction; says so, on every prompt, while the session was launched in one installed kit and works inside another (contract-015) |
 | `hooks/stop-gate.sh` | Stop | contract log, ledger, corrections, casebook, drift log, map | Hands the agent at most one due kit task per turn, highest priority first |
 | `hooks/batch-blind.sh` | PreToolUse (Read\|Grep\|Glob) | ledger, telemetry | Refuses the main session `telemetry.log` at all times — by path, by a search over `meta-ledger/`, or by a pattern naming the count; while a batch is open, also refuses it the ledger — by path and by directory search |
 | `hooks/subagent-stop.sh` | SubagentStop | agent type | Records that an agent ran |
@@ -32,9 +32,20 @@ The kit's own history is the evidence. In the downstream projects, drift inciden
 | `hooks/write-scope.sh` | PreToolUse (Write\|Edit), in agent frontmatter | file path | Limits where an agent may write |
 | `hooks/close-batch.sh` | run by the agent with Bash | batch file, ledger | Marks a batch decided once every item carries a decision |
 | `hooks/reveal-key.sh` | run by the agent with Bash | batch file, sealed key | Opens the key only after every decision |
-| `hooks/lib.sh` | — | — | Shared parsing; the marker-key contract below |
+| `hooks/mark-done.sh` | run by the agent with Bash at the end of an install or upgrade | telemetry | Writes a `done` line to telemetry (contract-011). The hold on the first batch no longer rests on it: the stop-gate holds the batch whenever the baseline the install or upgrade wrote is newer than the last session start (contract-015) |
+| `hooks/lib.sh` | — | — | Shared parsing; the marker-key contract below; one spelling for a path (a Windows shell reports the same file as `/d/x` and as `D:\x`, and both are brought to `D:/x` before any comparison — contract-013) |
+| `checks/G3-retired.sh` | run by the verifier and on upgrade | `checks/retired-phrases.txt`, every kit text | Fails when a wording the kit has retired still stands anywhere — a contract that replaces a sentence adds the old one to the list (contract-013) |
+| `checks/G4-pointers.sh` | run by the verifier and on upgrade | every `node → Heading` pointer | Fails when a pointer names a heading its target does not have (contract-013) |
+| `checks/G5-steps.sh` | run by the verifier and on upgrade | `meta-bootstrap/SKILL.md` | Fails when a paragraph of the bootstrap skill is over 1,200 bytes, naming the line — the text an agent follows while records are at risk stays in steps, and the allowance does not move (contract-016) |
+| `checks/preflight.sh` | run at the start of an install or upgrade, from the NEW kit's copy | the staged kit's `RELEASE.sha1`, the ledger, git status, the lock | `check` changes nothing and refuses, each time with its reason, when git is missing, the staged kit is not a whole release, a review batch is open, a lock is left, or the pioneer has uncommitted work (it asks them to commit and push, and says why); `begin` records the starting point in `.claude/kit-upgrade.lock`; `end` removes it (contract-017) |
+| `checks/rollback.sh` | run after an install or upgrade that stopped halfway | the lock | Restores `.claude/`, `CLAUDE.md` and the two ignore files to the recorded commit, or from the kept copy outside a repository; leaves the staged kit in place. A half-finished run is never continued (contract-017) |
+| `checks/merge.sh` | run on upgrade | a project's copy, the installed copy, the staged copy | git's three-way merge for a skill the project edited — exit code is the number of conflicts, each printed with both versions; `--header` refreshes a record's comment block and keeps the pioneer's notes beneath it (contract-017) |
+| `checks/hooks-selftest.sh` | run at the end of an install or upgrade | a throwaway copy of `.claude/` | Runs every hook once against the copy, so the test writes no telemetry and no session mark into the project (contract-017) |
+| `checks/residue.sh` | run on upgrade | a project's copy of a kit skill, the yardstick | Prints the lines that are the project's own, taking a re-wrapped line for the kit's (contract-013) |
 
 Installed by `meta-bootstrap` from `templates/settings.template.json` into the project's `.claude/settings.json`. Each kit hook group carries `"_kit": "base-building-kit"`, which is how an upgrade replaces them instead of appending a second copy.
+
+**Which kit a hook acts on.** A hook acts on the kit its event belongs to: `lib.sh` walks up from the event's working directory (`cwd` in the hook input, which follows Claude after `/cd` or a `cd`) to the nearest installed manifest and reads that kit's records; when no ancestor holds one, the launch directory (`CLAUDE_PROJECT_DIR`) stands. The two path hooks, `post-read.sh` and `owner-check.sh`, act only on paths under that root, so a read or an edit in another repository's kit is never this kit's evidence. The settings template and the agents locate the scripts the same way, so a session moved into a kit with `/cd` runs that kit's hooks. Other repositories a system spans are named in the manifest's `workspace` list and granted through `permissions.additionalDirectories`, which loads nothing from them (contract-010). One case is said aloud rather than left silent: a session launched inside one installed kit whose working directory moves inside another — `prompt-submit.sh` tells the pioneer, on every prompt while it lasts, which kit's records are now being governed (contract-015).
 
 **Not installed yet?** `kit_installed` is false when `MANIFEST.yaml` is missing *or* declares a base `kit_type`. The kit ships with its own manifest and its own records; until bootstrap's last seeding step replaces them, every mechanism stays silent rather than running the lifecycle against the base kit's data.
 
@@ -45,13 +56,13 @@ At the end of each turn the gate checks, in this order, and hands over the first
 1. An open batch whose every item carries a decision → run `close-batch.sh` (M-17)
 2. A decided batch with an unopened key → run the reveal (M-17)
 3. A reported contract with a revision that changes Tier 4 tests dated after the report → surface it as drift; the revision is never applied (M-18)
-4. An implemented contract whose session is unaudited → kit-session-auditor, with the transcript recorded on the entry (M-11)
+4. An implemented contract whose session is unaudited → kit-session-auditor, with the session id recorded on the entry as `transcript` (M-11)
 5. An implemented contract whose verification reported corrected or open clauses → put them to the pioneer, then close one of three ways (M-12)
 6. An implemented contract with `verification_state: none` → kit-verifier, or mark `awaiting-evidence` (M-12)
 7. Unconsolidated ledger observations → kit-consolidator (M-14)
 8. Verified contracts → meta-learning sweep (M-13)
 9. Unclerked corrections → kit-case-clerk (M-15)
-10. Pioneer-owned items waiting and no batch open → kit-batch-assembler, then the review batch (M-16)
+10. Pioneer-owned items waiting and no batch open → kit-batch-assembler, then the review batch (M-16) — held until the next session start after an install or upgrade (`done` in telemetry, contract-011)
 11. Three or more unstewarded map misses → kit-map-steward (M-21)
 12. A live contract with no bearing → surface it to the pioneer (M-24)
 
@@ -97,6 +108,7 @@ A review batch may carry items the pioneer already decided, shown again as if ne
 | `batch-blind` | batch-blind.sh | attempts to read the ledger while a batch was open |
 | `bypass` | owner-check.sh | a record a node governs was edited in a session that never loaded that node's skill — `bypass\|<node>\|<path>`. Ownership evidence for kit-map-steward, which alone reads it; no hook or skill surfaces the count to the acting session, because a count the agent can see becomes a ceremony (contract-004 G-6) |
 | `batch-decided` / `reveal` | close-batch.sh, reveal-key.sh | batch cadence |
+| `done` | mark-done.sh | an install or upgrade ended; one of two signs that hold the stop-gate's batch step until the next sitting (`startup` or `resume`) — the other, which needs no script, is a baseline newer than the session's mark |
 
 Telemetry is evidence, never context: no agent loads it whole, and it does not extract. **The main session cannot read it at all** — `batch-blind.sh` refuses the file by path, any search over `meta-ledger/`, and any Grep whose pattern names the count, at all times (contract-005 G-1); the steward and the consolidator, which run as agents, read it. A wide search from above `meta-ledger/` with a pattern that names nothing in the file is the stated limit.
 
@@ -125,7 +137,7 @@ The scripts read state through flat keys. Two rules make that parsing honest, an
 
 ## Portability
 
-bash, sed, awk, grep, tr and date only — no jq, no python. **This is the tool list a contract cites** when it guarantees a hook's portability; a shorter list elsewhere is a paraphrase of this one, not a stricter rule. Claude Code on Windows requires Git for Windows, which provides all of them. Avoid `grep -iF`: it aborts in some Git for Windows builds; `lib.sh` provides `contains` instead. Ship the scripts with LF endings (`.gitattributes`: `*.sh text eol=lf`); CRLF breaks them under bash. Hook input is read from the request only — `lib.sh` truncates the payload before any `tool_response`, so an echoed field cannot override `tool_input`.
+bash, sed, awk, grep, tr and date — and git, by the pioneer's ruling of 2026-09-19 ("the kit may use git."): the install and the upgrade take their snapshot, find their way back and merge the pioneer's lines with it. The hooks themselves still use none of it. No jq, no python. **This is the tool list a contract cites** when it guarantees a hook's portability; a shorter list elsewhere is a paraphrase of this one, not a stricter rule. Claude Code on Windows requires Git for Windows, which provides all of them. Avoid `grep -iF`: it aborts in some Git for Windows builds; `lib.sh` provides `contains` instead. Ship the scripts with LF endings (`.gitattributes`: `*.sh text eol=lf`); CRLF breaks them under bash. Hook input is read from the request only — `lib.sh` truncates the payload before any `tool_response`, so an echoed field cannot override `tool_input`.
 
 ## Adding or changing a mechanism
 

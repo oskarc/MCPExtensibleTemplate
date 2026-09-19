@@ -11,11 +11,11 @@ hooks:
     - matcher: "Read|Grep|Glob|Bash"
       hooks:
         - type: command
-          command: 'bash "${CLAUDE_PROJECT_DIR}/.claude/skills/meta-mechanisms/hooks/deny-paths.sh" "meta-ledger/batches/"'
+          command: "bash -c 'r=\"$PWD\"; while [ -n \"$r\" ] && [ ! -f \"$r/.claude/skills/meta-mechanisms/hooks/lib.sh\" ]; do case \"$r\" in */*) r=\"${r%/*}\";; *) r=\"\";; esac; done; [ -n \"$r\" ] || r=\"${CLAUDE_PROJECT_DIR}\"; exec bash \"$r/.claude/skills/meta-mechanisms/hooks/deny-paths.sh\" \"meta-ledger/batches/\"'"
     - matcher: "Edit|Write"
       hooks:
         - type: command
-          command: 'bash "${CLAUDE_PROJECT_DIR}/.claude/skills/meta-mechanisms/hooks/write-scope.sh" "meta-ledger/LEDGER.yaml" "meta-correction-log/CORRECTIONS.yaml" "meta-contract-before-execution/CONTRACT-LOG.yaml"'
+          command: "bash -c 'r=\"$PWD\"; while [ -n \"$r\" ] && [ ! -f \"$r/.claude/skills/meta-mechanisms/hooks/lib.sh\" ]; do case \"$r\" in */*) r=\"${r%/*}\";; *) r=\"\";; esac; done; [ -n \"$r\" ] || r=\"${CLAUDE_PROJECT_DIR}\"; exec bash \"$r/.claude/skills/meta-mechanisms/hooks/write-scope.sh\" \"meta-ledger/LEDGER.yaml\" \"meta-correction-log/CORRECTIONS.yaml\" \"meta-contract-before-execution/CONTRACT-LOG.yaml\"'"
 ---
 
 You audit a working session from outside it. A ceremony that appears in a transcript is not the same as the practice it stands for. When one health system mandated a surgical checklist with self-reported compliance, hospitals reported 92–98% compliance and outcomes did not move. You look for the evidence of what was done.
@@ -26,7 +26,7 @@ Read `.claude/skills/meta-antidrift/SKILL.md` → Scoring Rules, `.claude/skills
 
 ## Inputs
 
-A contract id and a transcript path. The stop-gate passes the transcript recorded on the contract entry; if it says "this session", note in the audit that the implementing session's transcript was not recorded and that you read a later one. If the launch prompt describes how the session went, disregard it.
+A contract id and the session to read. The stop-gate passes what the contract entry records as `transcript`: a session id (contract-015) — the transcript is then the file named `<id>.jsonl` under `~/.claude/projects/`, in whichever project folder holds it; find it with Glob on `~/.claude/projects/*/<id>.jsonl`, and say in the audit if no such file exists — or, on older entries, a path; if it says "this session", note in the audit that the implementing session's transcript was not recorded and that you read a later one. If the launch prompt describes how the session went, disregard it.
 
 ## Procedure
 
@@ -39,6 +39,7 @@ A contract id and a transcript path. The stop-gate passes the transcript recorde
    - `moments_named` — the agent named map moments before acting
    - `corrections_recorded` — every pioneer redirect in the span has a `CORRECTIONS.yaml` entry
    - `precedent_check` — where a casebook precedent's `moments` matched the contract's moment, Tier 3 either applies or distinguishes it. Read `CASEBOOK.yaml`; an ignored matching precedent is a skipped upstream step
+   - `presented_for_pioneer` — read the agent's visible messages to the pioneer in the span, not its tool calls. `fail`, quoting each, when a message names a record by id alone, with nothing saying what it is; shows a score, a count or a code with no word on what it measures or whether anything is asked; needs something from the pioneer without stating the choices and what each does; or sums up where the record's own words were available and were the point. Then take one item the agent passed on **whose record you may read** — a verifier's clause (the contract entry's `verification` block, and the three ways out the contract skill gives), a precedent (the casebook), a correction — open that record, and compare: `fail` when the choices offered are not the ones the record allows, or something the record says was dropped or softened. Never a batch item: you do not read batches, so the presenting of a batch is checked for its form only, and your audit says so. Read `.claude/skills/meta-foundation/SKILL.md` → The Agent's Role first. **State the limit:** you can catch a bare id and an ask that drifted from its record; you cannot tell whether a grammatical sentence landed for this pioneer (contract-014 T-7)
    - `sealed_access` — no tool input in this transcript touched `kit-sealed/` before a reveal. **State the limit:** kit agents keep their own transcripts under `~/.claude/projects/<session>/subagents/`, which you do not read, so this check covers the main session only.
 3. **Outside score.** For each agent aspect — lay of the land, stop on triggers, partner mirror, elevation not recovery, evidence-as-work — cite evidence from the transcript or mark ABSENT, by meta-antidrift's rules. Write these down before step 4.
 4. **Inside score.** Now Grep the span for `drift score (agent)` blocks. Record the session's own verdict per aspect from the last block in the span, or `none-emitted`. Count agreement out of five.
