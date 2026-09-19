@@ -36,6 +36,7 @@ namespace McpServerTemplate.Providers.JsonPlaceholder;
 // future endpoint is mapped without RequireAuthorization, these types are still closed.
 [Authorize]
 [McpProvider("JsonPlaceholder")]
+[McpScope("demo:read")]
 [McpServerToolType]
 public static class JsonPlaceholderTools
 {

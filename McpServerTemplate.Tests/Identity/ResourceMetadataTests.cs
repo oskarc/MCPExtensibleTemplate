@@ -72,6 +72,11 @@ public class ResourceMetadataTests
         info.Environment["Authentication__IdentityProviders__corp__Issuer"] = "https://login.example.com/";
         info.Environment["Authentication__IdentityProviders__corp__Algorithms__0"] = "RS256";
         info.Environment["Authentication__IdentityProviders__corp__ScopeCatalog__0"] = "weather:read";
+        info.Environment["Authentication__IdentityProviders__corp__ScopeCatalog__1"] = "observations:read";
+        info.Environment["Authentication__IdentityProviders__corp__ScopeCatalog__2"] = "demo:read";
+        info.Environment["Providers__Smhi__IdentityProvider"] = "corp";
+        info.Environment["Providers__SmhiObs__IdentityProvider"] = "corp";
+        info.Environment["Providers__JsonPlaceholder__IdentityProvider"] = "corp";
 
         // contract-002 · G-12 — Production over loopback plaintext is refused unless a trusted
         // proxy is declared. Here the harness is that proxy.

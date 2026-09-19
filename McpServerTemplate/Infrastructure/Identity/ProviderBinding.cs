@@ -18,13 +18,16 @@ public sealed class ProviderBinding
 {
     private readonly Dictionary<string, string> _identityProviderByProvider;
     private readonly Dictionary<string, string> _providerByTool;
+    private readonly Dictionary<string, string> _scopeByTool;
 
     private ProviderBinding(
         Dictionary<string, string> identityProviderByProvider,
-        Dictionary<string, string> providerByTool)
+        Dictionary<string, string> providerByTool,
+        Dictionary<string, string> scopeByTool)
     {
         _identityProviderByProvider = identityProviderByProvider;
         _providerByTool = providerByTool;
+        _scopeByTool = scopeByTool;
     }
 
     /// <summary>Provider names that were bound, for diagnostics.</summary>
@@ -46,7 +49,9 @@ public sealed class ProviderBinding
         ArgumentNullException.ThrowIfNull(tools);
 
         var providerByTool = new Dictionary<string, string>(StringComparer.Ordinal);
+        var scopeByTool = new Dictionary<string, string>(StringComparer.Ordinal);
         var unattributed = new List<string>();
+        var unscoped = new List<string>();
 
         foreach (var tool in tools)
         {
@@ -62,6 +67,25 @@ public sealed class ProviderBinding
             }
 
             providerByTool[tool.ProtocolTool.Name] = declared;
+
+            var scope = tool.Metadata.OfType<McpScopeAttribute>().Select(a => a.Scope).FirstOrDefault();
+            if (scope is null)
+            {
+                unscoped.Add(tool.ProtocolTool.Name);
+                continue;
+            }
+
+            scopeByTool[tool.ProtocolTool.Name] = scope;
+        }
+
+        if (unscoped.Count > 0)
+        {
+            // Same reasoning as an unowned tool: a tool that requires no scope is reachable by any
+            // token this server accepts, which is a permission nobody granted.
+            throw new ConfigurationException(
+                $"These tools declare no scope: {string.Join(", ", unscoped)}. Put "
+                + "[McpScope(\"name:action\")] on the type that declares them. A tool requiring no "
+                + "scope is reachable by every token this server accepts.");
         }
 
         if (unattributed.Count > 0)
@@ -98,7 +122,23 @@ public sealed class ProviderBinding
             bindings[provider] = bound;
         }
 
-        return new ProviderBinding(bindings, providerByTool);
+        // Every scope a tool requires must be one its bound identity provider can actually issue,
+        // or the tool is unreachable by anyone and the deployment does not know it.
+        foreach (var (tool, scope) in scopeByTool)
+        {
+            var bound = bindings[providerByTool[tool]];
+            var catalog = identity.IdentityProviders[bound].ScopeCatalog;
+
+            if (!catalog.Contains(scope, StringComparer.Ordinal))
+            {
+                throw new ConfigurationException(
+                    $"The tool '{tool}' requires scope '{scope}', which its identity provider "
+                    + $"'{bound}' cannot issue. That provider's catalog is "
+                    + $"{string.Join(", ", catalog)}. The tool would be unreachable by every caller.");
+            }
+        }
+
+        return new ProviderBinding(bindings, providerByTool, scopeByTool);
     }
 
     /// <summary>
@@ -119,6 +159,23 @@ public sealed class ProviderBinding
                _identityProviderByProvider.TryGetValue(provider, out var bound) &&
                string.Equals(bound, identityProvider, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Whether a principal holding <paramref name="scopes"/> may see or use <paramref name="toolName"/>.
+    /// Both conditions must hold: the trust domain matches, and the scope is held.
+    /// </summary>
+    public bool Allows(string toolName, string? identityProvider, IReadOnlyCollection<string> scopes)
+    {
+        ArgumentNullException.ThrowIfNull(scopes);
+
+        return Allows(toolName, identityProvider) &&
+               _scopeByTool.TryGetValue(toolName, out var required) &&
+               scopes.Contains(required, StringComparer.Ordinal);
+    }
+
+    /// <summary>The scope a tool requires, or null if it is not a tool this server exposes.</summary>
+    public string? ScopeOf(string toolName) =>
+        _scopeByTool.TryGetValue(toolName, out var scope) ? scope : null;
 
     /// <summary>The provider a tool belongs to, or null if it is not a tool this server exposes.</summary>
     public string? ProviderOf(string toolName) =>

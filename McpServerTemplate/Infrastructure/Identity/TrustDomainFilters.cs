@@ -28,6 +28,10 @@ public static class TrustDomainFilters
     public static string? IdentityProviderOf(ClaimsPrincipal? principal) =>
         principal?.FindFirst(IdentityProviderClaim)?.Value;
 
+    /// <summary>The normalised scopes a principal holds.</summary>
+    public static IReadOnlyCollection<string> ScopesOf(ClaimsPrincipal? principal) =>
+        principal?.FindAll(ScopeClaim).Select(c => c.Value).ToArray() ?? [];
+
     /// <summary>
     /// Removes tools whose provider answers to a different identity provider.
     /// </summary>
@@ -41,8 +45,11 @@ public static class TrustDomainFilters
                 return result;
             }
 
-            var idp = IdentityProviderOf(CallerOf(context.Services));
-            result.Tools = [.. result.Tools.Where(tool => binding.Allows(tool.Name, idp))];
+            var caller = CallerOf(context.Services);
+            var idp = IdentityProviderOf(caller);
+            var scopes = ScopesOf(caller);
+
+            result.Tools = [.. result.Tools.Where(tool => binding.Allows(tool.Name, idp, scopes))];
             return result;
         };
 
@@ -66,14 +73,26 @@ public static class TrustDomainFilters
                 return await next(context, cancellationToken);
             }
 
-            if (!binding.Allows(toolName, IdentityProviderOf(CallerOf(context.Services))))
+            var caller = CallerOf(context.Services);
+            var idp = IdentityProviderOf(caller);
+
+            // The two refusals are named separately, because they call for different action and an
+            // audit trail that says only "denied" cannot tell them apart. A missing scope is
+            // something the caller can go and ask for; a trust-domain mismatch is not.
+            if (!binding.Allows(toolName, idp))
             {
-                // Named rule, because an audit trail that says only "denied" cannot distinguish a
-                // missing scope from a trust-domain violation, and they call for different action.
                 throw new McpException(
                     $"authz_fail (rule: idp-binding). The tool '{toolName}' belongs to a provider "
                     + "bound to a different identity provider than the one that issued your token. "
                     + "This is not a scope you can request; the binding is a deployment decision.");
+            }
+
+            if (!binding.Allows(toolName, idp, ScopesOf(caller)))
+            {
+                throw new McpException(
+                    $"authz_fail (rule: insufficient_scope). The tool '{toolName}' requires the scope "
+                    + $"'{binding.ScopeOf(toolName)}', which your token does not carry. Request a "
+                    + "token with that scope and call again.");
             }
 
             return await next(context, cancellationToken);
@@ -91,18 +110,41 @@ public static class TrustDomainFilters
     /// The claims a validated token contributes beyond its own: which identity provider vouched
     /// for it, so the binding can be checked without re-reading the token.
     /// </summary>
-    public static IEnumerable<Claim> NormalizedClaims(string identityProvider, ClaimsPrincipal principal)
+    /// <summary>The scopes a principal holds, read through its identity provider's claim name.</summary>
+    public const string ScopeClaim = "mcp_scope";
+
+    /// <remarks>
+    /// Built eagerly, not as an iterator. The caller adds these to the very identity this reads
+    /// from, and a lazy sequence enumerates it while it is being added to — which threw
+    /// "Collection was modified" on every authenticated request.
+    /// </remarks>
+    public static IReadOnlyList<Claim> NormalizedClaims(
+        string identityProvider, IdentityProviderConfig provider, ClaimsPrincipal principal)
     {
+        ArgumentNullException.ThrowIfNull(provider);
         ArgumentNullException.ThrowIfNull(principal);
 
-        yield return new Claim(IdentityProviderClaim, identityProvider);
+        var claims = new List<Claim> { new(IdentityProviderClaim, identityProvider) };
+
+        // Identity providers disagree about the claim name — scope, scp — and about whether it is
+        // space-delimited or repeated. Normalising here means nothing downstream has to know which
+        // issuer a principal came from to read what it may do.
+        foreach (var claim in principal.FindAll(provider.ScopeClaim).ToArray())
+        {
+            foreach (var scope in claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                claims.Add(new Claim(ScopeClaim, scope));
+            }
+        }
 
         // The key everywhere downstream is {idp}:{sub}, so two identical subjects from two
         // identity providers are two principals rather than one.
         var subject = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (!string.IsNullOrEmpty(subject))
         {
-            yield return new Claim("principal", $"{identityProvider}:{subject}");
+            claims.Add(new Claim("principal", $"{identityProvider}:{subject}"));
         }
+
+        return claims;
     }
 }

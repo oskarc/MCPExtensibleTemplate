@@ -16,6 +16,7 @@ public class ProviderBindingTests
 {
     [McpServerToolType]
     [McpProvider("Weather")]
+    [McpScope("weather:read")]
     private static class WeatherTools
     {
         [McpServerTool]
@@ -24,6 +25,7 @@ public class ProviderBindingTests
 
     [McpServerToolType]
     [McpProvider("Billing")]
+    [McpScope("weather:read")]
     private static class BillingTools
     {
         [McpServerTool]
@@ -31,6 +33,7 @@ public class ProviderBindingTests
     }
 
     [McpServerToolType]
+    [McpScope("weather:read")]
     private static class UnownedTools
     {
         [McpServerTool]
@@ -140,6 +143,49 @@ public class ProviderBindingTests
             Tools(typeof(WeatherTools))));
 
         Assert.Contains("nowhere", ex.Message, StringComparison.Ordinal);
+    }
+
+    [McpServerToolType]
+    [McpProvider("Weather")]
+    private static class UnscopedTools
+    {
+        [McpServerTool]
+        public static string GetSomethingUnscoped() => "open to all";
+    }
+
+    [Fact]
+    public void T6_a_tool_requiring_no_scope_refuses_to_start()
+    {
+        // The same reasoning as an unowned tool, one level along: a tool that requires no scope is
+        // reachable by every token this server accepts, which is a permission nobody granted.
+        var ex = Assert.Throws<ConfigurationException>(() => ProviderBinding.Create(
+            Bindings(new() { ["Providers:Weather:IdentityProvider"] = "corp" }),
+            Identity("corp"),
+            Tools(typeof(UnscopedTools))));
+
+        Assert.Contains("get_something_unscoped", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("McpScope", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void T6_a_tool_whose_scope_its_identity_provider_cannot_issue_refuses_to_start()
+    {
+        // Configured, bound, and unreachable by anyone — the deployment would not know.
+        var ex = Assert.Throws<ConfigurationException>(() => ProviderBinding.Create(
+            Bindings(new() { ["Providers:Weather:IdentityProvider"] = "corp" }),
+            Identity("corp"),
+            Tools(typeof(BillingToolsWantingAnUnissuableScope))));
+
+        Assert.Contains("cannot issue", ex.Message, StringComparison.Ordinal);
+    }
+
+    [McpServerToolType]
+    [McpProvider("Weather")]
+    [McpScope("nobody:issues-this")]
+    private static class BillingToolsWantingAnUnissuableScope
+    {
+        [McpServerTool]
+        public static string GetUnreachable() => "never";
     }
 
     [Fact]

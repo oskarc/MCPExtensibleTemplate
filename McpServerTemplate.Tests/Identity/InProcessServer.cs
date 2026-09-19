@@ -1,4 +1,5 @@
 using McpServerTemplate.Infrastructure;
+using McpServerTemplate.Infrastructure.Identity;
 using McpServerTemplate.Providers.JsonPlaceholder;
 using McpServerTemplate.Providers.Smhi;
 using McpServerTemplate.Providers.SmhiObs;
@@ -88,7 +89,14 @@ public sealed class InProcessServer : IAsyncDisposable
                 .AddMcpServer(options => options.ServerInfo = new() { Name = "Test", Version = "1.0.0" })
                 .WithToolsFromAssembly(typeof(SmhiTools).Assembly)
                 .WithResourcesFromAssembly(typeof(SmhiTools).Assembly)
-                .WithPromptsFromAssembly(typeof(SmhiTools).Assembly),
+                .WithPromptsFromAssembly(typeof(SmhiTools).Assembly)
+                // Registered exactly as Program.cs does. Building the server without these is how
+                // a broken binding stayed invisible: the enforcement path existed and no test ran it.
+                .WithRequestFilters(filters =>
+                {
+                    filters.AddListToolsFilter(TrustDomainFilters.List());
+                    filters.AddCallToolFilter(TrustDomainFilters.Call());
+                }),
             configureIdentityForTests: (name, options) =>
             {
                 // The one seam. Discovery and JWKS are answered in-process, and counted.

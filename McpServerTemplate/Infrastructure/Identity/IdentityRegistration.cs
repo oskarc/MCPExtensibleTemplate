@@ -136,6 +136,17 @@ public static class IdentityRegistration
                         if (string.IsNullOrWhiteSpace(jti))
                         {
                             context.Fail("The token carries no jti claim, so it cannot be attributed or revoked.");
+                            return Task.CompletedTask;
+                        }
+
+                        // Normalise the principal. Without this a validated token carries no idp
+                        // claim, so the trust-domain binding cannot name who vouched for it and
+                        // refuses everything — the server would authenticate a caller correctly
+                        // and then deny them every tool.
+                        if (context.Principal?.Identity is System.Security.Claims.ClaimsIdentity identity)
+                        {
+                            identity.AddClaims(
+                                TrustDomainFilters.NormalizedClaims(name, provider, context.Principal));
                         }
 
                         return Task.CompletedTask;

@@ -27,6 +27,7 @@ namespace McpServerTemplate.Providers.Smhi;
 // future endpoint is mapped without RequireAuthorization, these types are still closed.
 [Authorize]
 [McpProvider("Smhi")]
+[McpScope("weather:read")]
 [McpServerResourceType]
 public static class SmhiResources
 {

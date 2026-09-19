@@ -16,6 +16,7 @@ namespace McpServerTemplate.Providers.SmhiObs;
 // future endpoint is mapped without RequireAuthorization, these types are still closed.
 [Authorize]
 [McpProvider("SmhiObs")]
+[McpScope("observations:read")]
 [McpServerToolType]
 public static class SmhiObsTools
 {

@@ -347,6 +347,13 @@ public class ServerProcessTests
         ["Authentication__IdentityProviders__corp__Issuer"] = "https://login.example.com/",
         ["Authentication__IdentityProviders__corp__Algorithms__0"] = "RS256",
         ["Authentication__IdentityProviders__corp__ScopeCatalog__0"] = "weather:read",
+        ["Authentication__IdentityProviders__corp__ScopeCatalog__1"] = "observations:read",
+        ["Authentication__IdentityProviders__corp__ScopeCatalog__2"] = "demo:read",
+
+        // Every provider answers to corp in these tests (G-5).
+        ["Providers__Smhi__IdentityProvider"] = "corp",
+        ["Providers__SmhiObs__IdentityProvider"] = "corp",
+        ["Providers__JsonPlaceholder__IdentityProvider"] = "corp",
         // contract-002 · G-12 — these run as Production over loopback plaintext, which the
         // transport guard refuses unless the deployment says a proxy is in front. Declaring the
         // loopback network is the honest form of that here: the test harness is the proxy.
