@@ -88,6 +88,32 @@
 # contract it led to). See meta-contract-artifact/SKILL.md.
 
 contracts:
+  - contract_id: report-002
+    feature: upgrade-procedure-case
+    type: analysis-report
+    date_proposed: 2026-09-19
+    bearing: |
+      A first-hand case of the kit's upgrade procedure, written by the agent that ran it on a live
+      project with three days of irreplaceable records at stake. The founding statement asks for a
+      frame that holds integrity over time; this reports where the frame's own upgrade path holds
+      and where it rests on an agent performing prose correctly.
+    status: published
+    status_note: |
+      As report-001: outside the contract lifecycle enum by necessity, and inert to the stop-gate,
+      which selects on `status` and never reads `type`. See report-001 F-5 and this report's F-7.
+    file: docs/reports/report-002-upgrade-procedure-case.html
+    artifact: https://claude.ai/artifact/TTHUg789gaeVXD4mUQQtmx
+    audience: the agent maintaining base-building-kit
+    findings_against: base-building-kit 0.25 (0d2f55a), upgrade procedure as performed 0.16 -> 0.25
+    supporting_files: [docs/reports/rehearsal-2026-09-19.md, docs/reports/upgrade-2026-09-19.md]
+    follows: report-001
+    led_to: null
+    verification_state: legacy
+    audited: legacy
+    disappointment: legacy
+    premortem: legacy
+    red_test: legacy
+    cost: legacy
   - contract_id: report-001
     feature: kit-lifecycle-defects
     type: analysis-report
@@ -106,6 +132,7 @@ contracts:
       report itself.
     file: docs/reports/report-001-kit-lifecycle-defects.html
     artifact: https://claude.ai/artifact/MEZaDfvneakH4vGa7jaXDt
+    followed_by: report-002
     audience: the agent maintaining base-building-kit
     findings_against: base-building-kit v0.24 (60c98eb), re-checked at v0.25 (0d2f55a) — all five still open; observed in this project at v0.16
     observations: [O-029, O-030, O-031]

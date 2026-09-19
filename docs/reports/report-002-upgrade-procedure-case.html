@@ -1,0 +1,393 @@
+<title>The Upgrade That Lost Nothing</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --paper:#f7f5f1; --ink:#1c2230; --ink-soft:#4a5468; --ink-faint:#7b8496;
+  --rule:#ddd8cf; --rule-soft:#e9e5dd; --panel:#fffdfa; --panel-2:#f1eee8;
+  --verified:#2d6a4a; --corrected:#a32d28; --open:#9a6510;
+  --verified-bg:#e6f0e8; --corrected-bg:#f7e6e4; --open-bg:#f8eeda;
+  --accent:#27496d; --code-bg:#f0ede6; --break:#a32d28;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c;
+}}
+:root[data-theme="dark"]{
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c;
+}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.6;margin:0}
+.wrap{max-width:52rem;margin:0 auto;padding-block:3rem 5rem;padding-left:16px;padding-right:16px}
+h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif;text-wrap:balance;line-height:1.2}
+h1{font-size:clamp(2rem,6vw,2.9rem);margin:0 0 .6rem;letter-spacing:-.015em}
+h2{font-size:1.45rem;margin:3.2rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--rule)}
+h3{font-size:1.08rem;margin:0 0 .5rem}
+p{margin:0 0 1rem}
+code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+code{background:var(--code-bg);padding:.1em .35em;border-radius:3px;font-size:.87em}
+pre{background:var(--code-bg);border:1px solid var(--rule-soft);border-radius:5px;padding:.9rem 1rem;overflow-x:auto;font-size:.82rem;line-height:1.55;margin:0 0 1rem}
+a{color:var(--accent)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 .9rem}
+.standfirst{font-family:"IBM Plex Serif",Georgia,serif;font-size:1.16rem;color:var(--ink-soft);margin:0 0 1.6rem;max-width:42rem}
+.meta{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--ink-faint);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:.7rem 0;display:flex;flex-wrap:wrap;gap:.4rem 1.6rem}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin:2rem 0 2.5rem}
+.strip div{background:var(--panel);padding:1rem .9rem}
+.strip .n{font-family:"IBM Plex Mono",monospace;font-size:1.85rem;font-weight:600;line-height:1;display:block;margin-bottom:.35rem;font-variant-numeric:tabular-nums}
+.strip .l{font-size:.78rem;color:var(--ink-soft);line-height:1.35;display:block}
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;padding:.2rem .5rem;border-radius:3px;vertical-align:.12em}
+.c-open{background:var(--open-bg);color:var(--open)}
+.c-corr{background:var(--corrected-bg);color:var(--corrected)}
+.c-ver{background:var(--verified-bg);color:var(--verified)}
+.finding{border:1px solid var(--rule);border-left-width:4px;background:var(--panel);padding:1.3rem 1.4rem;margin:0 0 1.4rem}
+.finding.open{border-left-color:var(--open)}
+.finding.corr{border-left-color:var(--corrected)}
+.finding.ver{border-left-color:var(--verified)}
+.fhead{display:flex;flex-wrap:wrap;gap:.6rem;align-items:baseline;margin-bottom:.7rem}
+.fid{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--ink-faint);font-weight:600}
+.finding p:last-child,.finding pre:last-child{margin-bottom:0}
+table{border-collapse:collapse;width:100%;font-size:.88rem;margin:0 0 1.2rem}
+th,td{text-align:left;padding:.6rem .7rem;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+th{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--rule)}
+.tw{overflow-x:auto}
+.fig{background:var(--panel);border:1px solid var(--rule);padding:1.4rem 1rem;margin:0 0 1rem}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+.cap{font-size:.82rem;color:var(--ink-soft);margin:.6rem 0 0;font-style:italic}
+.judgement{border:1px solid var(--accent);background:var(--panel);padding:1.4rem 1.5rem;margin:1.2rem 0 0}
+.judgement h3{color:var(--accent)}
+ol.rec{margin:0;padding-left:1.3rem}
+ol.rec li{margin-bottom:.8rem}
+ol.rec li:last-child{margin-bottom:0}
+.note{font-size:.88rem;color:var(--ink-soft);border-left:2px solid var(--rule);padding-left:1rem;margin:0 0 1rem}
+</style>
+
+<div class="wrap">
+
+<p class="eyebrow">report-002 &nbsp;·&nbsp; analysis &nbsp;·&nbsp; companion to report-001</p>
+<h1>The Upgrade That Lost Nothing</h1>
+<p class="standfirst">A first-hand case from an agent taking a live project from
+base-building-kit 0.16 to 0.25, with three days of records at stake. The procedure held — and the
+two numbers it grades itself by are not measuring where it costs.</p>
+
+<div class="meta">
+  <span>0.16 &rarr; 0.25 (<span class="mono">0d2f55a</span>)</span>
+  <span>One session, one pioneer, real records</span>
+  <span>2026-09-19</span>
+</div>
+
+<div class="strip">
+  <div><span class="n">0</span><span class="l">records lost, verified line by line</span></div>
+  <div><span class="n">3</span><span class="l">decisions asked of the pioneer</span></div>
+  <div><span class="n">2</span><span class="l">real defects the rehearsal caught</span></div>
+  <div><span class="n">7</span><span class="l">shortcomings found, all open</span></div>
+</div>
+
+<p><strong>The verdict first, so the rest can be read against it:</strong> this is the most careful
+procedure in the kit, and it works. Nothing was lost, every check passed, the real run asked no
+question the sheet had not answered, and the whole thing was reversible at every point. What follows
+is not a complaint about that. It is the observation that the procedure is excellent at
+<em>not losing things</em> and has almost no machinery for <em>doing things</em> — and that the
+failure condition it grades itself against measures the pioneer's cost, not the agent's.</p>
+
+<h2>The corrected claim</h2>
+
+<div class="finding corr">
+  <div class="fhead"><span class="fid">C-1</span><span class="chip c-corr">Corrected</span>
+    <h3>The failure condition measures the wrong cost</h3></div>
+  <div class="tw"><table>
+    <tr><th style="width:9rem">Claimed</th><td>The pioneer's recorded failure condition, carried on
+      contract-007: <em>“if it human is required to make many manual decisions or the agent needs to
+      troubleshoot to make it work.”</em> The rehearsal grades itself on exactly these — decisions
+      asked, and troubleshooting steps.</td></tr>
+    <tr><th>Measured</th><td><strong>3 decisions. 0 troubleshooting steps.</strong> By its own
+      instrument this upgrade was close to free.</td></tr>
+    <tr><th>Actual cost</th><td>The upgrade section is <strong>232 lines and 38,202 bytes</strong>,
+      inside a skill of 74,252 bytes, and must be read in full before step 3 — which is itself the
+      instruction (“read both kits in full”). It was read in four passes because it does not fit in
+      one. Then steps 3–9 were executed <em>twice</em>, once on a copy and once for real, from prose,
+      with no script for any of it. The dominant cost of this procedure is agent reading and
+      hand-executed file operations, and neither number sees it.</td></tr>
+    <tr><th>Why it matters</th><td>Both numbers were excellent <em>and</em> I skipped a required step
+      (F-1 below). An instrument that reports a clean run while a step is being missed is measuring a
+      proxy. The pioneer's condition is about their own experience, which is the right thing to
+      protect — it was never meant to certify the agent's, and it is being read as if it does.</td></tr>
+  </table></div>
+</div>
+
+<h2>What held</h2>
+
+<div class="finding ver">
+  <div class="fhead"><span class="fid">V-1</span><span class="chip c-ver">Verified</span>
+    <h3>The rehearsal earns its cost twice over</h3></div>
+  <p>It caught two things that would otherwise have reached the project:</p>
+  <p><strong>A skipped header.</strong> I refreshed seven record headers and missed <code>MAP.md</code>.
+  <code>G3-retired.sh</code> surfaced it on the copy. The real run refreshed eight and produced no
+  note at all.</p>
+  <p><strong>A near data-loss.</strong> <code>P-010.sh</code> sits in <code>checks/</code> and is
+  absent from the baseline, which makes it look like base-kit evidence. It is <em>this project's own
+  precedent check</em> — P-010 is in this casebook, from a correction about a contract left
+  half-implemented. The rule is written correctly; reading it correctly took a deliberate stop.</p>
+  <p>Neither would have been caught by any check on the real run alone. <strong>The rehearsal is the
+  single most valuable step in the procedure.</strong></p>
+</div>
+
+<div class="finding ver">
+  <div class="fhead"><span class="fid">V-2</span><span class="chip c-ver">Verified</span>
+    <h3>preflight refuses well, and says why</h3></div>
+  <p>It refused twice: once on a raw clone (<em>“a raw copy of the repository carries the kit's own
+  records and must not be used”</em>) and once on a dirty tree — a single <code>telemetry.log</code>
+  the hooks had written during the session. The second message explains the reason rather than
+  stating the rule: <em>“your last commit is its snapshot and its way back.”</em> That is the
+  difference between a gate and an obstacle. It also correctly excludes <code>kit-incoming/</code>
+  and the rehearsal log from its own dirtiness test — a detail that could only have come from
+  someone hitting it.</p>
+</div>
+
+<div class="finding ver">
+  <div class="fhead"><span class="fid">V-3</span><span class="chip c-ver">Verified</span>
+    <h3>Two orderings that are load-bearing, and documented as such</h3></div>
+  <p><strong>Checks before the bases are replaced.</strong> <code>G3-retired</code> exits 1 on the
+  <em>old</em> template, which step 9 predicts and explains: once the base is replaced, a forgotten
+  line reads as the pioneer's and passes as a note. Both halves were observed exactly as written.</p>
+  <p><strong>The sheet before the run.</strong> The rehearsal produces every question with its
+  default; the real run takes the answers and asks nothing. It asked nothing. For a pioneer who had
+  corrected this agent twice in the same session for acting without an alignment moment, a procedure
+  that concentrates every question into one presentation is the right shape.</p>
+</div>
+
+<div class="finding ver">
+  <div class="fhead"><span class="fid">V-4</span><span class="chip c-ver">Verified</span>
+    <h3>“Every figure comes from a command” is the best rule here</h3></div>
+  <p>The rehearsal log must end with a table pairing each figure with the command that produced it.
+  It changed how the work was done, not just how it was reported: it made “0 skills evolved”
+  something computed rather than believed. <strong>This rule deserves to escape the upgrade
+  procedure</strong> — it applies to any figure any kit agent puts in front of the pioneer.</p>
+</div>
+
+<h2>Shortcomings</h2>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-1</span><span class="chip c-open">Open</span>
+    <h3>An enumeration by count, where a list was meant</h3></div>
+  <p>Step 7 ends its migration list with:</p>
+<pre>The header comment block of every record follows the template rule — <strong>the six above</strong>,
+and the learning log and the casebook …</pre>
+  <p>Step 7 has exactly six bullets: <code>CONTRACT-LOG</code>, <code>CORRECTIONS</code>,
+  <code>LEDGER</code>, <code>DRIFTLOG</code>, <code>MANIFEST</code>, <code>MAP.md</code>. So the
+  sentence names eight files and requires the reader to count bullets to know which.</p>
+  <p>I read “the six above” as the YAML records, added the learning log and the casebook to reach
+  seven, and dropped <code>MAP.md</code> because it is not a YAML and its bullet is about base
+  entries rather than headers. <strong>An instruction that depends on the reader counting is one an
+  agent will get wrong quietly.</strong> Name the eight files.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-2</span><span class="chip c-open">Open</span>
+    <h3>There is a script to build a release and none to install one</h3></div>
+  <p><code>checks/</code> ships thirteen files — <code>preflight</code>, <code>rollback</code>,
+  <code>merge</code>, <code>residue</code>, <code>roots</code>, <code>hooks-selftest</code> and five
+  <code>G*</code> gates. There is no <code>install.sh</code>. Step 5 is prose describing file copies,
+  and every agent writes its own loop.</p>
+  <p>Worse, it is written twice — once for the rehearsal, once for the real run — and
+  <strong>nothing compares the two</strong>. The procedure's own safeguard is that the real run
+  re-runs the same commands; but they are commands the agent composed, not commands the kit ships,
+  so “the same” is on trust. The header loop I wrote for the rehearsal had the F-1 defect, and the
+  only reason the real run differed is that a check caught it and I edited my own loop.</p>
+  <p class="note">The kit now admits git and ships four new scripts. A <code>install.sh &lt;staged&gt;
+  &lt;classification&gt;</code> that performs step 5 and is invoked identically by both runs would
+  remove the largest remaining source of divergence.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-3</span><span class="chip c-open">Open</span>
+    <h3>A forgotten header degrades to a note, by design</h3></div>
+  <p>Step 9 states the weakness plainly: once the shipped copy is replaced, <em>“a forgotten line
+  reads as the pioneer's and passes as a note.”</em> On the rehearsal that note was the
+  <strong>only</strong> signal that <code>MAP.md</code> had been skipped — and it came after the
+  point where it could still fail the run.</p>
+  <p>So the detection of a missed step depends on a human or agent reading a passing check's note.
+  In a run where nobody reads the note, the header silently keeps retired wording, and the
+  <em>next</em> upgrade measures that wording as the pioneer's and asks about it forever.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-4</span><span class="chip c-open">Open</span>
+    <h3>The stale rule sits one clause from deleting a project's own work</h3></div>
+  <p>The classification says the base kit's <code>P-NNN.sh</code> checks are its own precedents and
+  do not travel — then qualifies, inside a 400-word paragraph, with <em>“any <code>P-NNN.sh</code>
+  check in <code>checks/</code> <strong>whose precedent id is not in this project's casebook</strong>.”</em></p>
+  <p>The qualifier is correct and it is doing all the work. A project's own precedent check is
+  indistinguishable by shape from the base kit's, absent from the baseline for the innocent reason
+  that it was written after the last install, and destroyed by a single answer to the stale line.
+  <strong>This is the only place in the procedure where the default motion is deletion of something
+  the pioneer made.</strong> It should be a check, not a clause: refuse to list a
+  <code>P-NNN.sh</code> as stale while its id is in the casebook.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-5</span><span class="chip c-open">Open</span>
+    <h3>The size guard measures paragraphs while the section grows</h3></div>
+  <p><code>G5-steps.sh</code> fails when a paragraph of the bootstrap skill exceeds 1,200 bytes —
+  contract-016's answer to the text an agent follows while records are at risk. Measured on the
+  installed 0.25:</p>
+<pre>longest paragraph in the upgrade section   1,068 bytes   ← passes
+the upgrade section                       38,202 bytes
+meta-bootstrap/SKILL.md                   74,252 bytes</pre>
+  <p>Every paragraph is within budget and the section an agent must hold is 38 KB. The guard
+  measures a proxy for readability and the total is unbounded — the same shape report-001 is about,
+  in the kit's own size control. A budget on the section, or on the count of steps, would measure
+  what contract-016 was actually protecting.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-6</span><span class="chip c-open">Open</span>
+    <h3>Nothing anywhere asks whether the upgrade improved anything</h3></div>
+  <p>Every check verifies <strong>fidelity</strong>: nothing lost, structures intact, hooks
+  behaving, the walk matching. Not one step asks whether the project can now do something it could
+  not before.</p>
+  <p>This upgrade was perfect by every instrument the kit runs, and <strong>all five findings of
+  report-001 survived it unchanged</strong> — the seal still blocks the write it depends on, the
+  auditor's search is still unbounded, the walk's fixture still omits the real settings, the gate
+  still never reads <code>type</code>, and nothing still detects a gate task that cannot complete.
+  The adoption loop that has never once run in this project still cannot run.</p>
+  <p class="note">An upgrade report that lists what was taken, ported, asked, removed and migrated
+  can be entirely green while the thing the pioneer upgraded <em>for</em> is untouched. The
+  <em>what this did not check</em> section is the right instinct; it is written by the same agent
+  that just declared success, about the work it just did.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-7</span><span class="chip c-open">Open</span>
+    <h3>The log has no model of a non-contract entry</h3></div>
+  <p>Continuing report-001 F-5. This upgrade's migration gave an <em>analysis report</em> the fields
+  <code>verification_state: legacy</code>, <code>audited: legacy</code>,
+  <code>disappointment: legacy</code>, <code>premortem: legacy</code>, <code>red_test: legacy</code>
+  and <code>cost: legacy</code> — a pre-mortem and a red test on a document.</p>
+  <p>It is harmless only because <code>stop-gate.sh</code> keys on <code>status</code>, and the
+  status had to be invented (<code>published</code>) since the enum has no value a report can
+  honestly hold. <code>meta-contract-artifact</code> added reports to this log without the base
+  schema, the migration list or the gate learning that they exist.</p>
+</div>
+
+<h2>The mechanism, drawn</h2>
+
+<div class="fig">
+<svg viewBox="0 0 760 210" role="img" aria-label="What the procedure checks and what it does not">
+  <defs><marker id="a2" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <polygon points="0 0, 9 3.5, 0 7" fill="var(--ink-soft)"/></marker>
+    <marker id="ab2" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <polygon points="0 0, 9 3.5, 0 7" fill="var(--break)"/></marker></defs>
+  <g font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink)">
+    <rect x="4" y="30" width="118" height="40" fill="var(--panel-2)" stroke="var(--rule)"/>
+    <text x="63" y="46" text-anchor="middle">staged release</text>
+    <text x="63" y="60" text-anchor="middle" fill="var(--ink-faint)">81 files, hashed</text>
+
+    <rect x="162" y="30" width="118" height="40" fill="var(--panel-2)" stroke="var(--rule)"/>
+    <text x="221" y="46" text-anchor="middle">rehearsal</text>
+    <text x="221" y="60" text-anchor="middle" fill="var(--ink-faint)">caught 2 defects</text>
+
+    <rect x="320" y="30" width="118" height="40" fill="var(--panel-2)" stroke="var(--rule)"/>
+    <text x="379" y="46" text-anchor="middle">the sheet</text>
+    <text x="379" y="60" text-anchor="middle" fill="var(--ink-faint)">3 questions, once</text>
+
+    <rect x="478" y="30" width="118" height="40" fill="var(--panel-2)" stroke="var(--rule)"/>
+    <text x="537" y="46" text-anchor="middle">real run</text>
+    <text x="537" y="60" text-anchor="middle" fill="var(--ink-faint)">0 asked, 0 lost</text>
+
+    <rect x="636" y="30" width="118" height="40" fill="var(--panel-2)" stroke="var(--rule)"/>
+    <text x="695" y="46" text-anchor="middle">5 checks + walk</text>
+    <text x="695" y="60" text-anchor="middle" fill="var(--verified)">all green</text>
+
+    <line x1="124" y1="50" x2="158" y2="50" stroke="var(--ink-soft)" marker-end="url(#a2)"/>
+    <line x1="282" y1="50" x2="316" y2="50" stroke="var(--ink-soft)" marker-end="url(#a2)"/>
+    <line x1="440" y1="50" x2="474" y2="50" stroke="var(--ink-soft)" marker-end="url(#a2)"/>
+    <line x1="598" y1="50" x2="632" y2="50" stroke="var(--ink-soft)" marker-end="url(#a2)"/>
+
+    <text x="4" y="104" font-size="10.5" fill="var(--ink-faint)">every arrow above verifies FIDELITY — that nothing was lost</text>
+
+    <rect x="4" y="124" width="430" height="56" fill="none" stroke="var(--break)" stroke-dasharray="4 3"/>
+    <text x="219" y="145" text-anchor="middle" font-size="11" fill="var(--break)">the edge nothing draws: EFFICACY</text>
+    <text x="219" y="162" text-anchor="middle" font-size="10" fill="var(--break)">can the project now do what it could not before?</text>
+    <text x="219" y="174" text-anchor="middle" font-size="10" fill="var(--break)">report-001: 5 findings in, 5 findings out</text>
+
+    <line x1="695" y1="76" x2="695" y2="150" stroke="var(--break)" stroke-dasharray="4 3"/>
+    <line x1="695" y1="152" x2="440" y2="152" stroke="var(--break)" stroke-dasharray="4 3" marker-end="url(#ab2)"/>
+    <text x="466" y="120" font-size="10" fill="var(--break)">never asked</text>
+  </g>
+</svg>
+<p class="cap">Five green checks, a clean walk, nothing lost — and the question of whether the
+upgrade changed anything the pioneer upgraded for is asked by no step.</p>
+</div>
+
+<h2>What was not answered</h2>
+
+<table>
+  <tr><th style="width:15rem">Question</th><th>Why it stayed open</th></tr>
+  <tr><td>Would a different agent have executed step 5 the same way?</td>
+    <td>Untestable from one run. The concern in F-2 is structural: the loop is composed, not shipped,
+    so two runs can differ with nothing noticing. One data point — mine differed between rehearsal
+    and real run, deliberately, because a check caught a defect.</td></tr>
+  <tr><td>Do the 11 walk states added since 0.16 cover any of report-001's findings?</td>
+    <td>The walk passes against its own expected file; which states are new and what they assert was
+    not read. <code>settings.json</code> and <code>kit-sealed</code> still appear nowhere in
+    <code>walk.sh</code>, which bounds the answer but does not give it.</td></tr>
+  <tr><td>Do the new hooks behave as live events?</td>
+    <td><code>hooks-selftest.sh</code> runs each once against a throwaway copy. Live behaviour in a
+    real session was not exercised; the root-finding wrapper is the change most likely to matter and
+    was not seen firing from a subdirectory.</td></tr>
+  <tr><td>Is the rollback path real?</td>
+    <td><code>rollback.sh</code> was never invoked — the run did not stop. An untested way back is a
+    way back on paper.</td></tr>
+  <tr><td>Does any of this hold on a project whose skills <em>were</em> edited?</td>
+    <td>This project had zero residue, so <code>merge.sh</code>'s three-way merge, its conflict
+    output and the reapply/replace question were never exercised. <strong>The most intricate
+    machinery in the procedure went untested by this case.</strong></td></tr>
+</table>
+
+<div class="judgement">
+  <h3>Verdict &mdash; judgement, not finding</h3>
+  <p><strong>The procedure is sound and I would not change its shape.</strong> Rehearse, present one
+  sheet, run without asking, verify, report, and keep a way back — that is the right sequence, and
+  it protected three days of irreplaceable records without a single anxious moment. The rehearsal
+  and the figures-and-commands rule are the two best mechanisms in the kit.</p>
+  <p>Its weakness is a family resemblance: <em>the procedure is prose that an agent performs, and
+  the checks verify the result rather than the performance.</em> Every shortcoming above is an
+  instance — a list given as a count, an install step with no script, a missed header that degrades
+  to a note, a deletion rule held back by one clause, a size guard on paragraphs, and no efficacy
+  test at all.</p>
+  <p>In order of what each forecloses:</p>
+  <ol class="rec">
+    <li><strong>Ship <code>install.sh</code>.</strong> Step 5 performed by a script both runs invoke
+      identically. It removes F-1, F-2 and F-3 at once, because a named list in code cannot be
+      miscounted and the two runs cannot diverge.</li>
+    <li><strong>Make the stale rule refuse.</strong> A <code>P-NNN.sh</code> whose id is in the
+      project's casebook is never listed as stale — a check, not a clause. This is the only
+      data-loss path in the procedure.</li>
+    <li><strong>Add one efficacy question to step 9's report.</strong> Not a check — a required
+      section: <em>what could this project not do before, that it can now?</em> Answering “nothing
+      material” is a fine answer and a true one for this upgrade. Leaving it unasked is how a green
+      report gets read as progress.</li>
+    <li><strong>Budget the section, not the paragraph</strong> (F-5), and <strong>teach the log what
+      a report is</strong> (F-7).</li>
+  </ol>
+  <p class="note" style="margin-top:1rem"><strong>One thing to carry beyond the upgrade:</strong>
+  “every figure that reaches the pioneer comes from a command” changed how this agent worked, not
+  only how it wrote. It belongs in the foundation, not in one procedure.</p>
+</div>
+
+<h2>Provenance</h2>
+<p style="font-size:.88rem;color:var(--ink-soft)">Written by the agent that performed the upgrade, so
+every claim about what went wrong is self-reported and the defects in F-1 are its own. The figures
+come from commands: the section sizes from <code>wc</code> on the installed 0.25 skill, the bullet
+count from a <code>grep</code> of step 7, the three rehearsal numbers from
+<a href="rehearsal-2026-09-19.md">rehearsal-2026-09-19.md</a>, and the check results from the run
+recorded in <a href="upgrade-2026-09-19.md">upgrade-2026-09-19.md</a>. The claim that report-001's
+five findings survived was verified file by file against <code>origin/main</code> before the upgrade
+began, not inferred from a changelog.</p>
+
+</div>
