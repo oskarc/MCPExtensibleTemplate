@@ -1024,6 +1024,42 @@ observations:
     stewarded: n/a
 
 
+  - obs_id: O-033
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [O-031, O-032]
+    statement: |
+      M-08
+
+      the system wont be used until its through the whole roadmap
+
+      Given when deciding to move P1.6's Kestrel HTTPS listener to Phase 6. It reframes the risk of
+      every deferral in this project: nothing is deployed, so a phase marked complete carries no
+      operational exposure while it is wrong.
+
+      It also removes the only feedback loop that normally catches a phase marked done too early.
+      A system in use corrects its own record — an unbuilt control is found by an incident, a
+      missing header by a scanner, a false claim by an operator who set the key and watched nothing
+      happen. With no production in the loop for six phases, "Phase N is complete" is a claim that
+      nothing tests until the end, and the only instrument is a roadmap check that runs when
+      somebody thinks to ask for one. This project has run exactly one, at the pioneer's prompting,
+      and it found three gaps in a phase that had been called implemented for two days.
+
+      The transferable point: the longer the gap between building and using, the more the standard
+      has to carry what use would otherwise catch. A roadmap whose rows bind to executed checks is
+      cheap in a project that ships weekly and load-bearing in one that ships once at the end —
+      and it is the projects that ship once at the end that are least likely to build it, because
+      nothing hurts yet.
+    level_guess: principle
+    stated_confidence: 0.85
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17

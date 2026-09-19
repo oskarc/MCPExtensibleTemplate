@@ -97,24 +97,36 @@ public class TransportAndPrincipalTests
     // ── G-12: no bearer tokens over an unprotected transport ──────────────────
 
     [Fact]
-    public void T12_production_without_tls_or_a_trusted_proxy_is_refused()
+    public void T12_production_without_a_trusted_proxy_is_refused()
     {
         var ex = Assert.Throws<ConfigurationException>(
             () => TransportSecurityGuard.Validate(Config([]), isProduction: true));
 
         Assert.Contains("TLS", ex.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("HttpTransport:Certificate:Path", ex.Message, StringComparison.Ordinal);
         Assert.Contains("KnownProxies", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("HttpTransport:KnownProxies:0", "10.0.0.1")]
+    [InlineData("HttpTransport:KnownNetworks:0", "10.0.0.0/8")]
+    public void T12_naming_the_proxy_is_what_satisfies_the_guard(string key, string value)
+    {
+        TransportSecurityGuard.Validate(Config(new() { [key] = value }), isProduction: true);
     }
 
     [Theory]
     [InlineData("HttpTransport:Certificate:Path", "/etc/certs/server.pfx")]
     [InlineData("HttpTransport:Certificate:Subject", "CN=mcp.example.com")]
-    [InlineData("HttpTransport:KnownProxies:0", "10.0.0.1")]
-    [InlineData("HttpTransport:KnownNetworks:0", "10.0.0.0/8")]
-    public void T12_either_terminating_tls_or_naming_the_proxy_is_enough(string key, string value)
+    public void T12_a_certificate_setting_no_longer_satisfies_the_guard(string key, string value)
     {
-        TransportSecurityGuard.Validate(Config(new() { [key] = value }), isProduction: true);
+        // This is the defect the narrowing removes. Until 2026-09-20 either of these satisfied the
+        // check while Program.cs bound http:// unconditionally, so a Production deployment could
+        // start, believe it was terminating TLS, and serve bearer tokens in cleartext. The Kestrel
+        // listener moved to the phase that handles it; the branch comes back when the listener does.
+        var ex = Assert.Throws<ConfigurationException>(
+            () => TransportSecurityGuard.Validate(Config(new() { [key] = value }), isProduction: true));
+
+        Assert.Contains("does not terminate TLS itself", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

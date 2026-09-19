@@ -672,9 +672,20 @@ contracts:
           password comes from, there being no config key for one. A third question follows from
           either answer — whether the listener is opt-in, since ResourceMetadataTests and
           ServerProcessTests spawn the shipped executable over http.
-        authorised_by: pioneer — execution awaiting a decision on what "from the vault" means here
+          RESOLVED 2026-09-20, the pioneer deciding: "right we should move it to the phase
+          handling that part." The Kestrel HTTPS listener moves to Phase 6, where P6.4 already
+          covers TLS termination at the ingress or in Kestrel, and carries the two open questions
+          with it — what "from the vault" means, and where a certificate password comes from.
+          The move alone would have left the false claim standing, so G-12 narrowed in the same
+          act: TransportSecurityGuard now names only the proxy branch, and a certificate setting
+          is refused with an explanation rather than accepted as evidence of a protection this
+          server does not provide. The roadmap records the move at P1.6, P6.4 and the SPEC-06
+          conformance row. The branch returns when the listener does.
+          Context the pioneer gave alongside the decision: the system will not be used until it is
+          through the whole roadmap, so the deferral carries no interim exposure.
+        authorised_by: pioneer
         date: 2026-09-20
-        tests_changed: []
+        tests_changed: [T-12]
       - what: |
           Drawn with TLS moved out of Phase 1 into Phase 6, on the reasoning that it is a deployment
           concern untested by Phase 1's exit criteria. Withdrawn before approval when the pioneer
