@@ -845,6 +845,140 @@ observations:
     stewarded: n/a
 
 
+  - obs_id: O-029
+    date: 2026-09-19
+    source: ser
+    contract_id: contract-002
+    refs: [A-001]
+    statement: |
+      M-30
+
+      kit-session-auditor audited contract-001 and wrote A-001 in full. It has now produced
+      nothing for contract-002 across three launches and two resumes, roughly 240 tool calls.
+      Same agent, same instructions, same transcript file. The only thing that changed is the
+      file's size: about 2,750 lines when A-001 was written, 5,958 lines and 16,112,599 bytes now.
+
+      The agent's step 1 anticipates size: "Transcripts are large: use Grep, not a whole-file
+      Read." On a JSONL transcript that instruction does not do what it was written to do,
+      because a record is a whole conversation turn. Measured on this file:
+
+        grep "contract-002"   304 hits   1,820,666 bytes
+        grep "implemented"    261 hits   1,910,328 bytes
+        grep "drift score"    118 hits     609,254 bytes
+        grep "Tier 1"          14 hits     312,202 bytes
+        longest single record            208,514 bytes
+
+      The four searches its own instructions name return about 4.65 MB between them, before any
+      of the span has been read. Grep here is not cheaper than the whole-file read it replaces;
+      it is a whole-file read with extra steps.
+
+      The transferable point is not about this agent. A mechanism that guards against a cost by
+      naming a cheaper tool has only moved the cost if the tool's unit of work is the expensive
+      thing. Grep's unit is a line; JSONL's line is a turn. The guard was written against a unit
+      this format does not have. Any kit instruction shaped "use X, not Y, because Y is large"
+      carries the same assumption, and should name the unit it counts rather than the tool.
+
+      It also does not degrade gracefully. The auditor fails silently, writing nothing, so the
+      stop-gate keeps handing over a task that provably cannot complete, and the only evidence
+      that anything is wrong is a gate that never clears.
+    level_guess: principle
+    stated_confidence: 0.9
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
+  - obs_id: O-030
+    date: 2026-09-19
+    source: ser
+    contract_id: contract-002
+    refs: [O-029]
+    statement: |
+      M-30
+
+      The kit's adoption path has never run, and the reason is not neglect. It cannot complete.
+
+      kit-batch-assembler assembled B-001 — eleven real items, shuffled, no ledger ids — and could
+      not seal its key. .claude/settings.json carries permissions.deny ["Read(kit-sealed/**)"], and
+      the Write tool refuses a path under a Read deny. The agent's own frontmatter contradicts
+      itself: deny-paths.sh denies its Bash on "kit-sealed/", while write-scope.sh lists
+      "kit-sealed/" among the three paths it may write. Both routes closed. It refused to work
+      around either guard and did not register the batch, so the blind was never armed and the
+      lifecycle did not deadlock — the right call, and the reason this is recoverable.
+
+      meta-mechanisms -> The blind and the seal states the design intent plainly: the deny covers
+      Read, Grep and Glob, and "Bash can still read the directory" is the accepted hole the auditor
+      is there to cover. Write was never considered. The rule was written as a read restriction and
+      behaves as a path restriction.
+
+      tests/walk.sh — the kit's own lifecycle walk, prescribed by that same skill for exactly this
+      ("walk the lifecycle, not only the script ... because each hook can pass while the loop they
+      form deadlocks") — passes all 36 states, run today. It drives stop-gate.sh through a temp
+      fixture that has no settings.json, no permissions.deny and no subagent. It tests what the gate
+      says in each state, not whether the step it hands over can be completed by the agent it names.
+
+      So the kit's failure-modes section names this failure exactly — "A step nobody can clear.
+      Every gate task must have a write that ends it. A task with no exit repeats every turn and
+      blocks every step below it." — and the kit's own lifecycle test cannot see it, because the
+      test runs in a configuration the kit never runs in.
+
+      Two such steps exist in this project right now: the session audit (O-029) and the review
+      batch. Both were invisible until something executed them. Between them they hold every
+      adoption the standard has earned in three days: 25 candidates, 7 drift entries, 10
+      precedents, and not one line of skill guidance changed since installation.
+
+      The transferable point, now at six instances across both registers: a control is not in force
+      until something has run it in the configuration that ships and watched it act. A green test
+      whose fixture omits the constraints of the real environment measures the code's intent, not
+      the system's behaviour — and the gap between those two is where every defect in this project
+      has been found.
+    level_guess: principle
+    stated_confidence: 0.95
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
+  - obs_id: O-031
+    date: 2026-09-19
+    source: ser
+    contract_id: contract-002
+    refs: [C-016]
+    statement: |
+      M-24
+
+      I gave a direction on G-12 — remove the certificate branch as a loophole — reasoning from the
+      founding statement's "no loopholes or workarounds" without reading the roadmap. The pioneer
+      asked what the roadmap says about TLS. It says the opposite.
+
+      P1.6, in contract-002's own phase: "Kestrel serves HTTPS with a certificate from the vault,
+      or ForwardedHeaders is restricted to KnownProxies/KnownNetworks. UseHsts(). In Production,
+      refuse to start when neither is configured." Two of its four clauses are built. The
+      certificate branch is a specified Phase 1 deliverable that was skipped, not a false promise
+      to remove — and UseHsts() appears in no contract clause, no verification and no analysis, so
+      it had been missed entirely.
+
+      The transferable point: the founding statement does not decide questions at this resolution,
+      and reasoning directly from it feels like grounding while skipping the document that actually
+      binds. FOUNDING says what the work serves; the roadmap says what that means this phase. A
+      direction derived from the first without the second will sound principled and contradict the
+      plan — which is worse than an unprincipled one, because the reasoning is presentable.
+
+      Bearing is read against the founding statement (M-24). Scope is read against the roadmap.
+      Conflating them is how a withdrawal of work gets argued for in the language of integrity.
+    level_guess: principle
+    stated_confidence: 0.9
+    loaded_candidates: []
+    prompted: true
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17

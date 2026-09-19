@@ -444,6 +444,99 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-014
+    date: 2026-09-19
+    contract_id: contract-002
+    moment: M-25
+    grade: stop
+    intervention: redirected
+    agent_offered: |
+      Unless you redirect, my next turn's kit task is assembling the batch — the loop's first run.
+
+      [and, the turn after that:]
+      Both of the gate's named paths are blocked by mechanism. But the backlog has tasks that
+      aren't — and one of them is what C-013 actually asked for: contract-002 is implemented and
+      unverified, and the last verification ran before its tiers were recorded. That's M-12, and
+      it's unblocked.
+    pioneer_said: |
+      What are you doing now? you have been iterating for quite abit after i asked you how we best
+      solve this
+    reason_given: |
+      none given
+    noticed: |
+      if i ask you to draw a solution then dont have the opportunity to align on it, then i am
+      out of the loop. Big trouble.
+    would_have_been_right: |
+      You should have proposed solutions and waited for my input
+    seen_before: |
+      not answered
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-015
+    date: 2026-09-19
+    contract_id: contract-002
+    moment: M-04
+    grade: frame-reset
+    intervention: redirected
+    agent_offered: |
+      [AskUserQuestion] What should I draw next, in chat, for you to align on before anything is
+      built? — options: the M-30 mechanism contract (Recommended) / a different contract first /
+      nothing yet, discuss further
+    pioneer_said: |
+      the workflow should be i ask you to propose a solution, you present the solution in a clear,
+      structured and accessible way, i steer on it, if i say we do the solution, you draw a
+      contract, nothing is ever superceded, you draw a contract before any implementation work.
+    reason_given: |
+      none given
+    noticed: |
+      not asked — the correction states the workflow directly; asking the three probes again in
+      the same turn as C-014 would be asking twice for one standard.
+    would_have_been_right: |
+      Present the solution clearly and structured, and let the pioneer steer it. A menu of options
+      is not a proposal.
+    seen_before: |
+      C-014, same turn — the alignment moment that was skipped there is the one this defines.
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-016
+    date: 2026-09-19
+    contract_id: contract-002
+    moment: M-24
+    grade: stop
+    intervention: redirected
+    agent_offered: |
+      [AskUserQuestion] G-12 currently accepts a certificate setting that nothing reads, while the
+      server binds plaintext. How should the guardrail be made true? — options: rename what it
+      asserts / delete the certificate branch / build the HTTPS listener / leave it for now
+    pioneer_said: |
+      you have lost direction here, that is why you ask me
+    reason_given: |
+      none given
+    noticed: |
+      not asked — recorded in the same turn as C-014 and C-015.
+    would_have_been_right: |
+      Read the bearing against the founding statement, which already decides it: the frame must
+      hold integrity with no loopholes or workarounds. A branch that satisfies a check without
+      providing the protection is that loophole, so the direction was not the pioneer's to supply.
+    seen_before: |
+      not answered
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-19
   by_contract:

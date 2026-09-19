@@ -1,0 +1,349 @@
+<title>Gate Tasks Nobody Can Clear</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --paper:#f7f5f1; --ink:#1c2230; --ink-soft:#4a5468; --ink-faint:#7b8496;
+  --rule:#ddd8cf; --rule-soft:#e9e5dd; --panel:#fffdfa; --panel-2:#f1eee8;
+  --verified:#2d6a4a; --corrected:#a32d28; --open:#9a6510;
+  --verified-bg:#e6f0e8; --corrected-bg:#f7e6e4; --open-bg:#f8eeda;
+  --accent:#27496d; --code-bg:#f0ede6; --break:#a32d28;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c;
+}}
+:root[data-theme="dark"]{
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c;
+}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;
+  line-height:1.6;margin:0}
+.wrap{max-width:52rem;margin:0 auto;padding-block:3rem 5rem;padding-left:16px;padding-right:16px}
+h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif;text-wrap:balance;line-height:1.2}
+h1{font-size:clamp(2rem,6vw,2.9rem);margin:0 0 .6rem;letter-spacing:-.015em}
+h2{font-size:1.45rem;margin:3.2rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--rule)}
+h3{font-size:1.08rem;margin:0 0 .5rem}
+p{margin:0 0 1rem}
+code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+code{background:var(--code-bg);padding:.1em .35em;border-radius:3px;font-size:.87em}
+pre{background:var(--code-bg);border:1px solid var(--rule-soft);border-radius:5px;
+  padding:.9rem 1rem;overflow-x:auto;font-size:.82rem;line-height:1.55;margin:0 0 1rem}
+a{color:var(--accent)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:.75rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-faint);margin:0 0 .9rem}
+.standfirst{font-family:"IBM Plex Serif",Georgia,serif;font-size:1.16rem;color:var(--ink-soft);
+  margin:0 0 1.6rem;max-width:42rem}
+.meta{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--ink-faint);
+  border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);
+  padding:.7rem 0;display:flex;flex-wrap:wrap;gap:.4rem 1.6rem}
+
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);margin:2rem 0 2.5rem}
+.strip div{background:var(--panel);padding:1rem .9rem}
+.strip .n{font-family:"IBM Plex Mono",monospace;font-size:1.85rem;font-weight:600;
+  line-height:1;display:block;margin-bottom:.35rem;font-variant-numeric:tabular-nums}
+.strip .l{font-size:.78rem;color:var(--ink-soft);line-height:1.35;display:block}
+
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;
+  font-weight:600;letter-spacing:.09em;text-transform:uppercase;padding:.2rem .5rem;
+  border-radius:3px;vertical-align:.12em}
+.c-open{background:var(--open-bg);color:var(--open)}
+.c-corr{background:var(--corrected-bg);color:var(--corrected)}
+.c-ver{background:var(--verified-bg);color:var(--verified)}
+
+.finding{border:1px solid var(--rule);border-left-width:4px;background:var(--panel);
+  padding:1.3rem 1.4rem;margin:0 0 1.4rem}
+.finding.open{border-left-color:var(--open)}
+.finding.corr{border-left-color:var(--corrected)}
+.fhead{display:flex;flex-wrap:wrap;gap:.6rem;align-items:baseline;margin-bottom:.7rem}
+.fid{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--ink-faint);font-weight:600}
+.finding p:last-child{margin-bottom:0}
+.finding pre:last-child{margin-bottom:0}
+
+table{border-collapse:collapse;width:100%;font-size:.88rem;margin:0 0 1.2rem}
+th,td{text-align:left;padding:.6rem .7rem;border-bottom:1px solid var(--rule-soft);
+  vertical-align:top}
+th{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--rule)}
+.tw{overflow-x:auto}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.fig{background:var(--panel);border:1px solid var(--rule);padding:1.4rem 1rem;margin:0 0 1rem}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+.cap{font-size:.82rem;color:var(--ink-soft);margin:.6rem 0 0;font-style:italic}
+
+.judgement{border:1px solid var(--accent);background:var(--panel);padding:1.4rem 1.5rem;margin:1.2rem 0 0}
+.judgement h3{color:var(--accent)}
+ol.rec{margin:0;padding-left:1.3rem}
+ol.rec li{margin-bottom:.8rem}
+ol.rec li:last-child{margin-bottom:0}
+.note{font-size:.88rem;color:var(--ink-soft);border-left:2px solid var(--rule);
+  padding-left:1rem;margin:0 0 1rem}
+</style>
+
+<div class="wrap">
+
+<p class="eyebrow">report-001 &nbsp;·&nbsp; analysis</p>
+<h1>Gate Tasks Nobody Can Clear</h1>
+<p class="standfirst">Three lifecycle steps in base-building-kit cannot be completed by the agents
+named to complete them. The kit's own lifecycle walk passes all 36 states while this is true,
+because its fixture omits the two things that break them.</p>
+
+<div class="meta">
+  <span>Found against v0.24 (<span class="mono">60c98eb</span>)</span>
+  <span>Re-checked at v0.25 (<span class="mono">0d2f55a</span>) — all five still open</span>
+  <span>Observed in a project running v0.16</span>
+  <span>2026-09-19</span>
+</div>
+
+<div class="strip">
+  <div><span class="n">5</span><span class="l">findings, all open in 0.24</span></div>
+  <div><span class="n">1</span><span class="l">claim corrected</span></div>
+  <div><span class="n">4</span><span class="l">gate tasks that could not complete in the field</span></div>
+  <div><span class="n">0</span><span class="l">of 25 candidates adopted in 3 days of use</span></div>
+</div>
+
+<p class="note"><strong>Re-checked at v0.25.</strong> Contract-017 landed between the first draft of
+this report and its publication, adding <code>preflight.sh</code>, <code>rollback.sh</code>,
+<code>merge.sh</code> and <code>hooks-selftest.sh</code> — real release machinery for install and
+upgrade. None of the five findings below is touched by it. Verified file by file against
+<code>origin/main</code>: the deny rule at <code>settings.template.json:63</code> is unchanged, the
+auditor's step 1 is unchanged, and <code>stop-gate.sh</code> and <code>walk.sh</code> still contain
+zero occurrences of <code>type</code> and <code>settings.json</code> respectively.
+<code>hooks-selftest.sh</code> is the nearest thing to F-4, but it checks that each hook <em>runs</em>,
+not that the task a gate hands over can be <em>completed</em>.</p>
+
+<p>All five were found by running the kit, not by reading it. The project where they surfaced has
+two contracts, 31 observations, 25 candidates, 16 corrections, 10 precedents and 7 drift entries —
+and <strong>zero lines of skill guidance changed since installation</strong>, because the adoption
+path has never executed once.</p>
+
+<h2>The corrected claim</h2>
+
+<p><code>meta-mechanisms/SKILL.md</code> &rarr; <em>Adding or changing a mechanism</em> states the
+guarantee that the lifecycle walk provides. That guarantee does not hold.</p>
+
+<div class="finding corr">
+  <div class="fhead"><span class="fid">C-1</span><span class="chip c-corr">Corrected</span></div>
+  <div class="tw"><table>
+    <tr><th style="width:9rem">Claimed</th><td>“walk the lifecycle, not only the script — one batch
+      and one contract through every state, <em>because each hook can pass while the loop they form
+      deadlocks</em>. … a state the walk does not visit is a state nobody has seen.”</td></tr>
+    <tr><th>Actual</th><td><code>walk.sh</code> exits 0 on all 36 states while two steps of that same
+      loop cannot be completed by any agent. The walk drives <code>stop-gate.sh</code> and asserts
+      what it <em>says</em>; it never runs the agent the gate names, so it cannot observe whether the
+      handed-over task can finish.</td></tr>
+    <tr><th>Why it can't see it</th><td>The fixture supplies the broken step for free.
+      <code>walk.sh:59</code> is <code>w_batch() { cat &gt; "$K/meta-ledger/batches/$1.md"; }</code>
+      — batch files appear by fiat. The fixture builder (lines 28–35) writes the manifest, contract
+      log, ledger, corrections, casebook, drift log, map and founding file, and <strong>no
+      <code>settings.json</code>, no agents, no <code>kit-sealed/</code></strong>. Line 420 asserts
+      the gate <em>names</em> <code>kit-batch-assembler</code>; the assembler never runs.</td></tr>
+  </table></div>
+</div>
+
+<h2>Findings</h2>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-1</span><span class="chip c-open">Open</span>
+    <h3>The seal blocks the write the seal depends on</h3></div>
+  <p><code>templates/settings.template.json:63</code> ships
+  <code>"deny": ["Read(kit-sealed/**)"]</code>. The Write tool refuses a path covered by a Read deny,
+  so <code>kit-batch-assembler</code> cannot write <code>B-NNN.key</code>. Its Bash route is closed
+  by its own <code>deny-paths.sh</code> hook. Both routes shut.</p>
+  <p>The agent's frontmatter contradicts itself — the same file passes
+  <code>kit-sealed/</code> to <code>write-scope.sh</code> as a path it <em>may</em> write:</p>
+<pre>- matcher: "Edit|Write"
+  … write-scope.sh "meta-ledger/batches/" "kit-sealed/" "meta-ledger/LEDGER.yaml"</pre>
+  <p><code>meta-mechanisms/SKILL.md:88</code> reasons about this rule entirely in terms of reads —
+  “applied to Grep and Glob on a best-effort basis”, “Bash can still read the directory”, and under
+  <em>What neither covers:</em> “Bash reads”. Writing is never considered. The rule was written as a
+  read restriction and behaves as a path restriction.</p>
+  <p><strong>Field consequence.</strong> The assembler produced a correct <code>B-001.md</code>
+  (11 real items), could not seal it, <em>correctly refused to work around either guard</em>, and
+  deliberately left <code>batches: []</code> so the blind would not arm on a batch whose key
+  <code>reveal-key.sh</code> could never open. Its judgement was sound; the mechanism was not.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-2</span><span class="chip c-open">Open</span>
+    <h3>The auditor's search strategy is unbounded on its own input format</h3></div>
+  <p><code>agents/kit-session-auditor.md:33</code> — <em>“Transcripts are large: use Grep, not a
+  whole-file Read.”</em> On JSONL a record is a whole conversation turn, so a grep hit returns that
+  entire turn. Measured on a 16,112,599-byte, 5,958-line transcript:</p>
+<pre>grep "contract-002"   304 hits   1,820,666 bytes   ← 11% of the file, one call
+grep "implemented"    261 hits   1,910,328 bytes
+grep "drift score"    118 hits     609,254 bytes
+grep "Tier 1"          14 hits     312,202 bytes
+longest single record            208,514 bytes
+                                 ───────────
+the four searches step 1 names:  ~4,650,000 bytes</pre>
+  <p>Grep here is not cheaper than the whole-file read it replaces; it is a whole-file read with
+  extra steps. The instruction guards against size by naming a cheaper tool, but the tool's unit of
+  work is a line and this format's line is a turn.</p>
+  <p>The same agent <strong>succeeded on the same file</strong> when it was ~2,750 lines, writing a
+  full audit. Three launches and two resumes at the current size produced nothing — no output, no
+  error, ~240 tool calls. 0.24 adds the <code>presented_for_pioneer</code> check (contract-014),
+  which does more work on the same unbounded input, against <code>maxTurns: 30</code>.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-3</span><span class="chip c-open">Open</span>
+    <h3>Turn budgets are uniform; contract size is not</h3></div>
+  <p><code>kit-verifier</code> (<code>maxTurns: 40</code>, unchanged 0.16 → 0.24) hit its limit at 51
+  tool uses against a four-tier contract with ~20 clauses, and <strong>delivered no report at
+  all</strong> — it was still calling tools when it stopped. A budget that is exceeded mid-work
+  produces silence, not a partial result, so the gate's task simply does not complete.</p>
+  <p>This is the same shape as F-2 at a different parameter: an agent whose input scales with the
+  work, and a bound that does not.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-4</span><span class="chip c-open">Open</span>
+    <h3>Nothing detects a gate task that never completes</h3></div>
+  <p>The kit already names this failure precisely, under <em>Failure modes</em>:</p>
+  <p class="note">“<strong>A step nobody can clear.</strong> Every gate task must have a write that
+  ends it. A task with no exit repeats every turn and blocks every step below it.”</p>
+  <p>Four were observed in one project in three days — the session audit, the batch seal, the
+  verification, and adoption as their consequence. Each agent failed <em>silently</em>: no error, no
+  partial write, nothing in telemetry distinguishing “ran and found nothing” from “could not run”.
+  The only signal is a gate that hands over the same task indefinitely, which reads as nagging rather
+  than as a defect. Over six consecutive turns in this session the gate re-issued one uncompletable
+  task without any mechanism noticing.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-5</span><span class="chip c-open">Open</span>
+    <h3>A documented exemption that the gate does not implement</h3></div>
+  <p><code>CONTRACT-LOG.template.yaml</code> states the rule in its schema comment:</p>
+<pre>type: contract    # or analysis-report, with a report-NNN id; <strong>the gates skip those</strong></pre>
+  <p><code>stop-gate.sh</code> never reads <code>type</code>. It selects by field position on
+  <code>status</code>, <code>verification_state</code> and <code>audited</code> —
+  <code>'$2=="implemented" &amp;&amp; $4=="false"'</code> and its siblings. An analysis report
+  registered with <code>status: implemented</code> therefore arms the audit gate and the verification
+  gate for a document that has no session to audit and no clauses to verify.</p>
+  <p>Compounding it, <code>meta-contract-artifact</code> introduces report entries into this log but
+  extends no status enum, so <strong>there is no lifecycle value a report can honestly carry</strong>.
+  The five documented values all describe a contract's build cycle.</p>
+  <p class="note">This one was found while registering <em>this report</em> in the log — the act of
+  following the kit's own instruction surfaced the defect. It is the same shape as F-1 through F-3:
+  a control that is written down and not implemented, discovered only by executing it.</p>
+</div>
+
+<h2>The mechanism, drawn</h2>
+
+<div class="fig">
+<svg viewBox="0 0 760 250" role="img" aria-label="The adoption loop, with the seal edge broken and the walk's fixture bypassing it">
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="var(--ink-soft)"/></marker>
+    <marker id="ab" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="var(--break)"/></marker>
+  </defs>
+  <g font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink)">
+    <rect x="4" y="44" width="106" height="38" fill="var(--panel-2)" stroke="var(--rule)"/>
+    <text x="57" y="60" text-anchor="middle">observations</text>
+    <text x="57" y="74" text-anchor="middle" fill="var(--ink-faint)">31</text>
+
+    <rect x="152" y="44" width="106" height="38" fill="var(--panel-2)" stroke="var(--rule)"/>
+    <text x="205" y="60" text-anchor="middle">candidates</text>
+    <text x="205" y="74" text-anchor="middle" fill="var(--ink-faint)">25</text>
+
+    <rect x="300" y="44" width="106" height="38" fill="var(--panel-2)" stroke="var(--rule)"/>
+    <text x="353" y="60" text-anchor="middle">batch file</text>
+    <text x="353" y="74" text-anchor="middle" fill="var(--ink-faint)">B-001, 11 items</text>
+
+    <rect x="448" y="44" width="106" height="38" fill="none" stroke="var(--break)" stroke-dasharray="4 3"/>
+    <text x="501" y="60" text-anchor="middle" fill="var(--break)">sealed key</text>
+    <text x="501" y="74" text-anchor="middle" fill="var(--break)">never written</text>
+
+    <rect x="596" y="44" width="106" height="38" fill="none" stroke="var(--rule)" stroke-dasharray="3 3"/>
+    <text x="649" y="60" text-anchor="middle" fill="var(--ink-faint)">reveal &rarr;</text>
+    <text x="649" y="74" text-anchor="middle" fill="var(--ink-faint)">skills updated</text>
+
+    <line x1="112" y1="63" x2="148" y2="63" stroke="var(--ink-soft)" marker-end="url(#a)"/>
+    <line x1="260" y1="63" x2="296" y2="63" stroke="var(--ink-soft)" marker-end="url(#a)"/>
+    <line x1="408" y1="63" x2="444" y2="63" stroke="var(--break)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ab)"/>
+    <line x1="556" y1="63" x2="592" y2="63" stroke="var(--ink-faint)" stroke-dasharray="3 3" marker-end="url(#a)"/>
+
+    <text x="426" y="34" text-anchor="middle" font-size="15" fill="var(--break)" font-weight="600">&#10007;</text>
+    <text x="426" y="104" text-anchor="middle" font-size="10" fill="var(--break)">F-1</text>
+
+    <rect x="248" y="158" width="264" height="52" fill="var(--panel-2)" stroke="var(--rule)"/>
+    <text x="380" y="177" text-anchor="middle" font-size="10.5">walk.sh fixture — w_batch()</text>
+    <text x="380" y="193" text-anchor="middle" font-size="10" fill="var(--ink-faint)">writes the batch file directly</text>
+    <text x="380" y="205" text-anchor="middle" font-size="10" fill="var(--ink-faint)">no settings.json · no agents</text>
+
+    <line x1="380" y1="154" x2="380" y2="88" stroke="var(--ink-soft)" stroke-dasharray="3 3" marker-end="url(#a)"/>
+    <text x="392" y="126" font-size="10" fill="var(--ink-faint)">supplies this for free</text>
+
+    <text x="596" y="182" font-size="10" fill="var(--ink-faint)">so the &#10007; edge</text>
+    <text x="596" y="196" font-size="10" fill="var(--ink-faint)">is never traversed</text>
+  </g>
+</svg>
+<p class="cap">The broken edge is the one the walk's fixture hands over for free. Everything left of
+it works; everything right of it has never run.</p>
+</div>
+
+<h2>What was not answered</h2>
+
+<table>
+  <tr><th style="width:14rem">Question</th><th>Why it stayed open</th></tr>
+  <tr><td>Is Write-under-a-Read-deny documented Claude Code semantics, or version-specific?</td>
+    <td>The refusal message was reported by the blocked subagent. It was not reproduced — attempting
+    a sealed-path write in the main session would itself be the drift the kit audits for.</td></tr>
+  <tr><td>Does the auditor exhaust context at step 1, or later?</td>
+    <td>Its inputs were measured, not its internal state. The byte counts prove the strategy is
+    unbounded; they do not prove where it stops.</td></tr>
+  <tr><td>Are there defects in the other seven releases' worth of change?</td>
+    <td>Three known defects were checked against 0.24. The kit was not reviewed.</td></tr>
+  <tr><td>Is <code>w_batch()</code> deliberate scope or oversight?</td>
+    <td>A unit test of the gate's messages is a legitimate thing to have. Whether it was <em>meant</em>
+    to also stand for the lifecycle guarantee is the author's to say.</td></tr>
+  <tr><td>Did the 0.24 upgrade rehearsal exercise any of this?</td>
+    <td>Its report (<span class="mono">report-004</span>) was not read; only the kit tree was
+    examined.</td></tr>
+</table>
+
+<div class="judgement">
+  <h3>Recommendation &mdash; judgement, not finding</h3>
+  <p>The three defects are one shape: <strong>a control checked in a configuration the running system
+  never uses.</strong> Repairing them individually leaves the shape intact, so they are ordered by
+  what each forecloses.</p>
+  <ol class="rec">
+    <li><strong>Separate read-denial from write-denial on the seal.</strong> The assembler needs
+      write-yes / read-no. Either express the project rule so Write does not inherit it, or move the
+      key somewhere the deny does not cover and protect it by hook instead. Smallest change; unblocks
+      adoption on its own.</li>
+    <li><strong>Bound every agent input that scales with the work.</strong> A digest step for the
+      auditor — a script-produced, fixed-size artifact it reads instead of the raw transcript — and a
+      turn budget for the verifier proportional to clause count rather than a constant.</li>
+    <li><strong>Extend the walk to run each gate task to completion under the real
+      <code>settings.json</code>, by the agent the gate names.</strong> This is the one that matters:
+      it would have caught all three, and it is what the kit's own text already claims the walk does.
+      Keeping <code>w_batch()</code> as a fast path is fine, provided one pass goes the long way.</li>
+    <li><strong>Give a stalled gate task a signal.</strong> The same task handed over N times with no
+      state change is currently indistinguishable from a patient backlog. It should say so.</li>
+    <li><strong>Make the gate read <code>type</code>, and give reports a status of their own</strong>
+      (F-5) — or drop the “gates skip those” claim from the schema. Either resolves it; leaving the
+      comment in place while the code ignores it is the failure the rest of this report is about.</li>
+  </ol>
+</div>
+
+<h2>Provenance</h2>
+<p style="font-size:.88rem;color:var(--ink-soft)">Every measurement above was produced by executing
+something, not by reading. <code>walk.sh</code> was run today against 0.16 and passed 36/36; the byte
+counts come from greps over a live transcript; the 0.24 and 0.25 claims come from a clone of
+<code>oskarc/meta-kit-builder</code> at <code>60c98eb</code> and <code>0d2f55a</code>, quoted by file
+and line, with the 0.25 re-check made against each file directly rather than read off a
+diffstat. The assembler's
+and verifier's failures were observed in a working session, not simulated. Recorded in the originating
+project as observations O-029, O-030 and O-031.</p>
+
+</div>

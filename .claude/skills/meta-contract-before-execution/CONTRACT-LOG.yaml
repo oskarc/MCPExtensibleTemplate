@@ -85,6 +85,28 @@
 # contract it led to). See meta-contract-artifact/SKILL.md.
 
 contracts:
+  - contract_id: report-001
+    feature: kit-lifecycle-defects
+    type: analysis-report
+    date_proposed: 2026-09-19
+    bearing: |
+      Three gate tasks in the kit that governs this project cannot be completed by the agents named
+      to complete them, so nothing the pioneer decides can reach a skill. The founding statement asks
+      for a frame that holds integrity over time with no loopholes; this reports the same failure in
+      the frame that governs the work.
+    status: published
+    status_note: |
+      Not one of the contract lifecycle values. meta-contract-artifact registers reports in this log
+      but extends no status enum, and stop-gate.sh selects on `status` by field position without ever
+      reading `type` — so the schema's "the gates skip those" is not implemented, and any contract
+      status here would arm a gate for a document with no session to audit. Recorded as F-5 in the
+      report itself.
+    file: docs/reports/report-001-kit-lifecycle-defects.html
+    artifact: https://claude.ai/artifact/MEZaDfvneakH4vGa7jaXDt
+    audience: the agent maintaining base-building-kit
+    findings_against: base-building-kit v0.24 (60c98eb), re-checked at v0.25 (0d2f55a) — all five still open; observed in this project at v0.16
+    observations: [O-029, O-030, O-031]
+    led_to: null
   - contract_id: contract-002
     feature: phase-1-identity
     type: contract
