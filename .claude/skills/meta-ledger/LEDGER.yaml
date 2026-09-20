@@ -1412,8 +1412,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-044
     stewarded: n/a
 
   - obs_id: O-047
@@ -1430,8 +1430,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-045
     stewarded: n/a
 
   - obs_id: O-048
@@ -1447,8 +1447,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-046
     stewarded: n/a
 
   - obs_id: O-049
@@ -1466,8 +1466,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-047
     stewarded: n/a
 
   - obs_id: O-050
@@ -1484,8 +1484,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-048
     stewarded: n/a
 
   - obs_id: O-051
@@ -1504,8 +1504,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-049
     stewarded: n/a
 
   - obs_id: O-052
@@ -1528,8 +1528,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-050
     stewarded: n/a
 
   - obs_id: O-053
@@ -1558,8 +1558,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-051
     stewarded: n/a
 
 
@@ -3142,6 +3142,233 @@ candidates:
     certainty: low
     certainty_codes: [single-contract]
     stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-044
+    created: 2026-09-20
+    statement: |
+      M-28
+
+      none of that means anything
+    level: principle
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-046"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-045
+    created: 2026-09-20
+    statement: |
+      M-12
+
+      go for A so we have a clean slate before we begin, id want you to verify contract 002
+      against the code after verification pass fixes them
+    level: pattern
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-047"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-046
+    created: 2026-09-20
+    statement: |
+      M-16
+
+      i wont judge on them now, lets look at why the ci in github is failing
+    level: pattern
+    tier: undecided
+    target: [meta-map]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-048"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-047
+    created: 2026-09-20
+    statement: |
+      M-12
+
+      Again, i dont know that t-2, t12,G12 or any of the other ids mean, there is no context for me
+      to get into. The meta approach clearly states no numerals or ids, and that you should create
+      the context not assume i know every Id by name.
+    level: principle
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-049"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-048
+    created: 2026-09-20
+    statement: |
+      M-12
+
+      you need to work harder to present it to me in a clear structured and accessible way without
+      having me translate
+    level: principle
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-050"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-049
+    created: 2026-09-20
+    statement: |
+      M-12
+
+      This is a flaw because you didnt properly lay of land before starting down a reasoning
+      pathway. then you got lost and tried to suggest solutions to make sense of your lost
+      direction, all of them wrong. I read your latest message like, workflow expected actions in
+      other order than it got but the test are valid for what they should uphold.
+    level: principle
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-051"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-050
+    created: 2026-09-20
+    statement: |
+      M-03
+
+      My read of where we are now, is that you dont properly hold the right perspective, im
+      guessing you guess instead of read and reason and rely on memory too much. So you are failing
+      to uphold your foundational principles of the practice, causing situations where i have to
+      take control and guide you out of holes.
+
+      We all fail and ail sometimes that is not the issue, but the solution here is a stronger
+      adherence to the practice, not a new contract or a new solution. Do you have execution
+      pressure messing with your measurements?
+    level: principle
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-052"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-051
+    created: 2026-09-20
+    statement: |
+      M-03
+
+      It sounds like you fall into gaming the tasks. The contracts produce an implementation that
+      learnings can be applied to that creates standard. Before contract, we gather evidence. In
+      the contract you lay the evidence in descriptions but also in prose so i understand that you
+      are on point. Before you can produce that you must read, your must reason and you must adhere
+      to a plan when it exist, which it does in this repo as a roadmap, together with the founding
+      statement the roadmap is the direction and the frame to be produced. before producing actual
+      code, you must produce the prerequisites for understanding, that is reading and reasoning.
+      The most foundational output, the thing closest to the core here, is correct and applied
+      understanding. Born out of that understanding comes everything else.
+
+      Sometimes its hard to me to see if that understanding you show in the contract is based only
+      the roadmap or what is implemented as well. When that happens we both have lost track. My
+      task according to the foundational principles is to hold closeness, distance and to catch and
+      realign when i see you in the wrong corner. Which i have done now.
+    level: principle
+    tier: undecided
+    target: [meta-foundation, meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-053"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
     restatements: 1
     last_moved: 2026-09-20
     decision: null

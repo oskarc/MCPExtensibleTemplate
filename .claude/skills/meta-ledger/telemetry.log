@@ -446,3 +446,20 @@
 2026-09-20T17:43:09Z|prompt|
 2026-09-20T17:43:10Z|subagent|kit-case-clerk
 2026-09-20T17:43:22Z|prompt|
+2026-09-20T17:43:47Z|stop-gate|8 ledger observation(s) are unconsolidated. Launch the kit-consolidator 
+2026-09-20T17:44:00Z|loaded-agent|meta-ledger/SKILL.md
+2026-09-20T17:44:05Z|loaded-agent|meta-ledger/LEDGER.yaml
+2026-09-20T17:44:17Z|loaded-agent|meta-ledger/LEDGER.yaml
+2026-09-20T17:44:32Z|loaded-agent|meta-correction-log/CORRECTIONS.yaml
+2026-09-20T17:44:34Z|prompt|
+2026-09-20T17:44:44Z|stop-gate-fault|8 ledger observation(s) are unconsolidated. Launch the kit-consolidator 
+2026-09-20T17:44:44Z|stop-gate|this is the third turn running with the same kit task and nothing has ch
+2026-09-20T17:45:16Z|loaded-agent|meta-casebook/CASEBOOK.yaml
+2026-09-20T17:45:34Z|loaded-agent|meta-ledger/LEDGER.yaml
+2026-09-20T17:46:30Z|loaded-agent|meta-ledger/LEDGER.yaml
+2026-09-20T17:46:33Z|loaded-agent|meta-ledger/LEDGER.yaml
+2026-09-20T17:47:42Z|prompt|
+2026-09-20T17:48:01Z|stop-gate|1 pioneer correction(s) are not yet clerked. Launch the kit-case-clerk s
+2026-09-20T17:48:10Z|prompt|
+2026-09-20T17:48:11Z|subagent|kit-consolidator
+2026-09-20T17:48:20Z|prompt|
