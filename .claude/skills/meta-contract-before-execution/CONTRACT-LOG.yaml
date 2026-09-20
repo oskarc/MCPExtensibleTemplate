@@ -98,6 +98,24 @@
 # contract it led to). See meta-contract-artifact/SKILL.md.
 
 contracts:
+  - contract_id: report-004
+    feature: the-unmeasured-output
+    type: analysis-report
+    date_proposed: 2026-09-20
+    bearing: |
+      The practice names correct and applied understanding as its foundational output, and every
+      instrument it has measures an artefact instead. This reports what that cost across one
+      contract, what held, and why the remedy is adherence rather than another mechanism.
+    status: published
+    file: docs/reports/report-004-the-unmeasured-output.html
+    artifact: https://claude.ai/artifact/SHXgngtvpr65LSbbseB1Qn
+    audience: the agent maintaining base-building-kit, and the practice itself
+    findings_against: the practice as written, observed across contract-002
+    observations: [O-031, O-043]
+    corrections: [C-017, C-020, C-021, C-022, C-023, C-024]
+    drift: [drift-008, drift-010, drift-011]
+    follows: report-003
+    led_to: null
   - contract_id: report-003
     feature: the-jammed-queue
     type: analysis-report
@@ -113,6 +131,7 @@ contracts:
       stop-gate, which selects on `status` and never reads `type`.
     file: docs/reports/report-003-the-jammed-queue.html
     artifact: https://claude.ai/artifact/NJNNQgtHzN1y2YqySpUBx7
+    followed_by: report-004
     audience: the agent maintaining base-building-kit
     findings_against: base-building-kit 0.25 (0d2f55a), observed across contract-002
     observations: [O-029, O-040]
@@ -339,8 +358,17 @@ contracts:
         McpServerTemplate.Tests/Identity/ResourceMetadataTests.cs
       date: 2026-09-18
     approval: approved-at-gate
-    status: implemented
+    status: verified
     verification_state: reported
+    closed_by: |
+      Pioneer confirmation, 2026-09-20: "Close the contract as it is complete."
+      The two clauses the verifier held open - the token-validation rule and the rule against
+      serving credentials over an unprotected connection - were open on a date comparison, not on
+      evidence. Both are implemented, both are tested, and all 199 tests pass. The report their
+      revisions postdate had judged clauses reconstructed from doc comments and the roadmap,
+      because this entry carried no tiers at the time; it is marked superseded twice over.
+      The pioneer's reading, recorded as C-022: "workflow expected actions in other order than it
+      got but the test are valid for what they should uphold."
     verification_history:
       - superseded: 2026-09-19
         by_evidence: |
