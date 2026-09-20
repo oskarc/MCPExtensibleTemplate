@@ -1356,8 +1356,8 @@ observations:
     stated_confidence: 0.9
     loaded_candidates: [K-022]
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-042
     stewarded: n/a
 
 
@@ -1394,8 +1394,8 @@ observations:
     stated_confidence: 0.9
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-043
     stewarded: n/a
 
 
@@ -2894,6 +2894,95 @@ candidates:
     decision: null
     outcome: null
 
+  - cand_id: K-042
+    created: 2026-09-20
+    statement: |
+      M-13
+
+      From contract-002's learning diff, where the contracted prediction and the verified reality
+      differ on how a guarantee is evidenced.
+
+      The contract assumed its twelve acceptance tests covered its twelve guarantees, so a passing
+      suite meant the guarantees held. The pioneer's pre-mortem doubted exactly that, in their
+      words: if the tests didnt cover loop holes, if the hardening has flaws. The pre-mortem was
+      right. Four defects reached implementation with every test green, and every one was found by
+      running the server rather than testing it - a claim-normalising method never called, the
+      enforcement filters absent from the harness, a stack overflow on the first unauthenticated
+      request, and a transport guard accepting a setting nothing reads.
+
+      The transferable rule: a test that builds its own composition tests that composition, not the
+      program. A control is not in force until something has run it in the configuration that ships
+      and watched it act. One omitted registration in the harness was enough to make two guarantees
+      unfalsifiable while reading as proven.
+
+      Alongside it, from the same diff: an approved revision is still evidence that has to be
+      ordered. Two revisions changed acceptance tests after a verification report, and the verifier
+      held both clauses open. May I change this is the pioneer's question; does the evidence still
+      stand once I do is the agent's, and it was never asked.
+    level: principle
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: true
+    disposition_proposed: trial
+    evidence_refs: ["O-044"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: low
+    certainty_codes: [single-contract]
+    stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-043
+    created: 2026-09-20
+    statement: |
+      M-13
+
+      From contract-002's learning diff, on where an agent's understanding comes from and whether
+      anything can see it.
+
+      Two failures in this contract share a root. A direction on the transport guard was drawn from
+      the founding statement alone and contradicted the roadmap, which specified the very branch it
+      proposed deleting - fluent, principled and wrong. And the contract's own open clauses were
+      explained three times from summaries rather than sources, each account collapsing on contact
+      with a file one command away.
+
+      Two rules follow. The founding statement says what the work serves and the roadmap says what
+      that means this phase: bearing is read against the first, scope against the second, and
+      reasoning from one without the other produces a conclusion that survives review on its tone.
+      And correct and applied understanding is the foundational output, the only one with no
+      instrument - a contract drawn, a clause verified, a task discharged and a score emitted are
+      all artefacts, and every one of them was green while the understanding beneath was thin.
+
+      Why no check reaches it: a coherent account suppresses the impulse to check, because the
+      agent does not experience itself as not knowing. Before any hypothesis, establish full scope
+      is therefore an epistemic rule whose trigger is absent exactly when it is needed. The only
+      instrument that worked across this contract was a person asking a question that had no
+      comfortable answer.
+    level: principle
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts: []
+    review_due: true
+    disposition_proposed: trial
+    evidence_refs: ["O-045"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: low
+    certainty_codes: [single-contract]
+    stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
 batches: []
 
 map_proposals: []
@@ -2944,8 +3033,8 @@ scores:
       corrections_from_tests: 2
       corrections_from_reading: 1
     - contract_id: contract-002
-      observations: 18
-      candidates_created: 18
+      observations: 20
+      candidates_created: 20
       audited: true
       verified: true
       cost: null
