@@ -843,8 +843,8 @@ observations:
     stated_confidence: 0.85
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-026
     stewarded: n/a
 
 
@@ -888,8 +888,8 @@ observations:
     stated_confidence: 0.9
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-027
     stewarded: n/a
 
 
@@ -941,8 +941,8 @@ observations:
     stated_confidence: 0.95
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-028
     stewarded: n/a
 
 
@@ -977,8 +977,8 @@ observations:
     stated_confidence: 0.9
     loaded_candidates: []
     prompted: true
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-029
     stewarded: n/a
 
 
@@ -1021,8 +1021,8 @@ observations:
     stated_confidence: 0.9
     loaded_candidates: []
     prompted: true
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-030
     stewarded: n/a
 
 
@@ -1057,8 +1057,8 @@ observations:
     stated_confidence: 0.85
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-031
     stewarded: n/a
 
   - obs_id: O-034
@@ -1078,8 +1078,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-032
     stewarded: n/a
 
   - obs_id: O-035
@@ -1099,8 +1099,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-033
     stewarded: n/a
 
   - obs_id: O-036
@@ -1119,8 +1119,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-034
     stewarded: n/a
 
   - obs_id: O-037
@@ -1137,8 +1137,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-035
     stewarded: n/a
 
   - obs_id: O-038
@@ -1156,8 +1156,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-036
     stewarded: n/a
 
   - obs_id: O-039
@@ -1173,8 +1173,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-037
     stewarded: n/a
 
 
@@ -1219,8 +1219,8 @@ observations:
     stated_confidence: 0.9
     loaded_candidates: []
     prompted: true
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-038
     stewarded: n/a
 
   - obs_id: O-041
@@ -1254,8 +1254,8 @@ observations:
     stated_confidence: 0.7
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-039
     stewarded: n/a
 
   - obs_id: O-042
@@ -1282,8 +1282,8 @@ observations:
     stated_confidence: 0.6
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-040
     stewarded: n/a
 
 
@@ -1319,8 +1319,8 @@ observations:
     stated_confidence: 0.85
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-041
     stewarded: n/a
 
 
@@ -2182,6 +2182,643 @@ candidates:
     decision: null
     outcome: null
 
+  - cand_id: K-026
+    created: 2026-09-20
+    statement: |
+      M-30
+
+      Three things in contract-002 were found by running the server and could not have been found
+      any other way, and they share a shape: each was a security control behaving correctly and
+      costing something nobody had priced.
+
+      The router forwarded unattributable requests to the MCP challenge scheme, whose handler
+      authenticates through the default scheme — the router. The server died of a stack overflow
+      on its first unauthenticated request. It compiled, and every unit test passed.
+
+      Requiring identity configuration for stdio was correct and would have made the template
+      unrunnable for a local IDE without a production-shaped config file. The guarantee was right;
+      its reach was wrong.
+
+      G-12 refused the contract's own HTTP tests, because they run as Production over loopback
+      plaintext. The guardrail was working on its first day, against its author.
+
+      The transferable point: a security control's cost lands on whoever is nearest, and that is
+      usually the developer, the test harness, or the local workflow — none of which appear in the
+      threat model that justified the control. Writing the guarantee is not the hard part. Finding
+      out who pays for it requires running it, and the three cases here were all paid by someone
+      other than the attacker it was aimed at.
+    level: principle
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-028"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: very-low
+    certainty_codes: [self-generated, single-contract]
+    stated_confidence: 0.85
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-027
+    created: 2026-09-20
+    statement: |
+      M-30
+
+      kit-session-auditor audited contract-001 and wrote A-001 in full. It has now produced
+      nothing for contract-002 across three launches and two resumes, roughly 240 tool calls.
+      Same agent, same instructions, same transcript file. The only thing that changed is the
+      file's size: about 2,750 lines when A-001 was written, 5,958 lines and 16,112,599 bytes now.
+
+      The agent's step 1 anticipates size: "Transcripts are large: use Grep, not a whole-file
+      Read." On a JSONL transcript that instruction does not do what it was written to do,
+      because a record is a whole conversation turn. Measured on this file:
+
+        grep "contract-002"   304 hits   1,820,666 bytes
+        grep "implemented"    261 hits   1,910,328 bytes
+        grep "drift score"    118 hits     609,254 bytes
+        grep "Tier 1"          14 hits     312,202 bytes
+        longest single record            208,514 bytes
+
+      The four searches its own instructions name return about 4.65 MB between them, before any
+      of the span has been read. Grep here is not cheaper than the whole-file read it replaces;
+      it is a whole-file read with extra steps.
+
+      The transferable point is not about this agent. A mechanism that guards against a cost by
+      naming a cheaper tool has only moved the cost if the tool's unit of work is the expensive
+      thing. Grep's unit is a line; JSONL's line is a turn. The guard was written against a unit
+      this format does not have. Any kit instruction shaped "use X, not Y, because Y is large"
+      carries the same assumption, and should name the unit it counts rather than the tool.
+
+      It also does not degrade gracefully. The auditor fails silently, writing nothing, so the
+      stop-gate keeps handing over a task that provably cannot complete, and the only evidence
+      that anything is wrong is a gate that never clears.
+    level: principle
+    tier: undecided
+    target: [kit-session-auditor]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-029"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: very-low
+    certainty_codes: [self-generated, single-contract]
+    stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-028
+    created: 2026-09-20
+    statement: |
+      M-30
+
+      The kit's adoption path has never run, and the reason is not neglect. It cannot complete.
+
+      kit-batch-assembler assembled B-001 — eleven real items, shuffled, no ledger ids — and could
+      not seal its key. .claude/settings.json carries permissions.deny ["Read(kit-sealed/**)"], and
+      the Write tool refuses a path under a Read deny. The agent's own frontmatter contradicts
+      itself: deny-paths.sh denies its Bash on "kit-sealed/", while write-scope.sh lists
+      "kit-sealed/" among the three paths it may write. Both routes closed. It refused to work
+      around either guard and did not register the batch, so the blind was never armed and the
+      lifecycle did not deadlock — the right call, and the reason this is recoverable.
+
+      meta-mechanisms -> The blind and the seal states the design intent plainly: the deny covers
+      Read, Grep and Glob, and "Bash can still read the directory" is the accepted hole the auditor
+      is there to cover. Write was never considered. The rule was written as a read restriction and
+      behaves as a path restriction.
+
+      tests/walk.sh — the kit's own lifecycle walk, prescribed by that same skill for exactly this
+      ("walk the lifecycle, not only the script ... because each hook can pass while the loop they
+      form deadlocks") — passes all 36 states, run today. It drives stop-gate.sh through a temp
+      fixture that has no settings.json, no permissions.deny and no subagent. It tests what the gate
+      says in each state, not whether the step it hands over can be completed by the agent it names.
+
+      So the kit's failure-modes section names this failure exactly — "A step nobody can clear.
+      Every gate task must have a write that ends it. A task with no exit repeats every turn and
+      blocks every step below it." — and the kit's own lifecycle test cannot see it, because the
+      test runs in a configuration the kit never runs in.
+
+      Two such steps exist in this project right now: the session audit (O-029) and the review
+      batch. Both were invisible until something executed them. Between them they hold every
+      adoption the standard has earned in three days: 25 candidates, 7 drift entries, 10
+      precedents, and not one line of skill guidance changed since installation.
+
+      The transferable point, now at six instances across both registers: a control is not in force
+      until something has run it in the configuration that ships and watched it act. A green test
+      whose fixture omits the constraints of the real environment measures the code's intent, not
+      the system's behaviour — and the gap between those two is where every defect in this project
+      has been found.
+    level: principle
+    tier: undecided
+    target: [meta-mechanisms]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-030"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: very-low
+    certainty_codes: [self-generated, single-contract]
+    stated_confidence: 0.95
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-029
+    created: 2026-09-20
+    statement: |
+      M-24
+
+      I gave a direction on G-12 — remove the certificate branch as a loophole — reasoning from the
+      founding statement's "no loopholes or workarounds" without reading the roadmap. The pioneer
+      asked what the roadmap says about TLS. It says the opposite.
+
+      P1.6, in contract-002's own phase: "Kestrel serves HTTPS with a certificate from the vault,
+      or ForwardedHeaders is restricted to KnownProxies/KnownNetworks. UseHsts(). In Production,
+      refuse to start when neither is configured." Two of its four clauses are built. The
+      certificate branch is a specified Phase 1 deliverable that was skipped, not a false promise
+      to remove — and UseHsts() appears in no contract clause, no verification and no analysis, so
+      it had been missed entirely.
+
+      The transferable point: the founding statement does not decide questions at this resolution,
+      and reasoning directly from it feels like grounding while skipping the document that actually
+      binds. FOUNDING says what the work serves; the roadmap says what that means this phase. A
+      direction derived from the first without the second will sound principled and contradict the
+      plan — which is worse than an unprincipled one, because the reasoning is presentable.
+
+      Bearing is read against the founding statement (M-24). Scope is read against the roadmap.
+      Conflating them is how a withdrawal of work gets argued for in the language of integrity.
+    level: principle
+    tier: undecided
+    target: [meta-founding-contract]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-031"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: very-low
+    certainty_codes: [self-generated, single-contract]
+    stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-030
+    created: 2026-09-20
+    statement: |
+      M-09
+
+      A roadmap check on Phase 1, run at the pioneer's request, found three gaps that no contract
+      clause, no test and no verification had named:
+
+      P1.6 is two of four clauses. The Kestrel HTTPS branch with a vault certificate is unbuilt —
+      the half I proposed deleting as a loophole (O-031) — and UseHsts() is absent from the source
+      entirely. P1.1's required claims are under-enforced: OnTokenValidated refuses a token with no
+      jti and stops, where the roadmap also requires sub, client_id (or azp) and iat. And
+      OnAuthenticationFailed -> authn_login_fail does not exist, so an authentication failure
+      produces no named audit event in a project whose roadmap cites the OWASP Logging Vocabulary.
+
+      Everything else in P1.1 through P1.10 is built, and all seven exit criteria have real tests —
+      the six token-rejection cases are a Theory asserting 401 against the shipped server in
+      process, not a single test standing for six.
+
+      The transferable point is not the gaps. It is that finding them took a pioneer's question and
+      an agent grepping. The roadmap already carries the right artifact — a conformance table whose
+      rows read SPEC-NN | control | where it lives | the test | the phases — and nothing reads it.
+      A claim of coverage that no mechanism binds to an executed check decays silently, and the
+      decay is invisible precisely where the work looks finished: eleven clauses built, three
+      missing, one status of "implemented" covering both.
+
+      This is the same rule the kit needs at its own level, now at eight instances across both
+      registers: a control is not in force until something has run it in the configuration that
+      ships and watched it act. Here it takes a specific shape — every row of a conformance table
+      names a test id, and a check fails when a row has no passing test or names one that does not
+      exist. The ordering constraint is that the rule cannot be cited in a contract's Tier 3 until
+      it is adopted, and adoption is blocked on the seal (O-030).
+    level: principle
+    tier: undecided
+    target: [meta-mechanisms]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-032"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: very-low
+    certainty_codes: [self-generated, single-contract]
+    stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-031
+    created: 2026-09-20
+    statement: |
+      M-08
+
+      the system wont be used until its through the whole roadmap
+
+      Given when deciding to move P1.6's Kestrel HTTPS listener to Phase 6. It reframes the risk of
+      every deferral in this project: nothing is deployed, so a phase marked complete carries no
+      operational exposure while it is wrong.
+
+      It also removes the only feedback loop that normally catches a phase marked done too early.
+      A system in use corrects its own record — an unbuilt control is found by an incident, a
+      missing header by a scanner, a false claim by an operator who set the key and watched nothing
+      happen. With no production in the loop for six phases, "Phase N is complete" is a claim that
+      nothing tests until the end, and the only instrument is a roadmap check that runs when
+      somebody thinks to ask for one. This project has run exactly one, at the pioneer's prompting,
+      and it found three gaps in a phase that had been called implemented for two days.
+
+      The transferable point: the longer the gap between building and using, the more the standard
+      has to carry what use would otherwise catch. A roadmap whose rows bind to executed checks is
+      cheap in a project that ships weekly and load-bearing in one that ships once at the end —
+      and it is the projects that ship once at the end that are least likely to build it, because
+      nothing hurts yet.
+    level: principle
+    tier: undecided
+    target: [meta-map]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-033"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-032
+    created: 2026-09-20
+    statement: |
+      M-12
+
+      number 1 is a foundational drift, one of the most central parts is the contract and you
+      didnt actually write it. How could this have happened? What influenced that drift?
+
+      And you also didnt tell me but ran verification agents in many iterations instead of
+      producing a moment to align
+    level: pattern
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-034"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-033
+    created: 2026-09-20
+    statement: |
+      M-03
+
+      if we dont have a contract you dont have anything to run the lay of the land for, and we
+      have no plan. the roadmap exist to be broken down into contracts, to feed the standard
+      development. the point is not to produce a mcp server, the point is to build the standard.
+
+      The meta approach has skills that enforces a contract for every change whatever it is.
+    level: principle
+    tier: undecided
+    target: [meta-map]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-035"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-034
+    created: 2026-09-20
+    statement: |
+      M-06
+
+      I approve the contract, now commit it to the contract log, complete the contract in full.
+      Adhere to the meta skills, when in doubt, when you miss your mark and try to fix yourself,
+      alway read the meta skills and not from memory, not exerpts or only looking at the names. if
+      you dont read them you dont understand the practice and cant deliver or meet the gate.
+    level: principle
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-036"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-035
+    created: 2026-09-20
+    statement: |
+      M-25
+
+      What are you doing now? you have been iterating for quite abit after i asked you how we best
+      solve this
+    level: pattern
+    tier: undecided
+    target: [meta-antidrift]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-037"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-036
+    created: 2026-09-20
+    statement: |
+      M-04
+
+      the workflow should be i ask you to propose a solution, you present the solution in a clear,
+      structured and accessible way, i steer on it, if i say we do the solution, you draw a
+      contract, nothing is ever superceded, you draw a contract before any implementation work.
+    level: principle
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-038"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-037
+    created: 2026-09-20
+    statement: |
+      M-24
+
+      you have lost direction here, that is why you ask me
+    level: pattern
+    tier: undecided
+    target: [meta-founding-contract]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-039"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-038
+    created: 2026-09-20
+    statement: |
+      M-30
+
+      The pioneer asked why they had to ask for the consolidator manually when a hook exists for it.
+      The answer is that the hook exists, is correct, and has never fired.
+
+      stop-gate.sh hands one task per turn in a fixed order of twelve. The session audit is fourth.
+      It cannot complete (O-029), so in twenty consecutive turns the gate has handed over the same
+      task and has never reached position seven, consolidation — nor eight, the learning diff, nor
+      nine, the clerk, nor ten, the batch. Every one of those hooks works. None of them has run
+      this session except the clerk, which ran because the pioneer said "run the clerk".
+
+      report-001 F-4 said nothing detects a gate task that never completes. That understated it.
+      The cost is not the repetition, which is merely noise; it is that one uncompletable task at
+      position four silently disabled six working mechanisms below it. The kit's own failure-modes
+      text names this exactly — "a task with no exit repeats every turn and blocks every step below
+      it" — and nothing measures it.
+
+      The priority order is deliberate and tested: walk.sh carries a state named "36 audit outranks
+      verify and consolidate". The walk verifies that the right task wins. It cannot verify that
+      the winner can finish, because its fixture supplies every state directly and never runs an
+      agent. So the test that proves the ordering correct is structurally incapable of noticing
+      that the ordering is fatal.
+
+      The transferable point, for any queue whose items are handed out one at a time by priority:
+      a strict priority order converts one stuck item into a silent outage of everything beneath
+      it, and the symptom is indistinguishable from a quiet backlog. Either the scheduler must be
+      able to tell that the head of the queue is not progressing and pass over it, or every item
+      in it must be guaranteed completable. This kit assumes the second and checks neither.
+
+      In practice the pioneer has been the scheduler for this entire session, dispatching by hand
+      the tasks the gate could not reach.
+    level: principle
+    tier: undecided
+    target: [meta-mechanisms]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-040"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: very-low
+    certainty_codes: [self-generated, single-contract]
+    stated_confidence: 0.9
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-039
+    created: 2026-09-20
+    statement: |
+      Two pioneer redirects in contract-002's build span carry no CORRECTIONS.yaml entry.
+
+      First, raw transcript line ~4267-4271 (2026-09-18): the agent laid out two ways to close
+      contract-001's verification gate, named (a) and (b), and said "I lean (b)". The pioneer
+      answered "go for A so we have a clean slate before we begin, id want you to verify
+      contract 002 against the code after verification pass fixes them" — choosing the option
+      the agent did not recommend. That is the meta-correction-log skill's own example of an
+      option-override, verbatim: "When the pioneer picks an option other than the one you
+      recommended... that is an option-override... Record it." No entry exists.
+
+      Second, raw line ~4912 (2026-09-18, 22:30:45): the agent named five ledger items as due
+      for a review batch and said "That's a full review batch, and M-16 exists precisely for
+      this." The pioneer answered "i wont judge on them now, lets look at why the ci in github
+      is failing" — a stop-grade redirect off the batch the agent had just proposed moving to.
+      The instruction recurred as a governing constraint for the rest of the session ("Still
+      holding the batch on your 'I won't judge on them now'", raw ~4947, ~5331) but was never
+      itself logged as a correction.
+
+      Both fall within the moment (M-07) the skill defines for recording: "the pioneer's words
+      change the direction, shape or scope of what you offered." Neither an approval nor an
+      answer that leaves the offer intact.
+    level: pattern
+    tier: undecided
+    target: [meta-correction-log]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-041"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: low
+    certainty_codes: [single-contract]
+    stated_confidence: 0.7
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-040
+    created: 2026-09-20
+    statement: |
+      One instance of the presentation failure C-017 later named directly recurred earlier and
+      uncaught, at raw transcript line ~7634: the agent's own turn read "M-15 is clear. What
+      remains is M-14 (consolidation, unblocked but its output queues behind the blocked
+      batch), M-12 (verification, retryable), and the two blocked by mechanism" — records named
+      by map id and status word, with nothing said about what any of them is, exactly the shape
+      meta-foundation/SKILL.md names as absence: "'O-040 to O-042 recorded, confidence 0.8'...
+      a summary where the record's own words were available."
+
+      Checked against a readable record elsewhere in the same span: at raw ~5434 the agent
+      translated the kit-verifier's clause findings to the pioneer in the record's own terms —
+      missing tiers, G-12 decorative and why, G-5 untested and why, the miscounted test claim —
+      not by id. So the failure was not constant through the span; it recurred at least once
+      before the pioneer had to name it themselves (C-017), which is what the fading curve this
+      skill tracks is meant to catch earlier than a correction.
+    level: pattern
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-042"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: low
+    certainty_codes: [single-contract]
+    stated_confidence: 0.6
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-041
+    created: 2026-09-20
+    statement: |
+      M-32
+
+      The repetition detector shipped in 0.27 fired for the first time today, on its third turn
+      with the same task. It works, and its diagnosis was wrong.
+
+      Its words: "this is the third turn running with the same kit task and nothing has changed
+      ... which is a fault, not a backlog — the task cannot be cleared the way it is being tried."
+      In this case nothing had changed because the task had been completed correctly and its
+      result put to the pioneer, who had not yet answered. The suggested remedy — record it
+      blocked — would have written into the record that a mechanism could not do the work, when
+      the work was done and a person was deciding.
+
+      The detector counts turns and state changes. It cannot see the difference between a task
+      stuck against a mechanism and a task waiting on a human, and those need opposite responses:
+      the first is recorded blocked so the lifecycle routes around it, the second must stay exactly
+      where it is, because routing around a pending decision is how a decision gets made by
+      default.
+
+      The transferable point, for any staleness detector: elapsed time without change is not
+      evidence of a fault unless you also know who the change was waiting on. A detector that
+      cannot name the party it is waiting for will eventually advise abandoning the thing that was
+      merely being considered carefully.
+    level: pattern
+    tier: undecided
+    target: [meta-mechanisms]
+    stage: assess
+    contradicts:
+      - file: meta-mechanisms/SKILL.md
+        passage: "Repetition is a fault, not a backlog."
+      - file: meta-mechanisms/SKILL.md
+        passage: "The gate stops repeating itself, says so, and tells the agent to surface it for steering with a suggested action — usually to record it blocked."
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-043"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: very-low
+    certainty_codes: [self-generated, single-contract]
+    stated_confidence: 0.85
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
 batches: []
 
 map_proposals: []
@@ -2221,7 +2858,7 @@ audits:
     findings: [O-041, O-042]
 
 scores:
-  updated: 2026-09-19
+  updated: 2026-09-20
   contracts:
     - contract_id: contract-001
       observations: 19
@@ -2232,13 +2869,13 @@ scores:
       corrections_from_tests: 2
       corrections_from_reading: 1
     - contract_id: contract-002
-      observations: 2
-      candidates_created: 2
-      audited: false
-      verified: false
+      observations: 18
+      candidates_created: 18
+      audited: true
+      verified: true
       cost: null
-      corrections_from_tests: null
-      corrections_from_reading: null
+      corrections_from_tests: 0
+      corrections_from_reading: 0
   coincidence:
     - sources: [auditor, verification]
       agreed: 0
