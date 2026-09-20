@@ -1287,6 +1287,43 @@ observations:
     stewarded: n/a
 
 
+  - obs_id: O-043
+    date: 2026-09-20
+    source: ser
+    contract_id: contract-002
+    refs: [O-040]
+    statement: |
+      M-32
+
+      The repetition detector shipped in 0.27 fired for the first time today, on its third turn
+      with the same task. It works, and its diagnosis was wrong.
+
+      Its words: "this is the third turn running with the same kit task and nothing has changed
+      ... which is a fault, not a backlog — the task cannot be cleared the way it is being tried."
+      In this case nothing had changed because the task had been completed correctly and its
+      result put to the pioneer, who had not yet answered. The suggested remedy — record it
+      blocked — would have written into the record that a mechanism could not do the work, when
+      the work was done and a person was deciding.
+
+      The detector counts turns and state changes. It cannot see the difference between a task
+      stuck against a mechanism and a task waiting on a human, and those need opposite responses:
+      the first is recorded blocked so the lifecycle routes around it, the second must stay exactly
+      where it is, because routing around a pending decision is how a decision gets made by
+      default.
+
+      The transferable point, for any staleness detector: elapsed time without change is not
+      evidence of a fault unless you also know who the change was waiting on. A detector that
+      cannot name the party it is waiting for will eventually advise abandoning the thing that was
+      merely being considered carefully.
+    level_guess: pattern
+    stated_confidence: 0.85
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17

@@ -343,31 +343,29 @@ entries:
     surfaced_by: kit-verifier
     aspect: evidence-as-work
     description: |
-      Tier 4 was revised twice after a verification report, which the contract log's own schema
-      names as drift: "A revision with tests dated after verification.date is drift (M-18), never
-      applied." Both revisions are dated 2026-09-20 and the report they postdate is dated
-      2026-09-19.
+      The verifier held two clauses open because Tier 4 was revised after a verification report,
+      applying the contract log's own rule: "A revision with tests dated after verification.date is
+      drift (M-18), never applied." The revisions are dated 2026-09-20; the report is dated
+      2026-09-19; the rule fired correctly on those dates.
 
-      T-2, when the P1.1 claim enforcement was added: three cases appended for sub, client_id and
-      iat. Purely additive — the six original cases are byte-identical — and every one was seen to
-      fail with the enforcement removed. It is still a test changed after the report that tested
-      its clause.
+      Its premise does not hold here, and this entry is kept to record why rather than to record a
+      fault. The report of 2026-09-19 judged clauses it had reconstructed from doc comments and the
+      roadmap, because contract-002's tiers had never been written to the log at all — the entry
+      says so itself: "THIS ENTRY CARRIES NO TIERS ... not now and not in any commit of this file."
+      It returned 9 verified, 1 corrected, 11 open, and it is marked superseded twice over. The
+      evidence the revisions are said to have invalidated had already been set aside, deliberately,
+      when the tiers were recorded and the pass re-run against the contract's own text.
 
-      T-12, when G-12 was narrowed: the assertion was inverted in the same commit that changed the
-      behaviour it describes (1f0c8d4). Two cases that asserted a certificate setting satisfies the
-      guard were replaced by one asserting it is refused. The verifier ran T-12 as it stood before
-      that edit and it failed, correctly.
+      What remains true about the agent's conduct: the assertion in the transport test was inverted
+      in the same commit that changed the behaviour it describes. That is the shape the rule exists
+      to catch, and it was done without noticing a report stood against the clause. It cost nothing
+      here only because the report was already void.
 
-      The rule is not about authorisation. Both revisions were the pioneer's and both are
-      improvements — the verifier says so itself. It is about evidence order: a test edited after
-      the report that rested on it cannot be the evidence for its clause, because a failing test
-      can always be made to pass by editing it. Changing the assertion in the same commit as the
-      behaviour is the exact shape the rule exists to catch, and I did it without noticing that a
-      verification report already stood against that clause.
-
-      The transferable point: an approved revision is still evidence that has to be ordered. The
-      question "may I change this?" was answered by the pioneer; the question "does the evidence
-      still stand once I do?" was never asked, and only a verifier reading dates could ask it.
+      The transferable point is about the rule, not the agent. It compares two dates and never asks
+      whether the report still stands. A superseded reading is not evidence, and a test changed
+      after it invalidates nothing — so the check will hold clauses open on any contract whose
+      verification was ever re-run, which is every contract that was corrected once. A staleness
+      rule needs to know what it is protecting, not only when things happened.
     evidence: |
       kit-verifier report of 2026-09-20: 19 verified, 0 corrected, 2 open; G-1 and G-12 both open
       as "Tier 4 revised after the report - drift (M-18), not applied". T-12 recorded as the one
@@ -376,10 +374,57 @@ entries:
       tests_changed [T-2] and [T-12], both dated 2026-09-20 against verification.date 2026-09-19.
     reaction: |
       Not noticed in session. Both revisions were recorded correctly, with their tests_changed
-      fields filled in honestly — which is what made the drift detectable at all. Put to the
-      pioneer with the three ways M-12 allows the contract to be closed.
+      fields filled in honestly — which is what made the rule fire at all. First reported to the
+      pioneer as a genuine evidence-order fault; corrected when the pioneer asked what the tests
+      had been evidence FOR, and the superseded report was opened for the first time. The agent
+      had explained the finding twice without reading the report it rested on.
     status: open
     elevation: []
     reviewed: null
     recurrence_count: 1
     related_drifts: [drift-007, drift-009]
+
+  - drift_id: drift-011
+    surfaced_in: 2026-09-20 / contract-002 verification, reported to the pioneer
+    surfaced_by: pioneer
+    aspect: partner-mirror
+    description: |
+      The verification result was reported to the pioneer in a message built from record ids —
+      test names, guarantee names, a phase clause — none of which was explained. The pioneer named
+      it drift: "that output is drift", after saying "i dont know that t-2, t12, G12 or any of the
+      other ids mean, there is no context for me to get into."
+
+      This is the second occurrence in one day. The first was a backlog status line made of map
+      ids, corrected the same morning and recorded. Between the two, the kit was upgraded and the
+      rule arrived in the always-loaded file: "Translate for the pioneer. What reaches them says
+      what it is, why now and what is asked, beside the record's own words, never instead of them;
+      no id or number stands alone." It was loaded, and the message was written anyway.
+
+      So the prose rule has now failed twice with the rule in context both times. Per the kit's own
+      ladder, a second failure of a prose mitigation is the same failed experiment and the
+      elevation must descend to a mechanism, a test or an agent.
+
+      The mechanism exists and does not reach this. The session auditor carries a check for exactly
+      this failure — a message that names a record by id alone, with nothing saying what it is —
+      added in the base kit's contract-014. It runs after a contract is implemented, reading a
+      transcript. It cannot catch the message as it is being written, which is the only moment that
+      would have helped. A post-hoc check on a communication failure tells the pioneer what they
+      already know, because they were the one who could not read it.
+
+      The transferable point: a check that fires after the harm, on a failure whose only victim is
+      the reader, is not a mitigation. It is a record. Where the failure is in what reaches a human,
+      the mechanism has to sit between the writing and the sending, or it protects nobody.
+    evidence: |
+      The agent's verification report of 2026-09-20, naming T-2, T-12, G-1, G-12, P1.1 and
+      Tier 4 with no gloss on any of them. Pioneer's words recorded verbatim as C-020. The prior
+      occurrence is C-017, same day. The rule was in INTENT.md, always loaded, from the 0.27
+      upgrade committed earlier in the session. The auditor's check is presented_for_pioneer, which
+      scored this same session fail (one instance) in audit A-002 — after the fact.
+    reaction: |
+      Correction recorded as C-020, this entry written when the pioneer named it drift, and the
+      report rewritten in plain words in the same turn.
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 2
+    related_drifts: [drift-009, drift-010]

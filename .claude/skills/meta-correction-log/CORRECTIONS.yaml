@@ -626,6 +626,72 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-020
+    date: 2026-09-20
+    contract_id: contract-002
+    moment: M-12
+    grade: detail
+    intervention: redirected
+    agent_offered: |
+      The verifier ran T-12 as it stood before my edit, and it failed. I had inverted the
+      assertion in the same commit that changed the behaviour it describes. [...] I revised Tier 4
+      twice after the 2026-09-19 report — T-2 when I added the P1.1 claim enforcement, and T-12
+      when G-12 was narrowed.
+    pioneer_said: |
+      Again, i dont know that t-2, t12,G12 or any of the other ids mean, there is no context for me
+      to get into. The meta approach clearly states no numerals or ids, and that you should create
+      the context not assume i know every Id by name.
+    reason_given: |
+      none given
+    noticed: |
+      The ids carry the whole meaning of the message and none of them is explained. Nothing in the
+      text says what the tests assert or what the guarantees promise, so there is no way in.
+    would_have_been_right: |
+      Create the context. Say what each guarantee promises and what each test checks, in plain
+      words, and let the id follow the meaning if it appears at all.
+    seen_before: |
+      C-017, earlier the same day, on a status line built from map ids. This is the second time,
+      and the kit's rule for it — INTENT.md "Translate for the pioneer ... no id or number stands
+      alone" — was already loaded when this message was written.
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-021
+    date: 2026-09-20
+    contract_id: contract-002
+    moment: M-12
+    grade: stop
+    intervention: redirected
+    agent_offered: |
+      [the rewritten verification report, which still opened with "the contract's twenty-one
+      promises" without saying what any of them were, described the open items before saying what
+      decision was wanted, and used "promises", "clauses" and "the guard" as though their meaning
+      were shared]
+    pioneer_said: |
+      you need to work harder to present it to me in a clear structured and accessible way without
+      having me translate
+    reason_given: |
+      none given
+    noticed: |
+      The rewrite removed the ids and left the structure that made them necessary: it still opened
+      with the result rather than the decision, counted things the pioneer had no picture of, and
+      used the practice's own vocabulary as if it were plain English.
+    would_have_been_right: |
+      Lead with the decision being asked for. Give only the context needed to make it. Put
+      everything else below, skippable. Say what a thing does, not what it is called.
+    seen_before: |
+      C-017 and C-020, both the same day. Third occurrence.
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-20
   by_contract:
