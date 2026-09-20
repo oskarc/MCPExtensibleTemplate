@@ -1562,6 +1562,43 @@ observations:
     merged_into: K-051
     stewarded: n/a
 
+  - obs_id: O-054
+    date: 2026-09-20
+    source: pioneer
+    contract_id: null
+    refs: [C-025]
+    statement: |
+      M-01
+
+      If we have almost 50 candidates then we clearly have work to do with the kit before the next
+      phase, and i had to prompt you to know, which is conflicting with the meta skills line that
+      the workflow should not require a human trigger.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-055
+    date: 2026-09-20
+    source: pioneer
+    contract_id: null
+    refs: [C-026]
+    statement: |
+      M-09
+
+      If you base this on data or readings that are incomplete or you know might be incorrect, you
+      should raise the bar and do the work before you present it.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
 
 candidates:
   - cand_id: K-001

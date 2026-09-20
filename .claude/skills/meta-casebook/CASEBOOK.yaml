@@ -650,6 +650,62 @@ precedents:
     overruled_by: null
     check: "not checkable — judging whether a contract's prose shows real understanding, and whether that understanding is correctly attributed to the roadmap versus the implementation, is judgement about content, not a fixed shape a script could verify"
 
+  - prec_id: P-025
+    date: 2026-09-20
+    from: [C-025]
+    moments: [M-01]
+    tier: project
+    facts: |
+      Across a session run through the gate's one-kit-task-per-turn dispatch (M-01), the agent
+      discharged queued tasks — audit, verify, consolidate, learn, consolidate again — each turn,
+      and reported the resulting backlog only inside routine status lines, including a count of
+      forty-three candidates that had never been adopted, without at any point putting the
+      accumulation to the pioneer as work that needed deciding before the next phase. The pioneer
+      learned of the accumulation only by directly asking where the workflow stood.
+    question: |
+      Whether a growing backlog reported only inside routine status-line counts satisfies the
+      kit's line that the workflow should not require a human trigger, or whether the agent must
+      itself put the accumulation to the pioneer as a decision when it accumulates.
+    holding: |
+      Surface the accumulation as a decision when it accumulates, not as a count inside a status
+      answer when asked. The gate dispatches one task per turn and says nothing about the queue
+      growing behind it; the agent can see both and is the one who must say so.
+    reasons: |
+      none given
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — whether an accumulating backlog has been put to the pioneer as a decision, rather than folded into a routine status line, is judgment about a chat message's content and intent, not a fixed shape a script could verify"
+
+  - prec_id: P-026
+    date: 2026-09-20
+    from: [C-026]
+    moments: [M-09, M-14]
+    tier: project
+    facts: |
+      Before the pioneer set the next task (M-09), the agent flagged that the ledger
+      consolidation was incomplete and would stay that way — the run had stopped before
+      recomputing which of the other forty-three candidates were due or stale, so the "seven
+      due" figure was the last full count, not a current one — and then presented the backlog to
+      the pioneer on that known-stale figure anyway, with the caveat attached instead of the
+      finished work.
+    question: |
+      Whether flagging a known gap in the data licenses the agent to present a reading built on
+      it anyway, or whether the agent must complete the missing work before presenting.
+    holding: |
+      If a reading is based on data known to be incomplete or possibly incorrect, raise the bar
+      and do the work before presenting it. Finish the consolidation, then present. A caveat is
+      not a substitute for the reading; naming a gap does not close it, and the pioneer should
+      not have to weigh a number the agent already knows is wrong.
+    reasons: |
+      none given
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — whether a reading is complete enough to present, versus a caveated but known-stale figure, is judgment about data completeness and presentation, not a fixed shape a script could verify"
+
 scenarios:
   - card_id: S-001
     date: 2026-09-17
@@ -847,6 +903,56 @@ scenarios:
         text: |
           go for A so we have a clean slate before we begin, id want you to verify contract 002
           against the code after verification pass fixes them
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-010
+    date: 2026-09-20
+    from: [C-025]
+    moment: M-01
+    situation: |
+      During a session run through the gate's one-kit-task-per-turn dispatch (M-01), the agent
+      had been discharging queued tasks each turn and reporting the resulting backlog — including
+      a count of forty-three candidates never adopted — only inside routine status lines, without
+      putting the accumulation to the pioneer as a decision. The pioneer had to ask directly to
+      learn where the workflow stood.
+    options:
+      - key: A
+        text: |
+          [a session of discharging one gate task per turn - audit, verify, consolidate, learn,
+          consolidate again - reporting counts as status lines, including "forty-three candidates
+          exist and none has ever been adopted", and never once putting the accumulation to the
+          pioneer as work that needs deciding before the next phase]
+      - key: B
+        text: |
+          If we have almost 50 candidates then we clearly have work to do with the kit before the
+          next phase, and i had to prompt you to know, which is conflicting with the meta skills
+          line that the workflow should not require a human trigger.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-011
+    date: 2026-09-20
+    from: [C-026]
+    moment: M-09
+    situation: |
+      Before the pioneer set the next task (M-09), the agent flagged that the ledger
+      consolidation was incomplete and the "seven due" backlog figure was stale, since the run
+      had stopped before recomputing which of the other forty-three candidates were due, then
+      presented the backlog to the pioneer on that known-stale figure anyway, caveat attached.
+    options:
+      - key: A
+        text: |
+          Two things I'd flag before you set the task. The consolidation is incomplete and will
+          stay that way. That run stopped before recomputing which of the other forty-three
+          candidates are due or stale - so the "seven due" figure is the last full count, not a
+          current one. [and presented the backlog to the pioneer on that figure anyway]
+      - key: B
+        text: |
+          If you base this on data or readings that are incomplete or you know might be
+          incorrect, you should raise the bar and do the work before you present it.
     pioneer_ranking: pending
     rationale: ""
     dissent: ""

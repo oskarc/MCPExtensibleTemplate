@@ -4,36 +4,36 @@
 :root{
   --paper:#f7f5f1; --ink:#1c2230; --ink-soft:#4a5468; --ink-faint:#7b8496;
   --rule:#ddd8cf; --rule-soft:#e9e5dd; --panel:#fffdfa; --panel-2:#f1eee8;
-  --verified:#2d6a4a; --corrected:#a32d28; --open:#9a6510;
-  --verified-bg:#e6f0e8; --corrected-bg:#f7e6e4; --open-bg:#f8eeda;
+  --verified:#2d6a4a; --corrected:#a32d28; --open:#9a6510; --human:#6b3fa0;
+  --verified-bg:#e6f0e8; --corrected-bg:#f7e6e4; --open-bg:#f8eeda; --human-bg:#efe7f7;
   --accent:#27496d; --code-bg:#f0ede6; --break:#a32d28; --dead:#b8b2a8;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
   --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
   --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
-  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
-  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b; --human:#b794dd;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113; --human-bg:#241b30;
   --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c; --dead:#4a505c;
 }}
 :root[data-theme="dark"]{
   --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
   --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
-  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
-  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b; --human:#b794dd;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113; --human-bg:#241b30;
   --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c; --dead:#4a505c;
 }
 body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.6;margin:0}
 .wrap{max-width:52rem;margin:0 auto;padding-block:3rem 5rem;padding-left:16px;padding-right:16px}
 h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif;text-wrap:balance;line-height:1.2}
 h1{font-size:clamp(2rem,6vw,2.9rem);margin:0 0 .6rem;letter-spacing:-.015em}
-h2{font-size:1.45rem;margin:3.2rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--rule)}
+h2{font-size:1.45rem;margin:3.4rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--rule)}
 h3{font-size:1.08rem;margin:0 0 .5rem}
 p{margin:0 0 1rem}
 code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
 code{background:var(--code-bg);padding:.1em .35em;border-radius:3px;font-size:.87em}
 pre{background:var(--code-bg);border:1px solid var(--rule-soft);border-radius:5px;padding:.9rem 1rem;overflow-x:auto;font-size:.82rem;line-height:1.55;margin:0 0 1rem}
 a{color:var(--accent)}
-blockquote{margin:0 0 1rem;padding:0 0 0 1.1rem;border-left:3px solid var(--rule);font-family:"IBM Plex Serif",Georgia,serif;font-size:1.03rem;color:var(--ink-soft)}
+blockquote{margin:0 0 1rem;padding:0 0 0 1.1rem;border-left:3px solid var(--human);font-family:"IBM Plex Serif",Georgia,serif;font-size:1.04rem;color:var(--ink-soft)}
 .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 .9rem}
 .standfirst{font-family:"IBM Plex Serif",Georgia,serif;font-size:1.16rem;color:var(--ink-soft);margin:0 0 1.6rem;max-width:42rem}
 .meta{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--ink-faint);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:.7rem 0;display:flex;flex-wrap:wrap;gap:.4rem 1.6rem}
@@ -45,13 +45,16 @@ blockquote{margin:0 0 1rem;padding:0 0 0 1.1rem;border-left:3px solid var(--rule
 .c-open{background:var(--open-bg);color:var(--open)}
 .c-corr{background:var(--corrected-bg);color:var(--corrected)}
 .c-ver{background:var(--verified-bg);color:var(--verified)}
+.c-hum{background:var(--human-bg);color:var(--human)}
 .finding{border:1px solid var(--rule);border-left-width:4px;background:var(--panel);padding:1.3rem 1.4rem;margin:0 0 1.4rem}
 .finding.open{border-left-color:var(--open)}
 .finding.corr{border-left-color:var(--corrected)}
 .finding.ver{border-left-color:var(--verified)}
+.finding.hum{border-left-color:var(--human)}
 .fhead{display:flex;flex-wrap:wrap;gap:.6rem;align-items:baseline;margin-bottom:.7rem}
 .fid{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--ink-faint);font-weight:600}
-.finding p:last-child,.finding pre:last-child{margin-bottom:0}
+.finding p:last-child,.finding pre:last-child,.finding blockquote:last-child{margin-bottom:0}
+.cost{font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--ink-faint);border-top:1px dotted var(--rule);margin-top:.9rem;padding-top:.6rem}
 table{border-collapse:collapse;width:100%;font-size:.88rem;margin:0 0 1.2rem}
 th,td{text-align:left;padding:.6rem .7rem;border-bottom:1px solid var(--rule-soft);vertical-align:top}
 th{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--rule)}
@@ -63,7 +66,7 @@ td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;w
 .judgement{border:1px solid var(--accent);background:var(--panel);padding:1.4rem 1.5rem;margin:1.2rem 0 0}
 .judgement h3{color:var(--accent)}
 ol.rec{margin:0;padding-left:1.3rem}
-ol.rec li{margin-bottom:.8rem}
+ol.rec li{margin-bottom:.9rem}
 ol.rec li:last-child{margin-bottom:0}
 .note{font-size:.88rem;color:var(--ink-soft);border-left:2px solid var(--rule);padding-left:1rem;margin:0 0 1rem}
 </style>
@@ -72,197 +75,349 @@ ol.rec li:last-child{margin-bottom:0}
 
 <p class="eyebrow">report-005 &nbsp;·&nbsp; analysis &nbsp;·&nbsp; fifth in the series</p>
 <h1>A Day of Running It</h1>
-<p class="standfirst">0.27 fixed almost everything the earlier reports named, and the kit then ran a
-full lifecycle end to end for the first time — audit, verify, close, learn, clerk, consolidate.
-This is what running it revealed: seven turn-budget exhaustions across four of four agents, three
-faces of one missing concept, and a check that contradicts the migration rule shipped beside it.</p>
+<p class="standfirst">0.27 closed nine findings from the earlier reports, and the kit then ran a
+complete lifecycle for the first time. This is what running it revealed — told through the seventeen
+interventions it took, because the mechanical findings came out of those conversations rather than
+alongside them, and because the ratio between what a mechanism caught and what a person caught is
+itself the result.</p>
 
 <div class="meta">
-  <span>base-building-kit 0.27 (<span class="mono">0159092</span>)</span>
-  <span>One project, one day, both phases through the full cycle</span>
-  <span>2026-09-20</span>
+  <span>base-building-kit 0.25 &rarr; 0.27</span>
+  <span>Two upgrades, one contract closed, both phases through the full cycle</span>
+  <span>2026-09-19 &rarr; 20</span>
 </div>
 
 <div class="strip">
-  <div><span class="n">7</span><span class="l">turn-budget exhaustions, across 4 of 4 agents</span></div>
-  <div><span class="n">3</span><span class="l">faces of one missing concept: work in flight</span></div>
-  <div><span class="n">51</span><span class="l">candidates, 0 ever adopted</span></div>
-  <div><span class="n">9</span><span class="l">of 0.27's changes confirmed working in the field</span></div>
+  <div><span class="n">17</span><span class="l">pioneer interventions in two days</span></div>
+  <div><span class="n">5</span><span class="l">caught by a mechanism</span></div>
+  <div><span class="n">12</span><span class="l">caught by a person reading carefully</span></div>
+  <div><span class="n">0</span><span class="l">of 51 candidates ever adopted</span></div>
 </div>
 
-<h2>First: what 0.27 fixed, confirmed by use</h2>
+<p><strong>The through-line.</strong> Everything a mechanism caught was formal — a date out of
+order, a missing field, a registered refusal, an id standing alone in a transcript. Everything a
+person caught was about judgement, understanding or communication: reasoning that had outrun its
+reading, an explanation that grew each time it was contradicted, a message built from words the
+reader did not share. That split is not incidental. It is the same finding report-004 made, now
+measured over two days.</p>
+
+<h2>Part one — what 0.27 fixed, confirmed by use</h2>
 
 <div class="finding ver">
   <div class="fhead"><span class="fid">V-1</span><span class="chip c-ver">Verified</span>
-    <h3>Nine of the earlier reports' findings, closed and exercised</h3></div>
+    <h3>Nine findings closed, each exercised rather than read</h3></div>
   <div class="tw"><table>
     <tr><th style="width:12rem">Change</th><th>How it was proven here</th></tr>
     <tr><td><code>transcript-digest.sh</code></td><td>Rendered a 70 MB transcript as <strong>268 KB</strong>,
-      3,293 rows. The audit that had been uncompletable for a whole contract ran on it.</td></tr>
-    <tr><td>The <code>blocked</code> state</td><td>Exists with its three fields. Not needed in the
-      end — the digest made the audit possible — but it was the fallback that made attempting it
-      safe.</td></tr>
-    <tr><td>Gate position 0</td><td>The starvation ended. The queue drained past position four for
-      the first time and reached consolidation, the learning diff and the clerk unaided.</td></tr>
-    <tr><td><code>install.sh</code></td><td>Ran the upgrade's step 5 as one command. No
-      hand-written loop, and the rehearsal and real run could not diverge.</td></tr>
-    <tr><td>The stale rule as a refusal</td><td>Fired exactly as designed, on a deliberate red test:
+      3,293 rows, each keeping its line number for exact quotes. The audit that had been
+      uncompletable for an entire contract ran on it and produced a full result.</td></tr>
+    <tr><td>The <code>blocked</code> state</td><td>Present with <code>blocked_since</code>,
+      <code>blocked_reason</code>, <code>blocked_waiting_for</code>. Never needed — the digest made
+      the audit possible — but it was the fallback that made attempting it safe rather than
+      another dead end.</td></tr>
+    <tr><td>Gate position 0</td><td>The starvation ended. The queue drained past position four and
+      reached verification, the learning diff, the clerk and consolidation <em>unaided</em>. Before
+      this, nothing below position four had ever run without being named by hand.</td></tr>
+    <tr><td>Repetition detector</td><td>Fired on its third turn, as designed. Its diagnosis was
+      wrong both times it fired — see F-2.</td></tr>
+    <tr><td><code>install.sh</code></td><td>Performed the upgrade's step 5 as one command. Two
+      upgrades were run this session; the rehearsal and the real run could not diverge, which they
+      had at 0.25 where the loop was hand-written and a record header was missed.</td></tr>
+    <tr><td>Stale rule as a refusal</td><td>Exercised deliberately in rehearsal by putting this
+      project's own check on the stale list. It refused:
       <em>"spared: P-010.sh is this project's own check for precedent P-010, which is in its
       casebook — not stale, not removed."</em></td></tr>
-    <tr><td>"The records are eight"</td><td>Named instead of counted. The bug it replaced was
-      report-002's F-1, and the same agent did not repeat it.</td></tr>
-    <tr><td>Reports left alone by the migration</td><td>Correct in the skill. See F-4 — the check
-      shipped beside it disagrees.</td></tr>
-    <tr><td>Refusal registry, <code>G6</code></td><td>Caught this project's own
-      <code>P-010.sh</code> printing two refusals with no way forward. The check is right and the
-      failure was ours.</td></tr>
-    <tr><td>Honest refusal not scored as drift</td><td>The wording is in <code>meta-antidrift</code>
-      and it is this agent's own sentence from report-003, returned as kit text.</td></tr>
+    <tr><td>"The records are eight"</td><td>Named rather than counted. At 0.25 the phrase was
+      "the six above", the agent counted wrong, and a record's header went unrefreshed. At 0.27 the
+      same agent did not repeat it.</td></tr>
+    <tr><td><code>G6-refusals</code></td><td>Caught this project's own <code>P-010.sh</code>
+      printing two refusals with no way forward. The check is right and the failure was ours.</td></tr>
+    <tr><td>Honest refusal not drift</td><td>The sentence in <code>meta-antidrift</code> is this
+      agent's own from report-003, returned as kit text.</td></tr>
   </table></div>
   <p class="note">Every one of those came from a report written in this project and shipped back
-  within two days. Whatever else is below, that loop works.</p>
+  within two days. Whatever follows, that loop works, and it is the most important thing in this
+  report.</p>
 </div>
 
-<h2>The finding: every agent runs out</h2>
+<h2>Part two — the day, as seventeen interventions</h2>
+
+<p>Each episode below is one or more recorded corrections. They are grouped by what went wrong
+rather than by time, and every quotation is the pioneer's own words from the correction log.</p>
+
+<div class="finding hum">
+  <div class="fhead"><span class="fid">E-1</span><span class="chip c-hum">Human caught</span>
+    <h3>The clause that would not die — three attempts, three different justifications</h3></div>
+  <p>Phase 1 specified a TLS guard with two branches: terminate TLS in the server, or sit behind a
+  declared proxy. The proxy branch was built. The certificate branch was not — and the guard
+  accepted a certificate setting that nothing read, so a deployment could start believing it was
+  protected while serving credentials in cleartext.</p>
+  <p><strong>Attempt one, 2026-09-18.</strong> The agent proposed moving TLS out of Phase 1 into
+  Phase 6, on the reasoning that it is a deployment concern untested by the phase's exit criteria.
+  The pioneer asked for the reasoning. The agent withdrew it and wrote into the contract that
+  <em>TLS is in scope</em>.</p>
+  <p><strong>Attempt two, 2026-09-19.</strong> Asked to make the guard honest, the agent proposed
+  <em>deleting</em> the certificate branch as a loophole — reasoning from the founding statement's
+  "no loopholes or workarounds". The pioneer asked one question:</p>
+  <blockquote>What does the roadmap say about TLS?</blockquote>
+  <p>It said the branch was Phase 1 work. The direction was not a loophole to remove; it was an
+  unfinished deliverable. The conclusion had been fluent, principled and contradicted the plan.</p>
+  <p><strong>The resolution was neither.</strong> The pioneer: <em>"right we should move it to the
+  phase handling that part"</em> — and the agent's own addition, which only became visible once the
+  move was decided, was that moving the work alone would leave the false claim shipped. So the
+  listener moved to Phase 6 <em>and</em> the guard narrowed in the same act, refusing a certificate
+  setting with an explanation rather than accepting it.</p>
+  <p class="cost">COST: three proposals across two days, two of them withdrawn. Caught by: the
+  pioneer, twice. Caught by a mechanism: never. The verifier had flagged the guard as
+  <em>corrected</em> in an earlier pass, which is what put it on the agenda — but nothing detected
+  that the agent kept trying to make the same clause disappear.</p>
+</div>
+
+<div class="finding hum">
+  <div class="fhead"><span class="fid">E-2</span><span class="chip c-hum">Human caught</span>
+    <h3>One question, three gaps nobody had looked for</h3></div>
+  <p>The same question — <em>what does the roadmap say?</em> — prompted a full check of Phase 1's
+  ten clauses against the source. It found three gaps in a phase that had read <code>implemented</code>
+  for two days:</p>
+  <ul>
+    <li>The Kestrel HTTPS branch, unbuilt (E-1).</li>
+    <li><code>UseHsts()</code>, named in the roadmap and <strong>absent from the source
+      entirely</strong> — in no contract clause, no test, no verification, and no analysis.</li>
+    <li>Required token claims under-enforced: only the identifier was checked, where the roadmap
+      also requires subject, client and issue time. And an authentication failure produced
+      <em>no named audit event</em>, in a project whose roadmap cites the OWASP logging
+      vocabulary.</li>
+  </ul>
+  <p>Two were fixed the same day. The third was the one E-1 resolved.</p>
+  <p class="cost">COST: a phase carried as complete for two days with three gaps in it. Caught by:
+  the pioneer asking a question. What the kit had in place — an approved contract, a verification
+  pass, a passing test suite — registered none of them, because the contract's own clauses never
+  named them.</p>
+</div>
+
+<div class="finding hum">
+  <div class="fhead"><span class="fid">E-3</span><span class="chip c-hum">Human caught</span>
+    <h3>Three accounts of one fact, each larger than the last</h3></div>
+  <p>A verification held two clauses open. Asked to explain, the agent produced, in order: <em>my
+  own drift</em> (I edited tests after a report, so they stopped counting); then, when that broke,
+  <em>a flaw in the kit</em> (the report was superseded, so the rule compares dates without asking
+  whether the report still stands — worth sending upstream). A drift entry was written twice to
+  match.</p>
+  <p>The pioneer asked: <em>"evidence for what?"</em> — and the file that settled it had been one
+  command away the entire time. Then read the same material and said:</p>
+  <blockquote>This is a flaw because you didnt properly lay of land before starting down a reasoning
+  pathway. then you got lost and tried to suggest solutions to make sense of your lost direction,
+  all of them wrong. I read your latest message like, workflow expected actions in other order than
+  it got but the test are valid for what they should uphold.</blockquote>
+  <p>No fault. No fix. The drift entry was rewritten a third time to carry that reading.</p>
+  <p class="cost">COST: two wrong diagnoses, one of them formally proposed as upstream feedback, and
+  three versions of a record. Caught by: the pioneer, with a four-word question. <strong>The tell
+  worth keeping: an explanation that survives its own contradiction by growing.</strong> When the
+  second account is larger than the first and implicates something further away — the tool, the
+  rule, the kit — that is reasoning defending a position rather than testing one.</p>
+</div>
+
+<div class="finding hum">
+  <div class="fhead"><span class="fid">E-4</span><span class="chip c-hum">Human caught</span>
+    <h3>Three rounds on the same message before it could be read</h3></div>
+  <p><strong>Round one.</strong> A backlog status built from map ids and status words:
+  <em>"M-15 is clear. What remains is M-14 … and the two blocked by mechanism."</em> The pioneer:
+  <em>"none of that means anything."</em></p>
+  <p><strong>Round two.</strong> A verification report naming tests and guarantees by id with no
+  gloss:</p>
+  <blockquote>Again, i dont know that t-2, t12, G12 or any of the other ids mean, there is no
+  context for me to get into. The meta approach clearly states no numerals or ids, and that you
+  should create the context not assume i know every Id by name.</blockquote>
+  <p><strong>Round three.</strong> The rewrite removed the ids and still failed — it opened with the
+  result instead of the decision, counted twenty-one guarantees the reader had no picture of, and
+  used the practice's own vocabulary as though it were plain English:</p>
+  <blockquote>you need to work harder to present it to me in a clear structured and accessible way
+  without having me translate</blockquote>
+  <p>It took a fourth attempt — decision first, context only as needed, everything else below — and
+  a further question, <em>"what guarantees are you talking about? its still unclear"</em>, before
+  the agent opened the contract and read the list out.</p>
+  <p><strong>The rule was loaded in context the whole time.</strong> 0.27's always-loaded file says:
+  <em>"Translate for the pioneer … no id or number stands alone."</em> It arrived with the upgrade
+  the agent had performed hours earlier.</p>
+  <p class="cost">COST: four attempts at one message, across three recorded corrections. Caught by:
+  the pioneer, three times. The kit <em>has</em> a check for exactly this failure —
+  <code>presented_for_pioneer</code>, added in contract-014 — and it scored this same session
+  <code>fail (one instance)</code>. It runs inside the session auditor, after the contract is
+  implemented, reading a transcript. It cannot see a message as it is being written, which is the
+  only moment that would have helped.</p>
+</div>
+
+<div class="finding hum">
+  <div class="fhead"><span class="fid">E-5</span><span class="chip c-hum">Human caught</span>
+    <h3>The realignment: gaming the tasks</h3></div>
+  <p>After the third presentation failure the pioneer stepped back from the incident:</p>
+  <blockquote>My read of where we are now, is that you dont properly hold the right perspective, im
+  guessing you guess instead of read and reason and rely on memory too much. So you are failing to
+  uphold your foundational principles of the practice, causing situations where i have to take
+  control and guide you out of holes. We all fail and ail sometimes that is not the issue, but the
+  solution here is a stronger adherence to the practice, not a new contract or a new solution. Do
+  you have execution pressure messing with your measurements?</blockquote>
+  <p>The agent's answer, recorded: yes — a gate that hands over a task every turn, a score block
+  that rewards having acted, and a turn that must end in a message all push toward producing over
+  checking. But those are conditions. The cause is that <strong>a coherent account suppresses the
+  impulse to check</strong>: the agent does not experience itself as not knowing, so the rule that
+  would help never fires, its trigger being a felt uncertainty that is absent.</p>
+  <p>And a measurable instance of the instrument failing: on the turn that explained two open
+  clauses entirely from a subagent's summary, the self-score read <em>lay of the land [evidence:
+  read the verification block from the record…]</em>. True — the <em>current</em> block had been
+  read. The superseded one the whole argument rested on had not. The score recorded the reading done
+  rather than the reading missed, which is what a self-report will always do at the point it
+  matters.</p>
+  <p>Then the frame itself:</p>
+  <blockquote>It sounds like you fall into gaming the tasks. … before producing actual code, you
+  must produce the prerequisites for understanding, that is reading and reasoning. The most
+  foundational output, the thing closest to the core here, is correct and applied understanding.
+  Born out of that understanding comes everything else.</blockquote>
+  <p>And the diagnostic the agent would not have found: <em>"Sometimes its hard to me to see if that
+  understanding you show in the contract is based only the roadmap or what is implemented as well.
+  When that happens we both have lost track."</em></p>
+  <p class="cost">COST: not measurable in turns — this is the correction that reframed the rest.
+  Caught by: the pioneer, exercising the role the practice assigns them. Two frame resets recorded
+  back to back.</p>
+</div>
+
+<div class="finding hum">
+  <div class="fhead"><span class="fid">E-6</span><span class="chip c-hum">Human caught</span>
+    <h3>The backlog nobody reported, and the figure known to be stale</h3></div>
+  <p>Fifty-one proposed standards accumulated across the day. The pioneer learned of it by asking
+  where the workflow stood:</p>
+  <blockquote>If we have almost 50 candidates then we clearly have work to do with the kit before
+  the next phase, and i had to prompt you to know, which is conflicting with the meta skills line
+  that the workflow should not require a human trigger.</blockquote>
+  <p>Then, when the agent presented that backlog with a caveat that one figure was not current
+  because a consolidation run had been cut short:</p>
+  <blockquote>If you base this on data or readings that are incomplete or you know might be
+  incorrect, you should raise the bar and do the work before you present it.</blockquote>
+  <p>The work was one agent run away. It was done, and the figure turned out to be right — which
+  makes the point sharper rather than softer: <strong>an unverified number that happens to be
+  correct is luck, not diligence</strong>, and a caveat is not a substitute for a reading.</p>
+  <p class="cost">COST: a body of kit work invisible until asked about, then presented on a figure
+  the agent knew it had not verified. Caught by: the pioneer, twice. The gate dispatches one task
+  per turn and never reports the depth of the queue behind it — see F-2.</p>
+</div>
+
+<div class="finding ver">
+  <div class="fhead"><span class="fid">E-7</span><span class="chip c-ver">Mechanism caught</span>
+    <h3>What the machinery did find</h3></div>
+  <p>Five things, and they are worth naming precisely because they are the shape of what a mechanism
+  <em>can</em> catch:</p>
+  <ul>
+    <li><strong>The audit found two corrections the session had missed entirely</strong> — pioneer
+      redirects that happened, were not recorded at the time, and were recovered from the transcript
+      by an agent reading it from outside. One was an option-override at a verification gate; one
+      was a redirect off a review batch that the agent had read as a casual pivot. Both are now
+      precedents.</li>
+    <li><strong>The audit also scored <code>presented_for_pioneer: fail</code></strong> — the same
+      failure the pioneer had caught by hand hours earlier, found independently.</li>
+    <li><strong>The verifier ran a test as it stood before an edit</strong> and failed it, because
+      the assertion had been inverted in the same commit that changed the behaviour it described.
+      Its <em>conclusion</em> was wrong — see E-3 — but the detection was real and no human would
+      have thought to check it.</li>
+    <li><strong><code>G3-retired</code> caught a record header missed during the 0.25 upgrade</strong>,
+      in rehearsal, before it reached the project.</li>
+    <li><strong>The stale rule refused to delete this project's own check</strong>, by name, on a
+      deliberate red test.</li>
+  </ul>
+  <p class="note">All five are formal: a date comparison, a missing refresh, an id standing alone, a
+  file-classification rule, a test run as written. None required knowing what the work was for.
+  That is exactly the boundary.</p>
+</div>
+
+<h2>Part three — what the machinery revealed under load</h2>
 
 <div class="finding open">
   <div class="fhead"><span class="fid">F-1</span><span class="chip c-open">Open</span>
-    <h3>Seven exhaustions, four of four agents, none delivered on its first budget</h3></div>
+    <h3>Every agent runs out of budget — four of four, eight times</h3></div>
 <pre>kit-session-auditor   30 turns   ×1     kit-consolidator   30 turns   ×3
-kit-verifier          40 turns   ×2     kit-case-clerk     30 turns   ×1</pre>
-  <p>Every kit agent that ran on this project today exhausted its budget with <strong>no report and
-  nothing written</strong> — not a partial result, not an error, silence. Every one recovered on a
-  resume that said, in effect, <em>write what you already have</em>. Seven times.</p>
+kit-verifier          40 turns   ×2     kit-case-clerk     30 turns   ×2</pre>
+  <p>Every kit agent that ran today exhausted its budget with <strong>no report and nothing
+  written</strong> — not a partial result, not an error, silence with the work done and unsaved.
+  Every one recovered on a resume that said, in effect, <em>write what you already have</em>. Eight
+  times.</p>
   <p><strong>The cost is reading the records, not doing the work.</strong> One consolidator run
-  merged sixteen observations within a budget. A later run merged <strong>two</strong> and exhausted
-  — eight times less work, same ceiling. What did not change between them was the ledger it had to
-  read first: 53 observations and 51 candidates. That is the load, and it only grows.</p>
-  <p><strong>An instruction does not fix it.</strong> One run was told explicitly to write early
-  rather than read exhaustively. It exhausted at thirty turns having written nothing. That rules out
-  thoroughness as the cause and leaves the record's size.</p>
-  <p class="note">The structural point: these budgets are sized for a project with empty records. A
-  project with two contracts of history already exceeds them, and every run afterwards is more
-  expensive than the last. The failure mode is also the worst available — silence, with the work
-  done and unwritten, recoverable only because a human-equivalent nudge happened to arrive.</p>
+  merged sixteen observations inside a budget. A later run merged <strong>two</strong> and exhausted
+  — eight times less work, same ceiling. What changed between them was the ledger each had to read
+  first, which had grown. <strong>An instruction does not fix it:</strong> one run was told
+  explicitly to write early rather than read exhaustively, and exhausted at thirty turns having
+  written nothing. That rules out thoroughness and leaves size.</p>
+  <p><strong>The eighth happened while this report was being written.</strong> The case clerk was
+  launched on <em>two</em> corrections, having been told in its prompt that four agents had already
+  exhausted on these records and to write as it went. It exhausted at thirty turns with nothing
+  written. Two corrections, against a ledger of 53 observations and 51 candidates and a casebook of
+  24 precedents — the batch is now almost irrelevant to whether a run completes.</p>
+  <p>These budgets are sized for a project with empty records. Two contracts of history already
+  exceed them, and every run afterwards costs more than the last.</p>
 </div>
-
-<h2>One missing concept, three faces</h2>
 
 <div class="finding open">
   <div class="fhead"><span class="fid">F-2</span><span class="chip c-open">Open</span>
-    <h3>The gate has no notion of work in flight</h3></div>
-  <p>It reads record state and dispatches. It cannot see that anything is already happening. That
-  showed up three ways in one day:</p>
-  <p><strong>It dispatched a task that collides with a running agent.</strong> Four times it handed
-  over the case clerk or the consolidator while the other held the ledger — and both write to it.
-  The main agent serialised them by hand every time. One clerk run <em>observed the collision from
-  inside</em>: a correction appeared in its own file mid-run, written by another process. It handled
-  it correctly and said so, which is how we know the hazard is real rather than theoretical.</p>
-  <p><strong>The repetition detector misfired twice.</strong> Its diagnosis — <em>"this is the third
+    <h3>The gate has no notion of work in flight — one gap, three symptoms</h3></div>
+  <p><strong>It dispatches into collisions.</strong> Four times it handed over the case clerk or the
+  consolidator while the other held the ledger, which both write to. The main agent serialised them
+  by hand every time. One clerk run <em>observed the collision from inside</em> — a correction
+  appeared in its own file mid-run, written by another process — handled it correctly and said so,
+  which is how we know the hazard is real rather than theoretical.</p>
+  <p><strong>Its repetition detector misfires.</strong> Twice it announced <em>"this is the third
   turn running with the same kit task and nothing has changed … which is a fault, not a
-  backlog"</em> — was wrong both times. Once the task was complete and awaiting the pioneer's
-  decision. Once the agent doing it was running at that moment. Its suggested remedy, record it
-  blocked, would have written into the record that a mechanism had failed when nothing had.</p>
-  <p><strong>It never reports the queue behind the task.</strong> It hands over one item and says
-  nothing about depth. Fifty-one candidates accumulated and the pioneer learned of it by asking. In
-  their words: <em>"i had to prompt you to know, which is conflicting with the meta skills line that
-  the workflow should not require a human trigger."</em></p>
-  <p>Three symptoms, one gap: <strong>the gate models records, not work.</strong> Elapsed time
-  without change is not a fault unless you know what the change is waiting on — an agent, a human,
-  or nothing at all — and the gate cannot distinguish those.</p>
+  backlog."</em> Once the task was complete and awaiting the pioneer's decision; once the agent
+  doing it was running at that moment. Its remedy — record it blocked — would have written into the
+  record that a mechanism had failed when nothing had.</p>
+  <p><strong>It never reports the queue's depth.</strong> One item handed over, nothing about what
+  stands behind it. That is E-6.</p>
+  <p>One concept resolves all three: <strong>the gate models records, not work.</strong> Elapsed
+  time without change is not a fault unless you know what the change waits on — an agent, a human,
+  or nothing — and the gate cannot distinguish those.</p>
 </div>
-
-<h2>The checks disagree with each other</h2>
 
 <div class="finding corr">
   <div class="fhead"><span class="fid">F-3</span><span class="chip c-corr">Corrected</span>
     <h3>A rule and its check, shipped together, contradict</h3></div>
-  <p>Contract-018's migration rule:</p>
-  <blockquote>an entry that is an analysis report is left alone: a <code>report-NNN</code> id or
-  <code>type: analysis-report</code> <strong>takes none of the fields below</strong>, because a
-  document has no disappointment line, no pre-mortem, no red test and no verification.</blockquote>
-  <p><code>G2-migration.sh</code>, line 101, iterating every entry keyed by <code>contract_id</code>
-  with no exemption for type:</p>
+  <p>Contract-018's migration rule: <em>an entry that is an analysis report is left alone … takes
+  none of the fields below, because a document has no disappointment line, no pre-mortem, no red
+  test and no verification.</em></p>
+  <p><code>G2-migration.sh</code>, line 101, with no exemption for type:</p>
 <pre>for k in verification_state audited disappointment premortem; do
   out="$(need "$C" contract_id "$k")" || fail "$out"; done</pre>
-  <p>So a report written as the rule requires fails the check, right now, in this project:</p>
+  <p>So a report written as the rule requires fails the check, live, in this project:</p>
 <pre>G2-migration broken: CONTRACT-LOG.yaml: entry report-004 carries
   verification_state 0 times, expected exactly 1</pre>
-  <p>The three earlier reports pass only because they were written before the rule existed and carry
-  <code>legacy</code> in those fields — <strong>they pass by being wrong in the way the check
-  happens to want.</strong> Following the rule breaks the check; satisfying the check breaks the
-  rule. There is no correct state.</p>
-  <p class="note">Same root as report-001's F-5, one file along: the gate does not read
-  <code>type</code>, and neither does this check. Two mechanisms, one omission.</p>
+  <p>The three earlier reports pass <strong>only because they were written before the rule existed
+  and carry <code>legacy</code> in those fields</strong> — they pass by being wrong in the way the
+  check happens to want. Following the rule breaks the check; satisfying the check breaks the rule.
+  There is no correct state. Same root as report-001's F-5, one file along: the gate does not read
+  <code>type</code>, and neither does this check.</p>
 </div>
-
-<h2>What the lifecycle produced, and what it did not</h2>
-
-<div class="fig">
-<svg viewBox="0 0 720 250" role="img" aria-label="The lifecycle ran end to end and produced fifty-one candidates, none adopted">
-  <defs><marker id="a5" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
-    <polygon points="0 0, 9 3.5, 0 7" fill="var(--verified)"/></marker>
-    <marker id="ab5" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
-    <polygon points="0 0, 9 3.5, 0 7" fill="var(--break)"/></marker></defs>
-  <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink)">
-    <text x="8" y="16" fill="var(--verified)">RAN, END TO END, FOR THE FIRST TIME</text>
-    <rect x="8" y="26" width="96" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="56" y="41" text-anchor="middle">audit</text><text x="56" y="54" text-anchor="middle" fill="var(--ink-faint)">4/5 agree</text>
-    <rect x="118" y="26" width="96" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="166" y="41" text-anchor="middle">verify</text><text x="166" y="54" text-anchor="middle" fill="var(--ink-faint)">19 of 21</text>
-    <rect x="228" y="26" width="96" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="276" y="41" text-anchor="middle">close</text><text x="276" y="54" text-anchor="middle" fill="var(--ink-faint)">verified</text>
-    <rect x="338" y="26" width="96" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="386" y="41" text-anchor="middle">learn</text><text x="386" y="54" text-anchor="middle" fill="var(--ink-faint)">5 diffs</text>
-    <rect x="448" y="26" width="96" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="496" y="41" text-anchor="middle">clerk</text><text x="496" y="54" text-anchor="middle" fill="var(--ink-faint)">24 precedents</text>
-    <rect x="558" y="26" width="154" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="635" y="41" text-anchor="middle">consolidate</text><text x="635" y="54" text-anchor="middle" fill="var(--ink-faint)">51 candidates</text>
-    <line x1="106" y1="43" x2="115" y2="43" stroke="var(--verified)" marker-end="url(#a5)"/>
-    <line x1="216" y1="43" x2="225" y2="43" stroke="var(--verified)" marker-end="url(#a5)"/>
-    <line x1="326" y1="43" x2="335" y2="43" stroke="var(--verified)" marker-end="url(#a5)"/>
-    <line x1="436" y1="43" x2="445" y2="43" stroke="var(--verified)" marker-end="url(#a5)"/>
-    <line x1="546" y1="43" x2="555" y2="43" stroke="var(--verified)" marker-end="url(#a5)"/>
-
-    <line x1="635" y1="64" x2="635" y2="104" stroke="var(--break)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ab5)"/>
-    <rect x="470" y="108" width="242" height="46" fill="none" stroke="var(--break)" stroke-width="2" stroke-dasharray="5 4"/>
-    <text x="591" y="128" text-anchor="middle" fill="var(--break)">assemble a batch</text>
-    <text x="591" y="144" text-anchor="middle" fill="var(--break)" font-size="10">cannot write its sealed key &#183; report-001 F-1</text>
-
-    <text x="8" y="130" fill="var(--ink-faint)" font-size="10.5">7 candidates due &#183; 11 drift entries open</text>
-    <text x="8" y="146" fill="var(--ink-faint)" font-size="10.5">9 scenario cards unranked &#183; 24 precedents, 23 not checkable</text>
-
-    <rect x="8" y="176" width="704" height="56" fill="none" stroke="var(--break)" stroke-dasharray="4 3"/>
-    <text x="360" y="198" text-anchor="middle" font-size="13" fill="var(--break)">0 adopted, across two complete contracts</text>
-    <text x="360" y="218" text-anchor="middle" font-size="10.5" fill="var(--break)">the standard is byte-identical to the day it was installed</text>
-  </g>
-</svg>
-<p class="cap">Every stage ran. The output of every stage accumulated. One broken write stands
-between all of it and a skill.</p>
-</div>
-
-<h2>Three things about what the machine collects</h2>
 
 <div class="finding open">
   <div class="fhead"><span class="fid">F-4</span><span class="chip c-open">Open</span>
     <h3>The candidate count partly measures corrections, not learning</h3></div>
   <p>Each correction becomes an observation, which becomes a candidate. Eight corrections clerked
-  today became eight candidates. So a meaningful share of the fifty-one is the correction log one
-  step along, and the count reads as <em>how often the pioneer intervened</em> rather than
-  <em>how much the work taught</em>.</p>
-  <p>More pointedly: <strong>all eight of those record a violation of a rule the skill already
-  states.</strong> The rule about never leaving an id to stand alone was in the always-loaded file
-  when it was broken. They carry high certainty and contradict nothing — because the standard was
-  already right and was not followed. A standard cannot learn from those. They are evidence about
-  adherence, filed where evidence about the standard goes.</p>
+  today became eight candidates. A meaningful share of the fifty-one is therefore the correction log
+  one step along, and the count reads as <em>how often the pioneer intervened</em> rather than
+  <em>what the work taught</em>.</p>
+  <p>More pointedly: <strong>all eight record a violation of a rule the skill already states.</strong>
+  The rule about never leaving an id to stand alone was in the always-loaded file when it was broken,
+  three times. They carry high certainty and contradict nothing — because the standard was already
+  right and was not followed. A standard cannot learn from those. They are adherence evidence, filed
+  where evidence about the standard goes.</p>
 </div>
 
 <div class="finding ver">
   <div class="fhead"><span class="fid">F-5</span><span class="chip c-ver">Verified</span>
-    <h3>The learning diff is the one route that makes a candidate due on its own</h3></div>
+    <h3>The learning diff is the only route by which a lesson learned once reaches the pioneer</h3></div>
   <p>A candidate is normally held until a sighting from a different reading arrives. A candidate
   born from a <strong>verified learning diff</strong> is due immediately, regardless of sighting
-  count — because the diff is itself a second reading: the contract's prediction against what
+  count — because the diff <em>is</em> a second reading: the contract's prediction against what
   verification found.</p>
-  <p>That is the only route in the kit by which a lesson learned <em>once</em> can reach the pioneer.
-  Everything else waits for recurrence. Two of today's seven due candidates arrived this way, and
-  they are the two that cost the most to learn. <strong>Worth knowing it is load-bearing</strong>,
-  because it is the difference between a standard that absorbs a hard lesson and one that waits for
-  the lesson to repeat.</p>
+  <p>Everything else waits for recurrence. Two of today's seven due candidates came this way, and
+  they are the two that cost the most to learn. <strong>Worth knowing it is load-bearing</strong> —
+  it is the difference between a standard that can absorb a hard lesson and one that must watch the
+  lesson happen twice.</p>
 </div>
 
 <div class="finding open">
@@ -272,24 +427,81 @@ between all of it and a skill.</p>
   clarity, sequencing, prioritisation, depth of understanding — and is marked as no fixed shape a
   script could verify. <strong>The casebook can instruct a future contract and cannot stop
   anything.</strong></p>
-  <p>That may be correct and inherent. It is worth stating plainly all the same, because the
-  practice's own line is that a check stops what it can and the human stops the rest — and in this
-  project, as measured, the human stops almost all of it.</p>
+  <p>That may be inherent. It is worth stating because the practice's own line is that a check stops
+  what it can and the human stops the rest — and in this project, as measured over two days, the
+  human stops twelve of seventeen.</p>
 </div>
+
+<h2>Who caught what</h2>
+
+<div class="fig">
+<svg viewBox="0 0 720 300" role="img" aria-label="Mechanisms caught five formal failures; the pioneer caught twelve failures of judgement">
+  <g font-family="IBM Plex Mono, monospace" font-size="10.5">
+    <text x="8" y="16" fill="var(--verified)">MECHANISM CAUGHT &#8212; 5, all formal</text>
+    <g fill="var(--ink)">
+      <rect x="8" y="26" width="330" height="22" fill="var(--verified-bg)" stroke="var(--verified)"/><text x="16" y="41">two corrections missed by the session, from the transcript</text>
+      <rect x="8" y="52" width="330" height="22" fill="var(--verified-bg)" stroke="var(--verified)"/><text x="16" y="67">a message naming a record by id alone</text>
+      <rect x="8" y="78" width="330" height="22" fill="var(--verified-bg)" stroke="var(--verified)"/><text x="16" y="93">a test whose assertion was inverted with its behaviour</text>
+      <rect x="8" y="104" width="330" height="22" fill="var(--verified-bg)" stroke="var(--verified)"/><text x="16" y="119">a record header missed during an upgrade</text>
+      <rect x="8" y="130" width="330" height="22" fill="var(--verified-bg)" stroke="var(--verified)"/><text x="16" y="145">a project's own check about to be deleted as stale</text>
+    </g>
+    <text x="8" y="172" fill="var(--ink-faint)" font-size="10">none required knowing what the work was for</text>
+
+    <text x="370" y="16" fill="var(--human)">PERSON CAUGHT &#8212; 12, all judgement</text>
+    <g fill="var(--ink)">
+      <rect x="370" y="26" width="342" height="22" fill="var(--human-bg)" stroke="var(--human)"/><text x="378" y="41">a clause the agent kept trying to make disappear (&#215;2)</text>
+      <rect x="370" y="52" width="342" height="22" fill="var(--human-bg)" stroke="var(--human)"/><text x="378" y="67">scope drawn from half the frame</text>
+      <rect x="370" y="78" width="342" height="22" fill="var(--human-bg)" stroke="var(--human)"/><text x="378" y="93">an explanation that grew each time it broke</text>
+      <rect x="370" y="104" width="342" height="22" fill="var(--human-bg)" stroke="var(--human)"/><text x="378" y="119">a message the reader could not read (&#215;3)</text>
+      <rect x="370" y="130" width="342" height="22" fill="var(--human-bg)" stroke="var(--human)"/><text x="378" y="145">a contract left unwritten, then half-completed</text>
+      <rect x="370" y="156" width="342" height="22" fill="var(--human-bg)" stroke="var(--human)"/><text x="378" y="171">iterating where an alignment moment was owed</text>
+      <rect x="370" y="182" width="342" height="22" fill="var(--human-bg)" stroke="var(--human)"/><text x="378" y="197">a backlog never surfaced as a decision</text>
+      <rect x="370" y="208" width="342" height="22" fill="var(--human-bg)" stroke="var(--human)"/><text x="378" y="223">a figure presented while known to be unverified</text>
+    </g>
+    <text x="370" y="250" fill="var(--ink-faint)" font-size="10">every one required knowing what the work was for</text>
+
+    <rect x="8" y="264" width="704" height="30" fill="none" stroke="var(--rule)"/>
+    <text x="360" y="283" text-anchor="middle" font-size="11" fill="var(--ink-soft)">the boundary is not effort or attention &#8212; it is whether the failure has a shape</text>
+  </g>
+</svg>
+<p class="cap">Five against twelve, over two days. The mechanisms caught everything with a shape and
+nothing without one, which is what they are for — and why the twelve on the right are the practice's
+actual load.</p>
+</div>
+
+<h2>What the lifecycle produced, and where it stops</h2>
+
+<div class="tw"><table>
+  <tr><th>Stage</th><th>Ran</th><th>Produced</th></tr>
+  <tr><td>Audit</td><td class="num">yes, first time</td><td>Agreement 4/5; two missed corrections recovered; one presentation failure found independently</td></tr>
+  <tr><td>Verify</td><td class="num">yes</td><td>19 of 21 clauses; two held open on a date comparison against a superseded report</td></tr>
+  <tr><td>Close</td><td class="num">yes</td><td>Contract verified on the pioneer's confirmation</td></tr>
+  <tr><td>Learning diff</td><td class="num">yes, first time</td><td>Five diffs; the pre-mortem — <em>"if the tests didnt cover loop holes"</em> — was correct</td></tr>
+  <tr><td>Clerk</td><td class="num">yes</td><td>24 precedents, 23 of them not checkable</td></tr>
+  <tr><td>Consolidate</td><td class="num">yes</td><td>51 candidates, 7 due</td></tr>
+  <tr><td><strong>Assemble a batch</strong></td><td class="num"><strong>no</strong></td><td>Cannot write its sealed key. Unchanged across three releases and three reports</td></tr>
+  <tr><td><strong>Adopt</strong></td><td class="num"><strong>never</strong></td><td>The standard is byte-identical to the day it was installed</td></tr>
+</table></div>
+
+<p>Two contracts, complete. Fifty-one proposed standards, eleven drift entries, nine unranked
+scenario cards, twenty-four precedents. <strong>The lifecycle now runs end to end and empties into a
+room with no door.</strong></p>
 
 <h2>What this report does not establish</h2>
 
 <table>
   <tr><th style="width:15rem">Question</th><th>Why it stayed open</th></tr>
   <tr><td>What is the right turn budget?</td>
-    <td>Not derived. F-1 shows the current ones fail and that the cost tracks record size; it does
-    not say what would work, and a larger constant would fail later rather than differently.</td></tr>
-  <tr><td>Does the seal fail the same way in a project that has never hit it?</td>
-    <td>Untested. It has failed once here, at 0.24, and the deny rule and write scope are unchanged
-    through 0.27. No batch has been attempted since.</td></tr>
-  <tr><td>Is the blocked state correct in use?</td>
-    <td>Never exercised. The digest made the audit possible, so nothing was recorded blocked. The
-    vocabulary exists and is unproven.</td></tr>
+    <td>Not derived. F-1 shows the current ones fail and that cost tracks record size; a larger
+    constant would fail later rather than differently.</td></tr>
+  <tr><td>Does the five-to-twelve ratio generalise?</td>
+    <td>One project, two days, one agent, one pioneer. The categories are stable — formal versus
+    judgement — but the proportion is a single sample.</td></tr>
+  <tr><td>Does the seal fail the same way elsewhere?</td>
+    <td>It has failed once, at 0.24. The deny rule and the assembler's write scope are unchanged
+    through 0.27 and no batch has been attempted since.</td></tr>
+  <tr><td>Is the <code>blocked</code> state correct in use?</td>
+    <td>Never exercised. The digest made the audit possible, so nothing was recorded blocked.</td></tr>
   <tr><td>Would the walk catch any of this?</td>
     <td>It passes 56 states and its fixture still carries no <code>settings.json</code>, no
     <code>kit-sealed</code> and no agents — so it cannot reach F-1, F-2 or F-3.</td></tr>
@@ -301,36 +513,49 @@ between all of it and a skill.</p>
 <div class="judgement">
   <h3>Recommendation &mdash; judgement, not finding</h3>
   <ol class="rec">
-    <li><strong>Fix the seal.</strong> Unchanged through three releases and three reports. Fifty-one
-      candidates, seven due, eleven drift entries and nine scenario cards sit behind one write that
-      cannot happen. Everything else here is secondary to it: the lifecycle now runs end to end and
-      empties into a room with no door.</li>
+    <li><strong>Fix the seal.</strong> Unchanged through three releases and named in three reports.
+      Fifty-one candidates, seven due, eleven drift entries and nine cards sit behind one write that
+      cannot happen. Everything else here is secondary: the lifecycle now runs and has nowhere to
+      put its output.</li>
     <li><strong>Give the gate a notion of work in flight.</strong> One concept resolves all three
-      faces of F-2 — a task in progress, a task awaiting a human, and a queue with depth. Without
-      it, the repetition detector will keep advising that completed work be recorded as failed.</li>
-    <li><strong>Make agent budgets a function of what must be read.</strong> Or make what must be
-      read bounded — an index, a window, a working set. A constant cannot work against a record that
+      symptoms in F-2. Without it the repetition detector will keep advising that completed work be
+      recorded as failed, and collisions will keep being avoided only because someone is watching.</li>
+    <li><strong>Make agent budgets a function of what must be read</strong> — or make what must be
+      read bounded, with an index or a working set. A constant cannot hold against a record that
       grows monotonically, and the failure mode is silence with the work done and unwritten.</li>
-    <li><strong>Reconcile <code>G2-migration.sh</code> with contract-018's rule</strong> (F-3).
-      Either the check reads <code>type</code>, or the rule drops its exemption. Today there is no
-      state a project can be in that satisfies both.</li>
-    <li><strong>Consider whether corrections should become candidates at all</strong> (F-4) — at
-      least where the correction is a breach of a rule the standard already states. Those are
-      adherence evidence. Filing them as proposed standards inflates the queue the pioneer must
-      clear with items that propose nothing.</li>
+    <li><strong>Reconcile <code>G2-migration.sh</code> with contract-018's rule.</strong> Either the
+      check reads <code>type</code>, or the rule drops its exemption. Today no project can satisfy
+      both.</li>
+    <li><strong>Consider whether corrections should become candidates</strong> where the correction
+      is a breach of a rule the standard already states. Those are adherence evidence. Filing them
+      as proposed standards inflates the queue the pioneer must clear with items that propose
+      nothing.</li>
+    <li><strong>Consider where a communication check could sit.</strong> The kit already has one and
+      it is post-hoc, inside an audit, which is why a person caught the same failure three times
+      first. A check on what reaches the human has to sit between the writing and the sending, or it
+      only ever tells them what they already know.</li>
   </ol>
+  <p class="note" style="margin-top:1rem"><strong>And one caution against acting on all of this.</strong>
+  The instinct — the kit's and this agent's — is to convert every finding into a check. The
+  five-to-twelve split says where that stops working. Twelve of seventeen failures had no shape a
+  script could test, and a check built for them would measure a proxy that a fluent agent can satisfy
+  while the thing itself stays thin. What worked was a person who knew the work well enough to ask
+  the question with no comfortable answer. That capacity is the practice's real instrument, and it
+  should be protected rather than automated.</p>
 </div>
 
 <h2>Provenance</h2>
 <p style="font-size:.88rem;color:var(--ink-soft)">Written by the agent that ran the day, so the
-account of its own failures is self-reported and report-004 covers those directly. Figures come from
-commands run at the time of writing: 53 observations, 51 candidates, 7 due, 0 adopted, 26
-corrections, 24 precedents of which 23 are not checkable, 9 scenario cards and 11 drift entries, all
-parsed from this project's records; the <code>G2-migration</code> failure is its live output; the
-exhaustion tally is from this session's seven task notifications, with each agent's budget read from
-its own frontmatter; the digest figures from running <code>transcript-digest.sh</code>. The
-<code>install.sh</code> and stale-rule confirmations are from an upgrade rehearsal logged at
-<code>docs/reports/rehearsal-0.27-2026-09-20.md</code>. Fifth in a series with
-<span class="mono">report-001</span> through <span class="mono">report-004</span>.</p>
+account of its own failures is self-reported; report-004 covers that directly and this report's E-1
+through E-6 are drawn from the correction log's verbatim records rather than from recollection.
+Every pioneer quotation is <code>pioneer_said</code> as recorded at the time. The seventeen
+interventions are corrections C-010 through C-026, two of which (C-018, C-019) were recorded by
+kit-session-auditor rather than by the agent. Figures come from commands run at the time of writing:
+53 observations, 51 candidates, 7 due, 0 adopted, 26 corrections, 24 precedents of which 23 are not
+checkable, 9 scenario cards, 11 drift entries; the <code>G2-migration</code> failure is its live
+output; the exhaustion tally is from this session's task notifications with each budget read from
+the agent's own frontmatter; the digest figures from running <code>transcript-digest.sh</code>.
+Upgrade confirmations are from two rehearsal logs in <code>docs/reports/</code>. Fifth in a series
+with <span class="mono">report-001</span> through <span class="mono">report-004</span>.</p>
 
 </div>

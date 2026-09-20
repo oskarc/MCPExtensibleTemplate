@@ -839,8 +839,8 @@ corrections:
       asked this turn, awaiting answer
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-025, S-010"
     clerk_note: null
 
 
@@ -871,8 +871,8 @@ corrections:
       asked this turn, awaiting answer
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-026, S-011"
     clerk_note: null
 
 
@@ -880,9 +880,9 @@ trajectory:
   updated: 2026-09-20
   by_contract:
     - contract_id: null
-      corrections: 7
+      corrections: 8
       bearing_reevaluations: 0
-      interventions: {did-it: 0, redirected: 7, hinted: 0, reviewed-after: 0}
+      interventions: {did-it: 0, redirected: 8, hinted: 0, reviewed-after: 0}
     - contract_id: contract-001
       corrections: 4
       bearing_reevaluations: 0
@@ -891,4 +891,4 @@ trajectory:
       corrections: 14
       bearing_reevaluations: 0
       interventions: {did-it: 0, redirected: 14, hinted: 0, reviewed-after: 0}
-  moments: {M-27: 3, M-07: 1, M-14: 2, M-04: 3, M-12: 6, M-03: 4, M-06: 1, M-25: 1, M-24: 1, M-28: 1, M-16: 1, M-01: 1}
+  moments: {M-27: 3, M-07: 1, M-15: 1, M-14: 1, M-04: 3, M-12: 6, M-03: 4, M-06: 1, M-25: 1, M-24: 1, M-28: 1, M-16: 1, M-01: 1, M-09: 1}
