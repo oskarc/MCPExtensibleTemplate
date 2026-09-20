@@ -1,0 +1,336 @@
+<title>A Day of Running It</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --paper:#f7f5f1; --ink:#1c2230; --ink-soft:#4a5468; --ink-faint:#7b8496;
+  --rule:#ddd8cf; --rule-soft:#e9e5dd; --panel:#fffdfa; --panel-2:#f1eee8;
+  --verified:#2d6a4a; --corrected:#a32d28; --open:#9a6510;
+  --verified-bg:#e6f0e8; --corrected-bg:#f7e6e4; --open-bg:#f8eeda;
+  --accent:#27496d; --code-bg:#f0ede6; --break:#a32d28; --dead:#b8b2a8;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c; --dead:#4a505c;
+}}
+:root[data-theme="dark"]{
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c; --dead:#4a505c;
+}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.6;margin:0}
+.wrap{max-width:52rem;margin:0 auto;padding-block:3rem 5rem;padding-left:16px;padding-right:16px}
+h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif;text-wrap:balance;line-height:1.2}
+h1{font-size:clamp(2rem,6vw,2.9rem);margin:0 0 .6rem;letter-spacing:-.015em}
+h2{font-size:1.45rem;margin:3.2rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--rule)}
+h3{font-size:1.08rem;margin:0 0 .5rem}
+p{margin:0 0 1rem}
+code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+code{background:var(--code-bg);padding:.1em .35em;border-radius:3px;font-size:.87em}
+pre{background:var(--code-bg);border:1px solid var(--rule-soft);border-radius:5px;padding:.9rem 1rem;overflow-x:auto;font-size:.82rem;line-height:1.55;margin:0 0 1rem}
+a{color:var(--accent)}
+blockquote{margin:0 0 1rem;padding:0 0 0 1.1rem;border-left:3px solid var(--rule);font-family:"IBM Plex Serif",Georgia,serif;font-size:1.03rem;color:var(--ink-soft)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 .9rem}
+.standfirst{font-family:"IBM Plex Serif",Georgia,serif;font-size:1.16rem;color:var(--ink-soft);margin:0 0 1.6rem;max-width:42rem}
+.meta{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--ink-faint);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:.7rem 0;display:flex;flex-wrap:wrap;gap:.4rem 1.6rem}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin:2rem 0 2.5rem}
+.strip div{background:var(--panel);padding:1rem .9rem}
+.strip .n{font-family:"IBM Plex Mono",monospace;font-size:1.85rem;font-weight:600;line-height:1;display:block;margin-bottom:.35rem;font-variant-numeric:tabular-nums}
+.strip .l{font-size:.78rem;color:var(--ink-soft);line-height:1.35;display:block}
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;padding:.2rem .5rem;border-radius:3px;vertical-align:.12em}
+.c-open{background:var(--open-bg);color:var(--open)}
+.c-corr{background:var(--corrected-bg);color:var(--corrected)}
+.c-ver{background:var(--verified-bg);color:var(--verified)}
+.finding{border:1px solid var(--rule);border-left-width:4px;background:var(--panel);padding:1.3rem 1.4rem;margin:0 0 1.4rem}
+.finding.open{border-left-color:var(--open)}
+.finding.corr{border-left-color:var(--corrected)}
+.finding.ver{border-left-color:var(--verified)}
+.fhead{display:flex;flex-wrap:wrap;gap:.6rem;align-items:baseline;margin-bottom:.7rem}
+.fid{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--ink-faint);font-weight:600}
+.finding p:last-child,.finding pre:last-child{margin-bottom:0}
+table{border-collapse:collapse;width:100%;font-size:.88rem;margin:0 0 1.2rem}
+th,td{text-align:left;padding:.6rem .7rem;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+th{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--rule)}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tw{overflow-x:auto}
+.fig{background:var(--panel);border:1px solid var(--rule);padding:1.4rem 1rem;margin:0 0 1rem}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+.cap{font-size:.82rem;color:var(--ink-soft);margin:.6rem 0 0;font-style:italic}
+.judgement{border:1px solid var(--accent);background:var(--panel);padding:1.4rem 1.5rem;margin:1.2rem 0 0}
+.judgement h3{color:var(--accent)}
+ol.rec{margin:0;padding-left:1.3rem}
+ol.rec li{margin-bottom:.8rem}
+ol.rec li:last-child{margin-bottom:0}
+.note{font-size:.88rem;color:var(--ink-soft);border-left:2px solid var(--rule);padding-left:1rem;margin:0 0 1rem}
+</style>
+
+<div class="wrap">
+
+<p class="eyebrow">report-005 &nbsp;·&nbsp; analysis &nbsp;·&nbsp; fifth in the series</p>
+<h1>A Day of Running It</h1>
+<p class="standfirst">0.27 fixed almost everything the earlier reports named, and the kit then ran a
+full lifecycle end to end for the first time — audit, verify, close, learn, clerk, consolidate.
+This is what running it revealed: seven turn-budget exhaustions across four of four agents, three
+faces of one missing concept, and a check that contradicts the migration rule shipped beside it.</p>
+
+<div class="meta">
+  <span>base-building-kit 0.27 (<span class="mono">0159092</span>)</span>
+  <span>One project, one day, both phases through the full cycle</span>
+  <span>2026-09-20</span>
+</div>
+
+<div class="strip">
+  <div><span class="n">7</span><span class="l">turn-budget exhaustions, across 4 of 4 agents</span></div>
+  <div><span class="n">3</span><span class="l">faces of one missing concept: work in flight</span></div>
+  <div><span class="n">51</span><span class="l">candidates, 0 ever adopted</span></div>
+  <div><span class="n">9</span><span class="l">of 0.27's changes confirmed working in the field</span></div>
+</div>
+
+<h2>First: what 0.27 fixed, confirmed by use</h2>
+
+<div class="finding ver">
+  <div class="fhead"><span class="fid">V-1</span><span class="chip c-ver">Verified</span>
+    <h3>Nine of the earlier reports' findings, closed and exercised</h3></div>
+  <div class="tw"><table>
+    <tr><th style="width:12rem">Change</th><th>How it was proven here</th></tr>
+    <tr><td><code>transcript-digest.sh</code></td><td>Rendered a 70 MB transcript as <strong>268 KB</strong>,
+      3,293 rows. The audit that had been uncompletable for a whole contract ran on it.</td></tr>
+    <tr><td>The <code>blocked</code> state</td><td>Exists with its three fields. Not needed in the
+      end — the digest made the audit possible — but it was the fallback that made attempting it
+      safe.</td></tr>
+    <tr><td>Gate position 0</td><td>The starvation ended. The queue drained past position four for
+      the first time and reached consolidation, the learning diff and the clerk unaided.</td></tr>
+    <tr><td><code>install.sh</code></td><td>Ran the upgrade's step 5 as one command. No
+      hand-written loop, and the rehearsal and real run could not diverge.</td></tr>
+    <tr><td>The stale rule as a refusal</td><td>Fired exactly as designed, on a deliberate red test:
+      <em>"spared: P-010.sh is this project's own check for precedent P-010, which is in its
+      casebook — not stale, not removed."</em></td></tr>
+    <tr><td>"The records are eight"</td><td>Named instead of counted. The bug it replaced was
+      report-002's F-1, and the same agent did not repeat it.</td></tr>
+    <tr><td>Reports left alone by the migration</td><td>Correct in the skill. See F-4 — the check
+      shipped beside it disagrees.</td></tr>
+    <tr><td>Refusal registry, <code>G6</code></td><td>Caught this project's own
+      <code>P-010.sh</code> printing two refusals with no way forward. The check is right and the
+      failure was ours.</td></tr>
+    <tr><td>Honest refusal not scored as drift</td><td>The wording is in <code>meta-antidrift</code>
+      and it is this agent's own sentence from report-003, returned as kit text.</td></tr>
+  </table></div>
+  <p class="note">Every one of those came from a report written in this project and shipped back
+  within two days. Whatever else is below, that loop works.</p>
+</div>
+
+<h2>The finding: every agent runs out</h2>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-1</span><span class="chip c-open">Open</span>
+    <h3>Seven exhaustions, four of four agents, none delivered on its first budget</h3></div>
+<pre>kit-session-auditor   30 turns   ×1     kit-consolidator   30 turns   ×3
+kit-verifier          40 turns   ×2     kit-case-clerk     30 turns   ×1</pre>
+  <p>Every kit agent that ran on this project today exhausted its budget with <strong>no report and
+  nothing written</strong> — not a partial result, not an error, silence. Every one recovered on a
+  resume that said, in effect, <em>write what you already have</em>. Seven times.</p>
+  <p><strong>The cost is reading the records, not doing the work.</strong> One consolidator run
+  merged sixteen observations within a budget. A later run merged <strong>two</strong> and exhausted
+  — eight times less work, same ceiling. What did not change between them was the ledger it had to
+  read first: 53 observations and 51 candidates. That is the load, and it only grows.</p>
+  <p><strong>An instruction does not fix it.</strong> One run was told explicitly to write early
+  rather than read exhaustively. It exhausted at thirty turns having written nothing. That rules out
+  thoroughness as the cause and leaves the record's size.</p>
+  <p class="note">The structural point: these budgets are sized for a project with empty records. A
+  project with two contracts of history already exceeds them, and every run afterwards is more
+  expensive than the last. The failure mode is also the worst available — silence, with the work
+  done and unwritten, recoverable only because a human-equivalent nudge happened to arrive.</p>
+</div>
+
+<h2>One missing concept, three faces</h2>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-2</span><span class="chip c-open">Open</span>
+    <h3>The gate has no notion of work in flight</h3></div>
+  <p>It reads record state and dispatches. It cannot see that anything is already happening. That
+  showed up three ways in one day:</p>
+  <p><strong>It dispatched a task that collides with a running agent.</strong> Four times it handed
+  over the case clerk or the consolidator while the other held the ledger — and both write to it.
+  The main agent serialised them by hand every time. One clerk run <em>observed the collision from
+  inside</em>: a correction appeared in its own file mid-run, written by another process. It handled
+  it correctly and said so, which is how we know the hazard is real rather than theoretical.</p>
+  <p><strong>The repetition detector misfired twice.</strong> Its diagnosis — <em>"this is the third
+  turn running with the same kit task and nothing has changed … which is a fault, not a
+  backlog"</em> — was wrong both times. Once the task was complete and awaiting the pioneer's
+  decision. Once the agent doing it was running at that moment. Its suggested remedy, record it
+  blocked, would have written into the record that a mechanism had failed when nothing had.</p>
+  <p><strong>It never reports the queue behind the task.</strong> It hands over one item and says
+  nothing about depth. Fifty-one candidates accumulated and the pioneer learned of it by asking. In
+  their words: <em>"i had to prompt you to know, which is conflicting with the meta skills line that
+  the workflow should not require a human trigger."</em></p>
+  <p>Three symptoms, one gap: <strong>the gate models records, not work.</strong> Elapsed time
+  without change is not a fault unless you know what the change is waiting on — an agent, a human,
+  or nothing at all — and the gate cannot distinguish those.</p>
+</div>
+
+<h2>The checks disagree with each other</h2>
+
+<div class="finding corr">
+  <div class="fhead"><span class="fid">F-3</span><span class="chip c-corr">Corrected</span>
+    <h3>A rule and its check, shipped together, contradict</h3></div>
+  <p>Contract-018's migration rule:</p>
+  <blockquote>an entry that is an analysis report is left alone: a <code>report-NNN</code> id or
+  <code>type: analysis-report</code> <strong>takes none of the fields below</strong>, because a
+  document has no disappointment line, no pre-mortem, no red test and no verification.</blockquote>
+  <p><code>G2-migration.sh</code>, line 101, iterating every entry keyed by <code>contract_id</code>
+  with no exemption for type:</p>
+<pre>for k in verification_state audited disappointment premortem; do
+  out="$(need "$C" contract_id "$k")" || fail "$out"; done</pre>
+  <p>So a report written as the rule requires fails the check, right now, in this project:</p>
+<pre>G2-migration broken: CONTRACT-LOG.yaml: entry report-004 carries
+  verification_state 0 times, expected exactly 1</pre>
+  <p>The three earlier reports pass only because they were written before the rule existed and carry
+  <code>legacy</code> in those fields — <strong>they pass by being wrong in the way the check
+  happens to want.</strong> Following the rule breaks the check; satisfying the check breaks the
+  rule. There is no correct state.</p>
+  <p class="note">Same root as report-001's F-5, one file along: the gate does not read
+  <code>type</code>, and neither does this check. Two mechanisms, one omission.</p>
+</div>
+
+<h2>What the lifecycle produced, and what it did not</h2>
+
+<div class="fig">
+<svg viewBox="0 0 720 250" role="img" aria-label="The lifecycle ran end to end and produced fifty-one candidates, none adopted">
+  <defs><marker id="a5" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <polygon points="0 0, 9 3.5, 0 7" fill="var(--verified)"/></marker>
+    <marker id="ab5" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <polygon points="0 0, 9 3.5, 0 7" fill="var(--break)"/></marker></defs>
+  <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink)">
+    <text x="8" y="16" fill="var(--verified)">RAN, END TO END, FOR THE FIRST TIME</text>
+    <rect x="8" y="26" width="96" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="56" y="41" text-anchor="middle">audit</text><text x="56" y="54" text-anchor="middle" fill="var(--ink-faint)">4/5 agree</text>
+    <rect x="118" y="26" width="96" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="166" y="41" text-anchor="middle">verify</text><text x="166" y="54" text-anchor="middle" fill="var(--ink-faint)">19 of 21</text>
+    <rect x="228" y="26" width="96" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="276" y="41" text-anchor="middle">close</text><text x="276" y="54" text-anchor="middle" fill="var(--ink-faint)">verified</text>
+    <rect x="338" y="26" width="96" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="386" y="41" text-anchor="middle">learn</text><text x="386" y="54" text-anchor="middle" fill="var(--ink-faint)">5 diffs</text>
+    <rect x="448" y="26" width="96" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="496" y="41" text-anchor="middle">clerk</text><text x="496" y="54" text-anchor="middle" fill="var(--ink-faint)">24 precedents</text>
+    <rect x="558" y="26" width="154" height="34" fill="var(--panel-2)" stroke="var(--verified)"/><text x="635" y="41" text-anchor="middle">consolidate</text><text x="635" y="54" text-anchor="middle" fill="var(--ink-faint)">51 candidates</text>
+    <line x1="106" y1="43" x2="115" y2="43" stroke="var(--verified)" marker-end="url(#a5)"/>
+    <line x1="216" y1="43" x2="225" y2="43" stroke="var(--verified)" marker-end="url(#a5)"/>
+    <line x1="326" y1="43" x2="335" y2="43" stroke="var(--verified)" marker-end="url(#a5)"/>
+    <line x1="436" y1="43" x2="445" y2="43" stroke="var(--verified)" marker-end="url(#a5)"/>
+    <line x1="546" y1="43" x2="555" y2="43" stroke="var(--verified)" marker-end="url(#a5)"/>
+
+    <line x1="635" y1="64" x2="635" y2="104" stroke="var(--break)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ab5)"/>
+    <rect x="470" y="108" width="242" height="46" fill="none" stroke="var(--break)" stroke-width="2" stroke-dasharray="5 4"/>
+    <text x="591" y="128" text-anchor="middle" fill="var(--break)">assemble a batch</text>
+    <text x="591" y="144" text-anchor="middle" fill="var(--break)" font-size="10">cannot write its sealed key &#183; report-001 F-1</text>
+
+    <text x="8" y="130" fill="var(--ink-faint)" font-size="10.5">7 candidates due &#183; 11 drift entries open</text>
+    <text x="8" y="146" fill="var(--ink-faint)" font-size="10.5">9 scenario cards unranked &#183; 24 precedents, 23 not checkable</text>
+
+    <rect x="8" y="176" width="704" height="56" fill="none" stroke="var(--break)" stroke-dasharray="4 3"/>
+    <text x="360" y="198" text-anchor="middle" font-size="13" fill="var(--break)">0 adopted, across two complete contracts</text>
+    <text x="360" y="218" text-anchor="middle" font-size="10.5" fill="var(--break)">the standard is byte-identical to the day it was installed</text>
+  </g>
+</svg>
+<p class="cap">Every stage ran. The output of every stage accumulated. One broken write stands
+between all of it and a skill.</p>
+</div>
+
+<h2>Three things about what the machine collects</h2>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-4</span><span class="chip c-open">Open</span>
+    <h3>The candidate count partly measures corrections, not learning</h3></div>
+  <p>Each correction becomes an observation, which becomes a candidate. Eight corrections clerked
+  today became eight candidates. So a meaningful share of the fifty-one is the correction log one
+  step along, and the count reads as <em>how often the pioneer intervened</em> rather than
+  <em>how much the work taught</em>.</p>
+  <p>More pointedly: <strong>all eight of those record a violation of a rule the skill already
+  states.</strong> The rule about never leaving an id to stand alone was in the always-loaded file
+  when it was broken. They carry high certainty and contradict nothing — because the standard was
+  already right and was not followed. A standard cannot learn from those. They are evidence about
+  adherence, filed where evidence about the standard goes.</p>
+</div>
+
+<div class="finding ver">
+  <div class="fhead"><span class="fid">F-5</span><span class="chip c-ver">Verified</span>
+    <h3>The learning diff is the one route that makes a candidate due on its own</h3></div>
+  <p>A candidate is normally held until a sighting from a different reading arrives. A candidate
+  born from a <strong>verified learning diff</strong> is due immediately, regardless of sighting
+  count — because the diff is itself a second reading: the contract's prediction against what
+  verification found.</p>
+  <p>That is the only route in the kit by which a lesson learned <em>once</em> can reach the pioneer.
+  Everything else waits for recurrence. Two of today's seven due candidates arrived this way, and
+  they are the two that cost the most to learn. <strong>Worth knowing it is load-bearing</strong>,
+  because it is the difference between a standard that absorbs a hard lesson and one that waits for
+  the lesson to repeat.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-6</span><span class="chip c-open">Open</span>
+    <h3>Twenty-three of twenty-four precedents are "not checkable"</h3></div>
+  <p>Every precedent clerked from this project's corrections names a judgement — presentation
+  clarity, sequencing, prioritisation, depth of understanding — and is marked as no fixed shape a
+  script could verify. <strong>The casebook can instruct a future contract and cannot stop
+  anything.</strong></p>
+  <p>That may be correct and inherent. It is worth stating plainly all the same, because the
+  practice's own line is that a check stops what it can and the human stops the rest — and in this
+  project, as measured, the human stops almost all of it.</p>
+</div>
+
+<h2>What this report does not establish</h2>
+
+<table>
+  <tr><th style="width:15rem">Question</th><th>Why it stayed open</th></tr>
+  <tr><td>What is the right turn budget?</td>
+    <td>Not derived. F-1 shows the current ones fail and that the cost tracks record size; it does
+    not say what would work, and a larger constant would fail later rather than differently.</td></tr>
+  <tr><td>Does the seal fail the same way in a project that has never hit it?</td>
+    <td>Untested. It has failed once here, at 0.24, and the deny rule and write scope are unchanged
+    through 0.27. No batch has been attempted since.</td></tr>
+  <tr><td>Is the blocked state correct in use?</td>
+    <td>Never exercised. The digest made the audit possible, so nothing was recorded blocked. The
+    vocabulary exists and is unproven.</td></tr>
+  <tr><td>Would the walk catch any of this?</td>
+    <td>It passes 56 states and its fixture still carries no <code>settings.json</code>, no
+    <code>kit-sealed</code> and no agents — so it cannot reach F-1, F-2 or F-3.</td></tr>
+  <tr><td>How much of the day's output is thin?</td>
+    <td>Not audited. Report-004 documented three cases of reasoning outrunning reading; the same
+    thinness may sit under work nobody questioned.</td></tr>
+</table>
+
+<div class="judgement">
+  <h3>Recommendation &mdash; judgement, not finding</h3>
+  <ol class="rec">
+    <li><strong>Fix the seal.</strong> Unchanged through three releases and three reports. Fifty-one
+      candidates, seven due, eleven drift entries and nine scenario cards sit behind one write that
+      cannot happen. Everything else here is secondary to it: the lifecycle now runs end to end and
+      empties into a room with no door.</li>
+    <li><strong>Give the gate a notion of work in flight.</strong> One concept resolves all three
+      faces of F-2 — a task in progress, a task awaiting a human, and a queue with depth. Without
+      it, the repetition detector will keep advising that completed work be recorded as failed.</li>
+    <li><strong>Make agent budgets a function of what must be read.</strong> Or make what must be
+      read bounded — an index, a window, a working set. A constant cannot work against a record that
+      grows monotonically, and the failure mode is silence with the work done and unwritten.</li>
+    <li><strong>Reconcile <code>G2-migration.sh</code> with contract-018's rule</strong> (F-3).
+      Either the check reads <code>type</code>, or the rule drops its exemption. Today there is no
+      state a project can be in that satisfies both.</li>
+    <li><strong>Consider whether corrections should become candidates at all</strong> (F-4) — at
+      least where the correction is a breach of a rule the standard already states. Those are
+      adherence evidence. Filing them as proposed standards inflates the queue the pioneer must
+      clear with items that propose nothing.</li>
+  </ol>
+</div>
+
+<h2>Provenance</h2>
+<p style="font-size:.88rem;color:var(--ink-soft)">Written by the agent that ran the day, so the
+account of its own failures is self-reported and report-004 covers those directly. Figures come from
+commands run at the time of writing: 53 observations, 51 candidates, 7 due, 0 adopted, 26
+corrections, 24 precedents of which 23 are not checkable, 9 scenario cards and 11 drift entries, all
+parsed from this project's records; the <code>G2-migration</code> failure is its live output; the
+exhaustion tally is from this session's seven task notifications, with each agent's budget read from
+its own frontmatter; the digest figures from running <code>transcript-digest.sh</code>. The
+<code>install.sh</code> and stale-rule confirmations are from an upgrade rehearsal logged at
+<code>docs/reports/rehearsal-0.27-2026-09-20.md</code>. Fifth in a series with
+<span class="mono">report-001</span> through <span class="mono">report-004</span>.</p>
+
+</div>

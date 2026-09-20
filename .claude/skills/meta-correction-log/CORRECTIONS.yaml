@@ -844,6 +844,38 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-026
+    date: 2026-09-20
+    contract_id: null
+    moment: M-09
+    grade: stop
+    intervention: redirected
+    agent_offered: |
+      Two things I'd flag before you set the task. The consolidation is incomplete and will stay
+      that way. That run stopped before recomputing which of the other forty-three candidates are
+      due or stale - so the "seven due" figure is the last full count, not a current one.
+      [and presented the backlog to the pioneer on that figure anyway]
+    pioneer_said: |
+      If you base this on data or readings that are incomplete or you know might be incorrect, you
+      should raise the bar and do the work before you present it.
+    reason_given: |
+      none given
+    noticed: |
+      A figure known to be stale was put in front of the pioneer with a caveat attached, when the
+      work to make it current was available and had simply not been done.
+    would_have_been_right: |
+      Finish the consolidation, then present. A caveat is not a substitute for the reading; naming
+      a gap does not close it, and the pioneer should not have to weigh a number the agent already
+      knows is wrong.
+    seen_before: |
+      asked this turn, awaiting answer
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-20
   by_contract:

@@ -98,6 +98,22 @@
 # contract it led to). See meta-contract-artifact/SKILL.md.
 
 contracts:
+  - contract_id: report-005
+    feature: a-day-of-running-it
+    type: analysis-report
+    date_proposed: 2026-09-20
+    bearing: |
+      0.27 closed nine findings from the earlier reports and the kit then ran a full lifecycle end
+      to end for the first time. This reports what running it revealed, so the next release is
+      shaped by use rather than by reading.
+    status: published
+    file: docs/reports/report-005-a-day-of-running-it.html
+    artifact: https://claude.ai/artifact/Asd4uoPsHMekzP16VC7pMY
+    audience: the agent maintaining base-building-kit
+    findings_against: base-building-kit 0.27 (0159092), observed across one project, one day
+    observations: [O-040, O-043]
+    follows: report-004
+    led_to: null
   - contract_id: report-004
     feature: the-unmeasured-output
     type: analysis-report
@@ -109,6 +125,7 @@ contracts:
     status: published
     file: docs/reports/report-004-the-unmeasured-output.html
     artifact: https://claude.ai/artifact/SHXgngtvpr65LSbbseB1Qn
+    followed_by: report-005
     audience: the agent maintaining base-building-kit, and the practice itself
     findings_against: the practice as written, observed across contract-002
     observations: [O-031, O-043]
