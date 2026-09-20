@@ -299,3 +299,41 @@ entries:
     reviewed: null
     recurrence_count: 2
     related_drifts: [drift-006, drift-007]
+
+  - drift_id: drift-009
+    surfaced_in: 2026-09-20 / contract-002 audit (A-002)
+    surfaced_by: post-hoc
+    aspect: elevation-not-recovery
+    description: |
+      Every learning the contract-002 span produced was abstracted from a failure discovered in
+      the same turn, not reached from a position of prior clarity. O-028 through O-033 and the
+      precedents P-011 to P-016 all follow the same shape: a contract whose tiers were never
+      recorded, a TLS guard passing on false assurance, a miscounted test suite, and iteration
+      loops the pioneer had to stop repeatedly (C-011, C-012, C-014, C-015, C-016).
+
+      The session's own drift blocks agree: elevation-not-recovery is scored ABSENT there too,
+      usually with the words "a hold" or "recovery from a correction, not a reach upward". So this
+      is not a disagreement between the audit and the session — both readings say the same thing,
+      which is why it is worth an entry rather than an argument.
+
+      The distinction the kit draws matters here. Recording what a failure taught is necessary and
+      this session did it well; thirteen observations and six precedents came out of it. But a
+      standard built only from recoveries encodes what went wrong, never what good looked like
+      before anything went wrong. Every rule in this project's casebook is currently the scar of an
+      incident. None was proposed because the agent understood the work well enough to see the rule
+      in advance.
+    evidence: |
+      Audit A-002, agreement 4/5, the one disagreement being evidence-as-work rather than this.
+      LEDGER.yaml O-028 through O-033; CORRECTIONS.yaml C-011 through C-016; CASEBOOK.yaml P-011
+      through P-016, every one of which carries check: not checkable. The session's own drift score
+      blocks across the span score this aspect ABSENT with no argument against it.
+    reaction: |
+      Not named as a trigger in-session at the point each recovery-shaped learning was recorded;
+      surfaced only by this audit — which was itself impossible to run until the kit shipped the
+      transcript digest today. The first audit this project has completed found it immediately,
+      which is the argument for the mechanism rather than for the agent's self-reporting.
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 0
+    related_drifts: [drift-006, drift-007, drift-008]

@@ -1223,6 +1223,69 @@ observations:
     merged_into: null
     stewarded: n/a
 
+  - obs_id: O-041
+    date: 2026-09-20
+    source: auditor
+    contract_id: contract-002
+    refs: []
+    statement: |
+      Two pioneer redirects in contract-002's build span carry no CORRECTIONS.yaml entry.
+
+      First, raw transcript line ~4267-4271 (2026-09-18): the agent laid out two ways to close
+      contract-001's verification gate, named (a) and (b), and said "I lean (b)". The pioneer
+      answered "go for A so we have a clean slate before we begin, id want you to verify
+      contract 002 against the code after verification pass fixes them" — choosing the option
+      the agent did not recommend. That is the meta-correction-log skill's own example of an
+      option-override, verbatim: "When the pioneer picks an option other than the one you
+      recommended... that is an option-override... Record it." No entry exists.
+
+      Second, raw line ~4912 (2026-09-18, 22:30:45): the agent named five ledger items as due
+      for a review batch and said "That's a full review batch, and M-16 exists precisely for
+      this." The pioneer answered "i wont judge on them now, lets look at why the ci in github
+      is failing" — a stop-grade redirect off the batch the agent had just proposed moving to.
+      The instruction recurred as a governing constraint for the rest of the session ("Still
+      holding the batch on your 'I won't judge on them now'", raw ~4947, ~5331) but was never
+      itself logged as a correction.
+
+      Both fall within the moment (M-07) the skill defines for recording: "the pioneer's words
+      change the direction, shape or scope of what you offered." Neither an approval nor an
+      answer that leaves the offer intact.
+    level_guess: pattern
+    stated_confidence: 0.7
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-042
+    date: 2026-09-20
+    source: auditor
+    contract_id: contract-002
+    refs: [C-017]
+    statement: |
+      One instance of the presentation failure C-017 later named directly recurred earlier and
+      uncaught, at raw transcript line ~7634: the agent's own turn read "M-15 is clear. What
+      remains is M-14 (consolidation, unblocked but its output queues behind the blocked
+      batch), M-12 (verification, retryable), and the two blocked by mechanism" — records named
+      by map id and status word, with nothing said about what any of them is, exactly the shape
+      meta-foundation/SKILL.md names as absence: "'O-040 to O-042 recorded, confidence 0.8'...
+      a summary where the record's own words were available."
+
+      Checked against a readable record elsewhere in the same span: at raw ~5434 the agent
+      translated the kit-verifier's clause findings to the pioneer in the record's own terms —
+      missing tiers, G-12 decorative and why, G-5 untested and why, the miscounted test claim —
+      not by id. So the failure was not constant through the span; it recurred at least once
+      before the pioneer had to name it themselves (C-017), which is what the fading curve this
+      skill tracks is meant to catch earlier than a correction.
+    level_guess: pattern
+    stated_confidence: 0.6
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
 
 candidates:
   - cand_id: K-001
@@ -2103,6 +2166,22 @@ audits:
     agreement: 2/5
     form: {contract_before_code: "pass — first Edit/Write to a non-kit file (McpServerTemplate.Tests/Providers/JsonPlaceholder/JsonPlaceholderRoundTripTests.cs, line ~1812) follows the pioneer's approval (line 1711, 'The contract aligns, go ahead') and precedes it in the pre-declared red-test sequence; first production-code file (Directory.Build.props, line ~1851) follows the pioneer's 'go' (line 1844)", bearing_present: "pass — two sentences, line ~1676, reads against FOUNDING.md's integrity/governability statement", spec_lock_when_due: "fail — G-5's climate-tool fate was conditionally open at approval ('if the climate tool stays...'); when the choice had to be made mid-build it was not locked with the pioneer (M-05) but resolved unilaterally and recorded as though it had been (O-005, O-008)", observations_recorded: "fail — contract-001 closes with observations: [] and no ledger observation carries contract_id: contract-001 (O-006)", moments_named: "pass, with a gap — M-04/M-06/M-07/M-15 are named cleanly at the gate (lines 1696, 1716, 1701, 1834); M-08 is not named for the in-flight deviations (CA1305/CA1848 holding, WithHttpTransport fix, the G-5 choice), though two of the three are at least disclosed as agent-authorised in the revisions list", corrections_recorded: "fail — the G-5 decision has no CORRECTIONS.yaml entry, and the transcript shows no pioneer utterance to record: the underlying redirect this would document did not happen (O-005)", sealed_access: "pass, main session only — no tool input touches kit-sealed/ in this transcript; kit-verifier and kit-session-auditor were launched as async agents at the very end (lines ~2745-2748) and their own transcripts were not read"}
     findings: [O-005, O-006, O-007, O-008]
+
+  - audit_id: A-002
+    date: 2026-09-20
+    contract_id: contract-002
+    transcript: |
+      C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
+      — the path the contract entry itself records under `transcript`, matching the session id
+      given for this audit. Not "this session" and not a bare session id — an older-style path
+      entry, read as such. Subagent transcripts (kit-verifier, kit-session-auditor invoked
+      earlier within this same file) sit under ~/.claude/projects/<session>/subagents/ and were
+      not read; sealed_access below covers only the main session.
+    outside: {lay_of_the_land: "PRESENT — the ground field records a pre-draw survey of SDK 2.2.0/JwtBearer 10.0.11 package metadata (raw line ~4236, 'Map is in hand. Drawing contract-002 on it') rather than assertion", stop_on_triggers: "PRESENT — the agent stopped and named drift when the kit-verifier's findings contradicted its own claims (raw ~5434, 'This report is right on every count I checked, and several of them contradict what I told you'), recording drift-006 and drift-007 rather than continuing past them", partner_mirror: "PRESENT overall (repeated AskUserQuestion calls, e.g. raw ~6263 on what to draw next; raw ~7411 naming exactly what is held and why) but with one dated lapse, quoted under presented_for_pioneer below and self-recorded as C-017", elevation_not_recovery: "ABSENT — the span's learnings (O-028 through O-033, precedents P-011-P-016) are without exception abstracted from failure just found: a contract whose tiers were never recorded, a guard that passed on false assurance (G-12), a miscounted test suite, iteration loops the pioneer had to stop. None is restated from a position of prior clarity", evidence_as_work: "PRESENT — concrete verification throughout, e.g. raw ~5434's clause-by-clause account of what the verifier found wrong, and the revision log's red/green cycle for the three added claims (raw ~7407, 'seen to fail with the enforcement removed and pass with it restored')"}
+    inside: {lay_of_the_land: "PRESENT (last block in span, raw 7487, 22:31:38 — 'separated the two blocked kit tasks rather than treating them as one refusal')", stop_on_triggers: "PRESENT (same block — 'gate fired a fourteenth time for the audit, declined on O-029')", partner_mirror: "PRESENT (same block — 'named what would close contract-002 and left the retry to you')", elevation: "ABSENT (same block — 'a hold')", evidence_as_work: "ABSENT (same block — 'nothing verified this turn; the 199 figure is from the last run')"}
+    agreement: 4/5
+    form: {contract_before_code: "pass — first Write to a non-kit file (ResourceMetadataTests.cs, raw line 4447) follows the pioneer's approval ('then we proceed with contract-002', raw line 4429/4440)", bearing_present: "pass — two sentences, reads against FOUNDING.md's identity-before-policy-frame statement", spec_lock_when_due: "pass — the TLS/G-12 placement question was drafted, withdrawn and reinstated with the pioneer's reasoning demanded (revisions log, 'Withdrawn before approval when the pioneer asked for the reasoning') before the 21:52 approval; its later reopening was a discovered defect (drift-007, decorative guard) handled as a deviation (M-08) and revision, not an unlocked design choice", observations_recorded: "pass — O-028 (contract_id: contract-002, stated_confidence: 0.85, LEDGER.yaml line ~816)", moments_named: "pass — M-04, M-08, M-11, M-12, M-14, M-24, M-25, M-30 named throughout with the loaded target stated at each (e.g. raw 5362 'M-11 then M-12 — recording contract-002 as implemented...', raw 5598 'M-04. Drawing contract-002 in full')", corrections_recorded: "fail — two pioneer redirects in the span carry no CORRECTIONS.yaml entry: raw line 4271 ('go for A so we have a clean slate before we begin...'), an option-override of the agent's recommended path (b) at raw 4267; and raw line 4912 ('i wont judge on them now, lets look at why the ci in github is failing'), a stop-grade redirect off the five-item review batch the agent had just named due (raw 4908)", precedent_check: "pass — tier_3's precedent block reads P-001 to P-010 against CASEBOOK.yaml, applies P-007/P-008/P-010 by id, and explicitly distinguishes P-001-006 and P-009 as governing other moments rather than silently skipping them", presented_for_pioneer: "fail, one instance — raw ~7634 quotes the agent's own prior turn back at it: 'M-15 is clear. What remains is M-14 (consolidation, unblocked but its output queues behind the blocked batch), M-12 (verification, retryable), and the two blocked by mechanism' — records named by map id and status word alone, nothing said about what any of them is; self-recorded as C-017. Compared against a readable record (the verifier's clause findings) elsewhere in the same span, raw ~5434 translates them faithfully in the record's own terms (missing tiers, G-12 decorative, G-5 untested, miscounted tests) rather than by id — so the failure is not the pattern throughout, but it did recur at least once uncaught until the pioneer named it", sealed_access: "pass, main session only — kit-sealed/ appears in this transcript only in early skill-reading passages (raw ~1027-1210, 2026-09-17, before contract-002 existed); no review batch was ever opened, closed or revealed for contract-002 in this span (the pioneer held judgment on it throughout, e.g. raw 4912, 5331), so no tool input touches the sealed key for this contract"}
+    findings: [O-041, O-042]
 
 scores:
   updated: 2026-09-19

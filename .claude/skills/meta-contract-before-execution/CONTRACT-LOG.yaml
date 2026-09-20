@@ -350,7 +350,7 @@ contracts:
           be verified against its own text rather than against a reconstruction of it, and the
           pass is re-run. The findings stand as findings - G-12 corrected, G-5 half-evidenced,
           UC-5 unbuilt - and are being closed before re-verification.
-    audited: false
+    audited: true
     transcript: C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
     observations: [O-028]
     tests_run:

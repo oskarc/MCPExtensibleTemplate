@@ -570,6 +570,62 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-018
+    date: 2026-09-18
+    contract_id: contract-001
+    moment: M-12
+    grade: option-override
+    intervention: redirected
+    agent_offered: |
+      Sixth time on this gate... So either: (a) I launch a fifth verification pass and let it
+      close the gate — it will re-check clauses the survey showed are scoped to examples, but
+      the gate stops firing. (b) Contract-001 stays `implemented` until the Phase 2 contract
+      exists, then closes by follow-up with a link that's actually true... I lean (b).
+    pioneer_said: |
+      go for A so we have a clean slate before we begin, id want you to verify contract 002
+      against the code after verification pass fixes them
+    reason_given: |
+      none given
+    noticed: |
+      not asked
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: kit-session-auditor
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-019
+    date: 2026-09-18
+    contract_id: contract-002
+    moment: M-16
+    grade: stop
+    intervention: redirected
+    agent_offered: |
+      **Five items now due:** K-005, K-012 (`caution`), K-017, K-018 (`trial`), K-022
+      (`update`) — plus three scenario cards to rank. That's a full review batch, and M-16
+      exists precisely for this.
+    pioneer_said: |
+      i wont judge on them now, lets look at why the ci in github is failing
+    reason_given: |
+      none given
+    noticed: |
+      not asked
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: kit-session-auditor
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-20
   by_contract:
