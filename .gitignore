@@ -20,3 +20,4 @@ logs/
 
 # Test run artifacts (trx, coverage) — produced by dotnet test, never source.
 TestResults/
+.claude/skills/meta-ledger/.session-started
