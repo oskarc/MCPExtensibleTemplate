@@ -337,3 +337,49 @@ entries:
     reviewed: null
     recurrence_count: 0
     related_drifts: [drift-006, drift-007, drift-008]
+
+  - drift_id: drift-010
+    surfaced_in: 2026-09-20 / contract-002 verification
+    surfaced_by: kit-verifier
+    aspect: evidence-as-work
+    description: |
+      Tier 4 was revised twice after a verification report, which the contract log's own schema
+      names as drift: "A revision with tests dated after verification.date is drift (M-18), never
+      applied." Both revisions are dated 2026-09-20 and the report they postdate is dated
+      2026-09-19.
+
+      T-2, when the P1.1 claim enforcement was added: three cases appended for sub, client_id and
+      iat. Purely additive — the six original cases are byte-identical — and every one was seen to
+      fail with the enforcement removed. It is still a test changed after the report that tested
+      its clause.
+
+      T-12, when G-12 was narrowed: the assertion was inverted in the same commit that changed the
+      behaviour it describes (1f0c8d4). Two cases that asserted a certificate setting satisfies the
+      guard were replaced by one asserting it is refused. The verifier ran T-12 as it stood before
+      that edit and it failed, correctly.
+
+      The rule is not about authorisation. Both revisions were the pioneer's and both are
+      improvements — the verifier says so itself. It is about evidence order: a test edited after
+      the report that rested on it cannot be the evidence for its clause, because a failing test
+      can always be made to pass by editing it. Changing the assertion in the same commit as the
+      behaviour is the exact shape the rule exists to catch, and I did it without noticing that a
+      verification report already stood against that clause.
+
+      The transferable point: an approved revision is still evidence that has to be ordered. The
+      question "may I change this?" was answered by the pioneer; the question "does the evidence
+      still stand once I do?" was never asked, and only a verifier reading dates could ask it.
+    evidence: |
+      kit-verifier report of 2026-09-20: 19 verified, 0 corrected, 2 open; G-1 and G-12 both open
+      as "Tier 4 revised after the report - drift (M-18), not applied". T-12 recorded as the one
+      test not passing when run as it stood. Commits: c878f79 (T-2 cases added), 1f0c8d4 (T-12
+      assertion inverted alongside TransportSecurityGuard.cs). Contract-002's revisions carry
+      tests_changed [T-2] and [T-12], both dated 2026-09-20 against verification.date 2026-09-19.
+    reaction: |
+      Not noticed in session. Both revisions were recorded correctly, with their tests_changed
+      fields filled in honestly — which is what made the drift detectable at all. Put to the
+      pioneer with the three ways M-12 allows the contract to be closed.
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 1
+    related_drifts: [drift-007, drift-009]
