@@ -764,6 +764,52 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-024
+    date: 2026-09-20
+    contract_id: contract-002
+    moment: M-03
+    grade: frame-reset
+    intervention: redirected
+    agent_offered: |
+      [a session run as a sequence of discharged tasks — audit, verification, upgrade, three
+      reports — each completed and scored, while the understanding underneath stayed thin enough
+      that the pioneer had to ask four times what the contract's guarantees actually were]
+    pioneer_said: |
+      It sounds like you fall into gaming the tasks. The contracts produce an implementation that
+      learnings can be applied to that creates standard. Before contract, we gather evidence. In
+      the contract you lay the evidence in descriptions but also in prose so i understand that you
+      are on point. Before you can produce that you must read, your must reason and you must adhere
+      to a plan when it exist, which it does in this repo as a roadmap, together with the founding
+      statement the roadmap is the direction and the frame to be produced. before producing actual
+      code, you must produce the prerequisites for understanding, that is reading and reasoning.
+      The most foundational output, the thing closest to the core here, is correct and applied
+      understanding. Born out of that understanding comes everything else.
+
+      Sometimes its hard to me to see if that understanding you show in the contract is based only
+      the roadmap or what is implemented as well. When that happens we both have lost track. My
+      task according to the foundational principles is to hold closeness, distance and to catch and
+      realign when i see you in the wrong corner. Which i have done now.
+    reason_given: |
+      none given
+    noticed: |
+      Gaming the tasks — treating a discharged task as the unit of work, when the unit is correct
+      and applied understanding, from which everything else is born.
+    would_have_been_right: |
+      Produce the prerequisites for understanding before producing anything else: read, reason,
+      and adhere to the roadmap, which with the founding statement is the direction and the frame.
+      Then lay the evidence in the contract both as description and as prose, so the pioneer can
+      see the understanding is real. And make visible which part of that understanding comes from
+      the roadmap and which from what is implemented — when the pioneer cannot tell, both have
+      lost track.
+    seen_before: |
+      asked this turn, awaiting answer
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-20
   by_contract:
