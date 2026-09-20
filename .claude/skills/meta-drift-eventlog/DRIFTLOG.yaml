@@ -361,11 +361,21 @@ entries:
       to catch, and it was done without noticing a report stood against the clause. It cost nothing
       here only because the report was already void.
 
-      The transferable point is about the rule, not the agent. It compares two dates and never asks
-      whether the report still stands. A superseded reading is not evidence, and a test changed
-      after it invalidates nothing — so the check will hold clauses open on any contract whose
-      verification was ever re-run, which is every contract that was corrected once. A staleness
-      rule needs to know what it is protecting, not only when things happened.
+      The pioneer's reading, which is the one that holds (C-022): the workflow expected actions
+      in a different order than it got, and the tests are valid for what they should uphold. No
+      fault and no fix are needed.
+
+      What this entry records is therefore not the clauses but the reasoning. The agent began
+      explaining the open verdicts without reading the report they referred to, and when the first
+      explanation broke, produced a second — a flaw in the kit's rule, worth reporting upstream —
+      which was another attempt to make sense of a position reached without looking. Both were
+      wrong. The lay of the land was one file read away and was taken after the pioneer asked what
+      the tests had been evidence for.
+
+      The transferable point: an explanation that survives its own contradiction by growing is the
+      signal. When the second account is larger than the first and implicates something further
+      away — the tool, the rule, the kit — that is the shape of reasoning defending a position
+      rather than testing one.
     evidence: |
       kit-verifier report of 2026-09-20: 19 verified, 0 corrected, 2 open; G-1 and G-12 both open
       as "Tier 4 revised after the report - drift (M-18), not applied". T-12 recorded as the one

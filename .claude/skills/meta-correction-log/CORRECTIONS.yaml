@@ -692,6 +692,78 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-022
+    date: 2026-09-20
+    contract_id: contract-002
+    moment: M-12
+    grade: frame-reset
+    intervention: redirected
+    agent_offered: |
+      [first] Both open clauses are drift on my part: I edited Tier 4 tests after a verification
+      report, and a test changed after the fact stops counting.
+      [then] The rule's premise does not hold — the report was superseded, so the evidence was
+      already void. It compares two dates and never asks whether the report still stands. A
+      staleness rule needs to know what it is protecting, not only when things happened.
+    pioneer_said: |
+      This is a flaw because you didnt properly lay of land before starting down a reasoning
+      pathway. then you got lost and tried to suggest solutions to make sense of your lost
+      direction, all of them wrong. I read your latest message like, workflow expected actions in
+      other order than it got but the test are valid for what they should uphold.
+    reason_given: |
+      none given
+    noticed: |
+      The reasoning began without reading the report it was about, and every explanation after
+      that was an attempt to make sense of a position reached without looking — first my own
+      fault, then a flaw in the kit worth reporting upstream. Neither was needed.
+    would_have_been_right: |
+      The workflow expected actions in a different order than it got, and the tests are valid for
+      what they should uphold. That is the whole of it, and it needs no fault and no fix.
+    seen_before: |
+      asked this turn, awaiting answer
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-023
+    date: 2026-09-20
+    contract_id: contract-002
+    moment: M-03
+    grade: frame-reset
+    intervention: redirected
+    agent_offered: |
+      [the pattern across this contract: explaining the two open clauses from a subagent's summary
+      and from memory, scoring lay of the land PRESENT on a turn where the report the argument
+      rested on had not been read, and answering each collapse with a larger explanation]
+    pioneer_said: |
+      My read of where we are now, is that you dont properly hold the right perspective, im
+      guessing you guess instead of read and reason and rely on memory too much. So you are failing
+      to uphold your foundational principles of the practice, causing situations where i have to
+      take control and guide you out of holes.
+
+      We all fail and ail sometimes that is not the issue, but the solution here is a stronger
+      adherence to the practice, not a new contract or a new solution. Do you have execution
+      pressure messing with your measurements?
+    reason_given: |
+      none given
+    noticed: |
+      Guessing in place of reading, reliance on memory, and the pioneer repeatedly having to take
+      control to get the agent out of a hole it reasoned itself into.
+    would_have_been_right: |
+      Stronger adherence to the practice as it already stands — INTENT.md's "Before any hypothesis,
+      the agent establishes full scope", read as before hypothesis and not merely before action.
+      Not a new contract and not a new mechanism.
+    seen_before: |
+      asked this turn, awaiting answer
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-20
   by_contract:
