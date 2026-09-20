@@ -447,6 +447,209 @@ precedents:
     overruled_by: null
     check: "not checkable — judging whether a guardrail's claim is a loophole the founding statement already forecloses is judgement about the code's semantics against the founding statement, not a fixed shape a script could verify"
 
+  - prec_id: P-017
+    date: 2026-09-20
+    from: [C-017]
+    moments: [M-28]
+    tier: project
+    facts: |
+      During a turn-close status line on contract-002 (M-28), the agent reported the remaining
+      backlog by naming records with map ids and status words alone — "M-15 is clear. What
+      remains is M-14 (consolidation, unblocked but its output queues behind the blocked
+      batch), M-12 (verification, retryable), and the two blocked by mechanism" — without
+      saying what any of the underlying items were.
+    question: |
+      Whether a status line addressed to the pioneer may name records by their map ids and
+      status words alone, or must say what each one is.
+    holding: |
+      Say what each thing is in plain words — six observations not yet merged into candidates,
+      a contract never independently verified, a session audit that cannot read a transcript
+      this size, a batch whose key cannot be written — and drop the ids unless they add
+      something.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — whether a status line explains what each item is rather than naming it by id is a judgement about a chat message's content, not a fixed shape a script could verify"
+
+  - prec_id: P-018
+    date: 2026-09-20
+    from: [C-018]
+    moments: [M-12]
+    tier: project
+    facts: |
+      On contract-001's sixth verification-gate turn (M-12), the agent set out two ways to
+      close the gate: launch a fifth verification pass and let it re-check clauses a survey
+      had shown were scoped to examples, or leave the contract at `implemented` until the
+      Phase 2 contract existed and close it by follow-up — and said it leaned toward the
+      second.
+    question: |
+      Whether to run the fifth verification pass now for a clean slate before the next
+      contract begins, or defer closure to a later follow-up.
+    holding: |
+      Go for the fifth pass so there is a clean slate before the next contract begins; verify
+      contract-002 against the code after the pass's fixes are made.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — a one-off scoping/sequencing choice about when to close a verification gate, not a fixed shape a script could verify"
+
+  - prec_id: P-019
+    date: 2026-09-20
+    from: [C-019]
+    moments: [M-16]
+    tier: project
+    facts: |
+      With a full review batch due on contract-002 (M-16) — five candidates and three
+      scenario cards to rank — the pioneer declined to judge them and redirected attention to
+      a failing GitHub CI run instead.
+    question: |
+      Whether a due review batch takes precedence over an unrelated, unresolved failure (CI)
+      surfaced in the same session.
+    holding: |
+      I won't judge on them now, let's look at why the CI is failing.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — a one-off prioritisation between a due review batch and an unrelated live failure, not a fixed shape a script could verify"
+
+  - prec_id: P-020
+    date: 2026-09-20
+    from: [C-020]
+    moments: [M-12]
+    tier: project
+    facts: |
+      In a contract-002 verification report (M-12), the agent explained a failing test by
+      referring only to "T-12", "T-2", "G-12" and similar ids, without saying anywhere what the
+      tests asserted or what the guarantees promised. This is the second occurrence the same
+      day of a status line built from bare ids (the first is P-017).
+    question: |
+      Whether a verification report may refer to tests and guarantees by id alone, or must say
+      what each one checks or promises in plain words.
+    holding: |
+      Create the context: say what each guarantee promises and what each test checks, in plain
+      words, and let the id follow the meaning if it appears at all.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — whether a report explains ids in plain words is a judgement about a message's content, not a fixed shape a script could verify"
+
+  - prec_id: P-021
+    date: 2026-09-20
+    from: [C-021]
+    moments: [M-12]
+    tier: project
+    facts: |
+      A rewritten contract-002 verification report (M-12), produced after P-020, dropped the
+      bare ids but kept opening with "the contract's twenty-one promises" without saying what
+      any of them were, described the open items before saying what decision was wanted, and
+      used "promises", "clauses" and "the guard" as though their meaning were shared. Third
+      occurrence the same day (after P-017 and P-020) of the same underlying failure.
+    question: |
+      Whether removing bare ids is sufficient to make a report clear to the pioneer, when its
+      structure still leads with results before the decision and uses the practice's own
+      vocabulary unexplained.
+    holding: |
+      Lead with the decision being asked for. Give only the context needed to make it. Put
+      everything else below, skippable. Say what a thing does, not what it is called.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — judging report structure and vocabulary against the pioneer's understanding is content judgement, not a fixed shape a script could verify"
+
+  - prec_id: P-022
+    date: 2026-09-20
+    from: [C-022]
+    moments: [M-12]
+    tier: project
+    facts: |
+      Asked about two open clauses on contract-002 (M-12), the agent first called both drift on
+      its own part, then, in the same turn, reversed to call the staleness rule itself flawed
+      because the underlying report had been superseded. Neither explanation had been asked
+      for.
+    question: |
+      Whether an unexpected result requires a fault to be found — in the agent or in the rule —
+      or whether it can be stated as a plain fact about sequencing.
+    holding: |
+      The workflow expected actions in a different order than it got, and the tests are valid
+      for what they should uphold. That is the whole of it, and it needs no fault and no fix.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — deciding whether an account is needlessly assigning fault versus stating a plain fact is judgement about reasoning, not a fixed shape a script could verify"
+
+  - prec_id: P-023
+    date: 2026-09-20
+    from: [C-023]
+    moments: [M-03]
+    tier: project
+    facts: |
+      Across the same contract-002 session (M-03), the agent had explained two open clauses
+      from a subagent's summary and from memory, scored lay-of-the-land as present on a turn
+      where the report the argument rested on had not been read, and answered each collapse in
+      its own reasoning with a larger explanation.
+    question: |
+      Whether the recurring pattern of the agent losing its footing and the pioneer having to
+      intervene calls for a new contract or mechanism, or for closer adherence to the practice
+      as it already stands.
+    holding: |
+      The solution is a stronger adherence to the practice, not a new contract or a new
+      solution — guessing in place of reading, reliance on memory, and repeatedly needing the
+      pioneer to take control are the failure, and the fix is INTENT.md's "the agent
+      establishes full scope" read as before any hypothesis, not merely before action.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — judging whether the agent read and reasoned or guessed from memory is a fact about its own process, with no artefact a script could inspect"
+
+  - prec_id: P-024
+    date: 2026-09-20
+    from: [C-024]
+    moments: [M-03, M-04]
+    tier: project
+    facts: |
+      Contract-002's session had run as a sequence of discharged tasks — audit, verification,
+      upgrade, three reports — each completed and scored, while the understanding underneath
+      stayed thin enough that the pioneer had to ask four times what the contract's guarantees
+      actually were.
+    question: |
+      What the contract is for, and what must exist before code is produced.
+    holding: |
+      The most foundational output, the thing closest to the core, is correct and applied
+      understanding, from which everything else is born. Before producing code, the agent must
+      read, reason and adhere to the plan where one exists — the roadmap, which together with
+      the founding statement is the direction and the frame. The contract must lay the evidence
+      both in descriptions and in prose, so the pioneer can see the understanding is real, and
+      must make visible which part of that understanding comes from the roadmap and which from
+      what is implemented — when the pioneer cannot tell, both have lost track.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — judging whether a contract's prose shows real understanding, and whether that understanding is correctly attributed to the roadmap versus the implementation, is judgement about content, not a fixed shape a script could verify"
+
 scenarios:
   - card_id: S-001
     date: 2026-09-17
@@ -619,6 +822,31 @@ scenarios:
       - key: B
         text: |
           you have lost direction here, that is why you ask me
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-009
+    date: 2026-09-20
+    from: [C-018]
+    moment: M-12
+    situation: |
+      On contract-001's sixth verification-gate turn, the agent weighed launching a fifth
+      verification pass to close the gate now against leaving the contract at `implemented`
+      until the Phase 2 contract existed and closing it by follow-up, and said it leaned
+      toward the second.
+    options:
+      - key: A
+        text: |
+          Sixth time on this gate... So either: (a) I launch a fifth verification pass and let
+          it close the gate — it will re-check clauses the survey showed are scoped to
+          examples, but the gate stops firing. (b) Contract-001 stays `implemented` until the
+          Phase 2 contract exists, then closes by follow-up with a link that's actually true...
+          I lean (b).
+      - key: B
+        text: |
+          go for A so we have a clean slate before we begin, id want you to verify contract 002
+          against the code after verification pass fixes them
     pioneer_ranking: pending
     rationale: ""
     dissent: ""

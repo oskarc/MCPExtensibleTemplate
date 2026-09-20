@@ -565,8 +565,8 @@ corrections:
       asked this turn, awaiting answer
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-017
     clerk_note: null
 
 
@@ -594,8 +594,8 @@ corrections:
       not asked
     supersedes: []
     recorded_by: kit-session-auditor
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-018, S-009"
     clerk_note: null
 
 
@@ -621,8 +621,8 @@ corrections:
       not asked
     supersedes: []
     recorded_by: kit-session-auditor
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-019
     clerk_note: null
 
 
@@ -655,8 +655,8 @@ corrections:
       alone" — was already loaded when this message was written.
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-020
     clerk_note: null
 
 
@@ -687,8 +687,8 @@ corrections:
       C-017 and C-020, both the same day. Third occurrence.
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-021
     clerk_note: null
 
 
@@ -722,8 +722,8 @@ corrections:
       asked this turn, awaiting answer
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-022
     clerk_note: null
 
 
@@ -759,8 +759,8 @@ corrections:
       asked this turn, awaiting answer
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: P-023
     clerk_note: null
 
 
@@ -805,6 +805,40 @@ corrections:
       asked this turn, awaiting answer
     supersedes: []
     recorded_by: main-agent
+    clerked: true
+    precedent: P-024
+    clerk_note: null
+
+
+  - corr_id: C-025
+    date: 2026-09-20
+    contract_id: null
+    moment: M-01
+    grade: stop
+    intervention: redirected
+    agent_offered: |
+      [a session of discharging one gate task per turn - audit, verify, consolidate, learn,
+      consolidate again - reporting counts as status lines, including "forty-three candidates
+      exist and none has ever been adopted", and never once putting the accumulation to the
+      pioneer as work that needs deciding before the next phase]
+    pioneer_said: |
+      If we have almost 50 candidates then we clearly have work to do with the kit before the next
+      phase, and i had to prompt you to know, which is conflicting with the meta skills line that
+      the workflow should not require a human trigger.
+    reason_given: |
+      none given
+    noticed: |
+      The pioneer had to ask where the workflow stood in order to learn that a body of kit work
+      had accumulated, which contradicts the kit's own line that the pioneer never has to invoke
+      it.
+    would_have_been_right: |
+      Surface the accumulation as a decision when it accumulates, not as a count inside a status
+      answer when asked. The gate dispatches one task per turn and says nothing about the queue
+      growing behind it; the agent can see both and is the one who must say so.
+    seen_before: |
+      asked this turn, awaiting answer
+    supersedes: []
+    recorded_by: main-agent
     clerked: false
     precedent: null
     clerk_note: null
@@ -814,15 +848,15 @@ trajectory:
   updated: 2026-09-20
   by_contract:
     - contract_id: null
-      corrections: 6
-      bearing_reevaluations: 0
-      interventions: {did-it: 0, redirected: 6, hinted: 0, reviewed-after: 0}
-    - contract_id: contract-001
-      corrections: 3
-      bearing_reevaluations: 0
-      interventions: {did-it: 0, redirected: 3, hinted: 0, reviewed-after: 0}
-    - contract_id: contract-002
       corrections: 7
       bearing_reevaluations: 0
       interventions: {did-it: 0, redirected: 7, hinted: 0, reviewed-after: 0}
-  moments: {M-27: 3, M-07: 1, M-14: 2, M-04: 3, M-12: 2, M-03: 2, M-06: 1, M-25: 1, M-24: 1}
+    - contract_id: contract-001
+      corrections: 4
+      bearing_reevaluations: 0
+      interventions: {did-it: 0, redirected: 4, hinted: 0, reviewed-after: 0}
+    - contract_id: contract-002
+      corrections: 14
+      bearing_reevaluations: 0
+      interventions: {did-it: 0, redirected: 14, hinted: 0, reviewed-after: 0}
+  moments: {M-27: 3, M-07: 1, M-14: 2, M-04: 3, M-12: 6, M-03: 4, M-06: 1, M-25: 1, M-24: 1, M-28: 1, M-16: 1, M-01: 1}

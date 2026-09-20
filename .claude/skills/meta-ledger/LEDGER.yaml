@@ -1399,6 +1399,170 @@ observations:
     stewarded: n/a
 
 
+  - obs_id: O-046
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-017]
+    statement: |
+      M-28
+
+      none of that means anything
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-047
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-001
+    refs: [C-018]
+    statement: |
+      M-12
+
+      go for A so we have a clean slate before we begin, id want you to verify contract 002
+      against the code after verification pass fixes them
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-048
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-019]
+    statement: |
+      M-16
+
+      i wont judge on them now, lets look at why the ci in github is failing
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-049
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-020]
+    statement: |
+      M-12
+
+      Again, i dont know that t-2, t12,G12 or any of the other ids mean, there is no context for me
+      to get into. The meta approach clearly states no numerals or ids, and that you should create
+      the context not assume i know every Id by name.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-050
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-021]
+    statement: |
+      M-12
+
+      you need to work harder to present it to me in a clear structured and accessible way without
+      having me translate
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-051
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-022]
+    statement: |
+      M-12
+
+      This is a flaw because you didnt properly lay of land before starting down a reasoning
+      pathway. then you got lost and tried to suggest solutions to make sense of your lost
+      direction, all of them wrong. I read your latest message like, workflow expected actions in
+      other order than it got but the test are valid for what they should uphold.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-052
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-023]
+    statement: |
+      M-03
+
+      My read of where we are now, is that you dont properly hold the right perspective, im
+      guessing you guess instead of read and reason and rely on memory too much. So you are failing
+      to uphold your foundational principles of the practice, causing situations where i have to
+      take control and guide you out of holes.
+
+      We all fail and ail sometimes that is not the issue, but the solution here is a stronger
+      adherence to the practice, not a new contract or a new solution. Do you have execution
+      pressure messing with your measurements?
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-053
+    date: 2026-09-20
+    source: pioneer
+    contract_id: contract-002
+    refs: [C-024]
+    statement: |
+      M-03
+
+      It sounds like you fall into gaming the tasks. The contracts produce an implementation that
+      learnings can be applied to that creates standard. Before contract, we gather evidence. In
+      the contract you lay the evidence in descriptions but also in prose so i understand that you
+      are on point. Before you can produce that you must read, your must reason and you must adhere
+      to a plan when it exist, which it does in this repo as a roadmap, together with the founding
+      statement the roadmap is the direction and the frame to be produced. before producing actual
+      code, you must produce the prerequisites for understanding, that is reading and reasoning.
+      The most foundational output, the thing closest to the core here, is correct and applied
+      understanding. Born out of that understanding comes everything else.
+
+      Sometimes its hard to me to see if that understanding you show in the contract is based only
+      the roadmap or what is implemented as well. When that happens we both have lost track. My
+      task according to the foundational principles is to hold closeness, distance and to catch and
+      realign when i see you in the wrong corner. Which i have done now.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17
