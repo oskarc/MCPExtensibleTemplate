@@ -1577,8 +1577,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-052
     stewarded: n/a
 
   - obs_id: O-055
@@ -1595,8 +1595,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-053
     stewarded: n/a
 
 
@@ -3400,6 +3400,61 @@ candidates:
     review_due: false
     disposition_proposed: null
     evidence_refs: ["O-053"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-052
+    created: 2026-09-20
+    statement: |
+      M-01
+
+      If we have almost 50 candidates then we clearly have work to do with the kit before the next
+      phase, and i had to prompt you to know, which is conflicting with the meta skills line that
+      the workflow should not require a human trigger.
+    level: principle
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts:
+      - file: meta-foundation/INTENT.md
+        passage: "When a hook hands you a kit task, do it. The pioneer never has to invoke the kit."
+    review_due: true
+    disposition_proposed: update
+    evidence_refs: ["O-054"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-053
+    created: 2026-09-20
+    statement: |
+      M-09
+
+      If you base this on data or readings that are incomplete or you know might be incorrect, you
+      should raise the bar and do the work before you present it.
+    level: principle
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-055"]
     helpful: {independent: 0, loaded: 0}
     harmful: {independent: 0, loaded: 0}
     independent_uses: 0
