@@ -173,3 +173,143 @@ entries:
       evidence: "diffs[2]; the untested: line against the three corrected clauses"
       observation: O-020
       human_decision: pending
+
+- work_id: work-002
+  feature: phase-1-identity
+  contract_id: contract-002
+  surfaced_in: 2026-09-20
+  states:
+    contracted:
+      approach: |
+        One bearer scheme per configured identity provider, routed on the unvalidated issuer
+        claim and pinned on arrival; a trust-domain binding tying each provider to exactly one
+        identity provider, refused at startup; scope enforcement on both listing and calling;
+        and a transport guard refusing to start in Production without TLS or a declared proxy.
+      principles_invoked: [identity-before-policy]
+      patterns_invoked: [policy-scheme-issuer-routing, startup-refusal-over-request-time-failure]
+      precedents_invoked: [P-001, P-006, P-007, P-008, P-009, P-010]
+      candidates_cited: [K-022]
+      assumptions:
+        - "Tier 4's twelve acceptance tests cover the twelve guarantees."
+        - "A guarantee whose test passes is a guarantee that holds."
+        - "TLS is a deployment concern, so the phase can be scoped without it."
+        - "The bearing read against the founding statement is enough to set scope."
+    implemented:
+      approach: |
+        As contracted, plus the forwarded-headers wiring that makes a declared proxy a proxy the
+        server actually trusts, and the in-process harness that composes the shipped server so
+        tokens can be minted against it.
+      deviations:
+        - what: TLS moved out of Phase 1 into Phase 6 as a deployment concern; withdrawn before approval when the pioneer asked for the reasoning
+          authorized: false
+        - what: UseHsts() added, named in the roadmap's Phase 1 and absent from the source
+          authorized: true
+        - what: token required to carry sub, client_id or azp, and iat, not only jti; authentication failure mapped to a named audit event
+          authorized: true
+        - what: the transport guard narrowed to the proxy branch, the Kestrel listener moved to the phase that handles it
+          authorized: true
+    verified:
+      method: mixed
+      verification_ref: contract-002 verification block, 2026-09-20, kit-verifier
+      result: partial
+      evidence: |
+        19 clauses verified, 0 corrected, 2 open. Eleven of twelve tests pass; T-12 fails when
+        run as it stood before its revision. The two open clauses are open on a date comparison
+        against a report since superseded twice, not on evidence. Closed by pioneer confirmation,
+        2026-09-20, recorded on the entry.
+  diffs:
+    - dimension: pattern
+      assumption: |
+        Tier 4's tests cover the guarantees, so a passing suite means the guarantees hold. The
+        pioneer's pre-mortem named the doubt exactly, in their words: if the tests didnt cover
+        loop holes, if the hardening has flaws.
+      discovery: |
+        The pre-mortem was correct. Three defects reached implementation with every test passing,
+        and each was found by running the server rather than by testing it: a claim-normalising
+        method that was never called, so every authenticated caller was denied every tool; the
+        enforcement filters registered in Program.cs and absent from the harness, which is what
+        hid the first; and a stack overflow on the first unauthenticated request. A fourth, the
+        transport guard accepting a certificate setting nothing reads, was found the same way.
+      learning: |
+        A test that builds its own composition tests that composition, not the program. A control
+        is not in force until something has run it in the configuration that ships and watched it
+        act. The harness omitting one registration was enough to make two guarantees
+        unfalsifiable while reading as proven.
+      node_impact:
+        - node_id: K-030
+          action: verify
+    - dimension: principle
+      assumption: |
+        The bearing, read against the founding statement, is enough to set what a phase owes.
+      discovery: |
+        A direction on the transport guard was derived from the founding statement alone - no
+        loopholes or workarounds - and concluded a branch should be deleted. The roadmap
+        specified that branch as work for this phase. The conclusion was fluent, principled and
+        contradicted the plan; it was caught by the pioneer asking what the roadmap said about
+        TLS.
+      learning: |
+        The founding statement says what the work serves; the roadmap says what that means this
+        phase. Bearing is read against the first, scope against the second, and reasoning from
+        one without the other produces a conclusion that is presentable and wrong - worse than an
+        unprincipled one, because it survives review on its tone.
+      node_impact:
+        - node_id: K-033
+          action: verify
+    - dimension: implementation
+      assumption: |
+        An authorised revision may change Tier 4, because the pioneer approved the change.
+      discovery: |
+        Two revisions carried tests_changed dated after a verification report, and the verifier
+        held both clauses open. The rule is about evidence order, not authorisation: a test
+        edited after the report that rested on it cannot be the evidence for its clause. Here the
+        premise did not hold, the report having been superseded twice, but the transport test's
+        assertion was still inverted in the same commit that changed the behaviour it describes.
+      learning: |
+        An approved revision is still evidence that has to be ordered. May I change this is the
+        pioneer's question; does the evidence still stand once I do is the agent's, and it was
+        never asked.
+      node_impact:
+        - node_id: K-039
+          action: new
+    - dimension: principle
+      assumption: |
+        A contract's guarantees, once drawn, are understood by the agent that drew them.
+      discovery: |
+        Across this contract the agent explained its own open clauses three times from summaries
+        rather than sources, each account collapsing on contact with a file one command away, and
+        could not say what the contract's twenty-one guarantees were until asked directly enough
+        to read them out. Every instrument the kit has went green throughout.
+      learning: |
+        Correct and applied understanding is the foundational output and the only one with no
+        instrument. A coherent account suppresses the impulse to check, because the agent does
+        not experience itself as not knowing - so before any hypothesis, establish full scope is
+        an epistemic rule whose trigger is absent exactly when it is needed.
+      node_impact:
+        - node_id: K-041
+          action: verify
+    - dimension: pattern
+      assumption: |
+        Identity must land before the policy frame - a policy that cannot name who is calling is
+        not a policy.
+      discovery: |
+        Held. Nineteen of twenty-one clauses verified against the contract's own text, including
+        every one of the nine user-facing use cases: the challenge that names where to get a
+        credential, the six ways a token is refused, the unregistered issuer refused before any
+        key lookup, scope filtering on list and call, the trust-domain binding, the development
+        principal, the origin guard, and startup refusal on misconfiguration.
+      learning: |
+        The contract's central bet was sound and is recorded as holding. A clean diff on the
+        approach itself, with every failure above sitting in how the work was evidenced rather
+        than in what was built.
+      node_impact: []
+  elevation_proposal:
+    - target: meta-contract-before-execution
+      kind: principle
+      evidence: diffs[0] and diffs[2]
+      observation: O-044
+      human_decision: pending
+    - target: meta-foundation
+      kind: principle
+      evidence: diffs[1] and diffs[3]
+      observation: O-045
+      human_decision: pending

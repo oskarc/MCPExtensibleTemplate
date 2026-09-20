@@ -358,7 +358,7 @@ contracts:
         McpServerTemplate.Tests/Identity/ResourceMetadataTests.cs
       date: 2026-09-18
     approval: approved-at-gate
-    status: verified
+    status: learned
     verification_state: reported
     closed_by: |
       Pioneer confirmation, 2026-09-20: "Close the contract as it is complete."
@@ -1038,7 +1038,7 @@ contracts:
         date: 2026-09-18
         tests_changed: []
     cost: null
-    work_id: null
+    work_id: work-002
 
   - contract_id: contract-001
     feature: phase-0-foundation
