@@ -18,7 +18,7 @@ kit_identity:
   category: dotnet-mcp-server
   version: 0.1
   parent_kit: base-building-kit
-  base_kit_version: 0.27
+  base_kit_version: 0.29
   library_kit: null
   workspace: []
   status: active

@@ -120,6 +120,9 @@ release refused: no kit_identity.version in the committed manifest — the versi
 release refused: the shipping folders have uncommitted changes. A release is built from a commit, so what ships is what is recorded — commit first.
 -> commit the shipping folders first; what ships is what is recorded.
 
+records-index refused: unknown selection \"<>\" — pass observations, corrections, or all
+-> pass one of the three selections the script names; with no second argument it prints all of them.
+
 
 P-010 broken: CONTRACT-LOG.yaml is missing
 -> The contract log is this project's record of every contract. If it has been moved or deleted, restore it from git; if this is a fresh project, meta-bootstrap seeds it from templates/CONTRACT-LOG.template.yaml.

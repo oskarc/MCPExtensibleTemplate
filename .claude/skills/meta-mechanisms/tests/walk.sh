@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run from anywhere: bash meta-mechanisms/tests/walk.sh — drives the hooks through 56 states in a temp fixture: the stop-gate's lifecycle (01-36), which kit a hook acts on, the hold on the first batch and the session id (37-47), then a task that cannot be done — the third state, the skip, the ask and the repetition fault (48-56).
+# Run from anywhere: bash meta-mechanisms/tests/walk.sh — drives the hooks through 65 states in a temp fixture built as a real project — settings, a seal and agents: the stop-gate's lifecycle (01-36), which kit a hook acts on, the hold on the first batch and the session id (37-47), a task that cannot be done (48-56), the closing four against the question guard (57), and a workflow healing itself — the queue's depth, the hold while an agent runs, the resume, the lease that lapses and waiting told from failing (58-65).
 # Lifecycle walk: drive stop-gate.sh through every state of the kit's state machine.
 SRC="$(cd "$(dirname "$0")/../.." && pwd)"
 
@@ -33,7 +33,15 @@ mk() {
   printf 'entries: []\n'                    > "$K/meta-drift-eventlog/DRIFTLOG.yaml"
   printf 'M-01 | x | must | INTENT.md | ratified\n' > "$K/meta-map/MAP.md"
   printf 'founding\n'                       > "$K/meta-founding-contract/FOUNDING.md"
+  # a project, not a bare skills folder: the settings that wire the hooks, the seal the batch writes into, and
+  # the agents the gate dispatches to (contract-021 UC-7)
+  mkdir -p "$FX/.claude/kit-sealed" "$FX/.claude/agents"
+  cp "$SRC/templates/settings.template.json" "$FX/.claude/settings.json"
+  cp "$SRC"/agents/*.md "$FX/.claude/agents/"
 }
+# fp — the fingerprint of the fixture's records, as the hooks take it
+fp() { ( cd "$FX" && . "$H/lib.sh" >/dev/null 2>&1; set_root "$FX"; record_fingerprint ); }
+tel() { printf '%s|%s|%s|\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >> "$K/meta-ledger/telemetry.log"; }
 
 DEFMSG="Work done. drift score 0.1"
 
@@ -80,9 +88,10 @@ observations:
   - obs_id: O-1
     consolidated: false
 EOF
-show "04 question before drift block must defer" 'Should I keep the agent? drift score 0.1 lay-of-the-land 0.0'
-show "05 question, no drift block at all" 'Should I keep it?'
-show "06 no question, drift block present" 'All set. drift score 0.1 closeness 0.2'
+CLOSE='What should you have based the framing of the output on? The plan. What did you base the framing of the output on? The plan. Why did you choose to base the framing of the output on that? It governs. How are you presenting this to the pioneer to make sure they can align on the basis of the output? I showed the source.'
+show "04 question before the closing four must defer" "Should I keep the agent? $CLOSE"
+show "05 question, no closing four at all" 'Should I keep it?'
+show "06 no question, the closing four present" "All set. $CLOSE"
 
 echo "=== batch lifecycle ==="
 mk; w_ledger <<'EOF'
@@ -457,6 +466,31 @@ show "54 ...and the turn after the fault routes normally again"
 mk; printf 'corrections:\n  - corr_id: C-1\n    clerked: blocked\n    blocked_since: 2026-09-20\n    blocked_reason: the correction names a record the project does not have\n    blocked_waiting_for: the pioneer to say which record was meant\n' | w_corr
 show "55 a blocked correction is put to the pioneer, and the clerk is not asked for it"
 show "56 ...and with it announced, nothing else is due"
+echo "=== the closing four and the question guard (contract-020) ==="
+mk; printf 'observations:
+  - obs_id: O-1
+    consolidated: false
+' > "$K/meta-ledger/LEDGER.yaml"
+show "57 a question AFTER the closing four still defers, though the block carries four of its own" "$CLOSE Shall I proceed with the retirement?"
+
+echo "=== a workflow that heals itself (contract-021) ==="
+mk; printf 'observations:\n  - obs_id: O-1\n    consolidated: false\n' > "$K/meta-ledger/LEDGER.yaml"
+printf 'corrections:\n  - corr_id: C-1\n    clerked: false\n' > "$K/meta-correction-log/CORRECTIONS.yaml"
+show "58 a hand-over names how many kit tasks stand behind it"
+tel agent-launch "kit-consolidator:$(fp)"
+show "59 while an agent runs, nothing else is dispatched"
+tel subagent "kit-consolidator:$(fp)"
+show "60 it stopped having written nothing: resume it, do not start it over"
+show "61 ...and a second silence records the task blocked and moves the queue on"
+mk; printf 'observations:\n  - obs_id: O-1\n    consolidated: false\n' > "$K/meta-ledger/LEDGER.yaml"
+tel agent-launch "kit-case-clerk:$(fp)"
+tel stop-gate "x"; tel stop-gate "x"; tel stop-gate "x"
+show "62 an agent that never reported finishing releases the queue, and the gate says so"
+mk; printf 'contracts:\n  - contract_id: c-1\n    status: implemented\n    verification_state: reported\n    audited: true\n    bearing: |\n      b\n' | w_contracts
+show "63 a task whose next move is the pioneer's, once"
+show "64 ...twice"
+show "65 ...three turns running is waiting on them, not a fault"
+
 echo "=== telemetry ==="
 ls -1 "$K/meta-ledger/" 2>/dev/null
 tail -n 4 "$K/meta-ledger/telemetry.log" 2>/dev/null || echo "(no telemetry written)"
