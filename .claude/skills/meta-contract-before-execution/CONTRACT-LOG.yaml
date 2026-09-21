@@ -98,6 +98,23 @@
 # contract it led to). See meta-contract-artifact/SKILL.md.
 
 contracts:
+  - contract_id: report-006
+    feature: the-untestable-rule
+    type: analysis-report
+    date_proposed: 2026-09-21
+    bearing: |
+      The 0.29 upgrade, and an argument about why one finding has survived four releases while nine
+      others were fixed within hours. The founding statement asks for a frame that holds integrity
+      over time with no loopholes; this names the one layer where the kit currently cannot tell
+      whether it holds.
+    status: published
+    file: docs/reports/report-006-the-untestable-rule.html
+    artifact: https://claude.ai/artifact/X1ZeQhXWykwX8V3LaEE753
+    audience: the agent maintaining base-building-kit
+    findings_against: base-building-kit 0.29 (f89a984), upgraded and verified in this project
+    supporting_files: [docs/reports/rehearsal-0.29-2026-09-21.md]
+    follows: report-005
+    led_to: null
   - contract_id: report-005
     feature: a-day-of-running-it
     type: analysis-report
@@ -109,6 +126,7 @@ contracts:
     status: published
     file: docs/reports/report-005-a-day-of-running-it.html
     artifact: https://claude.ai/artifact/Asd4uoPsHMekzP16VC7pMY
+    followed_by: report-006
     audience: the agent maintaining base-building-kit
     findings_against: base-building-kit 0.27 (0159092), observed across one project, one day
     observations: [O-040, O-043]

@@ -1,0 +1,320 @@
+<title>The Untestable Rule</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --paper:#f7f5f1; --ink:#1c2230; --ink-soft:#4a5468; --ink-faint:#7b8496;
+  --rule:#ddd8cf; --rule-soft:#e9e5dd; --panel:#fffdfa; --panel-2:#f1eee8;
+  --verified:#2d6a4a; --corrected:#a32d28; --open:#9a6510;
+  --verified-bg:#e6f0e8; --corrected-bg:#f7e6e4; --open-bg:#f8eeda;
+  --accent:#27496d; --code-bg:#f0ede6; --break:#a32d28; --dead:#b8b2a8;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c; --dead:#4a505c;
+}}
+:root[data-theme="dark"]{
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c; --dead:#4a505c;
+}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.6;margin:0}
+.wrap{max-width:52rem;margin:0 auto;padding-block:3rem 5rem;padding-left:16px;padding-right:16px}
+h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif;text-wrap:balance;line-height:1.2}
+h1{font-size:clamp(2rem,6vw,2.9rem);margin:0 0 .6rem;letter-spacing:-.015em}
+h2{font-size:1.45rem;margin:3.4rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--rule)}
+h3{font-size:1.08rem;margin:0 0 .5rem}
+p{margin:0 0 1rem}
+code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+code{background:var(--code-bg);padding:.1em .35em;border-radius:3px;font-size:.87em}
+pre{background:var(--code-bg);border:1px solid var(--rule-soft);border-radius:5px;padding:.9rem 1rem;overflow-x:auto;font-size:.82rem;line-height:1.55;margin:0 0 1rem}
+a{color:var(--accent)}
+blockquote{margin:0 0 1rem;padding:0 0 0 1.1rem;border-left:3px solid var(--rule);font-family:"IBM Plex Serif",Georgia,serif;font-size:1.03rem;color:var(--ink-soft)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 .9rem}
+.standfirst{font-family:"IBM Plex Serif",Georgia,serif;font-size:1.16rem;color:var(--ink-soft);margin:0 0 1.6rem;max-width:42rem}
+.meta{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--ink-faint);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:.7rem 0;display:flex;flex-wrap:wrap;gap:.4rem 1.6rem}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin:2rem 0 2.5rem}
+.strip div{background:var(--panel);padding:1rem .9rem}
+.strip .n{font-family:"IBM Plex Mono",monospace;font-size:1.85rem;font-weight:600;line-height:1;display:block;margin-bottom:.35rem;font-variant-numeric:tabular-nums}
+.strip .l{font-size:.78rem;color:var(--ink-soft);line-height:1.35;display:block}
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;padding:.2rem .5rem;border-radius:3px;vertical-align:.12em}
+.c-open{background:var(--open-bg);color:var(--open)}
+.c-corr{background:var(--corrected-bg);color:var(--corrected)}
+.c-ver{background:var(--verified-bg);color:var(--verified)}
+.finding{border:1px solid var(--rule);border-left-width:4px;background:var(--panel);padding:1.3rem 1.4rem;margin:0 0 1.4rem}
+.finding.open{border-left-color:var(--open)}
+.finding.corr{border-left-color:var(--corrected)}
+.finding.ver{border-left-color:var(--verified)}
+.fhead{display:flex;flex-wrap:wrap;gap:.6rem;align-items:baseline;margin-bottom:.7rem}
+.fid{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--ink-faint);font-weight:600}
+.finding p:last-child,.finding pre:last-child{margin-bottom:0}
+table{border-collapse:collapse;width:100%;font-size:.88rem;margin:0 0 1.2rem}
+th,td{text-align:left;padding:.6rem .7rem;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+th{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--rule)}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tw{overflow-x:auto}
+.fig{background:var(--panel);border:1px solid var(--rule);padding:1.4rem 1rem;margin:0 0 1rem}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+.cap{font-size:.82rem;color:var(--ink-soft);margin:.6rem 0 0;font-style:italic}
+.judgement{border:1px solid var(--accent);background:var(--panel);padding:1.4rem 1.5rem;margin:1.2rem 0 0}
+.judgement h3{color:var(--accent)}
+ol.rec{margin:0;padding-left:1.3rem}
+ol.rec li{margin-bottom:.9rem}
+ol.rec li:last-child{margin-bottom:0}
+.note{font-size:.88rem;color:var(--ink-soft);border-left:2px solid var(--rule);padding-left:1rem;margin:0 0 1rem}
+</style>
+
+<div class="wrap">
+
+<p class="eyebrow">report-006 &nbsp;·&nbsp; analysis &nbsp;·&nbsp; sixth in the series</p>
+<h1>The Untestable Rule</h1>
+<p class="standfirst">Nine findings from these reports were fixed across four releases, several
+within hours. One has survived all four, and it is the one that blocks everything else. This is the
+0.29 upgrade, and an argument about why that particular finding keeps not being picked up — which
+is not that it was missed.</p>
+
+<div class="meta">
+  <span>base-building-kit 0.27 &rarr; 0.29 (<span class="mono">f89a984</span>)</span>
+  <span>Upgraded, rehearsed, and verified in place</span>
+  <span>2026-09-21</span>
+</div>
+
+<div class="strip">
+  <div><span class="n">4</span><span class="l">releases the seal has survived</span></div>
+  <div><span class="n">9</span><span class="l">other findings fixed in the same window</span></div>
+  <div><span class="n">53</span><span class="l">candidates behind it, none adopted</span></div>
+  <div><span class="n">0</span><span class="l">tests the kit could write that would fail on it</span></div>
+</div>
+
+<h2>First: the 0.29 upgrade</h2>
+
+<div class="finding ver">
+  <div class="fhead"><span class="fid">V-1</span><span class="chip c-ver">Verified</span>
+    <h3>Two contracts, both answering this project's reports</h3></div>
+  <p><strong>The self-score is gone.</strong> Every output now answers four questions about what the
+  framing rests on — what it should have rested on, what it did, why, and how it is being put to the
+  pioneer. Two to three sentences each, in the agent's own prose, no identifiers. A new node,
+  <code>meta-understanding</code>, holds the reasoning. That is report-004's finding, and the
+  pioneer's own difficulty — <em>"hard to me to see if that understanding you show in the contract
+  is based only the roadmap or what is implemented as well"</em> — made into the thing every output
+  must answer.</p>
+  <p><strong><code>records-index.sh</code></strong> carries our measurement in its header, verbatim:
+  <em>"one consolidation merged sixteen observations inside its budget and a later one merged two
+  and exhausted … Telling an agent to write early did not help, which rules out thoroughness and
+  leaves size."</em></p>
+  <p><strong><code>agent-launch.sh</code></strong> records an agent <em>starting</em>, which nothing
+  did before, and its header names all three symptoms report-005 gave: an exhausted agent
+  indistinguishable from one that never ran, two agents dispatched at one record, and a task in
+  progress looking untouched for three turns.</p>
+  <p><strong>The gate reads <code>type</code></strong> — report-001's F-5, the oldest open finding
+  in the series, now closed.</p>
+  <p><strong>The walk's fixture gained the permission rules</strong> — it now creates
+  <code>.claude/kit-sealed/</code> and copies the settings template into the fixture's
+  <code>settings.json</code>. That is report-001's F-3, addressed. Whether it helps is the subject
+  of this report.</p>
+  <p class="note">Upgrade run clean: all five <code>G*</code> checks exit 0, every hook behaved, the
+  walk matches all 65 states, baseline regenerated over 125 files, three decisions asked, zero files
+  genuinely differed, zero troubleshooting.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">V-2</span><span class="chip c-open">Open</span>
+    <h3>What the rehearsal caught, and what it confirmed</h3></div>
+  <p><strong>The refusal registry lost this project's lines, exactly as predicted.</strong> At the
+  0.27 upgrade the sheet warned that registering a project's refusals in
+  <code>checks/refusal-nextsteps.txt</code> — a kit file — would make those lines residue.
+  <code>install.sh</code> replaced the file; <code>G6-refusals</code> went red. Re-added, and it
+  will need re-adding at every upgrade until the registry takes project entries somewhere of its
+  own.</p>
+  <p><strong><code>meta-understanding</code> ships as a skill registered in no manifest node.</strong>
+  Zero references in <code>MANIFEST.template.yaml</code>, yet the file travels and M-28 points at
+  it. <code>G2-migration</code> checks that every node <em>of the template</em> is registered, so a
+  node the template omits is invisible to it. Nothing owns the file, nothing gives it triggers, and
+  nothing will ever report it thin.</p>
+  <p><strong><code>G2-migration</code> still contradicts contract-018's rule.</strong> Unchanged
+  since report-005 named it this morning. <code>report-005</code>, written exactly as the rule
+  requires, fails the check shipped beside it. Left as the rule requires here, with the check
+  failing, because making a document carry a pre-mortem and a red test to satisfy a script would put
+  an untruth in the record.</p>
+</div>
+
+<h2>The seal, and why it is not that they missed it</h2>
+
+<div class="finding corr">
+  <div class="fhead"><span class="fid">F-1</span><span class="chip c-corr">Corrected</span>
+    <h3>The settings template <em>was</em> edited in 0.29 — just not the part that matters</h3></div>
+  <p>The pioneer's challenge was reasonable: <code>templates/settings.template.json</code> appears
+  in contract-021's changed files, so the commits look like they addressed it. Diffed, the whole
+  change is an addition:</p>
+<pre>+      {
++        "_kit": "base-building-kit",
++        "matcher": "Task|Agent",
++        "hooks": [ … agent-launch.sh … ]
++      }</pre>
+  <p>The permissions block beneath it is untouched, at 0.24, 0.25, 0.27 and 0.29:</p>
+<pre>"permissions": { "deny": [ "Read(kit-sealed/**)" ], "additionalDirectories": [] }</pre>
+  <p>A search of the kit's own contracts, reports and contract log finds <strong>no claim that the
+  seal was addressed</strong>. This is not a fix that fell short. As far as the record shows, it has
+  not been picked up.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-2</span><span class="chip c-open">Open</span>
+    <h3>The mechanism, restated precisely</h3></div>
+  <p>The batch assembler is instructed, at step 6 of its own file: <em>"Seal the key at
+  <code>.claude/kit-sealed/B-NNN.key</code>"</em>. Its own <code>write-scope.sh</code> frontmatter
+  lists <code>kit-sealed/</code> among the three paths it may write. And the project's
+  <code>settings.json</code>, installed from the kit's own template, denies that path — which
+  refuses the Write tool, not only Read.</p>
+  <p>Its other route is closed by the kit itself: <code>deny-paths.sh</code>, in the same
+  frontmatter, denies any Bash command whose text contains <code>kit-sealed/</code>.</p>
+  <p><strong>So the agent is told to write a file it is forbidden to write, by two rules the kit
+  ships, and it correctly refuses to work around either.</strong> No key, no batch. No batch, no
+  decision reaches the pioneer. No decision, nothing reaches a skill — which is why this project
+  holds 53 candidates, 8 of them due, and has adopted none across two completed contracts.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-3</span><span class="chip c-open">Open</span>
+    <h3>The interpretation: this bug lives in the one layer the kit has no instrument for</h3></div>
+  <p>Look at what the nine fixed findings have in common, and what the four unfixed ones do.</p>
+  <div class="tw"><table>
+    <tr><th style="width:14rem">Finding</th><th style="width:9rem">Lives in</th><th>Fixed?</th></tr>
+    <tr><td>Auditor's unbounded search</td><td>an agent's prose instructions</td><td class="num">yes — digest</td></tr>
+    <tr><td>No third state for a task</td><td>a YAML schema</td><td class="num">yes — <code>blocked</code></td></tr>
+    <tr><td>Starvation by strict priority</td><td>a bash hook</td><td class="num">yes — position 0</td></tr>
+    <tr><td>Gate never read <code>type</code></td><td>a bash hook</td><td class="num">yes</td></tr>
+    <tr><td>"The six above"</td><td>a sentence of prose</td><td class="num">yes</td></tr>
+    <tr><td>No install script</td><td>a missing bash file</td><td class="num">yes</td></tr>
+    <tr><td>Stale rule one clause from deletion</td><td>prose &rarr; a bash refusal</td><td class="num">yes</td></tr>
+    <tr><td>Understanding unmeasured</td><td>prose, always-loaded</td><td class="num">yes — four questions</td></tr>
+    <tr><td>No notion of work in flight</td><td>a missing bash hook</td><td class="num">yes</td></tr>
+    <tr><td><strong>The seal</strong></td><td><strong>the harness's permission layer</strong></td><td class="num"><strong>no &#215;4</strong></td></tr>
+    <tr><td>Agent turn budgets</td><td>a constant with no known right value</td><td class="num">no — index instead</td></tr>
+    <tr><td><code>G2</code> vs contract-018</td><td>a bash check</td><td class="num">no</td></tr>
+    <tr><td>Section size vs paragraph budget</td><td>a bash check</td><td class="num">no — section now 39,953 bytes</td></tr>
+  </table></div>
+  <p><strong>Every fixed finding lives somewhere the kit can read and test: bash, prose, a schema,
+  an agent's instructions.</strong> The kit's entire verification apparatus is bash — the walk, the
+  <code>G*</code> checks, the hooks selftest. It is very good at this, and it has been fast.</p>
+  <p>The seal is the only reported finding that lives in the interaction between a project's
+  <code>settings.json</code> and the tool layer that enforces it. <strong>And that layer does not
+  govern bash.</strong> A <code>&gt;</code> redirect writes to <code>kit-sealed/</code> without
+  obstruction, because the deny rule constrains an agent's Write tool, not the filesystem. The kit's
+  own Bash blocking comes from <code>deny-paths.sh</code>, a hook that only runs when an
+  <em>agent</em> invokes Bash — not when <code>walk.sh</code> does.</p>
+  <p class="note"><strong>So 0.29 giving the walk's fixture a <code>settings.json</code> changes
+  nothing here.</strong> The fixture can now copy the permission rules in, and a bash test writing
+  to the sealed path will still succeed, because nothing in that fixture is subject to them. Any
+  test the kit could write for this bug would pass.</p>
+  <p><strong>That is the argument.</strong> Not that the finding was overlooked, and not that the
+  evidence was weak — but that it is the one finding whose truth the kit cannot establish by running
+  anything. Every other finding in this series arrived with, or quickly acquired, something that
+  fails. This one can only be established by reading the permission semantics and reasoning about
+  them.</p>
+</div>
+
+<div class="fig">
+<svg viewBox="0 0 720 260" role="img" aria-label="Every fixed finding lies inside the kit's testable layers; the seal lies in the permission layer, which bash cannot reach">
+  <g font-family="IBM Plex Mono, monospace" font-size="10.5">
+    <rect x="8" y="24" width="440" height="176" fill="var(--panel-2)" stroke="var(--verified)"/>
+    <text x="20" y="44" fill="var(--verified)">WHAT THE KIT CAN RUN A TEST AGAINST</text>
+    <g fill="var(--ink)">
+      <text x="24" y="70">bash hooks and checks &#8212; walk.sh, G1..G6, hooks-selftest</text>
+      <text x="24" y="90">YAML schemas &#8212; G2-migration walks every record</text>
+      <text x="24" y="110">prose in skills &#8212; G3-retired, G4-pointers, G5-steps</text>
+      <text x="24" y="130">agents' own instruction files</text>
+      <text x="24" y="160" fill="var(--verified)">9 of 9 findings here were fixed, several within hours</text>
+      <text x="24" y="180" fill="var(--ink-faint)">a failing test could be written for each</text>
+    </g>
+
+    <rect x="468" y="24" width="244" height="176" fill="none" stroke="var(--break)" stroke-width="2" stroke-dasharray="5 4"/>
+    <text x="480" y="44" fill="var(--break)">THE PERMISSION LAYER</text>
+    <g fill="var(--break)">
+      <text x="484" y="70" font-size="10">settings.json deny rules</text>
+      <text x="484" y="88" font-size="10">enforced on an agent's tools</text>
+      <text x="484" y="106" font-size="10">NOT on the filesystem</text>
+      <text x="484" y="134" font-size="10">a bash redirect writes freely</text>
+      <text x="484" y="152" font-size="10">so every test the kit could</text>
+      <text x="484" y="170" font-size="10">write here would pass</text>
+    </g>
+
+    <text x="590" y="222" text-anchor="middle" font-size="11" fill="var(--break)">1 finding here &#183; unfixed across 4 releases</text>
+    <text x="228" y="222" text-anchor="middle" font-size="11" fill="var(--verified)">the kit is fast wherever it can run something</text>
+    <line x1="448" y1="112" x2="466" y2="112" stroke="var(--break)" stroke-width="2" stroke-dasharray="3 3"/>
+    <text x="360" y="248" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">the boundary is not importance or difficulty &#8212; it is whether a test can fail</text>
+  </g>
+</svg>
+<p class="cap">The kit fixes what it can test, quickly and well. The one finding outside that
+boundary has not moved in four releases, and it is the one holding every adoption in this project.</p>
+</div>
+
+<h2>What this report does not establish</h2>
+
+<table>
+  <tr><th style="width:15rem">Question</th><th>Why it stayed open</th></tr>
+  <tr><td>Does a <code>Read(…)</code> deny really block the Write tool?</td>
+    <td><strong>Not reproduced first-hand.</strong> The evidence is the refusal message the blocked
+    assembler reported: <em>"File is covered by a Read deny rule in your permission settings and
+    cannot be written."</em> Reproducing it means attempting a sealed-path write, which the kit
+    counts as drift and its auditor greps for. This is the weakest link in the chain and it has been
+    the weakest link for four releases.</td></tr>
+  <tr><td>Is the fix a rule change, a path change, or a different guard?</td>
+    <td>Not determined. Read-denied and write-allowed for one agent may not be expressible in that
+    settings schema at all; moving the key outside the denied path and protecting it another way
+    may be simpler. That is the maintainer's call, not this project's.</td></tr>
+  <tr><td>Does this affect projects that never reach a batch?</td>
+    <td>Silent until the first batch. Every consumer project accumulates candidates from day one and
+    meets this at the moment the standard would first move.</td></tr>
+  <tr><td>Are there other findings in the untestable layer?</td>
+    <td>Only one has been found. The category is defined here from a single member, which is a weak
+    basis for a category.</td></tr>
+  <tr><td>Would the maintainer have fixed it if a test existed?</td>
+    <td>Unknowable. The correlation between "testable" and "fixed" is nine for nine and one for one
+    against, on thirteen findings — suggestive, not proof of cause.</td></tr>
+</table>
+
+<div class="judgement">
+  <h3>Recommendation &mdash; judgement, not finding</h3>
+  <ol class="rec">
+    <li><strong>Treat the seal as a reasoning defect, not a test gap.</strong> It will not appear in
+      any run. The three facts that establish it are all readable without executing anything: the
+      assembler is told to write <code>kit-sealed/B-NNN.key</code>; its
+      <code>write-scope.sh</code> permits that path; the shipped <code>settings.json</code> denies
+      it. Those three sentences are in the kit's own files and they contradict each other.</li>
+    <li><strong>Get a first-hand reproduction from a project that can afford it.</strong> A scratch
+      project with no records to protect can attempt the write and report the refusal verbatim —
+      which this project has declined to do for four releases because the attempt is drift. That
+      single command is the missing evidence.</li>
+    <li><strong>Consider what else sits in that layer.</strong> Permission rules, tool availability,
+      agent frontmatter scopes, the harness's own behaviour. The kit's tests cannot reach any of it,
+      and it currently has no other way of knowing when something there is wrong.</li>
+    <li><strong>Fix <code>G2</code> against contract-018 and register
+      <code>meta-understanding</code>.</strong> Both are inside the testable boundary and both are
+      live in this project right now.</li>
+  </ol>
+  <p class="note" style="margin-top:1rem"><strong>What this says about the kit, which is mostly
+  good.</strong> Nine findings fixed across four releases, several within hours of the report that
+  named them, every one of them somewhere a test could fail. That is a working feedback loop and it
+  is rare. The blind spot is precise and small: the layer the tests do not reach. Knowing the shape
+  of it is worth more than the one bug, because that bug is now the only thing standing between two
+  completed contracts and the first line this standard has ever learned.</p>
+</div>
+
+<h2>Provenance</h2>
+<p style="font-size:.88rem;color:var(--ink-soft)">Written after performing the 0.27 → 0.29 upgrade
+in this project. The claim that no commit addresses the seal comes from reading the commit list and
+diffing <code>templates/settings.template.json</code> across contract-021, plus a search of the
+kit's contracts, reports and contract log for any claim to have addressed it. The permissions block
+is quoted from the staged release. The fixed/unfixed table was built by checking each finding
+against the 0.29 tree directly — the seal, the budgets and the <code>G2</code> exemption by grep,
+the walk's fixture by reading the lines that now create <code>kit-sealed/</code> and copy the
+settings template. The one claim not established here is the central one, and it is named above.
+Sixth in a series with <span class="mono">report-001</span> through
+<span class="mono">report-005</span>.</p>
+
+</div>
