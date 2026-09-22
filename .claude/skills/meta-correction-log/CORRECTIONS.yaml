@@ -902,11 +902,8 @@ corrections:
       asked this turn, awaiting answer
     supersedes: []
     recorded_by: main-agent
-    clerked: blocked
-    blocked_since: 2026-09-22
-    blocked_reason: the case clerk writes to LEDGER.yaml, which the batch blind refuses while review batch B-001 is open and undecided
-    blocked_waiting_for: B-001 to be decided and closed, after which the clerk runs normally
-    precedent: null
+    clerked: true
+    precedent: "P-027, S-012"
     clerk_note: null
 
 
@@ -936,11 +933,8 @@ corrections:
       not asked — this resolves C-027 rather than recording a new failure.
     supersedes: [C-027]
     recorded_by: main-agent
-    clerked: blocked
-    blocked_since: 2026-09-22
-    blocked_reason: the case clerk writes to LEDGER.yaml, which the batch blind refuses while review batch B-001 is open and undecided
-    blocked_waiting_for: B-001 to be decided and closed, after which the clerk runs normally
-    precedent: null
+    clerked: true
+    precedent: "P-028, S-013"
     clerk_note: null
 
 
@@ -969,11 +963,8 @@ corrections:
       C-017, C-020 and C-021, all on 2026-09-20. Fourth occurrence.
     supersedes: []
     recorded_by: main-agent
-    clerked: blocked
-    blocked_since: 2026-09-22
-    blocked_reason: the case clerk writes to LEDGER.yaml, which the batch blind refuses while review batch B-001 is open and undecided
-    blocked_waiting_for: B-001 to be decided and closed, after which the clerk runs normally
-    precedent: null
+    clerked: true
+    precedent: "P-029"
     clerk_note: null
 
 
@@ -1002,11 +993,8 @@ corrections:
       C-017, C-020, C-021 and C-029, all within two days. Fifth occurrence.
     supersedes: []
     recorded_by: main-agent
-    clerked: blocked
-    blocked_since: 2026-09-22
-    blocked_reason: the case clerk writes to LEDGER.yaml, which the batch blind refuses while review batch B-001 is open and undecided
-    blocked_waiting_for: B-001 to be decided and closed, after which the clerk runs normally
-    precedent: null
+    clerked: true
+    precedent: "P-030"
     clerk_note: null
 
 
@@ -1038,21 +1026,18 @@ corrections:
       C-017, C-020, C-021, C-029, C-030 — and the vague ask specifically at item one of this batch.
     supersedes: []
     recorded_by: main-agent
-    clerked: blocked
-    blocked_since: 2026-09-22
-    blocked_reason: the case clerk writes to LEDGER.yaml, which the batch blind refuses while review batch B-001 is open and undecided
-    blocked_waiting_for: B-001 to be decided and closed, after which the clerk runs normally
-    precedent: null
+    clerked: true
+    precedent: "P-031"
     clerk_note: null
 
 
 trajectory:
-  updated: 2026-09-20
+  updated: 2026-09-22
   by_contract:
     - contract_id: null
-      corrections: 8
+      corrections: 13
       bearing_reevaluations: 0
-      interventions: {did-it: 0, redirected: 8, hinted: 0, reviewed-after: 0}
+      interventions: {did-it: 0, redirected: 13, hinted: 0, reviewed-after: 0}
     - contract_id: contract-001
       corrections: 4
       bearing_reevaluations: 0
@@ -1061,4 +1046,4 @@ trajectory:
       corrections: 14
       bearing_reevaluations: 0
       interventions: {did-it: 0, redirected: 14, hinted: 0, reviewed-after: 0}
-  moments: {M-27: 3, M-07: 1, M-15: 1, M-14: 1, M-04: 3, M-12: 6, M-03: 4, M-06: 1, M-25: 1, M-24: 1, M-28: 1, M-16: 1, M-01: 1, M-09: 1}
+  moments: {M-27: 3, M-07: 1, M-15: 1, M-14: 1, M-04: 3, M-12: 6, M-03: 4, M-06: 1, M-25: 1, M-24: 1, M-28: 1, M-16: 6, M-01: 1, M-09: 1}

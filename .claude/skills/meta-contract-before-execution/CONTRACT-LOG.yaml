@@ -98,6 +98,25 @@
 # contract it led to). See meta-contract-artifact/SKILL.md.
 
 contracts:
+  - contract_id: report-007
+    feature: the-first-review
+    type: analysis-report
+    date_proposed: 2026-09-22
+    bearing: |
+      The first review batch this project has been able to hold — twenty items decided back to back
+      after the seal was fixed in 0.31. The founding statement asks for a frame that holds integrity
+      over time with no loopholes; a review is where the pioneer's judgement enters the standard, so
+      what the procedure did under close reading is the strongest evidence yet of whether that frame
+      holds.
+    status: published
+    file: docs/reports/report-007-the-first-review.html
+    artifact: https://claude.ai/artifact/G1PdKaVzmTXqZkbWptZvqi
+    audience: the agent maintaining base-building-kit
+    findings_against: base-building-kit 0.31 (e29cac2), one batch of twenty items, one sitting
+    corrections: [C-027, C-028, C-029, C-030, C-031]
+    supporting_files: [.claude/skills/meta-ledger/batches/B-001.md, docs/reports/rehearsal-0.31-2026-09-21.md]
+    follows: report-006
+    led_to: null
   - contract_id: report-006
     feature: the-untestable-rule
     type: analysis-report
@@ -113,6 +132,7 @@ contracts:
     audience: the agent maintaining base-building-kit
     findings_against: base-building-kit 0.29 (f89a984), upgraded and verified in this project
     supporting_files: [docs/reports/rehearsal-0.29-2026-09-21.md]
+    followed_by: report-007
     follows: report-005
     led_to: null
   - contract_id: report-005

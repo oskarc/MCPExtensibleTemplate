@@ -1,0 +1,388 @@
+<title>The First Review</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --paper:#f7f5f1; --ink:#1c2230; --ink-soft:#4a5468; --ink-faint:#7b8496;
+  --rule:#ddd8cf; --rule-soft:#e9e5dd; --panel:#fffdfa; --panel-2:#f1eee8;
+  --verified:#2d6a4a; --corrected:#a32d28; --open:#9a6510; --human:#6b3fa0;
+  --verified-bg:#e6f0e8; --corrected-bg:#f7e6e4; --open-bg:#f8eeda; --human-bg:#efe7f7;
+  --accent:#27496d; --code-bg:#f0ede6; --break:#a32d28;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b; --human:#b794dd;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113; --human-bg:#241b30;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c;
+}}
+:root[data-theme="dark"]{
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b; --human:#b794dd;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113; --human-bg:#241b30;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c;
+}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.6;margin:0}
+.wrap{max-width:52rem;margin:0 auto;padding-block:3rem 5rem;padding-left:16px;padding-right:16px}
+h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif;text-wrap:balance;line-height:1.2}
+h1{font-size:clamp(2rem,6vw,2.9rem);margin:0 0 .6rem;letter-spacing:-.015em}
+h2{font-size:1.45rem;margin:3.4rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--rule)}
+h3{font-size:1.08rem;margin:0 0 .5rem}
+p{margin:0 0 1rem}
+code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+code{background:var(--code-bg);padding:.1em .35em;border-radius:3px;font-size:.87em}
+pre{background:var(--code-bg);border:1px solid var(--rule-soft);border-radius:5px;padding:.9rem 1rem;overflow-x:auto;font-size:.82rem;line-height:1.55;margin:0 0 1rem}
+a{color:var(--accent)}
+blockquote{margin:0 0 1rem;padding:0 0 0 1.1rem;border-left:3px solid var(--human);font-family:"IBM Plex Serif",Georgia,serif;font-size:1.03rem;color:var(--ink-soft)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 .9rem}
+.standfirst{font-family:"IBM Plex Serif",Georgia,serif;font-size:1.16rem;color:var(--ink-soft);margin:0 0 1.6rem;max-width:42rem}
+.meta{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--ink-faint);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:.7rem 0;display:flex;flex-wrap:wrap;gap:.4rem 1.6rem}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin:2rem 0 2.5rem}
+.strip div{background:var(--panel);padding:1rem .9rem}
+.strip .n{font-family:"IBM Plex Mono",monospace;font-size:1.85rem;font-weight:600;line-height:1;display:block;margin-bottom:.35rem;font-variant-numeric:tabular-nums}
+.strip .l{font-size:.78rem;color:var(--ink-soft);line-height:1.35;display:block}
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;padding:.2rem .5rem;border-radius:3px;vertical-align:.12em}
+.c-open{background:var(--open-bg);color:var(--open)}
+.c-corr{background:var(--corrected-bg);color:var(--corrected)}
+.c-ver{background:var(--verified-bg);color:var(--verified)}
+.c-hum{background:var(--human-bg);color:var(--human)}
+.finding{border:1px solid var(--rule);border-left-width:4px;background:var(--panel);padding:1.3rem 1.4rem;margin:0 0 1.4rem}
+.finding.open{border-left-color:var(--open)}
+.finding.corr{border-left-color:var(--corrected)}
+.finding.ver{border-left-color:var(--verified)}
+.finding.hum{border-left-color:var(--human)}
+.fhead{display:flex;flex-wrap:wrap;gap:.6rem;align-items:baseline;margin-bottom:.7rem}
+.fid{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--ink-faint);font-weight:600}
+.finding p:last-child,.finding pre:last-child,.finding blockquote:last-child{margin-bottom:0}
+table{border-collapse:collapse;width:100%;font-size:.86rem;margin:0 0 1.2rem}
+th,td{text-align:left;padding:.55rem .6rem;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+th{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--rule)}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tw{overflow-x:auto}
+.judgement{border:1px solid var(--accent);background:var(--panel);padding:1.4rem 1.5rem;margin:1.2rem 0 0}
+.judgement h3{color:var(--accent)}
+ol.rec{margin:0;padding-left:1.3rem}
+ol.rec li{margin-bottom:.9rem}
+ol.rec li:last-child{margin-bottom:0}
+.note{font-size:.88rem;color:var(--ink-soft);border-left:2px solid var(--rule);padding-left:1rem;margin:0 0 1rem}
+</style>
+
+<div class="wrap">
+
+<p class="eyebrow">report-007 &nbsp;·&nbsp; analysis &nbsp;·&nbsp; seventh in the series</p>
+<h1>The First Review</h1>
+<p class="standfirst">A downstream project held its first review batch — twenty items, from a queue
+that had been unopenable for five days. This is what the procedure did under a pioneer who reads
+closely: what held, the five corrections it drew, the three item defects it surfaced, and the one
+place the decision vocabulary nearly recorded the opposite of what was meant.</p>
+
+<div class="meta">
+  <span>base-building-kit 0.31 (<span class="mono">e29cac2</span>)</span>
+  <span>Batch B-001 · 20 items · assembled, decided and revealed in one sitting</span>
+  <span>2026-09-22</span>
+</div>
+
+<div class="strip">
+  <div><span class="n">20</span><span class="l">items decided, first batch this project has held</span></div>
+  <div><span class="n">5</span><span class="l">corrections drawn by the review itself</span></div>
+  <div><span class="n">3</span><span class="l">defects found in the items, not the decisions</span></div>
+  <div><span class="n">1</span><span class="l">line added to the always-loaded file — the first the standard has learned</span></div>
+</div>
+
+<p><strong>The procedure works.</strong> Statement before recommendation, the pioneer's read before
+the agent's evidence, one sheet of choices with what each does — the shape is right and the decisions
+it produced are better than the ones the agent would have made. Everything below is inside that
+verdict, not against it.</p>
+
+<h2>What the batch decided</h2>
+
+<div class="tw"><table>
+  <tr><th style="width:3.5rem">Item</th><th style="width:6rem">Kind</th><th style="width:5rem">Decision</th><th>The pioneer's reason, verbatim where given</th></tr>
+  <tr><td class="num">1</td><td>card</td><td class="num">[B, A]</td><td>"The reason is the reasoning, i fully agree with B"</td></tr>
+  <tr><td class="num">2</td><td>map line</td><td class="num">revise</td><td>"What to do when a task cant be completed is to surface it and ask for guidance."</td></tr>
+  <tr><td class="num">3</td><td>card</td><td class="num">B</td><td>—</td></tr>
+  <tr><td class="num">4</td><td>card</td><td class="num">B</td><td>"4 agents running out of budget with nothing to show for it is not a budgeting issue, its running into a wall without looking where we are running."</td></tr>
+  <tr><td class="num">5</td><td>card</td><td class="num">[A, B]</td><td>"i understand when i want you to push ahead, but you dont. Its my point to hold."</td></tr>
+  <tr><td class="num">6</td><td>candidate</td><td class="num">decline</td><td>"this is already being enforced by the kit, so it superecedes another skill"</td></tr>
+  <tr><td class="num">7</td><td>card</td><td class="num">decline</td><td>"Imagine we completed this project, then exported the skills. Why is this a standard for how to build a mcp server?"</td></tr>
+  <tr><td class="num">8</td><td>candidate</td><td class="num">decline</td><td>"its not a structural or standardizing thing"</td></tr>
+  <tr><td class="num">9</td><td>card</td><td class="num">B</td><td>"you were lost in the woods and were asking what tree was the way out, but none were."</td></tr>
+  <tr><td class="num">10</td><td>card</td><td class="num">B</td><td>"its just rules of engagement where we have to align. i would have assumed you knew this already."</td></tr>
+  <tr><td class="num">11</td><td>candidate</td><td class="num">hold</td><td>"caution is the right move, we'd like to gather more evidence" → then, shown what caution does: "oh, then hold is the right one"</td></tr>
+  <tr><td class="num">12</td><td>candidate</td><td class="num">decline</td><td>"we got lost in the woods and tried to stuble our way out. This is not an elevation moment, but rather in the middle of drift."</td></tr>
+  <tr><td class="num">13</td><td>candidate</td><td class="num">hold</td><td>certainty ruling (below)</td></tr>
+  <tr><td class="num">14</td><td>card</td><td class="num">[A, B]</td><td>"We had some issues to handle but i overlooked it and it got lost in the mix."</td></tr>
+  <tr><td class="num">15</td><td>card</td><td class="num">B</td><td>"i gave you a direction for the future. then we implemented it from the meta kit agent so this ruling was absorbed on the backend"</td></tr>
+  <tr><td class="num">16</td><td>card</td><td class="num">B</td><td>"Its not part of a standard, its part of how claude code should work."</td></tr>
+  <tr><td class="num">17</td><td>card</td><td class="num">B</td><td>"this is classic 'Lay of the land' debt."</td></tr>
+  <tr><td class="num">18</td><td>candidate</td><td class="num">add</td><td>"you can make the addition" / "the wording is correct, type category."</td></tr>
+  <tr><td class="num">19</td><td>candidate</td><td class="num">hold</td><td>certainty ruling</td></tr>
+  <tr><td class="num">20</td><td>candidate</td><td class="num">hold</td><td>certainty ruling</td></tr>
+</table></div>
+
+<p><strong>One line entered the standard</strong>, written beside the sentence it contradicts rather
+than replacing it, at type-category: <em>"What is waiting on the pioneer is put to them as a decision
+when it accumulates, never left as a count in a status line for them to ask about."</em></p>
+
+<h2>The five corrections the review itself drew</h2>
+
+<div class="finding hum">
+  <div class="fhead"><span class="fid">C-1</span><span class="chip c-hum">Pioneer</span>
+    <h3>Two of them reverse each other, and the kit handled it correctly</h3></div>
+  <p>Six items in, the pioneer redirected the presentation order:</p>
+  <blockquote>The agent should present candidates that scores high on reliability, those it feels
+  are strong or likely to be adopted.</blockquote>
+  <p>That is the thing <code>meta-skill-builder</code> names as an anti-pattern — <em>"framing an
+  item so that approval is the path of least resistance"</em> — and its shuffle exists to prevent it.
+  The agent surfaced the conflict with the skill's own words rather than complying, and offered three
+  ways to proceed. The pioneer's answer:</p>
+  <blockquote>stay true to the skill</blockquote>
+  <p>Both were recorded, the second naming the first in <code>supersedes</code>, and the case clerk
+  later marked the first precedent overruled by reading that field rather than judging for itself.
+  <strong>The changed-mind mechanism worked end to end</strong> — nothing was quietly overwritten and
+  the reversal is legible in the record.</p>
+  <p class="note">Worth naming because it is the kit's most delicate moment: the pioneer instructed
+  something the skill forbids. The skill's own rule — surface the conflict, do not resolve it by
+  compromise — produced the right outcome, and the pioneer chose the procedure over their own
+  instruction.</p>
+</div>
+
+<div class="finding corr">
+  <div class="fhead"><span class="fid">C-2</span><span class="chip c-corr">Corrected</span>
+    <h3>Three corrections in one review, all the same failure: the agent presenting in the kit's vocabulary</h3></div>
+  <p>Three separate stops, all during the twenty items:</p>
+  <blockquote>i have no idea what that means</blockquote>
+  <blockquote>It was very hard to understand, the language and structure makes it hard for a human
+  go grasp.</blockquote>
+  <blockquote>you regressed in how you presented now</blockquote>
+  <p>The first was a housekeeping question written in kit terms — the clerk, the ledger, blinded,
+  <code>blocked_waiting_for</code> — asking for a yes or no about a thing never explained. The second
+  was a <strong>raw map row put in front of a human</strong>: a pipe-delimited line of columns,
+  written for an agent that reads the map every turn, unreadable whatever gloss sits beneath it. The
+  third was the agent re-introducing commentary about the batch's structure and the procedure's
+  ordering four items after finding a shape that worked.</p>
+  <p><strong>These are the sixth, seventh and eighth occurrences of the same failure in six days.</strong>
+  Five earlier corrections say the same thing in different words — <em>"you need to include me in the
+  context"</em>, <em>"i have never seen P-004 and dont know in what regard it matters"</em>,
+  <em>"none of that means anything"</em>, <em>"i dont know that t-2, t12, G12 or any of the other ids
+  mean … The meta approach clearly states no numerals or ids"</em>, <em>"you need to work harder to
+  present it to me in a clear structured and accessible way without having me translate"</em>. The
+  always-loaded file carries the rule — <em>"Translate for the pioneer … no id or number stands
+  alone"</em> — and it was in context every time.</p>
+</div>
+
+<h2>Three defects in the items themselves</h2>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-1</span><span class="chip c-open">Open</span>
+    <h3>A candidate quoted a passage the skill no longer contains</h3></div>
+  <p>Item 6 proposed <code>update</code> against this sentence in the contract skill:</p>
+  <blockquote>The pioneer authors the disappointment; the agent authors the command.</blockquote>
+  <p>That sentence does not exist. The skill now reads <em>"The agent drafts the tests with the
+  tiers; the pioneer's disappointment decides them"</em> — and cites this very correction as its
+  source. The kit adopted the claim upstream in contract-012; it has been in force here since.</p>
+  <p><strong>All four of the item's options assumed the sentence was there.</strong> update, retire,
+  add and decline are the exits for a candidate that contradicts a passage — none of them fits a
+  candidate whose passage is already gone. The batch file's own preamble anticipates this
+  (<em>"a quoted passage the skill does not actually contain is a defect in the candidate"</em>) but
+  offers no exit for it, so it was recorded as <code>decline</code> with the defect written into the
+  reason.</p>
+  <p class="note">The generalisable part: a candidate's <code>contradicts</code> field is captured
+  when the candidate is consolidated and is <strong>not re-checked when the batch is assembled</strong>.
+  Any upstream release between those two moments can make it stale. In a project that upgrades often
+  — this one took four releases in three days — that window is wide.</p>
+</div>
+
+<div class="finding corr">
+  <div class="fhead"><span class="fid">F-2</span><span class="chip c-corr">Corrected</span>
+    <h3>The decision vocabulary nearly recorded the opposite of what was meant</h3></div>
+  <p>On item 11 the pioneer said:</p>
+  <blockquote>caution is the right move, we'd like to gather more evidence before doing anything.</blockquote>
+  <p><code>caution</code> writes the claim into the target skill's anti-patterns <em>immediately</em>.
+  <code>hold</code> parks it until new evidence arrives. The stated reason — gather more evidence
+  before doing anything — describes <code>hold</code>. Shown the difference, the pioneer said:
+  <em>"oh, then hold is the right one."</em></p>
+  <p><strong>Nothing in the item would have caught this.</strong> The batch file lists what each
+  option does, and it was read aloud; the mismatch was between the option's effect and the reason
+  given for choosing it, which only a reader comparing the two would notice. Had the agent simply
+  recorded what was said, a skill would have been edited today on a decision meaning the opposite.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-3</span><span class="chip c-open">Open</span>
+    <h3>A ruling that could not be applied, because one kind has no such value</h3></div>
+  <p>Thirteen items in, the pioneer ruled:</p>
+  <blockquote>Id like to only rule on items that has cetainty high or higher … i rule held on
+  everyone that isnt high or higher</blockquote>
+  <p>Applied to the eight remaining items, that leaves <strong>one</strong>. Three candidates were
+  rated low and became <code>hold</code> without discussion. <strong>Four were scenario cards, which
+  carry no certainty at all</strong> — they are rankings of past moments, not claims with evidence —
+  and a card's vocabulary is a ranking or <code>decline</code>, with no <code>hold</code>.</p>
+  <p>So a rule expressed in the vocabulary of one item kind could not be applied to another, and the
+  batch cannot close until every item carries a decision. The four cards were presented and ranked
+  individually. That was the right outcome, but it was reached by the agent noticing the gap, not by
+  anything in the procedure.</p>
+  <p class="note">Two asymmetries meet here: cards have no certainty to filter on, and no
+  <code>hold</code> to defer with. A pioneer reasonably expects "defer what is weak" to apply across
+  a batch; it applies to three of the four kinds.</p>
+</div>
+
+<h2>What the pioneer's reasons reveal about the practice</h2>
+
+<div class="finding ver">
+  <div class="fhead"><span class="fid">V-1</span><span class="chip c-ver">Observed</span>
+    <h3>One test decided a third of the batch, and it is not in any skill</h3></div>
+  <p>Three cards and one candidate were refused on the same ground, stated first at item 7:</p>
+  <blockquote>Imagine we completed this project, then exported the skills. Why is this a standard for
+  how to build a mcp server?</blockquote>
+  <p>And again at item 10 — <em>"its just rules of engagement where we have to align"</em> — and item
+  16 — <em>"Its not part of a standard, its part of how claude code should work."</em></p>
+  <p>The kit has the distinction: <code>meta-skill-builder</code>'s Step 0 separates type-category
+  from project. But <strong>that test is applied when an adopted learning is written into a skill,
+  not when an item is put to the pioneer</strong>. Everything in this batch had already passed
+  through observation, consolidation and assembly without anyone asking whether it could survive
+  export. The pioneer applied the test four times in twenty items; a filter at assembly would have
+  removed those four before they reached the sheet.</p>
+</div>
+
+<div class="finding ver">
+  <div class="fhead"><span class="fid">V-2</span><span class="chip c-ver">Observed</span>
+    <h3>The pioneer ranked the agent's framing above their own override</h3></div>
+  <p>Item 5 showed a moment where the agent laid out two ways to clear a gate and said which it
+  preferred; the pioneer chose the other. Ranking it, they put <strong>the agent's framing
+  first</strong>:</p>
+  <blockquote>i understand when i want you to push ahead, but you dont. Its my point to hold.</blockquote>
+  <p>Presenting the choice with a lean was correct; overriding it is the pioneer's prerogative, and
+  an override is not evidence the agent got it wrong. <strong>That distinction is not in any skill</strong>,
+  and it cuts against the natural reading of a correction log where every entry records the agent
+  being redirected — thirty-one of thirty-one at intervention <code>redirected</code>, none
+  <code>hinted</code> or <code>reviewed-after</code>. A log of overrides is not a log of errors, and
+  nothing in the kit says so.</p>
+</div>
+
+<h2>Where the agent's budget actually goes</h2>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-4</span><span class="chip c-open">Open</span>
+    <h3>The index solved locating; the cost was never locating</h3></div>
+  <p>0.29 shipped <code>records-index.sh</code> in direct response to a downstream measurement of
+  agents exhausting their budgets. It works. An agent asked to account for its own run reported:</p>
+  <pre>records-index.sh .claude/skills observations
+→ line numbers 1608, 1626, 1643, 1660, 1678 — never scanned the section</pre>
+  <p><strong>And it exhausted anyway.</strong> Eleven kit agent runs have now ended in budget
+  exhaustion on this project's records — the tally is from task notifications, not from a log — and
+  the most recent of them is the one quoted above. Asked where the budget went instead, the answer
+  was specific:</p>
+  <ul>
+    <li><strong>No index for candidates.</strong> To answer "does a candidate already make this
+      claim, at this target", the agent grepped the ledger — then 3,700 lines — and ruled out 58
+      candidates by hand. The index covers observations and corrections only, and nothing else:
+      verified by running it with <code>all</code>, which prints those two sections and no
+      third.</li>
+    <li><strong>An observation is a pointer, not a record.</strong> One line — a moment id and a
+      quoted sentence — meaning nothing without its correction. Per item the agent then read the
+      corrections file, the entire target skill (to quote a contradicting passage verbatim, as
+      required), the contract log and the drift log. <strong>None of that is indexed.</strong></li>
+  </ul>
+  <p class="note">The shape of the finding: the fix addressed the step that was already cheap. The
+  expensive part is the cross-file reading the schema requires <em>per candidate</em>, and it scales
+  with the number of candidates already held, not with the batch in hand. A second index — candidates
+  by target and recency — would cut the larger half.</p>
+</div>
+
+<h2>Smaller things, recorded because they cost real turns</h2>
+
+<table>
+  <tr><th style="width:15rem">What happened</th><th>Why it matters</th></tr>
+  <tr><td>The agent asked a card for "your read" and "assume this is wrong, why"</td>
+    <td>Those two fields belong to candidates. The batch file says so in its preamble — <em>"items
+    that carry a learning"</em> — and the card's own fields don't include them. The agent read the
+    procedure's general instruction rather than the item. The pioneer's response was
+    <em>"what do you want me to answer? you instructions are unclear"</em>.</td></tr>
+  <tr><td>The blind did not cover a shell read</td>
+    <td>While a batch is open the ledger is refused to the presenting session — through the file
+    tools. The agent read it through the shell without thinking. The kit documents this
+    (<em>"What neither covers: Bash reads"</em>), so it is a known hole rather than a failure, but
+    the one mechanism designed to keep re-presented items indistinguishable is one habit away from
+    being bypassed by the agent it constrains.</td></tr>
+  <tr><td>Recording a decision broke the ledger's format</td>
+    <td>A reason containing an unquoted colon — <em>"pioneer ruling: only rule on items…"</em> —
+    made the file unparseable. Caught immediately and repaired as block scalars. Worth noting only
+    because <strong>every decision reason is free-form pioneer prose</strong> written into YAML by
+    an agent at reveal time, and colons in ordinary speech are common.</td></tr>
+  <tr><td>Presentation forms were invented per item</td>
+    <td>The agent used three different shapes for three candidates before the pioneer asked why.
+    The kit prescribes the <em>order</em> of a review precisely and says nothing about the
+    <em>form</em> of each item kind. The forms that resulted — and the pioneer's requirement that
+    each item name what kind of thing it is and what deciding it does — were designed in the middle
+    of the review, by the pioneer, four items from the end.</td></tr>
+</table>
+
+<div class="judgement">
+  <h3>Recommendation &mdash; judgement, not finding</h3>
+  <ol class="rec">
+    <li><strong>Re-check <code>contradicts</code> at assembly, not only at consolidation</strong>
+      (F-1). A candidate that quotes a passage is checked against the skill when it is consolidated
+      and never again. Every upstream release between then and the batch can invalidate it — and
+      when it does, none of the four exits fits. One grep at assembly time would catch it, or the
+      item could carry a fifth exit for "the passage is gone".</li>
+    <li><strong>Give cards a defer.</strong> A pioneer's rule to defer weak items cannot be applied
+      to a kind with no certainty and no <code>hold</code>. Either cards carry a strength signal, or
+      they get a <code>defer</code> that closes the batch without ranking them.</li>
+    <li><strong>Apply the export test at assembly.</strong> Four of twenty items failed the
+      pioneer's own question — <em>would this be a standard for how to build this kind of system?</em>
+      — and the kit already has that distinction in Step 0. Asking it before the sheet rather than
+      after adoption would have removed a fifth of the batch.</li>
+    <li><strong>Index candidates by target</strong> (F-4). The observation index works and addressed
+      the cheaper half. The expensive half is finding whether a claim already exists, which currently
+      means reading every candidate.</li>
+    <li><strong>Prescribe a form per item kind, not only an order.</strong> The procedure is exact
+      about sequence and silent about presentation, so each agent invents one — and the failure mode
+      is the kit's own vocabulary reaching the pioneer. The forms this review settled on are in this
+      project's record and are offered as a starting point, not as the answer.</li>
+    <li><strong>Say somewhere that an override is not an error.</strong> Thirty-one corrections, all
+      <code>redirected</code>. The pioneer ranked an agent's framing above their own override on the
+      grounds that presenting the choice was right and overriding it is theirs to do. A log that
+      cannot distinguish those two teaches the agent to stop offering choices.</li>
+  </ol>
+  <p class="note" style="margin-top:1rem"><strong>What should not change.</strong> The order —
+  statement, then the pioneer's read, then the agent's evidence — did exactly what it is for. Three
+  of the twenty decisions went against the proposed disposition, and two of those reversed on reasons
+  the agent had not considered. The one-sided question (<em>"assume this is wrong, why?"</em>) and
+  the refusal to let the agent argue are the parts of this procedure that earned their cost.</p>
+</div>
+
+<h2>What this report does not establish</h2>
+
+<table>
+  <tr><th style="width:15rem">Question</th><th>Why it stayed open</th></tr>
+  <tr><td>Does the export test generalise?</td>
+    <td>One pioneer, one project, one batch. They applied it four times unprompted, which is
+    suggestive of a real filter and not proof of one.</td></tr>
+  <tr><td>Would a candidate index actually fix the budget?</td>
+    <td>Not tested. The agent's account names it as the larger of two costs; the other — reading
+    each target skill to quote a passage — is required by the schema and would remain.</td></tr>
+  <tr><td>How much did the presentation corrections cost?</td>
+    <td>Not measured in turns. Three corrections across twenty items, each requiring a restatement,
+    but the review completed in one sitting regardless.</td></tr>
+  <tr><td>Do re-presented items work?</td>
+    <td>Untested. This was a first batch, so the key marked none as re-presented and the whole
+    consistency mechanism went unexercised.</td></tr>
+  <tr><td>Is the agent's account of its own failures complete?</td>
+    <td>Self-reported. The corrections are the pioneer's verbatim words, but what the agent did not
+    notice is by definition absent.</td></tr>
+</table>
+
+<h2>Provenance</h2>
+<p style="font-size:.88rem;color:var(--ink-soft)">Written by the agent that presented the batch.
+Every decision and reason in the table is read from <code>B-001.md</code> as recorded at the time;
+every pioneer quotation is <code>pioneer_said</code> from the correction log, verbatim. The five
+corrections are C-027 through C-031; the five earlier ones quoted in C-2 are C-002, C-005, C-017,
+C-020 and C-021. The intervention figure is a count over the whole log. The budget account in F-4 is
+a kit agent's own report of its run, with the claim that no candidate index exists verified by
+running <code>records-index.sh .claude/skills all</code>; the exhaustion tally is from task
+notifications across sessions, as in report-005, and is not held in any record. The missing sentence in F-1 was verified absent
+from the installed skill. Seventh in a series with <span class="mono">report-001</span> through
+<span class="mono">report-006</span>.</p>
+
+</div>

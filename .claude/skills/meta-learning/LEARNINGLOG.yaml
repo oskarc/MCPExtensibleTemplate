@@ -167,12 +167,12 @@ entries:
       kind: principle
       evidence: "diffs[0]; G-4's recorded correction and the carried half in the close"
       observation: O-019
-      human_decision: pending
+      human_decision: decline
     - target: meta-contract-before-execution
       kind: pattern
       evidence: "diffs[2]; the untested: line against the three corrected clauses"
       observation: O-020
-      human_decision: pending
+      human_decision: hold
 
 - work_id: work-002
   feature: phase-1-identity
@@ -307,9 +307,9 @@ entries:
       kind: principle
       evidence: diffs[0] and diffs[2]
       observation: O-044
-      human_decision: pending
+      human_decision: hold
     - target: meta-foundation
       kind: principle
       evidence: diffs[1] and diffs[3]
       observation: O-045
-      human_decision: pending
+      human_decision: hold

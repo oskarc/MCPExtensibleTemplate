@@ -1605,6 +1605,93 @@ observations:
     merged_into: K-053
     stewarded: n/a
 
+  - obs_id: O-056
+    date: 2026-09-22
+    source: pioneer
+    contract_id: null
+    refs: [C-027]
+    statement: |
+      M-16
+
+      The agent should present candidates that scores high on reliability, those it feels are
+      strong or likely to be adopted.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-054
+    stewarded: n/a
+
+  - obs_id: O-057
+    date: 2026-09-22
+    source: pioneer
+    contract_id: null
+    refs: [C-028]
+    statement: |
+      M-16
+
+      stay true to the skill
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-055
+    stewarded: n/a
+
+  - obs_id: O-058
+    date: 2026-09-22
+    source: pioneer
+    contract_id: null
+    refs: [C-029]
+    statement: |
+      M-16
+
+      i have no idea what that means
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-056
+    stewarded: n/a
+
+  - obs_id: O-059
+    date: 2026-09-22
+    source: pioneer
+    contract_id: null
+    refs: [C-030]
+    statement: |
+      M-16
+
+      It was very hard to understand, the language and structure makes it hard for a human go
+      grasp.
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-057
+    stewarded: n/a
+
+  - obs_id: O-060
+    date: 2026-09-22
+    source: pioneer
+    contract_id: null
+    refs: [C-031]
+    statement: |
+      M-16
+
+      you regressed in how you presented now
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: true
+    merged_into: K-058
+    stewarded: n/a
+
 
 candidates:
   - cand_id: K-001
@@ -3552,6 +3639,137 @@ candidates:
     stated_confidence: null
     restatements: 1
     last_moved: 2026-09-20
+    decision: null
+    outcome: null
+
+  - cand_id: K-054
+    created: 2026-09-22
+    statement: |
+      M-16
+
+      The agent should present candidates that scores high on reliability, those it feels are
+      strong or likely to be adopted.
+    level: principle
+    tier: undecided
+    target: [meta-skill-builder]
+    stage: assess
+    contradicts:
+      - file: meta-skill-builder/SKILL.md
+        passage: "For each item, in order:"
+      - file: meta-skill-builder/SKILL.md
+        passage: "Present; do not argue. The proposed disposition is the only recommendation on the page."
+    review_due: true
+    disposition_proposed: decline
+    evidence_refs: ["O-056"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 1, loaded: 0}
+    independent_uses: 0
+    certainty: moderate
+    certainty_codes: [pioneer-unprompted, contradicted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-22
+    decision: null
+    outcome: null
+
+  - cand_id: K-055
+    created: 2026-09-22
+    statement: |
+      M-16
+
+      stay true to the skill
+    level: principle
+    tier: undecided
+    target: [meta-skill-builder]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-057"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-22
+    decision: null
+    outcome: null
+
+  - cand_id: K-056
+    created: 2026-09-22
+    statement: |
+      M-16
+
+      i have no idea what that means
+    level: pattern
+    tier: undecided
+    target: [meta-foundation]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-058"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-22
+    decision: null
+    outcome: null
+
+  - cand_id: K-057
+    created: 2026-09-22
+    statement: |
+      M-16
+
+      It was very hard to understand, the language and structure makes it hard for a human go
+      grasp.
+    level: pattern
+    tier: undecided
+    target: [meta-map]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-059"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-22
+    decision: null
+    outcome: null
+
+  - cand_id: K-058
+    created: 2026-09-22
+    statement: |
+      M-16
+
+      you regressed in how you presented now
+    level: pattern
+    tier: undecided
+    target: [meta-skill-builder]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-060"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: high
+    certainty_codes: [pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-09-22
     decision: null
     outcome: null
 

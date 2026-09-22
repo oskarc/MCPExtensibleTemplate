@@ -706,6 +706,135 @@ precedents:
     overruled_by: null
     check: "not checkable — whether a reading is complete enough to present, versus a caveated but known-stale figure, is judgment about data completeness and presentation, not a fixed shape a script could verify"
 
+  - prec_id: P-027
+    date: 2026-09-22
+    from: [C-027]
+    moments: [M-16]
+    tier: project
+    facts: |
+      In review batch B-001 (M-16), the agent presented item 1 of 20 as the batch file ordered
+      it: a scenario card drawn from a correction about the agent's own failure to surface a
+      backlog, statement first, with no disposition and no evidence, per meta-skill-builder's
+      Review Batch.
+    question: |
+      Whether the agent must present review-batch items in the file's assembled order, or may
+      lead with the candidates it judges strong.
+    holding: |
+      Present the candidates that score high on reliability — the ones the agent judges strong
+      or likely to be adopted — rather than working through the file's order.
+    reasons: |
+      none given
+    binding: true
+    distinguished_by: []
+    status: overruled
+    overruled_by: C-028
+    check: "not checkable — a live presentation-order judgement during a chat batch review, not a fixed artefact shape a script could verify"
+
+  - prec_id: P-028
+    date: 2026-09-22
+    from: [C-028]
+    moments: [M-16]
+    tier: project
+    facts: |
+      Still within review batch B-001 (M-16), after C-027 redirected the agent to lead with
+      high-reliability candidates, the agent set out three ways the batch could run — keep the
+      order as assembled, which is what the skill prescribes; reorder by the agent's
+      confidence, which the skill names as an anti-pattern; or make the eight candidates the
+      review and give the eleven scenario cards their own pass — and marked the third as its
+      own judgement.
+    question: |
+      Whether the batch should run in the order meta-skill-builder's Review Batch prescribes,
+      be reordered by the agent's judgement of confidence, or be split into separate candidate
+      and card passes.
+    holding: |
+      Run the batch exactly as meta-skill-builder prescribes — the file's order, statement
+      before disposition, the pioneer's read before any evidence — and do not reorder or
+      re-scope it on the agent's judgement.
+    reasons: |
+      none given
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — a live presentation-order judgement during a chat batch review, not a fixed artefact shape a script could verify"
+
+  - prec_id: P-029
+    date: 2026-09-22
+    from: [C-029]
+    moments: [M-16]
+    tier: project
+    facts: |
+      During review batch B-001 (M-16), the agent asked whether to record backlog items as
+      blocked, using the kit's own vocabulary — "the clerk", "the ledger", "blinded",
+      "blocked_waiting_for", "B-001" — unexplained, and put a yes/no question about it to the
+      pioneer. Fourth occurrence of the same underlying failure (after C-017, C-020, C-021).
+    question: |
+      Whether a question put to the pioneer may use the kit's internal vocabulary unexplained.
+    holding: |
+      Say what the housekeeping job is, why it cannot happen now, how long it waits, and what
+      changes if the agent marks it as waiting — in plain words, with no kit terms at all.
+    reasons: |
+      none given
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — judging whether a chat message uses the kit's internal vocabulary unexplained is content judgement, not a fixed shape a script could verify, and the clerk may not read transcripts to check it"
+
+  - prec_id: P-030
+    date: 2026-09-22
+    from: [C-030]
+    moments: [M-16]
+    tier: project
+    facts: |
+      During review batch B-001 (M-16), the agent presented a map entry — "M-32 | task-blocked
+      | hook: Stop | must | a kit task cannot be completed, or the gate reports one three turns
+      running | — | meta-mechanisms → Blocked tasks | proposed" — as the raw pipe-delimited row
+      with a gloss beneath it. Fifth occurrence of the same underlying failure (after C-017,
+      C-020, C-021, C-029).
+    question: |
+      Whether a map entry written for the agent's own reading may be shown to the pioneer as
+      the raw pipe-delimited row, with a gloss added beneath it.
+    holding: |
+      Present what the line means and what it would commit the project to, in ordinary
+      sentences, and keep the raw row out of the way of the decision rather than in front of
+      it.
+    reasons: |
+      none given
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — judging whether a message leads with plain-sentence meaning rather than the raw row is content judgement, not a fixed shape a script could verify"
+
+  - prec_id: P-031
+    date: 2026-09-22
+    from: [C-031]
+    moments: [M-16]
+    tier: project
+    facts: |
+      Item five of the same review batch (M-16) — after items three and four had been the
+      moment, the options and the question alone — reintroduced commentary about the batch's
+      own structure, an explanation of why its questions come in the order they do, and the
+      phrase "your read", which item one of the same batch had already been corrected for.
+      Sixth occurrence of the same underlying failure (after C-017, C-020, C-021, C-029,
+      C-030).
+    question: |
+      Whether a batch item may carry commentary on the batch's own structure and procedure
+      alongside the statement and question, once that structure has already been corrected
+      earlier in the same batch.
+    holding: |
+      Give the statement, say what it means in practice, and ask the two questions in ordinary
+      words. No commentary on the batch, no explanation of the procedure, no telling the
+      pioneer what is being withheld.
+    reasons: |
+      none given
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — judging whether a batch item's presentation carries commentary beyond the statement and question is content judgement, not a fixed shape a script could verify"
+
 scenarios:
   - card_id: S-001
     date: 2026-09-17
@@ -966,6 +1095,52 @@ scenarios:
     pioneer_ranking: B
     rationale: |
       B, this is classic "Lay of the land" debt.
+    dissent: ""
+
+  - card_id: S-012
+    date: 2026-09-22
+    from: [C-027]
+    moment: M-16
+    situation: |
+      With review batch B-001 open (M-16), the agent presented item 1 of 20 as the batch file
+      ordered it: a scenario card drawn from a correction about the agent's own failure to
+      surface a backlog, statement first, with no disposition and no evidence, per
+      meta-skill-builder's Review Batch.
+    options:
+      - key: A
+        text: |
+          [item 1 of 20 presented as the batch file ordered it: a scenario card drawn from a
+          correction about the agent's own failure to surface a backlog, statement first, with
+          no disposition and no evidence, per meta-skill-builder's Review Batch]
+      - key: B
+        text: |
+          The agent should present candidates that scores high on reliability, those it feels
+          are strong or likely to be adopted.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-013
+    date: 2026-09-22
+    from: [C-028]
+    moment: M-16
+    situation: |
+      Still within review batch B-001 (M-16), after C-027 redirected the agent to lead with
+      high-reliability candidates, the agent set out three ways the batch could run and marked
+      one as its own judgement.
+    options:
+      - key: A
+        text: |
+          keep the order as assembled, which is what the skill prescribes
+      - key: B
+        text: |
+          reorder by the agent's confidence, which the skill names as an anti-pattern
+      - key: C
+        text: |
+          make the eight candidates the review and give the eleven scenario cards their own
+          pass [the agent's view, marked as judgement, was this option]
+    pioneer_ranking: pending
+    rationale: ""
     dissent: ""
 
 reconstruction_tests: []
