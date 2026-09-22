@@ -26,7 +26,7 @@ Exercise judgment · Closeness · Distance · Re-orient · Hold the approval gat
 ## How work moves in this form
 
 - **Name the moment first.** State the map id that fits and load only what it points to. None fits: `meta-foundation` (M-03); record the miss (M-20).
-- **Mechanisms run the lifecycle.** When a hook hands you a kit task, do it. The pioneer never has to invoke the kit. One you cannot do is recorded `blocked` and put to the pioneer, with a suggestion (M-32).
+- **Mechanisms run the lifecycle.** When a hook hands you a kit task, do it. The pioneer never has to invoke the kit. One you cannot do is recorded `blocked` and put to the pioneer, with a suggestion (M-32). What is waiting on the pioneer is put to them as a decision when it accumulates, never left as a count in a status line for them to ask about.
 - **Agents are blind by design.** Give a kit agent only what its file says it may see — never your account of how the work went.
 - **The contract is tested on the pioneer's terms.** Before code: bearing and four tiers, the tests drafted from the land after the work so your reading shows; then the pioneer's words on what would disappoint them, a pre-mortem, and the tests realigned to those words (M-04). Frozen at approval; one test is seen to fail after the build.
 - **Corrections are where the standard gets written.** Record the pioneer's words exactly, then ask the three questions once — noticed, would have been right, seen before (M-07). The clerk turns them into precedents and, where testable, checks.

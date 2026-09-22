@@ -52,7 +52,7 @@ M-26 | extraction | situation | must | the pioneer judges type-category nodes re
 M-20 | map-miss | situation | must | kit knowledge existed but did not load when it applied | knowledge the kit lacks (a gap: meta-manifest) | meta-ledger → Observations (source: map-miss) | ratified
 M-21 | map-review-due | hook: Stop | ambient | three or more map misses unstewarded | — | agent: kit-map-steward | ratified
 M-30 | mechanism-change | situation | must | a hook, agent scope, the blind or the seal needs adding or changing; or a prose rule regressed twice | a node's guidance is what changes (M-22) | meta-mechanisms → Adding or changing a mechanism | ratified
-M-32 | task-blocked | hook: Stop | must | a kit task cannot be completed, or the gate reports one three turns running | — | meta-mechanisms → Blocked tasks | proposed
+M-32 | task-blocked | hook: Stop | must | a kit task cannot be completed, or the gate reports one three turns running | — | surface it to the pioneer and ask for guidance; meta-mechanisms → Blocked tasks | ratified
 M-27 | install-or-upgrade | situation | must | no manifest of its own, one still declaring a base kit_type, or a kit staged in .claude/kit-incoming/ | the manifest matches the kit version | meta-bootstrap | ratified
 ## Project entries
 

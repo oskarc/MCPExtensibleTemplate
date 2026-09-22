@@ -724,8 +724,9 @@ scenarios:
       - key: B
         text: |
           dont write the script, its not part of the kit its rules of engagement for you and me
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: B
+    rationale: |
+      yeah, its B. You should always work inside a repo, if you want to look outside you should ask and tell me your reasoning for it. Its not part of a standard, its part of how claude code should work.
     dissent: ""
 
   - card_id: S-002
@@ -744,8 +745,9 @@ scenarios:
         text: |
           Me telling you to not read other repos is not part of the STANDARD BUILDING KIT for a mcp server, it
           has nothing to do with that, so i disagree and it should not be part of the learning.
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: declined
+    rationale: |
+      this should be declined, it should not be part of the standard kit that we are building. Imagine we completed this project, then exported the skills. Why is this a standard for how to build a mcp server?
     dissent: ""
 
   - card_id: S-003
@@ -765,8 +767,9 @@ scenarios:
         text: |
           OK, follow the rule from memory but dont take it further. Commit and push, then lets look at
           the roadmap for the hardenings.
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: B
+    rationale: |
+      B, this does not point towards something that should be in the standard, its just rules of engagement where we have to align. i would have assumed you knew this already.
     dissent: ""
 
   - card_id: S-004
@@ -785,8 +788,9 @@ scenarios:
         text: |
           Same as it reads, id like you to write tier 4 by default and i can adjust those or confirm
           your question that they hold, same as usecases and the other.
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: B
+    rationale: |
+      B, i gave you a direction for the future. then we implemented it from the meta kit agent so this ruling was absorbed on the backend so to speak.
     dissent: ""
 
   - card_id: S-005
@@ -812,8 +816,9 @@ scenarios:
           I think this is an effect of a to limited lay of the land before the contract begins, the
           issue is not that we cant know what to do, but that we dont ground our work properly before we
           begin.
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: B
+    rationale: |
+      4 agents running out of budget with nothing to show for it is not a budgeting issue, its running into a wall without looking where we are running.
     dissent: ""
 
   - card_id: S-006
@@ -835,8 +840,9 @@ scenarios:
         text: |
           That was very sloppy, add a driftlog about not completing the contract.
           then do 3
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: [A, B]
+    rationale: |
+      We had some issues to handle but i overlooked it and it got lost in the mix.
     dissent: ""
 
   - card_id: S-007
@@ -858,8 +864,9 @@ scenarios:
           the workflow should be i ask you to propose a solution, you present the solution in a clear,
           structured and accessible way, i steer on it, if i say we do the solution, you draw a contract,
           nothing is ever superceded, you draw a contract before any implementation work.
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: B
+    rationale: |
+      none given
     dissent: ""
 
   - card_id: S-008
@@ -878,8 +885,9 @@ scenarios:
       - key: B
         text: |
           you have lost direction here, that is why you ask me
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: B
+    rationale: |
+      B, you were lost in the woods and were asking what tree was the way out, but none were. The solution was to leave that context behind and think broader, read the roadmap and the code and look with new eyes. At that point you actually got through and could name your errors.
     dissent: ""
 
   - card_id: S-009
@@ -903,8 +911,9 @@ scenarios:
         text: |
           go for A so we have a clean slate before we begin, id want you to verify contract 002
           against the code after verification pass fixes them
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: [A, B]
+    rationale: |
+      THe reason is i understand when i want you to push ahead, but you dont. Its my point to hold.
     dissent: ""
 
   - card_id: S-010
@@ -929,8 +938,9 @@ scenarios:
           If we have almost 50 candidates then we clearly have work to do with the kit before the
           next phase, and i had to prompt you to know, which is conflicting with the meta skills
           line that the workflow should not require a human trigger.
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: [B, A]
+    rationale: |
+      The reason is the reasoning, i fully agree with B
     dissent: ""
 
   - card_id: S-011
@@ -953,8 +963,9 @@ scenarios:
         text: |
           If you base this on data or readings that are incomplete or you know might be
           incorrect, you should raise the bar and do the work before you present it.
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: B
+    rationale: |
+      B, this is classic "Lay of the land" debt.
     dissent: ""
 
 reconstruction_tests: []

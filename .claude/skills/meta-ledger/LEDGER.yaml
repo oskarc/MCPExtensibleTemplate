@@ -1639,7 +1639,8 @@ candidates:
     decision:
       batch: null                      # decided directly by the pioneer; no batch was open
       item: null
-      verdict_before: null
+      verdict_before: |
+        null
       decision: decline
       level_decided: null
       tier_decided: null
@@ -1647,7 +1648,8 @@ candidates:
         Me telling you to not read other repos is not part of the STANDARD BUILDING KIT for a mcp server, it
         has nothing to do with that, so i disagree and it should not be part of the learning.
       date: 2026-09-17
-      applied_as: null
+      applied_as: |
+        null
     outcome: {resolved: 2026-09-17, held: unobserved}
 
   - cand_id: K-002
@@ -1751,7 +1753,7 @@ candidates:
     target: [meta-contract-before-execution]
     stage: assess
     contradicts: []
-    review_due: true
+    review_due: false
     disposition_proposed: caution
     evidence_refs: ["O-005", "O-009"]
     helpful: {independent: 0, loaded: 0}
@@ -1764,7 +1766,17 @@ candidates:
     last_moved: 2026-09-18
     decision: null
     outcome: null
-
+    decision:
+      batch: B-001
+      item: I-20
+      verdict_before: |
+        not given
+      decision: hold
+      level_decided: n/a
+      tier_decided: n/a
+      reason: |
+        pioneer ruling: only rule on items with certainty high or higher; held on everything below.
+      date: 2026-09-22
   - cand_id: K-006
     created: 2026-09-18
     statement: |
@@ -1990,9 +2002,9 @@ candidates:
     level: principle
     tier: undecided
     target: [meta-contract-before-execution]
-    stage: assess
+    stage: declined
     contradicts: []
-    review_due: true
+    review_due: false
     disposition_proposed: caution
     evidence_refs: ["O-013", "O-014"]
     helpful: {independent: 0, loaded: 0}
@@ -2005,7 +2017,17 @@ candidates:
     last_moved: 2026-09-18
     decision: null
     outcome: null
-
+    decision:
+      batch: B-001
+      item: I-8
+      verdict_before: |
+        not given
+      decision: decline
+      level_decided: n/a
+      tier_decided: n/a
+      reason: |
+        decline, its not a structural or standardizing thing
+      date: 2026-09-22
   - cand_id: K-013
     created: 2026-09-18
     statement: |
@@ -2216,9 +2238,9 @@ candidates:
     level: principle
     tier: undecided
     target: [meta-contract-before-execution]
-    stage: assess
+    stage: declined
     contradicts: []
-    review_due: true
+    review_due: false
     disposition_proposed: trial
     evidence_refs: ["O-019"]
     helpful: {independent: 0, loaded: 0}
@@ -2231,7 +2253,17 @@ candidates:
     last_moved: 2026-09-19
     decision: null
     outcome: null
-
+    decision:
+      batch: B-001
+      item: I-12
+      verdict_before: |
+        not given
+      decision: decline
+      level_decided: n/a
+      tier_decided: n/a
+      reason: |
+        my read of this situation is that we got lost in the woods and tried to stuble our way out. This is not an elevation moment, but rather in the middle of drift.
+      date: 2026-09-22
   - cand_id: K-018
     created: 2026-09-19
     statement: |
@@ -2252,7 +2284,7 @@ candidates:
     target: [meta-contract-before-execution]
     stage: assess
     contradicts: []
-    review_due: true
+    review_due: false
     disposition_proposed: trial
     evidence_refs: ["O-020"]
     helpful: {independent: 0, loaded: 0}
@@ -2265,7 +2297,17 @@ candidates:
     last_moved: 2026-09-19
     decision: null
     outcome: null
-
+    decision:
+      batch: B-001
+      item: I-11
+      verdict_before: |
+        You might have the right read, or perhaps in this instance it was as you say. But this weakens that lines foundation or score. Another way to put it is that this applies that the mechanic or its use is not complete in what it attempts.
+      decision: hold
+      level_decided: n/a
+      tier_decided: n/a
+      reason: |
+        caution is the right move, we would like to gather more evidence before doing anything. / oh, then hold is the right one
+      date: 2026-09-22
   - cand_id: K-019
     created: 2026-09-19
     statement: |
@@ -2368,11 +2410,11 @@ candidates:
     level: pattern
     tier: undecided
     target: [meta-contract-before-execution]
-    stage: assess
+    stage: declined
     contradicts:
       - file: meta-contract-before-execution/SKILL.md
         passage: "The pioneer authors the disappointment; the agent authors the command."
-    review_due: true
+    review_due: false
     disposition_proposed: update
     evidence_refs: ["O-024"]
     helpful: {independent: 0, loaded: 0}
@@ -2385,7 +2427,17 @@ candidates:
     last_moved: 2026-09-17
     decision: null
     outcome: null
-
+    decision:
+      batch: B-001
+      item: I-6
+      verdict_before: |
+        not given
+      decision: decline
+      level_decided: n/a
+      tier_decided: n/a
+      reason: |
+        this is already being enforced by the kit, so it superecedes another skill / i agree, its right to decline you proposal.
+      date: 2026-09-22
   - cand_id: K-023
     created: 2026-09-18
     statement: |
@@ -3131,7 +3183,7 @@ candidates:
     target: [meta-contract-before-execution]
     stage: assess
     contradicts: []
-    review_due: true
+    review_due: false
     disposition_proposed: trial
     evidence_refs: ["O-044"]
     helpful: {independent: 0, loaded: 0}
@@ -3144,7 +3196,17 @@ candidates:
     last_moved: 2026-09-20
     decision: null
     outcome: null
-
+    decision:
+      batch: B-001
+      item: I-13
+      verdict_before: |
+        not given
+      decision: hold
+      level_decided: n/a
+      tier_decided: n/a
+      reason: |
+        pioneer ruling: only rule on items with certainty high or higher; held on everything below.
+      date: 2026-09-22
   - cand_id: K-043
     created: 2026-09-20
     statement: |
@@ -3176,7 +3238,7 @@ candidates:
     target: [meta-foundation]
     stage: assess
     contradicts: []
-    review_due: true
+    review_due: false
     disposition_proposed: trial
     evidence_refs: ["O-045"]
     helpful: {independent: 0, loaded: 0}
@@ -3189,7 +3251,17 @@ candidates:
     last_moved: 2026-09-20
     decision: null
     outcome: null
-
+    decision:
+      batch: B-001
+      item: I-19
+      verdict_before: |
+        not given
+      decision: hold
+      level_decided: n/a
+      tier_decided: n/a
+      reason: |
+        pioneer ruling: only rule on items with certainty high or higher; held on everything below.
+      date: 2026-09-22
   - cand_id: K-044
     created: 2026-09-20
     statement: |
@@ -3428,11 +3500,11 @@ candidates:
     level: principle
     tier: undecided
     target: [meta-foundation]
-    stage: assess
+    stage: adopt
     contradicts:
       - file: meta-foundation/INTENT.md
         passage: "When a hook hands you a kit task, do it. The pioneer never has to invoke the kit."
-    review_due: true
+    review_due: false
     disposition_proposed: update
     evidence_refs: ["O-054"]
     helpful: {independent: 0, loaded: 0}
@@ -3445,7 +3517,18 @@ candidates:
     last_moved: 2026-09-20
     decision: null
     outcome: null
-
+    decision:
+      batch: B-001
+      item: I-18
+      verdict_before: |
+        I agree that mechanisms should run the lifecycle, would it be enforced or remembered? You aim is correct, but the implementation?
+      decision: add
+      level_decided: principle
+      tier_decided: type-category
+      reason: |
+        you can make the addition / the wording is correct, type category.
+      date: 2026-09-22
+    applied_as: add — the claim written beside the quoted sentence in meta-foundation/INTENT.md, the sentence left standing
   - cand_id: K-053
     created: 2026-09-20
     statement: |
@@ -3472,7 +3555,14 @@ candidates:
     decision: null
     outcome: null
 
-batches: []
+batches:
+  - batch_id: B-001
+    date: 2026-09-22
+    file: meta-ledger/batches/B-001.md
+    items: 20
+    decided: true
+    revealed: true
+    represented: []
 
 map_proposals: []
 

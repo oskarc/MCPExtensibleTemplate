@@ -876,6 +876,176 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-027
+    date: 2026-09-22
+    contract_id: null
+    moment: M-16
+    grade: option-override
+    intervention: redirected
+    agent_offered: |
+      [item 1 of 20 presented as the batch file ordered it: a scenario card drawn from a correction
+      about the agent's own failure to surface a backlog, statement first, with no disposition and
+      no evidence, per meta-skill-builder's Review Batch]
+    pioneer_said: |
+      The agent should present candidates that scores high on reliability, those it feels are
+      strong or likely to be adopted.
+    reason_given: |
+      none given
+    noticed: |
+      The batch led with a low-value item about the agent's own mistake rather than with the
+      candidates most likely to be worth adopting, and the procedure gives the agent no way to say
+      which it believes are strong.
+    would_have_been_right: |
+      Present the candidates that score high on reliability — the ones the agent judges strong or
+      likely to be adopted — rather than working through the file's order.
+    seen_before: |
+      asked this turn, awaiting answer
+    supersedes: []
+    recorded_by: main-agent
+    clerked: blocked
+    blocked_since: 2026-09-22
+    blocked_reason: the case clerk writes to LEDGER.yaml, which the batch blind refuses while review batch B-001 is open and undecided
+    blocked_waiting_for: B-001 to be decided and closed, after which the clerk runs normally
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-028
+    date: 2026-09-22
+    contract_id: null
+    moment: M-16
+    grade: option-override
+    intervention: redirected
+    agent_offered: |
+      Three ways the batch can run: keep the order as assembled, which is what the skill
+      prescribes; reorder by the agent's confidence, which the skill names as an anti-pattern;
+      or make the eight candidates the review and give the eleven scenario cards their own pass.
+      The agent's view, marked as judgement, was the third.
+    pioneer_said: |
+      stay true to the skill
+    reason_given: |
+      none given
+    noticed: |
+      The conflict was between the pioneer's own instruction and the procedure, and the procedure
+      stands.
+    would_have_been_right: |
+      Run the batch exactly as meta-skill-builder prescribes — the file's order, statement before
+      disposition, the pioneer's read before any evidence — and do not reorder or re-scope it on
+      the agent's judgement.
+    seen_before: |
+      not asked — this resolves C-027 rather than recording a new failure.
+    supersedes: [C-027]
+    recorded_by: main-agent
+    clerked: blocked
+    blocked_since: 2026-09-22
+    blocked_reason: the case clerk writes to LEDGER.yaml, which the batch blind refuses while review batch B-001 is open and undecided
+    blocked_waiting_for: B-001 to be decided and closed, after which the clerk runs normally
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-029
+    date: 2026-09-22
+    contract_id: null
+    moment: M-16
+    grade: detail
+    intervention: redirected
+    agent_offered: |
+      They are not permanently stuck - they are waiting on B-001 closing, because the clerk writes
+      to the ledger and the ledger is blinded while a batch is open. That is exactly what
+      blocked_waiting_for is for. Shall I record them blocked on that basis?
+    pioneer_said: |
+      i have no idea what that means
+    reason_given: |
+      none given
+    noticed: |
+      The question was written in the kit's own vocabulary - the clerk, the ledger, blinded,
+      blocked_waiting_for, B-001 - none of which says anything to a reader who is not holding the
+      kit's internals. It asked for a yes or no about a thing never explained.
+    would_have_been_right: |
+      Say what the housekeeping job is, why it cannot happen now, how long it waits, and what
+      changes if the agent marks it as waiting - in plain words, with no kit terms at all.
+    seen_before: |
+      C-017, C-020 and C-021, all on 2026-09-20. Fourth occurrence.
+    supersedes: []
+    recorded_by: main-agent
+    clerked: blocked
+    blocked_since: 2026-09-22
+    blocked_reason: the case clerk writes to LEDGER.yaml, which the batch blind refuses while review batch B-001 is open and undecided
+    blocked_waiting_for: B-001 to be decided and closed, after which the clerk runs normally
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-030
+    date: 2026-09-22
+    contract_id: null
+    moment: M-16
+    grade: detail
+    intervention: redirected
+    agent_offered: |
+      M-32 | task-blocked | hook: Stop | must | a kit task cannot be completed, or the gate reports
+      one three turns running | — | meta-mechanisms → Blocked tasks | proposed
+      [presented as the raw pipe-delimited row with a gloss beneath it]
+    pioneer_said: |
+      It was very hard to understand, the language and structure makes it hard for a human go
+      grasp.
+    reason_given: |
+      none given
+    noticed: |
+      A map entry is a row of pipe-separated columns written for the agent that reads the map every
+      turn. Put in front of a human it is an unreadable structure whatever gloss is added beneath.
+    would_have_been_right: |
+      Present what the line means and what it would commit the project to, in ordinary sentences,
+      and keep the raw row out of the way of the decision rather than in front of it.
+    seen_before: |
+      C-017, C-020, C-021 and C-029, all within two days. Fifth occurrence.
+    supersedes: []
+    recorded_by: main-agent
+    clerked: blocked
+    blocked_since: 2026-09-22
+    blocked_reason: the case clerk writes to LEDGER.yaml, which the batch blind refuses while review batch B-001 is open and undecided
+    blocked_waiting_for: B-001 to be decided and closed, after which the clerk runs normally
+    precedent: null
+    clerk_note: null
+
+
+  - corr_id: C-031
+    date: 2026-09-22
+    contract_id: null
+    moment: M-16
+    grade: detail
+    intervention: redirected
+    agent_offered: |
+      That's 5 of 20 — and the first five were all past decisions. This one is different. It's a
+      proposed change to how the practice works, and it carries the two questions the cards didn't.
+      [... then] Your read — one line on the statement itself. [... then] (I'll give you the
+      evidence, what stands behind it, and what it would change only after you've answered those.
+      That order is deliberate — it's what keeps my framing out of your decision.)
+    pioneer_said: |
+      you regressed in how you presented now
+    reason_given: |
+      none given
+    noticed: |
+      Items three to five were the moment, the options, the question, and nothing else. This one
+      re-introduced commentary about the batch's structure, an explanation of why the questions
+      come in that order, and the vague "your read" that had already been corrected at item one.
+    would_have_been_right: |
+      Give the statement, say what it means in practice, and ask the two questions in ordinary
+      words. No commentary on the batch, no explanation of the procedure, no telling the pioneer
+      what is being withheld.
+    seen_before: |
+      C-017, C-020, C-021, C-029, C-030 — and the vague ask specifically at item one of this batch.
+    supersedes: []
+    recorded_by: main-agent
+    clerked: blocked
+    blocked_since: 2026-09-22
+    blocked_reason: the case clerk writes to LEDGER.yaml, which the batch blind refuses while review batch B-001 is open and undecided
+    blocked_waiting_for: B-001 to be decided and closed, after which the clerk runs normally
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-20
   by_contract:
