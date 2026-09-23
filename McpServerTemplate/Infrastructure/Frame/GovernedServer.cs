@@ -123,11 +123,16 @@ public static class GovernedServer
         services.GetRequiredService<RequestGate>();
 
         var description = FrameManifest.Describe(options, manifest, registry);
-        services.GetRequiredService<ILogger<RequestGate>>().LogInformation(
-            "Frame installed: limits={Limits} providers={Providers} :: {Manifest}",
-            services.GetRequiredService<ILimitStore>().Description,
-            string.Join(",", enabled.Modules.Select(m => m.Name)),
-            description);
+        var logger = services.GetRequiredService<ILogger<RequestGate>>();
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Frame installed: limits={Limits} providers={Providers} :: {Manifest}",
+                services.GetRequiredService<ILimitStore>().Description,
+                string.Join(",", enabled.Modules.Select(m => m.Name)),
+                description);
+        }
+
         return description;
     }
 
