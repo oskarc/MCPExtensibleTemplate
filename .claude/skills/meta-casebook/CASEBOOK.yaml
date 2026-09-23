@@ -1116,8 +1116,9 @@ scenarios:
         text: |
           The agent should present candidates that scores high on reliability, those it feels
           are strong or likely to be adopted.
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: [B, A]
+    rationale: |
+      Not sure this should be declined, but it should be fixed in the meta kit repo
     dissent: ""
 
   - card_id: S-013
@@ -1139,8 +1140,9 @@ scenarios:
         text: |
           make the eight candidates the review and give the eleven scenario cards their own
           pass [the agent's view, marked as judgement, was this option]
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: declined
+    rationale: |
+      The order is not important as long as only the candidates and cards with HIGH certainty are the only ones showed.
     dissent: ""
 
 reconstruction_tests: []

@@ -3652,13 +3652,13 @@ candidates:
     level: principle
     tier: undecided
     target: [meta-skill-builder]
-    stage: assess
+    stage: declined
     contradicts:
       - file: meta-skill-builder/SKILL.md
         passage: "For each item, in order:"
       - file: meta-skill-builder/SKILL.md
         passage: "Present; do not argue. The proposed disposition is the only recommendation on the page."
-    review_due: true
+    review_due: false
     disposition_proposed: decline
     evidence_refs: ["O-056"]
     helpful: {independent: 0, loaded: 0}
@@ -3668,9 +3668,20 @@ candidates:
     certainty_codes: [pioneer-unprompted, contradicted]
     stated_confidence: null
     restatements: 1
-    last_moved: 2026-09-22
-    decision: null
-    outcome: null
+    last_moved: 2026-09-23
+    decision:
+      batch: B-002
+      item: I-2
+      verdict_before: |
+        Yes, but it can be sharpened, the agent should only present candidates that score high on reliability...
+      decision: decline
+      level_decided: null
+      tier_decided: null
+      reason: |
+        oh, that will be handled by the next version of the meta kit
+      date: 2026-09-23
+      applied_as: null
+    outcome: {resolved: 2026-09-23, held: unobserved}
 
   - cand_id: K-055
     created: 2026-09-22
@@ -3778,6 +3789,13 @@ batches:
     date: 2026-09-22
     file: meta-ledger/batches/B-001.md
     items: 20
+    decided: true
+    revealed: true
+    represented: []
+  - batch_id: B-002
+    date: 2026-09-22
+    file: meta-ledger/batches/B-002.md
+    items: 3
     decided: true
     revealed: true
     represented: []
