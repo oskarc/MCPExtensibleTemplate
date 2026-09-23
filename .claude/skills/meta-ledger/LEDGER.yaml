@@ -1693,6 +1693,201 @@ observations:
     stewarded: n/a
 
 
+  - obs_id: O-061
+    date: 2026-09-23
+    source: ser
+    contract_id: contract-003
+    refs: []
+    statement: |
+      M-11
+      
+      A registration call that picks the wrong overload fails silently, and only a check that the
+      declared surface is the served surface catches it. Registering each provider's tool types with
+      WithTools(module.ToolTypes) bound to the SDK's generic overload that takes any object as the tool
+      target - a list of types matched it more closely than IEnumerable<Type> - and registered the
+      list's own methods: none. The server started, validated and served no tools, with no error. The
+      frame's startup check had verified every served tool had a policy, but not that every declared
+      tool was served. Found by driving the real stdio process, not by the suite. Fixed with explicit
+      casts and a new check: declared but not served refuses startup.
+    level_guess: implementation
+    stated_confidence: 0.55
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+  - obs_id: O-062
+    date: 2026-09-23
+    source: ser
+    contract_id: contract-003
+    refs: []
+    statement: |
+      M-11
+      
+      A refuse-by-default list is itself a security decision, and it can fail open in a direction no
+      test of refusals sees. The request-kind gate admitted a named list of methods and left out
+      server/discover, the request by which a client reaches the 2026-07-28 protocol revision. Every
+      client silently fell back to an older revision - and lost the input-required round-trip the
+      Irreversible gate depends on, so the gate refused every irreversible call as unsupported. Tests
+      written as raw JSON-RPC passed; only the SDK's real client exposed it. A default-deny list has to
+      be checked against what the real client negotiates, not only against what it refuses.
+    level_guess: pattern
+    stated_confidence: 0.7
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+  - obs_id: O-063
+    date: 2026-09-23
+    source: ser
+    contract_id: contract-003
+    refs: []
+    statement: |
+      M-11
+      
+      Claim names the frame reads must be claim names only the frame writes. The trust domain was read
+      from the first 'idp' claim on the principal; the normalizing step added its own but left any the
+      token carried, and Entra ID issues an 'idp' claim for guest users. A token from one identity
+      provider carrying idp=<another> would have been judged as the other's caller. Present since
+      contract-002 and found while building contract-003's gate; closed by removing reserved claims
+      before normalizing, with a test minting a partner token that names corp and reaches nothing.
+    level_guess: pattern
+    stated_confidence: 0.75
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+  - obs_id: O-064
+    date: 2026-09-23
+    source: ser
+    contract_id: contract-003
+    refs: []
+    statement: |
+      M-11
+      
+      A test harness can drift from the shipped server through its configuration sources, not only its
+      code. The in-process test server loaded the shipped appsettings files from its output folder, so
+      every test ran with provider sections it never declared. Nothing noticed until the settings
+      allowlist refused a test that enabled one provider while the shipped files named three. The
+      harness now reads only what each test declares. contract-003's G-3 closed the copied filters; the
+      copied configuration was the same drift by another route.
+    level_guess: pattern
+    stated_confidence: 0.6
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+  - obs_id: O-065
+    date: 2026-09-23
+    source: ser
+    contract_id: contract-003
+    refs: []
+    statement: |
+      M-11
+      
+      The stdio host and the guard in front of it read different environment variables. The guard
+      accepted ASPNETCORE_ENVIRONMENT or DOTNET_ENVIRONMENT; Host.CreateApplicationBuilder reads only
+      DOTNET_ENVIRONMENT, so with the first set the guard passed as Development while the host ran as
+      Production and loaded Production settings. Harmless until contract-003 made the environment decide
+      rules (Redis and the enabled list are required outside Development). The host is now built with
+      the environment the guard checked.
+    level_guess: implementation
+    stated_confidence: 0.5
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+  - obs_id: O-066
+    date: 2026-09-23
+    source: ser
+    contract_id: contract-003
+    refs: []
+    statement: |
+      M-11
+      
+      A drafted acceptance test can name an observation the build cannot produce, and the survey that
+      drew it did not check. T-10 asked a real server process in Production to repeat the scope and
+      argument refusals; those need a token the process accepts, and a spawned process fetches signing
+      keys over HTTPS from a real authority, which the test machine cannot provide without trusting a
+      made-up certificate. contract-002 had recorded exactly this (the reason its harness composes
+      in-process). Drafting tests from the land after the work should include whether each observation
+      is producible on the machines that run it.
+    level_guess: pattern
+    stated_confidence: 0.6
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+  - obs_id: O-067
+    date: 2026-09-23
+    source: ser
+    contract_id: contract-003
+    refs: []
+    statement: |
+      M-11
+      
+      The frame's registration order and a before/after comparison of the service collection turn
+      'providers cannot switch the frame off' from a convention into a check. Each module registers
+      under watch: a removed registration, or one whose service type (or generic argument) lies in the
+      frame's, the SDK's, the identity layer's or the host pipeline's namespaces, refuses startup naming
+      the module; after build, every installed filter must be the frame's or the SDK's own. Stated
+      limit: code in the same process can still reach anything by reflection; this governs
+      registration, which is how every ordinary extension point is reached. Novel to the kit (G-12).
+    level_guess: pattern
+    stated_confidence: 0.65
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+  - obs_id: O-068
+    date: 2026-09-23
+    source: ser
+    contract_id: contract-003
+    refs: []
+    statement: |
+      M-11
+      
+      A settings allowlist over the sections the frame governs closes a whole class of false comfort at
+      once: a misspelled key and a retired key both used to be ignored silently while the operator
+      believed them in force. Every unknown key under Authentication, Providers, Limits, Confirmation,
+      Development and RateLimit now refuses startup with the nearest real key or the reason it was
+      retired. It immediately found two retired keys still in the shipped appsettings (ApiKey,
+      RateLimit) and the harness drift in O-064. Novel to the kit (G-11).
+    level_guess: pattern
+    stated_confidence: 0.7
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+  - obs_id: O-069
+    date: 2026-09-23
+    source: ser
+    contract_id: contract-003
+    refs: []
+    statement: |
+      M-11
+      
+      The challenge the pioneer asked for before approval found what the contract's own tests could not
+      have: a confirmation designed stateless ('the HMAC makes verification stateless') is replayable
+      within its window, and no test of the first draw tried a replay. The red test for this contract
+      broke exactly that guarantee and T-7 went red. Asking 'what does not hold its claim?' of a drawn
+      contract, before approval, produced four guarantees and narrowed four claims; the draft's tests
+      passed against all eight flaws.
+    level_guess: principle
+    stated_confidence: 0.75
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17

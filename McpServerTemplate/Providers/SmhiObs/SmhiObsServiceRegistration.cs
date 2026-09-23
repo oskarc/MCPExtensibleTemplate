@@ -1,4 +1,5 @@
 using McpServerTemplate.Infrastructure;
+using McpServerTemplate.Infrastructure.Frame;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
@@ -13,7 +14,8 @@ public static class SmhiObsServiceRegistration
 {
     public static IServiceCollection AddSmhiObsProvider(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        EgressPolicy egress)
     {
         // IOptions<SmhiObsConfig> enables hot-reload and cleaner testability.
         var section = configuration.GetSection("Providers:SmhiObs");
@@ -38,10 +40,9 @@ public static class SmhiObsServiceRegistration
         var budget = ResilienceBudget.Create(
             providerName: "SmhiObs",
             // Historical observation series are larger and slower than a forecast.
-            attemptTimeout: TimeSpan.FromSeconds(20),
-            maxRetryAttempts: 2,
-            // Must exceed 20s x 3 = 60s.
-            totalTimeout: TimeSpan.FromSeconds(70),
+            attemptTimeout: egress.AttemptTimeout,
+            maxRetryAttempts: egress.MaxRetryAttempts,
+            totalTimeout: egress.TotalTimeout,
             samplingDuration: TimeSpan.FromSeconds(45),
             breakDuration: TimeSpan.FromSeconds(15));
 

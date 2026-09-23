@@ -25,9 +25,9 @@ public class ConfigurationFailureTests
 
     public static TheoryData<string, Action<IServiceCollection, IConfiguration>> EveryProvider() => new()
     {
-        { "Smhi", (s, c) => s.AddSmhiProvider(c) },
-        { "SmhiObs", (s, c) => s.AddSmhiObsProvider(c) },
-        { "JsonPlaceholder", (s, c) => s.AddJsonPlaceholderProvider(c) },
+        { "Smhi", (s, c) => s.AddSmhiProvider(c, new SmhiModule().Policy.Egress) },
+        { "SmhiObs", (s, c) => s.AddSmhiObsProvider(c, new SmhiObsModule().Policy.Egress) },
+        { "JsonPlaceholder", (s, c) => s.AddJsonPlaceholderProvider(c, new JsonPlaceholderModule().Policy.Egress) },
     };
 
     [Theory]

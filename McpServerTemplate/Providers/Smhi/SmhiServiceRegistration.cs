@@ -1,4 +1,5 @@
 using McpServerTemplate.Infrastructure;
+using McpServerTemplate.Infrastructure.Frame;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
@@ -26,7 +27,8 @@ public static class SmhiServiceRegistration
 {
     public static IServiceCollection AddSmhiProvider(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        EgressPolicy egress)
     {
         // IOptions<SmhiConfig> enables hot-reload and cleaner testability.
         var section = configuration.GetSection("Providers:Smhi");
@@ -50,10 +52,9 @@ public static class SmhiServiceRegistration
         var budget = ResilienceBudget.Create(
             providerName: "Smhi",
             // A forecast is a small document; an attempt that has not answered in 10s is stuck.
-            attemptTimeout: TimeSpan.FromSeconds(10),
-            maxRetryAttempts: 2,
-            // Must exceed 10s x 3 = 30s, or the third attempt could never run.
-            totalTimeout: TimeSpan.FromSeconds(35),
+            attemptTimeout: egress.AttemptTimeout,
+            maxRetryAttempts: egress.MaxRetryAttempts,
+            totalTimeout: egress.TotalTimeout,
             samplingDuration: TimeSpan.FromSeconds(30),
             breakDuration: TimeSpan.FromSeconds(15));
 

@@ -64,7 +64,9 @@ public sealed class TestIdentityProvider : IDisposable
         string scopeClaim = "scope",
         DateTime? expires = null,
         DateTime? notBefore = null,
-        SigningCredentials? signingCredentials = null)
+        SigningCredentials? signingCredentials = null,
+        DateTime? issuedAt = null,
+        IDictionary<string, object>? extraClaims = null)
     {
         // Each required claim is omissible on its own, so a rejection test names exactly the one
         // claim it is making wrong (contract-002 revision, 2026-09-20 — roadmap P1.1).
@@ -90,13 +92,18 @@ public sealed class TestIdentityProvider : IDisposable
             claims[scopeClaim] = string.Join(' ', scopes);
         }
 
+        foreach (var (name, value) in extraClaims ?? new Dictionary<string, object>())
+        {
+            claims[name] = value;
+        }
+
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = issuer ?? Issuer,
             Audience = audience,
             Claims = claims,
-            IssuedAt = DateTime.UtcNow,
-            NotBefore = notBefore ?? DateTime.UtcNow.AddMinutes(-1),
+            IssuedAt = issuedAt ?? DateTime.UtcNow,
+            NotBefore = notBefore ?? (issuedAt ?? DateTime.UtcNow).AddMinutes(-1),
             Expires = expires ?? DateTime.UtcNow.AddMinutes(10),
             SigningCredentials = signingCredentials
                 ?? new SigningCredentials(_key, SecurityAlgorithms.RsaSha256),

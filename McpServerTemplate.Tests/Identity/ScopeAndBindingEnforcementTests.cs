@@ -85,7 +85,7 @@ public class ScopeAndBindingEnforcementTests
         await using var server = await InProcessServer.StartAsync([corp]);
 
         var everything = corp.MintToken(
-            Resource, scopes: ["weather:read", "observations:read", "demo:read"]);
+            Resource, scopes: ["weather:read", "observations:read", "demo:read", "demo:write"]);
 
         var listed = await ListToolsAsync(server, everything);
 

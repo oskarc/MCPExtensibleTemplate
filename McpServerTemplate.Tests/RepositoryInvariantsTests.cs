@@ -148,4 +148,18 @@ public class RepositoryInvariantsTests
 
         Assert.Contains("<UserSecretsId>", project, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void T16_providers_carry_no_second_declaration_of_their_provider_or_scope()
+    {
+        // contract-003 · G-1 — a provider's policy is the one place its scopes are declared. The
+        // attributes that used to say the same thing on the classes are gone; a second declaration
+        // is one that can disagree with the first.
+        var markers = new[] { "[McpProvider(", "[McpScope(" };
+        var offenders = Directory.GetFiles(Path.Combine(RepositoryRoot(), "McpServerTemplate", "Providers"), "*.cs", SearchOption.AllDirectories)
+            .Where(f => markers.Any(m => File.ReadAllText(f).Contains(m, StringComparison.Ordinal)))
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
 }

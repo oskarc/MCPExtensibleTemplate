@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using McpServerTemplate.Infrastructure.Frame;
 using McpServerTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -25,9 +26,9 @@ public static class HttpServerComposition
     /// configuration.
     /// </summary>
     /// <param name="builder">The web application builder.</param>
-    /// <param name="configureMcpServer">
-    /// Registers the MCP server itself. Passed in because the tool, prompt and resource
-    /// registration is provider-specific and belongs beside the providers.
+    /// <param name="modules">
+    /// The provider modules the server may serve. The shipped server and the tests pass them to the
+    /// same composition (contract-003 · G-3); only the list differs.
     /// </param>
     /// <param name="configureIdentityForTests">
     /// A hook onto each identity provider's bearer options. Its only intended use is giving a
@@ -35,38 +36,34 @@ public static class HttpServerComposition
     /// </param>
     public static AuthenticationConfig AddHttpServer(
         WebApplicationBuilder builder,
-        Func<IServiceCollection, IConfiguration, IMcpServerBuilder> configureMcpServer,
+        IReadOnlyList<IProviderModule> modules,
         Action<string, JwtBearerOptions>? configureIdentityForTests = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(configureMcpServer);
+        ArgumentNullException.ThrowIfNull(modules);
 
         var configuration = builder.Configuration;
 
+        // Identity is validated first: a deployment that cannot verify a token must not come up,
+        // and that is the first thing an operator needs to hear. Its services are registered after
+        // the MCP server, because providers register before anything of the frame's (G-12).
+        var identity = IdentityConfigurationBinder.Bind(configuration);
+
         // The HTTP transport's services must be registered before MapMcp can route to them;
         // without this the host builds and then throws on the first route mapping.
-        configureMcpServer(builder.Services, configuration)
+        builder.Services.AddGovernedMcpServer(configuration, builder.Environment, modules)
             // contract-002 · G-11 — stateless streamable HTTP: no session affinity, no
             // Mcp-Session-Id, so any instance can serve any request.
             .WithHttpTransport(options => options.Stateless = true)
-            // contract-002 · G-4 — the SDK filters list-tools and call-tool against the caller's
-            // authorization, so a principal is shown only what it may use.
+            // contract-002 · G-4 — the SDK's own [Authorize] filters, beneath the frame's gate.
             .AddAuthorizationFilters();
 
         // contract-002 · G-12 — refuse plaintext in Production before anything binds.
         TransportSecurityGuard.Validate(configuration, builder.Environment.IsProduction());
 
-        // Identity is configured and validated before anything binds. A deployment that cannot
-        // verify a token must not come up and discover that on its first request.
-        var identity = IdentityConfigurationBinder.Bind(configuration);
         builder.Services.AddIdentity(identity, configureIdentityForTests);
         builder.Services.AddAuthorization();
-
-        // contract-002 · G-5 — the binding needs the registered tools, so it is resolved from the
-        // container; callers force it at startup rather than on the first call.
-        builder.Services.AddHttpContextAccessor();
-        builder.Services.AddSingleton(services => ProviderBinding.Create(
-            configuration, identity, services.GetServices<McpServerTool>()));
+        builder.Services.AddSingleton(identity);
 
         // ── Kestrel hardening ──
         builder.WebHost.ConfigureKestrel(kestrel =>
@@ -183,10 +180,9 @@ public static class HttpServerComposition
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        // Resolved here on purpose: a provider that declares no identity provider, or a tool
-        // that declares no provider, stops the server now rather than when a call is wrongly
-        // allowed.
-        app.Services.GetRequiredService<ProviderBinding>();
+        // contract-003 · G-2, G-12 — every policy, binding and installed filter is checked now, so a
+        // mistake stops the server rather than surfacing when a call is wrongly allowed.
+        GovernedServer.ValidateAtStartup(app.Services);
 
         app.UseForwardedHeaders();
 

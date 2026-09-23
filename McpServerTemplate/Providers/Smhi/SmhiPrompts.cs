@@ -1,4 +1,3 @@
-using McpServerTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
 using System.ComponentModel;
 using System.Globalization;
@@ -22,11 +21,9 @@ namespace McpServerTemplate.Providers.Smhi;
 ///
 /// Prompts are OPTIONAL — a minimal provider only needs Tools.
 /// </summary>
-// contract-002 · G-4 — defence in depth beneath the policy filter of Phase 2. If a
+// contract-002 · G-4 — defence in depth beneath the frame's request gate (contract-003). If a
 // future endpoint is mapped without RequireAuthorization, these types are still closed.
 [Authorize]
-[McpProvider("Smhi")]
-[McpScope("weather:read")]
 [McpServerPromptType]
 public static class SmhiPrompts
 {

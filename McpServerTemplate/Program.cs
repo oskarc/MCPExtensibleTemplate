@@ -2,9 +2,8 @@ using System.Reflection;
 using System.Threading.RateLimiting;
 using McpServerTemplate.Infrastructure;
 using McpServerTemplate.Infrastructure.Identity;
-using McpServerTemplate.Providers.JsonPlaceholder;
-using McpServerTemplate.Providers.Smhi;
-using McpServerTemplate.Providers.SmhiObs;
+using McpServerTemplate.Infrastructure.Frame;
+using McpServerTemplate.Providers;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,13 +18,12 @@ using Serilog.Events;
 // This file is TEMPLATE CORE. It should rarely change when swapping providers.
 //
 // HOW TO SWAP PROVIDERS:
-//   1. Delete the Providers/Smhi/ folder
-//   2. Create Providers/YourApi/ with your own tools, client, and DI registration
-//   3. Change the ONE line below marked with "PROVIDER-SPECIFIC"
-//   4. Update appsettings.json with your provider's config section
-//   5. WithToolsFromAssembly() / WithResourcesFromAssembly() / WithPromptsFromAssembly()
-//      auto-discover all [McpServerToolType], [McpServerResourceType], [McpServerPromptType]
-//      classes — no additional wiring needed.
+//   1. Create Providers/YourApi/ with static tool, resource and prompt classes and a client
+//   2. Write an IProviderModule declaring its policy — a scope, risk and limits for every tool,
+//      a scope for every resource and prompt, and the hosts it may call
+//   3. List the module in Providers/BuiltInProviders.cs and its name in Providers:Enabled
+//   Nothing is found by scanning: a class no module names is not served, and a primitive with
+//   no policy stops the server from starting (contract-003).
 //
 // TRANSPORT:
 //   Transport=stdio — (default) stdin/stdout, for a local IDE. Development only: it builds a
@@ -112,40 +110,38 @@ static async Task<int> RunStdioAsync(string[] args, string environmentName)
             + "for any hosted environment.");
     }
 
-    var builder = Host.CreateApplicationBuilder(args);
+    // The generic host reads DOTNET_ENVIRONMENT only; the guard above also accepts
+    // ASPNETCORE_ENVIRONMENT. Without this the guard could pass as Development while the host ran
+    // as Production, loading Production settings — and, since contract-003, Production's rules.
+    var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+    {
+        Args = args,
+        EnvironmentName = environmentName,
+    });
+    var modules = BuiltInProviders.Create();
 
     // contract-002 · G-6 — stdio has no token to verify, so the principal it runs as is declared
-    // in configuration and validated against the identity provider it claims to come from. It is
-    // built here, at startup, so a wrong development identity stops the process rather than
-    // surfacing as a puzzling refusal later.
-    // Identity providers are bound only if a deployment configured them; stdio serves a local
-    // IDE and calls none of them.
-    var configuredIdentity = builder.Configuration.GetSection("Authentication:IdentityProviders").GetChildren().Any()
+    // in configuration and validated against the identity provider it claims to come from.
+    // contract-003 · G-14 — the same gate runs here as over HTTP. With no identity providers
+    // configured, a Development-only identity is synthesised: one per identity provider the
+    // providers are bound to, able to issue exactly the scopes their policies require, so the
+    // binding, scope, argument and limit checks all still run against the local principal.
+    var identity = builder.Configuration.GetSection("Authentication:IdentityProviders").GetChildren().Any()
         ? IdentityConfigurationBinder.Bind(builder.Configuration)
-        : null;
+        : DevelopmentPrincipal.SynthesizeIdentity(builder.Configuration, modules);
 
-    builder.Services.AddSingleton(DevelopmentPrincipal.Create(builder.Configuration, configuredIdentity));
-
-    // contract-002 · G-5 — when a developer has configured identity, stdio enforces the same
-    // trust-domain binding HTTP does, so a local run meets the refusals a deployed one would.
-    // With no identity configured there is nothing to bind against, and a plain local run for an
-    // IDE is left unencumbered rather than shown an empty tool list.
-    if (configuredIdentity is not null)
-    {
-        builder.Services.AddSingleton(services => ProviderBinding.Create(
-            builder.Configuration, configuredIdentity, services.GetServices<McpServerTool>()));
-    }
+    builder.Services.AddSingleton(identity);
+    builder.Services.AddSingleton(DevelopmentPrincipal.Create(builder.Configuration, identity));
 
     ConfigureLogging(builder.Services, builder.Configuration);
-    var mcpBuilder = ConfigureMcpServer(builder.Services, builder.Configuration);
-    mcpBuilder.WithStdioServerTransport();
-    RegisterProviders(builder.Services, builder.Configuration);
+    builder.Services.AddGovernedMcpServer(builder.Configuration, builder.Environment, modules)
+        .WithStdioServerTransport();
 
     var host = builder.Build();
 
-    // Forced at startup for the same reason as the HTTP path: a binding that cannot be honoured
-    // stops the server rather than surfacing when a call is wrongly allowed.
-    host.Services.GetService<ProviderBinding>();
+    // Checked at startup for the same reason as the HTTP path: a policy or binding that cannot be
+    // honoured stops the server rather than surfacing when a call is wrongly allowed.
+    GovernedServer.ValidateAtStartup(host.Services);
 
     await host.RunAsync();
     return ExitCode.Ok;
@@ -167,20 +163,14 @@ static async Task<int> RunHttpAsync(string[] args)
     var bindAddress = configuration.GetValue("HttpTransport:BindAddress", "localhost") ?? "localhost";
 
     // The whole composition lives in HttpServerComposition so a test can build the same server
-    // in-process and reach the bearer handler's backchannel (contract-002 · G-10).
-    HttpServerComposition.AddHttpServer(builder, ConfigureMcpServer);
+    // in-process and reach the bearer handler's backchannel (contract-002 · G-10), and the MCP
+    // server inside it is composed by the frame alone (contract-003 · G-3).
+    HttpServerComposition.AddHttpServer(builder, BuiltInProviders.Create());
 
     Log.Information("Starting MCP server with HTTP transport on {BindAddress}:{Port}", bindAddress, port);
     builder.WebHost.UseUrls($"http://{bindAddress}:{port}");
 
-    RegisterProviders(builder.Services, configuration);
-
     var app = builder.Build().UseHttpServer();
-
-    var binding = app.Services.GetRequiredService<ProviderBinding>();
-    Log.Information(
-        "Trust domains bound: {Bindings}",
-        string.Join(", ", binding.Providers.Select(p => $"{p} -> {binding.IdentityProviderOf(p)}")));
 
     await app.RunAsync();
     return ExitCode.Ok;
@@ -202,52 +192,4 @@ static void ConfigureLogging(IServiceCollection services, IConfiguration configu
     services.AddSerilog(config => config
         .ReadFrom.Configuration(configuration)
         .Enrich.FromLogContext());
-}
-
-static IMcpServerBuilder ConfigureMcpServer(IServiceCollection services, IConfiguration configuration)
-{
-    var assemblyVersion = Assembly.GetExecutingAssembly()
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-        ?? "1.0.0";
-
-    // A limit below 1 would reject every call to every tool; an operator who meant "unlimited"
-    // and typed 0 would take the whole server down with no error to read.
-    var maxCallsPerToolPerMinute = ConfigurationGuard.IntegerInRange(
-        configuration, "RateLimit:MaxCallsPerToolPerMinute", minimum: 1, maximum: 1_000_000,
-        fallback: 10, because: "calls per tool per minute");
-    var throttle = new ToolCallThrottleFilter(maxCallsPerToolPerMinute);
-    services.AddSingleton(throttle);
-
-    return services
-        .AddMcpServer(options =>
-        {
-            options.ServerInfo = new()
-            {
-                Name = "McpServerTemplate",
-                Version = assemblyVersion
-            };
-        })
-        .WithToolsFromAssembly()
-        .WithResourcesFromAssembly()
-        .WithPromptsFromAssembly()
-        .WithRequestFilters(filters =>
-        {
-            filters.AddCallToolFilter(ToolCallLoggingFilter.Create());
-            filters.AddCallToolFilter(throttle.AsFilter());
-
-            // contract-002 · G-5 — checked on both paths. Hiding a tool from the listing is
-            // discretion; refusing the call is enforcement, and a caller can name a tool it was
-            // never shown.
-            filters.AddListToolsFilter(TrustDomainFilters.List());
-            filters.AddCallToolFilter(TrustDomainFilters.Call());
-
-        });
-}
-
-// ── PROVIDER-SPECIFIC: Register your provider's services here ──
-static void RegisterProviders(IServiceCollection services, IConfiguration configuration)
-{
-    services.AddSmhiProvider(configuration);
-    services.AddSmhiObsProvider(configuration);
-    services.AddJsonPlaceholderProvider(configuration);
 }

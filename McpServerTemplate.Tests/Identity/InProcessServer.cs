@@ -1,15 +1,13 @@
 using McpServerTemplate.Infrastructure;
 using McpServerTemplate.Infrastructure.Identity;
-using McpServerTemplate.Providers.JsonPlaceholder;
-using McpServerTemplate.Providers.Smhi;
-using McpServerTemplate.Providers.SmhiObs;
+using McpServerTemplate.Infrastructure.Frame;
+using McpServerTemplate.Providers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Server;
 
 namespace McpServerTemplate.Tests.Identity;
 
@@ -21,6 +19,11 @@ namespace McpServerTemplate.Tests.Identity;
 /// child process fetches its signing keys from a real authority, so no test can mint a token it
 /// would accept. Composing it here reaches the one seam that matters — the backchannel — and
 /// changes nothing else: the same registration, the same middleware order, the same filters.
+///
+/// contract-003 · G-3 — and the MCP server inside it is composed by the same method the shipped
+/// server calls. This harness used to declare its own copy of the request filters "exactly as
+/// Program.cs does"; the copy had already drifted. It now passes only a list of provider modules,
+/// and a test compares what it installs with what the shipped process logs (T-10).
 /// </summary>
 public sealed class InProcessServer : IAsyncDisposable
 {
@@ -34,12 +37,24 @@ public sealed class InProcessServer : IAsyncDisposable
 
     public HttpClient Client { get; }
 
+    /// <summary>The server's container, for tests that inspect what the frame installed.</summary>
+    public IServiceProvider Services => _app.Services;
+
+    /// <summary>The address the server listens on.</summary>
+    public Uri Address => Client.BaseAddress!;
+
+    /// <summary>A base64 key for signing confirmations, the same in every test run.</summary>
+    public const string ConfirmationKey = "dGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXk=";
+
     public static async Task<InProcessServer> StartAsync(
         IEnumerable<TestIdentityProvider> identityProviders,
         string resource = "https://mcp.example.com/mcp",
-        Action<Dictionary<string, string?>>? configure = null)
+        Action<Dictionary<string, string?>>? configure = null,
+        IReadOnlyList<IProviderModule>? modules = null,
+        string? redis = null)
     {
         var providers = identityProviders.ToArray();
+        modules ??= BuiltInProviders.Create();
 
         var settings = new Dictionary<string, string?>
         {
@@ -55,7 +70,25 @@ public sealed class InProcessServer : IAsyncDisposable
             ["Providers:SmhiObs:UserAgent"] = "test/1.0",
             ["Providers:JsonPlaceholder:BaseUrl"] = "https://jsonplaceholder.typicode.com",
             ["Providers:JsonPlaceholder:UserAgent"] = "test/1.0",
+
+            // contract-003 — limits in Redis, as Production requires, and a confirmation key.
+            ["Limits:Redis"] = redis ?? await TestRedis.ConnectionStringAsync(),
+            ["Confirmation:Key"] = ConfirmationKey,
         };
+
+        for (var i = 0; i < modules.Count; i++)
+        {
+            settings[$"Providers:Enabled:{i}"] = modules[i].Name;
+        }
+
+        // Only the providers this server has: a section for any other is a setting it would
+        // ignore, which the settings allowlist refuses (contract-003 · G-11).
+        foreach (var key in settings.Keys.Where(k => k.StartsWith("Providers:", StringComparison.Ordinal) &&
+                     !k.StartsWith("Providers:Enabled:", StringComparison.Ordinal) &&
+                     modules.All(m => !k.StartsWith($"Providers:{m.Name}:", StringComparison.Ordinal))).ToArray())
+        {
+            settings.Remove(key);
+        }
 
         foreach (var idp in providers)
         {
@@ -65,17 +98,29 @@ public sealed class InProcessServer : IAsyncDisposable
             settings[$"Authentication:IdentityProviders:{idp.Name}:ScopeCatalog:0"] = "weather:read";
             settings[$"Authentication:IdentityProviders:{idp.Name}:ScopeCatalog:1"] = "observations:read";
             settings[$"Authentication:IdentityProviders:{idp.Name}:ScopeCatalog:2"] = "demo:read";
+            settings[$"Authentication:IdentityProviders:{idp.Name}:ScopeCatalog:3"] = "demo:write";
+            settings[$"Authentication:IdentityProviders:{idp.Name}:ScopeCatalog:4"] = "test:act";
         }
 
         // Every provider bound to the first identity provider unless a test says otherwise.
-        foreach (var provider in new[] { "Smhi", "SmhiObs", "JsonPlaceholder" })
+        foreach (var module in modules)
         {
-            settings[$"Providers:{provider}:IdentityProvider"] = providers[0].Name;
+            settings[$"Providers:{module.Name}:IdentityProvider"] = providers[0].Name;
         }
 
         configure?.Invoke(settings);
 
         var builder = WebApplication.CreateBuilder();
+
+        // The shipped appsettings files sit beside the test assembly and name every built-in
+        // provider. A test declares its configuration in full, so they are not read here: a section
+        // for a provider this test did not enable is a setting the server would ignore, and the
+        // settings allowlist rightly refuses it (contract-003 · G-11).
+        foreach (var file in builder.Configuration.Sources.OfType<Microsoft.Extensions.Configuration.Json.JsonConfigurationSource>().ToArray())
+        {
+            builder.Configuration.Sources.Remove(file);
+        }
+
         builder.Configuration.AddInMemoryCollection(settings);
         builder.Environment.EnvironmentName = Environments.Production;
         builder.Logging.ClearProviders();
@@ -85,28 +130,13 @@ public sealed class InProcessServer : IAsyncDisposable
 
         HttpServerComposition.AddHttpServer(
             builder,
-            (services, configuration) => services
-                .AddMcpServer(options => options.ServerInfo = new() { Name = "Test", Version = "1.0.0" })
-                .WithToolsFromAssembly(typeof(SmhiTools).Assembly)
-                .WithResourcesFromAssembly(typeof(SmhiTools).Assembly)
-                .WithPromptsFromAssembly(typeof(SmhiTools).Assembly)
-                // Registered exactly as Program.cs does. Building the server without these is how
-                // a broken binding stayed invisible: the enforcement path existed and no test ran it.
-                .WithRequestFilters(filters =>
-                {
-                    filters.AddListToolsFilter(TrustDomainFilters.List());
-                    filters.AddCallToolFilter(TrustDomainFilters.Call());
-                }),
+            modules,
             configureIdentityForTests: (name, options) =>
             {
                 // The one seam. Discovery and JWKS are answered in-process, and counted.
                 options.BackchannelHttpHandler = byName[name].Handler;
                 options.RequireHttpsMetadata = false;
             });
-
-        builder.Services.AddSmhiProvider(builder.Configuration);
-        builder.Services.AddSmhiObsProvider(builder.Configuration);
-        builder.Services.AddJsonPlaceholderProvider(builder.Configuration);
 
         var app = builder.Build().UseHttpServer();
         await app.StartAsync();

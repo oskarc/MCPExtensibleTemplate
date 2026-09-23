@@ -4,6 +4,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace McpServerTemplate.Tests;
 
@@ -284,14 +285,13 @@ public class ServerProcessTests
     // 70 with a stack trace, which sends whoever is on call looking for a bug in the code.
     [InlineData("HttpTransport__Port", "notanumber", "http")]
     [InlineData("HttpTransport__Port", "999999", "http")]
-    [InlineData("RateLimit__MaxCallsPerToolPerMinute", "0", "stdio")]
+    [InlineData("Limits__PerPrincipalPerMinute", "0", "stdio")]
     public async Task T3_a_malformed_setting_exits_78(string key, string value, string transport)
     {
         var environment = new Dictionary<string, string>
         {
             ["ASPNETCORE_ENVIRONMENT"] = transport == "stdio" ? "Development" : "Production",
             ["Transport"] = transport,
-            ["Authentication__ApiKey"] = "acceptance-test-key",
             [key] = value,
         };
 
@@ -324,6 +324,9 @@ public class ServerProcessTests
     {
         public required Process Process { get; init; }
         public required HttpClient Client { get; init; }
+        public Spawned? Spawned { get; init; }
+
+        public string StderrSnapshot() => Spawned?.Stderr ?? string.Empty;
 
         public async ValueTask DisposeAsync()
         {
@@ -369,6 +372,9 @@ public class ServerProcessTests
         environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
         environment["HttpTransport__BindAddress"] = "127.0.0.1";
 
+        // contract-003 · G-8 — Production refuses to start without Redis.
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
         var spawned = Start(environment);
         var process = spawned.Process;
 
@@ -389,7 +395,7 @@ public class ServerProcessTests
             try
             {
                 using var probe = await client.GetAsync("/healthz");
-                return new HttpServer { Process = process, Client = client };
+                return new HttpServer { Process = process, Client = client, Spawned = spawned };
             }
             catch (HttpRequestException)
             {
@@ -771,6 +777,150 @@ public class ServerProcessTests
         finally
         {
             process.Kill(entireProcessTree: true);
+        }
+    }
+
+    // ── contract-003: the shipped process is the tested one ───────────────────
+
+    private static string FrameManifestIn(string stderr)
+    {
+        var line = stderr.Split('\n').FirstOrDefault(l => l.Contains("Frame installed:", StringComparison.Ordinal));
+        Assert.False(line is null, $"the process logged no frame manifest: {stderr}");
+        return line![(line.IndexOf(" :: ", StringComparison.Ordinal) + 4)..].Trim();
+    }
+
+    private static async Task WaitForManifestAsync(Spawned spawned)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        while (DateTime.UtcNow < deadline && !spawned.Stderr.Contains("Frame installed:", StringComparison.Ordinal))
+        {
+            Assert.False(spawned.Process.HasExited, $"the server exited: {spawned.Stderr}");
+            await Task.Delay(200);
+        }
+    }
+
+    [Fact]
+    public async Task T10_the_shipped_process_installs_exactly_the_frame_the_tests_exercise()
+    {
+        // The real program, in Production, as a deployment runs it.
+        await using var shipped = await StartHttpAsync();
+        await WaitForManifestAsync(shipped.Spawned!);
+        var shippedManifest = FrameManifestIn(shipped.StderrSnapshot());
+
+        // The in-process server the gate tests use, with the providers Production enables.
+        using var corp = new Identity.TestIdentityProvider("corp", "https://login.example.com/");
+        await using var tested = await Identity.InProcessServer.StartAsync(
+            [corp], modules: [new McpServerTemplate.Providers.Smhi.SmhiModule(), new McpServerTemplate.Providers.SmhiObs.SmhiObsModule()]);
+        var testedManifest = McpServerTemplate.Infrastructure.Frame.FrameManifest.Describe(
+            tested.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ModelContextProtocol.Server.McpServerOptions>>().Value,
+            tested.Services.GetRequiredService<McpServerTemplate.Infrastructure.Frame.FrameManifest>(),
+            tested.Services.GetRequiredService<McpServerTemplate.Infrastructure.Frame.PolicyRegistry>());
+
+        // Every filter list, whose filter sits where, and every policy in force: identical.
+        Assert.Equal(shippedManifest, testedManifest);
+    }
+
+    [Fact]
+    public void T10_the_test_project_declares_no_request_checks_of_its_own()
+    {
+        // The names are assembled so this file does not match itself.
+        var registrations = new[] { "Add" + "CallToolFilter", "Add" + "ListToolsFilter", "With" + "RequestFilters", "With" + "MessageFilters", "Add" + "IncomingFilter" };
+        var separator = Path.DirectorySeparatorChar;
+        var offenders = Directory.EnumerateFiles(Path.Combine(RepositoryRoot(), "McpServerTemplate.Tests"), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{separator}obj{separator}", StringComparison.Ordinal) && !f.Contains($"{separator}bin{separator}", StringComparison.Ordinal))
+            .Where(f => registrations.Any(r => File.ReadAllText(f).Contains(r, StringComparison.Ordinal)))
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public async Task T11_production_serves_no_demo_tools()
+    {
+        await using var shipped = await StartHttpAsync();
+        await WaitForManifestAsync(shipped.Spawned!);
+        var log = shipped.StderrSnapshot();
+
+        Assert.Contains("providers=Smhi,SmhiObs ", log, StringComparison.Ordinal);
+        Assert.DoesNotContain("JsonPlaceholder", FrameManifestIn(log), StringComparison.Ordinal);
+        Assert.DoesNotContain("demo:", FrameManifestIn(log), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task T12_the_retired_throttle_setting_stops_the_shipped_process()
+    {
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+        environment["RateLimit__MaxCallsPerToolPerMinute"] = "10";
+
+        var (exitCode, stderr) = await RunToCompletionAsync(environment);
+
+        Assert.Equal(78, exitCode);
+        Assert.Contains("'RateLimit:MaxCallsPerToolPerMinute' is retired", stderr, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task T15_the_shipped_local_mode_runs_the_same_gate_against_redis()
+    {
+        // The real program over stdio, with limits in Redis. Its Development principal holds only
+        // observations:read here: every index is overridden, since configuration merges arrays by index.
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPNETCORE_ENVIRONMENT"] = "Development",
+            ["Transport"] = "stdio",
+            ["Limits__Redis"] = await TestRedis.ConnectionStringAsync(),
+        };
+        for (var i = 0; i < 4; i++)
+        {
+            environment[$"Development__DevPrincipal__Scopes__{i}"] = "observations:read";
+        }
+
+        var spawned = Start(environment, redirectStdin: true);
+        using var process = spawned.Process;
+        try
+        {
+            async Task<string> SendAsync(int id, string method, object parameters)
+            {
+                await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { jsonrpc = "2.0", id, method, @params = parameters }));
+                await process.StandardInput.FlushAsync();
+                using var timeout = new CancellationTokenSource(30_000);
+                while (true)
+                {
+                    var line = await process.StandardOutput.ReadLineAsync(timeout.Token);
+                    Assert.False(line is null, $"the server closed its output: {spawned.Stderr}");
+                    if (line!.Contains($"\"id\":{id}", StringComparison.Ordinal))
+                    {
+                        return line;
+                    }
+                }
+            }
+
+            await SendAsync(1, "initialize", new { protocolVersion = "2025-06-18", capabilities = new { }, clientInfo = new { name = "acceptance-test", version = "1" } });
+
+            // A tool its scopes do not reach.
+            var hidden = await SendAsync(2, "tools/call", new { name = "get_forecast", arguments = new { latitude = 59.3, longitude = 18.0 } });
+            Assert.Contains("rule: insufficient_scope", hidden, StringComparison.Ordinal);
+
+            // A tool it may call, with an argument the tool does not declare.
+            var extra = await SendAsync(3, "tools/call", new { name = "get_recent_temperature", arguments = new { latitude = 59.3, longitude = 18.0, station = "x" } });
+            Assert.Contains("rule: extraneous-argument", extra, StringComparison.Ordinal);
+
+            // A request kind nobody governs.
+            var ungoverned = await SendAsync(4, "logging/setLevel", new { level = "debug" });
+            Assert.Contains("rule: request-kind", ungoverned, StringComparison.Ordinal);
+
+            // And the limits it checked were held in Redis.
+            await WaitForManifestAsync(spawned);
+            Assert.Contains("limits=Redis", spawned.Stderr, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
         }
     }
 }

@@ -163,8 +163,14 @@ public static class IdentityRegistration
                         // and then deny them every tool.
                         if (context.Principal?.Identity is System.Security.Claims.ClaimsIdentity identity)
                         {
-                            identity.AddClaims(
-                                TrustDomainFilters.NormalizedClaims(name, provider, context.Principal));
+                            var normalized = PrincipalNormalization.NormalizedClaims(name, provider, context.Principal);
+
+                            // contract-003 — the names the frame reads are the frame's. An identity
+                            // provider may put its own claim under one of them (Entra ID issues an
+                            // "idp" claim for guest users), and the frame reads the first it finds:
+                            // left in place, the token's value would decide the trust domain.
+                            PrincipalNormalization.RemoveReserved(identity);
+                            identity.AddClaims(normalized);
                         }
 
                         return Task.CompletedTask;

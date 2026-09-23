@@ -82,6 +82,9 @@ public class ResourceMetadataTests
         // proxy is declared. Here the harness is that proxy.
         info.Environment["HttpTransport__KnownNetworks__0"] = "127.0.0.0/8";
 
+        // contract-003 · G-8 — Production refuses to start without Redis.
+        info.Environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
         var process = Process.Start(info)!;
         var stderr = new StringBuilder();
         process.ErrorDataReceived += (_, e) =>

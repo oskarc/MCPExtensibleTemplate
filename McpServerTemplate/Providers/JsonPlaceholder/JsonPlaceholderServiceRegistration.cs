@@ -1,4 +1,5 @@
 using McpServerTemplate.Infrastructure;
+using McpServerTemplate.Infrastructure.Frame;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
@@ -26,7 +27,8 @@ public static class JsonPlaceholderServiceRegistration
 {
     public static IServiceCollection AddJsonPlaceholderProvider(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        EgressPolicy egress)
     {
         // IOptions<JsonPlaceholderConfig> enables hot-reload and cleaner testability.
         var section = configuration.GetSection("Providers:JsonPlaceholder");
@@ -49,10 +51,9 @@ public static class JsonPlaceholderServiceRegistration
         // first HttpClient is built, which is a tool call, not startup.
         var budget = ResilienceBudget.Create(
             providerName: "JsonPlaceholder",
-attemptTimeout: TimeSpan.FromSeconds(5),
-            maxRetryAttempts: 2,
-            // Must exceed 5s x 3 = 15s.
-            totalTimeout: TimeSpan.FromSeconds(20),
+attemptTimeout: egress.AttemptTimeout,
+            maxRetryAttempts: egress.MaxRetryAttempts,
+            totalTimeout: egress.TotalTimeout,
             samplingDuration: TimeSpan.FromSeconds(30),
             breakDuration: TimeSpan.FromSeconds(15));
 

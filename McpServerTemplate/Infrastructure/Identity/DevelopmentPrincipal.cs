@@ -19,6 +19,9 @@ namespace McpServerTemplate.Infrastructure.Identity;
 /// </summary>
 public static class DevelopmentPrincipal
 {
+    /// <summary>The authentication type that marks the Development principal; the gate treats it as freshly issued.</summary>
+    public const string AuthenticationType = "development";
+
     /// <summary>
     /// Builds the principal from <c>Development:DevPrincipal</c>, refusing anything it cannot
     /// honour. A development identity that is wrong is worse than absent: it quietly grants
@@ -92,6 +95,53 @@ public static class DevelopmentPrincipal
             claims.Add(new Claim(scopeClaim, string.Join(' ', scopes)));
         }
 
-        return new ClaimsPrincipal(new ClaimsIdentity(claims, authenticationType: "development"));
+        // contract-003 · G-14 — normalized exactly as a validated token is, so stdio meets the same
+        // gate HTTP does rather than a principal the gate cannot read.
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, AuthenticationType));
+        var normalized = PrincipalNormalization.NormalizedClaims(
+            identityProvider,
+            new IdentityProviderConfig { Name = identityProvider, ScopeClaim = scopeClaim },
+            principal);
+        var claimsIdentity = (ClaimsIdentity)principal.Identity!;
+        PrincipalNormalization.RemoveReserved(claimsIdentity);
+        claimsIdentity.AddClaims(normalized);
+        return principal;
+    }
+
+    /// <summary>
+    /// An identity configuration for a local stdio run that configured none (contract-003 · G-14):
+    /// one identity provider per name the enabled providers are bound to, able to issue exactly the
+    /// scopes their policies require. It exists so the gate runs locally with nothing switched off;
+    /// it is never used over HTTP, where identity providers are required and validated.
+    /// </summary>
+    public static AuthenticationConfig SynthesizeIdentity(
+        IConfiguration configuration, IEnumerable<McpServerTemplate.Infrastructure.Frame.IProviderModule> modules)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(modules);
+
+        var identity = new AuthenticationConfig { Resource = "stdio://development" };
+        foreach (var module in modules)
+        {
+            var bound = configuration[$"Providers:{module.Name}:IdentityProvider"];
+            if (string.IsNullOrWhiteSpace(bound))
+            {
+                continue; // the policy check names the missing binding
+            }
+
+            if (!identity.IdentityProviders.TryGetValue(bound, out var provider))
+            {
+                provider = new IdentityProviderConfig { Name = bound };
+                identity.IdentityProviders[bound] = provider;
+            }
+
+            provider.ScopeCatalog = [.. provider.ScopeCatalog
+                .Concat(module.Policy.Tools.Values.Select(t => t.Scope))
+                .Concat(module.Policy.Resources.Values.Select(r => r.Scope))
+                .Concat(module.Policy.Prompts.Values.Select(p => p.Scope))
+                .Distinct(StringComparer.Ordinal)];
+        }
+
+        return identity;
     }
 }

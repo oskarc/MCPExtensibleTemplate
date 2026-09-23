@@ -248,13 +248,26 @@ contracts:
       policy immutability at runtime (held by types, not a test that tries); per-provider cache
       separation (checked as registrations, not by a cross-provider read).
       realigned: none
-    red_test: null
+    red_test:
+      broke: G-7
+      went_red: T-7
+      note: |
+        The single-use claim on a confirmation was switched off (the Redis claim skipped). T-7's
+        round-trip test went red at its replay step: the same confirmation, sent again inside its
+        120 seconds, ran the irreversible tool a second time. Restored; green again.
     approval: approved-at-gate
     status: approved
     verification_state: none
     audited: false
     file: docs/contracts/contract-003-governed-requests.html
     artifact: https://claude.ai/artifact/7C7n2PhiyXwjYBuiYvraHi
+    observations: [O-061, O-062, O-063, O-064, O-065, O-066, O-067, O-068, O-069]
+    transcript: 40478952-60db-48c0-8fd4-97b093d57259
+    tests_run:
+      date: 2026-09-23
+      command: dotnet test McpServerTemplate.sln --configuration Release
+      result: 253 passed, 0 failed
+    cost: null
     work_id: null
   - contract_id: report-007
     feature: the-first-review

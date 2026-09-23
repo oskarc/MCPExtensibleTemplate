@@ -5,8 +5,10 @@ A production-ready [Model Context Protocol](https://modelcontextprotocol.io/) (M
 ## Features
 
 - **Dual transport** — stdio for IDE/local use, HTTP with SSE for hosted multi-client deployments
-- **API key authentication** — constant-time validated `X-Api-Key` header (HTTP mode)
-- **Per-tool rate limiting** — sliding window throttle to catch agentic loops before they spiral
+- **Bearer-token identity** — OAuth 2.1 resource server; each provider answers to exactly one configured identity provider
+- **A policy per provider** — every tool, resource and prompt declares its scope, risk class and limits; anything undeclared refuses startup, and any request kind the frame does not govern is refused
+- **Per-caller rate limiting** — sliding windows per caller and per caller per tool, held in Redis so they apply across instances
+- **Risk gates** — write tools need a recent token; irreversible tools need a single-use confirmation tied to the exact arguments
 - **Per-client (IP) rate limiting** — HTTP-level protection via ASP.NET Core middleware
 - **HTTP resilience** — retry with exponential backoff + circuit breaker on upstream calls
 - **Structured logging** — Serilog to stderr + rolling files with correlation IDs per tool call
@@ -23,9 +25,9 @@ A production-ready [Model Context Protocol](https://modelcontextprotocol.io/) (M
 McpServerTemplate/
 ├── Program.cs                        # Entry point — transport, DI, middleware
 ├── Infrastructure/
-│   ├── ApiKeyMiddleware.cs           # X-Api-Key authentication (HTTP mode)
+│   ├── Frame/                        # The policy frame: policies, request gate, limits, confirmation, startup checks
+│   ├── Identity/                     # Bearer-token identity, one scheme per identity provider
 │   ├── ToolCallLoggingFilter.cs      # Correlation IDs, timing, arg sanitization
-│   ├── ToolCallThrottleFilter.cs     # Per-tool sliding window rate limiter
 │   └── HealthProbe.cs               # Startup upstream connectivity check
 ├── Providers/
 │   ├── JsonPlaceholder/              # Fake REST API provider (testing/demo)
@@ -193,16 +195,22 @@ All settings live in `appsettings.json` and can be overridden via environment va
 | `HttpTransport:Port` | `3001` | HTTP listen port |
 | `HttpTransport:BindAddress` | `localhost` | Bind address (`localhost`, `0.0.0.0`, etc.) |
 | `HttpTransport:AllowedOrigins` | `[]` | CORS allowed origins (empty = deny all) |
-| `Authentication:ApiKey` | `""` | Required API key for HTTP mode |
-| `RateLimit:MaxCallsPerToolPerMinute` | `10` | Per-tool rate limit (agentic loop protection) |
+| `Authentication:IdentityProviders:{name}:*` | — | Authority, issuer, algorithms and scope catalog per identity provider (HTTP) |
+| `Providers:Enabled` | — | The providers this deployment serves. Required outside Development |
+| `Providers:{Name}:IdentityProvider` | — | The one identity provider a provider answers to. Required |
+| `Limits:Redis` | — | Redis connection string for per-caller limits and used confirmations. Required outside Development |
+| `Limits:PerPrincipalPerMinute` | `120` | Requests per caller per minute, across all instances. Each tool's own limit is in its provider's policy |
+| `Confirmation:Key` | — | Base64 key (32+ bytes) signing confirmations. Required if any irreversible tool is enabled |
 | `Providers:JsonPlaceholder:BaseUrl` | `https://jsonplaceholder.typicode.com` | Fake REST API (must be HTTPS) |
 | `Providers:Smhi:BaseUrl` | SMHI API URL | Must be absolute HTTPS |
 | `Providers:SmhiObs:BaseUrl` | SMHI Obs API URL | Must be absolute HTTPS |
 
 ### Environment-specific overrides
 
-- **Development** (`ASPNETCORE_ENVIRONMENT=Development`) — Debug logging, 30 calls/min rate limit, `-dev` user agent
-- **Production** (`ASPNETCORE_ENVIRONMENT=Production`) — Warning level, 10 calls/min, 30-day log retention
+- **Development** (`ASPNETCORE_ENVIRONMENT=Development`) — Debug logging, all three providers, in-memory limits allowed, `-dev` user agent
+- **Production** (`ASPNETCORE_ENVIRONMENT=Production`) — Warning level, the SMHI providers only (the demo provider is not enabled), Redis required, 30-day log retention
+
+A misspelled or retired key in the `Authentication`, `Providers`, `Limits`, `Confirmation` or `Development` sections stops the server from starting and names the nearest real key: a setting the server would silently ignore is refused rather than trusted.
 
 ## Documentation
 
@@ -280,12 +288,13 @@ Upstream HTTP calls go through a resilience pipeline powered by `Microsoft.Exten
 
 ### Tool Call Lifecycle
 
-Every MCP tool call passes through the infrastructure filters in order:
+Every MCP request passes the frame's checks in order:
 
-1. **LoggingFilter** — assigns a crypto-random correlation ID, logs arguments (names only at Info level), starts a timer
-2. **ThrottleFilter** — checks per-tool sliding window rate limit; rejects immediately if exceeded
-3. **Tool execution** — the provider's tool method runs, calling the upstream API through the resilient HTTP client
-4. **LoggingFilter** — logs duration and result status with the same correlation ID
+1. **Request kind** — only the request kinds the frame governs go further; anything else is refused
+2. **LoggingFilter** — assigns a crypto-random correlation ID, logs arguments (names only at Info level), starts a timer
+3. **Request gate** — signed in → known item → right identity provider → scope → risk gate → per-caller limits → argument shape; each refusal names its rule and is logged as a security event
+4. **Tool execution** — the provider's tool method runs, calling the upstream API through the resilient HTTP client
+5. **Output cap** — an answer larger than the tool's policy allows is withheld, not cut short
 
 ### Output Engineering
 
@@ -306,33 +315,33 @@ Quick steps:
 2. Add these files following the JsonPlaceholder or SMHI pattern:
    - `YourApiConfig.cs` — strongly-typed config record
    - `YourApiClient.cs` — typed HTTP client with input validation
-   - `YourApiTools.cs` — `[McpServerToolType]` class with tool methods
+   - `YourApiTools.cs` — a **static** `[McpServerToolType]` class with tool methods (resources and prompts likewise)
    - `YourApiServiceRegistration.cs` — `AddYourApiProvider()` extension method
-   - Optionally: formatters, resources, prompts, models
-3. Register in `Program.cs`:
-   ```csharp
-   builder.Services.AddYourApiProvider(builder.Configuration);
-   ```
-4. Add config in `appsettings.json`:
+   - `YourApiModule.cs` — an `IProviderModule`: the provider's name, its types, and its **policy** — a scope, risk class and per-caller limit for every tool, a scope for every resource and prompt, and the hosts it may call
+3. List the module in `Providers/BuiltInProviders.cs`
+4. Add config, and name the provider in `Providers:Enabled`:
    ```json
    "Providers": {
+     "Enabled": [ "Smhi", "SmhiObs", "YourApi" ],
      "YourApi": {
        "BaseUrl": "https://api.example.com",
-       "UserAgent": "McpServerTemplate/1.0"
+       "UserAgent": "McpServerTemplate/1.0",
+       "IdentityProvider": "corp"
      }
    }
    ```
 
-Tools, resources, and prompts are auto-discovered via `WithToolsFromAssembly()` — no additional wiring needed.
+Nothing is found by scanning the assembly: a class no module names is not served. A tool without a policy, a policy without a tool, a scope the provider's identity provider cannot issue, or a `BaseUrl` outside the policy's hosts stops the server from starting, with a message saying what to fix.
 
 ## Security
 
-- **Authentication** — API key required for all HTTP requests (constant-time comparison)
+- **Authentication** — a bearer token from a configured identity provider on every HTTP request; the caller's trust domain decides which providers it can reach
+- **Policy frame** — every request is checked against its provider's declared policy; a provider cannot remove or add to the frame's checks
 - **Input validation** — coordinates, parameter IDs, and period values are validated against allowlists
 - **Response limits** — upstream responses are byte-counted (not Content-Length) and capped
 - **HTTPS enforcement** — provider base URLs must be absolute HTTPS at startup
 - **Kestrel hardening** — 1 MB request body limit, 100 max connections, 30 s header timeout
-- **Rate limiting** — per-tool (agentic loop protection) + per-IP (HTTP abuse protection)
+- **Rate limiting** — per caller and per caller per tool, across instances (agentic loop protection) + per-IP (HTTP abuse protection)
 - **Log safety** — argument values logged at Debug only; log paths validated against traversal
 - **CORS** — deny-all by default when in HTTP mode
 - **Binding** — defaults to `localhost`, not `0.0.0.0`
