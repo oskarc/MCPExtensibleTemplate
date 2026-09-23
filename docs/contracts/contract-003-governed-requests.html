@@ -1,0 +1,203 @@
+<title>Governed Requests</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --paper:#F2F4F1; --surface:#FFFFFF; --ink:#17201D; --muted:#5F706B;
+    --rule:#CFD8D4; --rule-strong:#AEBBB6;
+    --accent:#0E6B66; --accent-ink:#0B5551; --accent-soft:#DDEDEA; --on-accent:#FFFFFF;
+    --kept:#2F7D4F; --kept-soft:#E0F0E6;
+    --new:#B7791F; --new-soft:#F7ECD9;
+    --open:#B3352C; --open-soft:#F6E3E1;
+    --code-bg:#E3EAE7;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#141B18; --surface:#1C2522; --ink:#E6ECE9; --muted:#9AABA5;
+      --rule:#2B3733; --rule-strong:#3B4945;
+      --accent:#58C4BB; --accent-ink:#7FD6CE; --accent-soft:#1E3B38; --on-accent:#0B1512;
+      --kept:#6CC08B; --kept-soft:#1E3427;
+      --new:#E0AE5A; --new-soft:#3A2F1C;
+      --open:#E37A72; --open-soft:#3A2321;
+      --code-bg:#101614;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#141B18; --surface:#1C2522; --ink:#E6ECE9; --muted:#9AABA5;
+    --rule:#2B3733; --rule-strong:#3B4945;
+    --accent:#58C4BB; --accent-ink:#7FD6CE; --accent-soft:#1E3B38; --on-accent:#0B1512;
+    --kept:#6CC08B; --kept-soft:#1E3427;
+    --new:#E0AE5A; --new-soft:#3A2F1C;
+    --open:#E37A72; --open-soft:#3A2321;
+    --code-bg:#101614;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Source Sans 3", system-ui, "Segoe UI", sans-serif;
+    font-size:16.5px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:940px; margin:0 auto; padding-inline:24px; padding-block:32px 96px; }
+  h1,h2,h3 { font-family:"Archivo","Helvetica Neue",Arial,sans-serif; line-height:1.15; letter-spacing:-0.01em; text-wrap:balance; margin:0; }
+  h1 { font-size:40px; font-weight:800; }
+  h2 { font-size:24px; font-weight:700; margin-block:52px 12px; padding-top:22px; border-top:1px solid var(--rule-strong); }
+  h3 { font-size:16px; font-weight:700; margin-block:22px 8px; }
+  p { margin:0 0 12px; max-width:68ch; }
+  a { color:var(--accent-ink); }
+  code, .mono { font-family:"IBM Plex Mono","Cascadia Mono",Consolas,monospace; font-size:0.86em; }
+  code { background:var(--code-bg); padding:1px 5px; border-radius:3px; }
+  .num { font-variant-numeric:tabular-nums; }
+  .eyebrow { font-family:"IBM Plex Mono",monospace; font-size:12.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 10px; }
+  .lede { font-size:19px; line-height:1.45; max-width:60ch; margin-top:14px; }
+
+  .state { display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline;
+    margin-top:22px; padding:12px 16px; border-left:4px solid var(--kept); background:var(--kept-soft); }
+  .state b { font-weight:700; }
+  .state span { font-size:14.5px; }
+
+  .tally { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px; background:var(--rule);
+    border:1px solid var(--rule); margin-top:20px; }
+  .tally div { background:var(--surface); padding:12px 14px; }
+  .tally .v { font-family:"Archivo",sans-serif; font-weight:700; font-size:26px; line-height:1; font-variant-numeric:tabular-nums; }
+  .tally .k { font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--muted); margin-top:7px; }
+  .tally .hot .v { color:var(--open); }
+
+  blockquote { margin:0 0 12px; padding:10px 16px; border-left:3px solid var(--accent); background:var(--surface); font-size:15.5px; }
+  blockquote p { margin:0 0 8px; }
+  blockquote p:last-child { margin:0; }
+  blockquote cite { display:block; margin-top:8px; font-style:normal; font-size:13px; color:var(--muted); }
+
+  .table-wrap { overflow-x:auto; margin:12px 0 18px; }
+  table { border-collapse:collapse; width:100%; font-size:14.5px; }
+  th, td { text-align:left; vertical-align:top; padding:8px 12px 8px 0; border-bottom:1px solid var(--rule); }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--muted); border-bottom:1px solid var(--rule-strong); font-weight:600; }
+  td.id, th.id { font-family:"IBM Plex Mono",monospace; font-size:13px; white-space:nowrap; color:var(--accent-ink); }
+  td.holds { font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--muted); white-space:nowrap; }
+
+  .chip { display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:11.5px; padding:1px 7px; border-radius:3px; border:1px solid; white-space:nowrap; }
+  .chip.new { background:var(--new-soft); color:var(--new); border-color:var(--new); }
+  .chip.kept { background:var(--kept-soft); color:var(--kept); border-color:var(--kept); }
+  .chip.open { background:var(--open-soft); color:var(--open); border-color:var(--open); }
+
+  figure { margin:18px 0 8px; }
+  .fig-scroll { overflow-x:auto; }
+  figure svg { display:block; width:100%; min-width:620px; height:auto; color:var(--ink); }
+  figcaption { font-size:13px; color:var(--muted); padding-top:8px; max-width:78ch; }
+  .nd rect { fill:var(--surface); stroke:var(--rule-strong); stroke-width:1.25; }
+  .nd text { fill:currentColor; font:500 12.5px "Source Sans 3",system-ui,sans-serif; }
+  .nd .m { font-family:"IBM Plex Mono",monospace; font-size:11.5px; }
+  .nd.new rect { fill:var(--new-soft); stroke:var(--new); }
+  .nd.stop rect { fill:var(--open-soft); stroke:var(--open); }
+  .nd.good rect { fill:var(--kept-soft); stroke:var(--kept); }
+  .edge { fill:none; stroke:var(--muted); stroke-width:1.3; }
+  .edge.stop { stroke:var(--open); }
+  .elabel { fill:var(--muted); font:500 11px "Source Sans 3",sans-serif; }
+
+  .matrix td, .matrix th { text-align:center; padding:6px 4px; }
+  .matrix td:first-child, .matrix th:first-child { text-align:left; padding-right:10px; }
+  .matrix .hit { color:var(--accent-ink); font-weight:700; }
+  .matrix .dot { color:var(--rule-strong); }
+
+  ul { padding-left:20px; max-width:68ch; }
+  li { margin-bottom:6px; }
+  .gate { border:1px solid var(--rule-strong); border-radius:3px; background:var(--surface); padding:18px 20px; margin-top:16px; }
+  .gate h3 { margin-top:0; }
+  .foot { margin-top:44px; padding-top:18px; border-top:1px solid var(--rule-strong); font-size:13.5px; color:var(--muted); }
+  .foot b { color:var(--ink); }
+
+  @media (max-width:760px) {
+    .wrap { padding-inline:16px; }
+    h1 { font-size:30px; }
+    .tally { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
+</style>
+<style>
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:11.5px;padding:1px 7px;border-radius:3px}
+.chip.kept{background:var(--kept-soft);color:var(--kept)} .chip.new{background:var(--new-soft);color:var(--new)}
+.mat td,.mat th{text-align:center;padding:5px 6px;font-size:12.5px} .mat td:first-child{text-align:left}
+pre.tier{white-space:pre-wrap;background:var(--surface);border:1px solid var(--rule);padding:12px 14px;font-size:14px;font-family:"Source Sans 3",sans-serif}
+</style>
+<div class="wrap">
+<p class="eyebrow">contract-003 &middot; execution contract &middot; Phase 2, first half</p>
+<h1>Governed Requests</h1>
+<p class="lede">Resources and prompts answer any signed-in caller, unknown arguments pass silently, and a provider could switch the frame off &mdash; this contract makes every request pass a policy the provider cannot remove.</p>
+<div class="state"><b>Approved at the gate, 2026-09-23.</b><span>Implementation has not started. Status lives in the contract log; this page is the approved text.</span></div>
+<div class="tally">
+<div><div class="v">12</div><div class="k">use cases</div></div>
+<div><div class="v">14</div><div class="k">guardrails</div></div>
+<div><div class="v">16</div><div class="k">tests</div></div>
+<div><div class="v">4</div><div class="k">new packages</div></div>
+<div class="hot"><div class="v">0</div><div class="k">decisions open</div></div>
+</div>
+
+<h2>Direction</h2>
+<blockquote><p>After this contract, a request reaches a provider only if a policy declared for that provider allows that caller, that kind of request and that shape of arguments; the server refuses to start if any tool, resource or prompt lacks a policy, if the frame&#x27;s own parts have been altered, or if a governed setting is unknown; and any request kind nobody governs is refused. The bet is that one declared policy per provider, enforced by a frame providers cannot remove and that the tests and the real server both run, closes the ways in that Phase 1 left open - while what an argument&#x27;s value means stays the provider&#x27;s responsibility, stated as such.</p><cite>The bearing. If it and the tiers disagree, the bearing wins.</cite></blockquote>
+
+<h2>What the pioneer locked</h2>
+<p>A clause that cannot be traced to one of these is wrong, not merely debatable.</p>
+<ul>
+<li>Two contracts: every incoming request first, every outbound call second.</li>
+<li>Every request kind governed, and any kind not governed refused.</li>
+<li>Limits held in Redis now, required in production.</li>
+<li>The confirmation gate for irreversible tools built now.</li>
+<li>After challenging the first draw: <em>&ldquo;redraw it, good findings.&rdquo;</em> &mdash; the eight findings folded in.</li>
+</ul>
+<blockquote><p><b>Pre-mortem:</b> Pre mortem is if there are holes or security issues as a result of our work here.</p><p><b>Disappointment lines:</b> None given per guarantee; the pre-mortem stands for every guarantee (contract-015 default).</p></blockquote>
+
+<h2>The mechanism: one request, in order</h2>
+<div class="table-wrap"><table><tr><th>#</th><th>Check</th><th></th><th>What does it</th></tr><tr><td class="num">1</td><td><b>Signed in</b></td><td><span class="chip kept">existing</span></td><td>Phase 1 authentication; the request gate requires a principal</td></tr><tr><td class="num">2</td><td><b>Request kind admitted</b></td><td><span class="chip new">added</span></td><td>G-5: an incoming message filter admits only named methods</td></tr><tr><td class="num">3</td><td><b>Known item</b></td><td><span class="chip new">added</span></td><td>G-4: tool, resource, prompt or completion target has a policy</td></tr><tr><td class="num">4</td><td><b>Right identity provider</b></td><td><span class="chip kept">existing</span></td><td>Phase 1 binding, now read from the policy (G-1) and extended to resources and prompts</td></tr><tr><td class="num">5</td><td><b>Scope</b></td><td><span class="chip kept">existing</span></td><td>Phase 1 scope check, now from the policy, over every request kind</td></tr><tr><td class="num">6</td><td><b>Risk gate</b></td><td><span class="chip new">added</span></td><td>G-7: write = token under 5 min; irreversible = under 60 s + single-use confirmation</td></tr><tr><td class="num">7</td><td><b>Limits</b></td><td><span class="chip new">added</span></td><td>G-8: per caller and per caller per tool, in Redis, across instances</td></tr><tr><td class="num">8</td><td><b>Argument shape</b></td><td><span class="chip new">added</span></td><td>G-6: declared names, schema, lengths, finite numbers</td></tr><tr><td class="num">9</td><td><b>Output cap</b></td><td><span class="chip new">added</span></td><td>G-9: an answer over the tool&#x27;s cap is refused</td></tr></table></div>
+<p>Beside the request path, at startup: the policy check (G-2), the settings allowlist (G-11) and the frame-integrity comparison (G-12) each refuse to start instead of starting open.</p>
+
+<h2>Tier 1 &mdash; who it is for</h2>
+<pre class="tier">Who: an organisation&#x27;s platform team running the server centrally, the teams whose tools it
+exposes, the security function, and people calling tools through AI clients.
+What they want: to add a provider by declaring what it may do, and to trust that nothing
+undeclared gets through, even from a provider that does not cooperate.
+Success: the platform team reads a provider&#x27;s policy plus its validated configuration and knows
+who may reach what, through which request kinds, with which argument shapes, at what rate. A
+mistake or a typo stops startup instead of opening access. A refused caller is told which rule
+refused them and what to do.
+What it does not promise: that an argument&#x27;s value is sensible for the provider (that is the
+provider&#x27;s code); that a person rather than their AI client approved an irreversible action (the
+server enforces the round-trip; the client decides who answers); that a write came from someone
+who just signed in (the gate bounds how long a revoked user keeps write access).
+Cost today: resources and prompts are open to any signed-in caller; unknown arguments pass
+silently; the only limit is per tool, shared by everyone, and per instance; nothing distinguishes a
+destructive tool from a reading one.</pre>
+<h2>Tier 2 &mdash; use cases</h2>
+<div class="table-wrap"><table><tr><td class="mono"><b>UC-1</b></td><td>Declaring a provider: one policy covers every tool, resource and prompt, and the server starts. Edge: missing or orphaned policy, scope nobody can issue, wildcard or IP host, contradictory timeouts, labels not matching risk, configured upstream outside declared hosts - each refuses startup saying what and how to fix.</td></tr><tr><td class="mono"><b>UC-2</b></td><td>Listing: a caller sees only what their identity provider and scopes allow.</td></tr><tr><td class="mono"><b>UC-3</b></td><td>Using: tool calls, resource reads, prompt requests and completions are checked in a fixed order; a refusal names the rule and what to do. Naming something hidden is refused exactly as if it had been listed.</td></tr><tr><td class="mono"><b>UC-4</b></td><td>Argument shape: undeclared names, wrong types, over-long strings and non-numbers are refused before the tool runs; nothing reaches the upstream. Within the declared shape, meaning is the provider&#x27;s.</td></tr><tr><td class="mono"><b>UC-5</b></td><td>Ungoverned request kinds are refused.</td></tr><tr><td class="mono"><b>UC-6</b></td><td>Write tools refuse a token issued more than 5 minutes ago. Purpose: a revoked user loses write access within 5 minutes. Decided: the Development-only local principal counts as fresh.</td></tr><tr><td class="mono"><b>UC-7</b></td><td>Irreversible tools require a confirmation tied to the exact arguments, valid 120 s, usable once. Different arguments, expired, altered, replayed, or a client that cannot confirm - all refused. The token must be under 60 s old (decided, overturnable: the roadmap&#x27;s reading when an identity provider offers no introspection).</td></tr><tr><td class="mono"><b>UC-8</b></td><td>Limits per caller and per caller per tool hold across instances; with Redis unreachable, requests are refused.</td></tr><tr><td class="mono"><b>UC-9</b></td><td>Production loads only providers listed as enabled; the demo provider is not listed; an unknown name refuses startup.</td></tr><tr><td class="mono"><b>UC-10</b></td><td>In the sections the frame governs (identity, providers, limits, confirmation), any key it does not know refuses startup - typos and retired settings such as the old per-tool throttle.</td></tr><tr><td class="mono"><b>UC-11</b></td><td>Output over a tool&#x27;s cap is refused with the cap named, not truncated. Injection detection in outputs is left to Phase 4, where its signal is consumed.</td></tr><tr><td class="mono"><b>UC-12</b></td><td>A provider that removes, replaces or adds to the frame&#x27;s parts, or registers a tool through a side door, refuses startup naming the provider.</td></tr></table></div>
+<h2>Tier 3 &mdash; guardrails</h2>
+<div class="table-wrap"><table><tr><td class="mono"><b>G-1</b></td><td>(UC-1) Policy types per roadmap 3.2 plus ResourcePolicy and PromptPolicy, declared in code; providers become IProviderModule modules; McpProvider/McpScope attributes removed - one source of truth.</td></tr><tr><td class="mono"><b>G-2</b></td><td>(UC-1, UC-9) PolicyValidator at startup: roadmap 3.2 rules plus resources/prompts covered, configured hosts declared, enabled providers exist. sys_startup CRITICAL, exit 78.</td></tr><tr><td class="mono"><b>G-3</b></td><td>(all) One setup: the frame is composed in one method called by HTTP, stdio and the test server; the harness&#x27;s copy is deleted. Lesson of contract-002.</td></tr><tr><td class="mono"><b>G-4</b></td><td>(UC-2, UC-3) Request gate: principal -&gt; known item -&gt; idp-binding -&gt; scope -&gt; risk -&gt; limits -&gt; arguments, over tools/call, resources/read, prompts/get, completion/complete (scope of the referenced prompt or resource); list filters for tools, resources, resource templates, prompts. Distinct rule name and logged event per refusal.</td></tr><tr><td class="mono"><b>G-5</b></td><td>(UC-5) Refuse by default: an incoming message filter admits only a named list of methods.</td></tr><tr><td class="mono"><b>G-6</b></td><td>(UC-4) Argument guard: JsonSchema.Net 9.4.0 against the tool&#x27;s declared schema; unknown names (malicious_extraneous), MaxStringArgLength, non-finite numbers.</td></tr><tr><td class="mono"><b>G-7</b></td><td>(UC-6, UC-7) Risk gates. Confirmation nonce = HMAC(key; idp:sub, tool, SHA-256(args), time); its id recorded in Redis on first use and refused after. Key &gt;= 32 bytes, required when an Irreversible tool is enabled. Annotations derived from risk. A test-only tool exercises it.</td></tr><tr><td class="mono"><b>G-8</b></td><td>(UC-8) L2/L3 sliding 1-minute windows in Redis (StackExchange.Redis 3.3.1), key {idp}:{sub}; Production requires Redis; error -&gt; deny; in-memory Development only; ToolCallThrottleFilter removed. L4 (provider concurrency, daily budget) belongs to the second contract.</td></tr><tr><td class="mono"><b>G-9</b></td><td>(UC-11) Per-tool MaxOutputBytes.</td></tr><tr><td class="mono"><b>G-10</b></td><td>(UC-9) Providers:Enabled; per-provider registrations and caches.</td></tr><tr><td class="mono"><b>G-11</b></td><td>(UC-10) Settings allowlist per governed section; unknown key refuses startup naming the key and nearest known match.</td></tr><tr><td class="mono"><b>G-12</b></td><td>(UC-12) Frame integrity: providers register first, the frame last; installed request filters, message filters, gate services and policies are compared at startup with what the frame registered; any difference, or a tool outside a module&#x27;s policy, refuses startup naming the provider.</td></tr><tr><td class="mono"><b>G-13</b></td><td>(UC-8) JsonSchema.Net, StackExchange.Redis, Testcontainers.Redis 4.15.0 (tests), locked restore and audit; CI runs the Redis tests; a missing Redis fails, never skips.</td></tr><tr><td class="mono"><b>G-14</b></td><td>(UC-3, UC-4) stdio Development runs the same gate.</td></tr></table></div>
+<p>Novel to the kit, observations due after: G-3, G-5, G-11, G-12.</p>
+<h2>Tier 4 &mdash; acceptance tests</h2>
+<div class="table-wrap"><table><tr><td class="mono"><b>T-1</b></td><td>(G-2) Startup refusals, each exit 78 with a message naming the problem: no policy; policy for nothing; resource with no policy; scope not issuable; wildcard host; IP host; contradictory timeouts; wrong annotation; undeclared configured host; unknown enabled provider; Irreversible without key; Production without Redis (real process).</td></tr><tr><td class="mono"><b>T-2</b></td><td>(G-4) A weather-only token lists only weather tools, resources and prompts; a token from the other identity provider sees none of them.</td></tr><tr><td class="mono"><b>T-3</b></td><td>(G-4) Hidden tool called, wrong-idp resource read, unscoped prompt, unscoped completion: each refused with its own rule; fails if any returns content.</td></tr><tr><td class="mono"><b>T-4</b></td><td>(G-5) resources/subscribe, logging/setLevel and an invented method each get a JSON-RPC error and no handler runs.</td></tr><tr><td class="mono"><b>T-5</b></td><td>(G-6) Extra argument, wrong type, over-long string, NaN: each refused; the fake upstream records zero requests.</td></tr><tr><td class="mono"><b>T-6</b></td><td>(G-7) Write tool: iat 6 min old refused; 1 min old allowed.</td></tr><tr><td class="mono"><b>T-7</b></td><td>(G-7) Irreversible test tool: no confirmation -&gt; asks; valid -&gt; runs once; the same confirmation again within 120 s -&gt; refused; different args, 121 s, altered, client without elicitation -&gt; refused. Fails if it ever runs twice on one confirmation or without one.</td></tr><tr><td class="mono"><b>T-8</b></td><td>(G-8) Two instances, one Redis container: the limit carries across; another caller is unaffected; the same sub from another idp is a separate caller; Redis stopped -&gt; refused.</td></tr><tr><td class="mono"><b>T-9</b></td><td>(G-9) Oversized output refused, cap named.</td></tr><tr><td class="mono"><b>T-10</b></td><td>(G-3) Test server and program built by the same method; a test compares the installed request filters, message filters and policies of each - any difference fails. A real process in Production configuration with Redis repeats T-3&#x27;s and T-5&#x27;s refusals.</td></tr><tr><td class="mono"><b>T-11</b></td><td>(G-10) The real process in Production lists no demo tools.</td></tr><tr><td class="mono"><b>T-12</b></td><td>(G-11) A typo in a governed key and the retired throttle setting each refuse startup naming the key and nearest match.</td></tr><tr><td class="mono"><b>T-13</b></td><td>(G-12) Test-only modules that remove the gate, add a request filter, or add a tool without a policy each refuse startup naming the provider.</td></tr><tr><td class="mono"><b>T-14</b></td><td>(G-13) Locked restore, warnings-as-errors build, clean audit; CI runs the Redis tests, green.</td></tr><tr><td class="mono"><b>T-15</b></td><td>(G-14) stdio Development refuses an extra argument as HTTP does.</td></tr><tr><td class="mono"><b>T-16</b></td><td>(G-1) grep for McpProvider/McpScope attribute use in Providers returns zero.</td></tr></table></div>
+<pre class="tier">untested: argument value meaning (by design the provider&#x27;s); whether a human answered a
+confirmation (no server can see it); recent sign-in (the gate bounds revocation, not presence);
+policy immutability at runtime (held by types, not a test that tries); per-provider cache
+separation (checked as registrations, not by a cross-provider read).
+realigned: none</pre>
+
+<h2>Every magnitude and where it came from</h2>
+<div class="table-wrap"><table><tr><th>Quantity</th><th>Value</th><th>Source</th></tr><tr><td>Write token freshness</td><td class="num mono">5 min</td><td>Roadmap 3.3 (Write gate, iat within 5 min)</td></tr><tr><td>Irreversible token freshness</td><td class="num mono">60 s</td><td>Roadmap 3.3, read for identity providers without introspection - agent&#x27;s reading, overturnable</td></tr><tr><td>Confirmation validity</td><td class="num mono">120 s</td><td>Roadmap 3.4</td></tr><tr><td>Confirmation uses</td><td class="num mono">1</td><td>New - the challenge found the stateless nonce replayable</td></tr><tr><td>Confirmation key length</td><td class="num mono">&gt;= 32 bytes</td><td>Agent judgement: HMAC-SHA256 block-size key</td></tr><tr><td>Limit window</td><td class="num mono">sliding 1 min</td><td>Roadmap 3.6 (L2, L3)</td></tr><tr><td>Default MaxOutputBytes</td><td class="num mono">32,768</td><td>Roadmap 3.2 ToolPolicy default</td></tr><tr><td>Default MaxStringArgLength</td><td class="num mono">512</td><td>Roadmap 3.2 ToolPolicy default</td></tr><tr><td>Startup failure exit code</td><td class="num mono">78</td><td>EX_CONFIG, roadmap 3.2 and contract-001</td></tr></table></div>
+
+<h2>Traceability</h2>
+<p>Use cases against the guardrails that hold them. No row and no column is empty.</p>
+<div class="table-wrap"><table class="mat"><tr><th></th><th class="mono">G-1</th><th class="mono">G-2</th><th class="mono">G-3</th><th class="mono">G-4</th><th class="mono">G-5</th><th class="mono">G-6</th><th class="mono">G-7</th><th class="mono">G-8</th><th class="mono">G-9</th><th class="mono">G-10</th><th class="mono">G-11</th><th class="mono">G-12</th><th class="mono">G-13</th><th class="mono">G-14</th></tr><tr><td class="mono"><b>UC-1</b></td><td>&#9679;</td><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-2</b></td><td></td><td></td><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-3</b></td><td></td><td></td><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>&#9679;</td></tr><tr><td class="mono"><b>UC-4</b></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>&#9679;</td></tr><tr><td class="mono"><b>UC-5</b></td><td></td><td></td><td>&#9679;</td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-6</b></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-7</b></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-8</b></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td><td>&#9679;</td><td></td></tr><tr><td class="mono"><b>UC-9</b></td><td></td><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-10</b></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-11</b></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-12</b></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>&#9679;</td><td></td><td></td></tr></table></div>
+
+<h2>Boundaries</h2>
+<ul>
+<li>Outbound calls &mdash; hosts, redirects, internal addresses, response size, token forwarding, provider concurrency and daily budget &mdash; are the second contract. This one only declares the allowances and checks them at startup.</li>
+<li>The audit pipeline is Phase 3; this contract logs a named event per refusal, not the chained audit record.</li>
+<li>Strikes, suspension and revocation are Phase 4, as is injection detection in outputs.</li>
+<li>What an argument&rsquo;s value means for a provider is the provider&rsquo;s, not the frame&rsquo;s.</li>
+</ul>
+
+<h2>The gate</h2>
+<p>Approval authorises building exactly these clauses. A deviation found in flight stops the work and is put to the pioneer; it is not resolved quietly. After the build one guarantee is broken on purpose and the test that goes red is recorded before the contract reads implemented.</p>
+
+<h2>Verified this session</h2>
+<p>Roadmap sections 3.1&ndash;3.8 and Phase 2; <code>ProviderBinding</code>, <code>TrustDomainFilters</code>, <code>Program.cs</code>, the test harness <code>InProcessServer</code>, the Smhi resources and prompts; the installed SDK 2.2.0 documentation for request and message filters and elicitation; the NuGet registry for the four packages; Docker 29.5.3 running Redis 7.4.11. <b>No code has changed.</b></p>
+</div>

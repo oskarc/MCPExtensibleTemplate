@@ -98,6 +98,164 @@
 # contract it led to). See meta-contract-artifact/SKILL.md.
 
 contracts:
+  - contract_id: contract-003
+    feature: phase-2a-governed-requests
+    type: contract
+    date_proposed: 2026-09-23
+    date_approved: 2026-09-23
+    bearing: |
+      After this contract, a request reaches a provider only if a policy declared for that provider
+      allows that caller, that kind of request and that shape of arguments; the server refuses to
+      start if any tool, resource or prompt lacks a policy, if the frame's own parts have been
+      altered, or if a governed setting is unknown; and any request kind nobody governs is refused.
+      The bet is that one declared policy per provider, enforced by a frame providers cannot remove
+      and that the tests and the real server both run, closes the ways in that Phase 1 left open -
+      while what an argument's value means stays the provider's responsibility, stated as such.
+    ground: |
+      Surveyed before drawing (P-008, P-024). Roadmap sections 3.1-3.8 and Phase 2. Code: ProviderBinding
+      and TrustDomainFilters from contract-002 already bind tools to identity providers and scopes via
+      attributes. Found: SmhiResources and SmhiPrompts carry provider/scope attributes that nothing checks
+      - ProviderBinding iterates tools only and no resource/prompt filter exists, so any authenticated
+      caller from any trusted identity provider reaches them (found by reading; no test covers them).
+      Found: the test harness InProcessServer re-declares the MCP filters "exactly as Program.cs does" and
+      already differs (no logging or throttle filter). Provider upstream addresses come from configuration
+      (BaseUrl). SDK 2.2.0 installed docs: request filters exist for every request kind; an incoming
+      message filter sees every message and not calling next stops the handler; InputRequiredException and
+      InputRequest.ForElicitation exist. Packages verified on nuget: JsonSchema.Net 9.4.0,
+      StackExchange.Redis 3.3.1, Testcontainers.Redis 4.15.0, BannedApiAnalyzers 5.6.0. Docker 29.5.3 runs
+      locally (pioneer started it) and starts redis 7.4.11; CI is ubuntu-latest.
+      Spec lock 2026-09-23, all four answers the recommended option: two contracts (requests, then
+      outbound); every request kind governed, the rest refused; Redis now; the confirmation gate built now.
+      The first draw was challenged at the pioneer's request ("I want you to challenge the contract, what
+      does not hold its claim?"); eight findings - replayable confirmation, providers able to remove the
+      frame, misspelled settings ignored, a setup test that checked names, and four overstated claims - were
+      folded into this redraw ("redraw it, good findings.").
+    tier_1: |
+      Who: an organisation's platform team running the server centrally, the teams whose tools it
+      exposes, the security function, and people calling tools through AI clients.
+      What they want: to add a provider by declaring what it may do, and to trust that nothing
+      undeclared gets through, even from a provider that does not cooperate.
+      Success: the platform team reads a provider's policy plus its validated configuration and knows
+      who may reach what, through which request kinds, with which argument shapes, at what rate. A
+      mistake or a typo stops startup instead of opening access. A refused caller is told which rule
+      refused them and what to do.
+      What it does not promise: that an argument's value is sensible for the provider (that is the
+      provider's code); that a person rather than their AI client approved an irreversible action (the
+      server enforces the round-trip; the client decides who answers); that a write came from someone
+      who just signed in (the gate bounds how long a revoked user keeps write access).
+      Cost today: resources and prompts are open to any signed-in caller; unknown arguments pass
+      silently; the only limit is per tool, shared by everyone, and per instance; nothing distinguishes a
+      destructive tool from a reading one.
+    tier_2: |
+      UC-1  Declaring a provider: one policy covers every tool, resource and prompt, and the server
+            starts. Edge: missing or orphaned policy, scope nobody can issue, wildcard or IP host,
+            contradictory timeouts, labels not matching risk, configured upstream outside declared hosts
+            - each refuses startup saying what and how to fix.
+      UC-2  Listing: a caller sees only what their identity provider and scopes allow.
+      UC-3  Using: tool calls, resource reads, prompt requests and completions are checked in a fixed
+            order; a refusal names the rule and what to do. Naming something hidden is refused exactly
+            as if it had been listed.
+      UC-4  Argument shape: undeclared names, wrong types, over-long strings and non-numbers are refused
+            before the tool runs; nothing reaches the upstream. Within the declared shape, meaning is
+            the provider's.
+      UC-5  Ungoverned request kinds are refused.
+      UC-6  Write tools refuse a token issued more than 5 minutes ago. Purpose: a revoked user loses
+            write access within 5 minutes. Decided: the Development-only local principal counts as fresh.
+      UC-7  Irreversible tools require a confirmation tied to the exact arguments, valid 120 s, usable
+            once. Different arguments, expired, altered, replayed, or a client that cannot confirm - all
+            refused. The token must be under 60 s old (decided, overturnable: the roadmap's reading when
+            an identity provider offers no introspection).
+      UC-8  Limits per caller and per caller per tool hold across instances; with Redis unreachable,
+            requests are refused.
+      UC-9  Production loads only providers listed as enabled; the demo provider is not listed; an
+            unknown name refuses startup.
+      UC-10 In the sections the frame governs (identity, providers, limits, confirmation), any key it
+            does not know refuses startup - typos and retired settings such as the old per-tool throttle.
+      UC-11 Output over a tool's cap is refused with the cap named, not truncated. Injection detection in
+            outputs is left to Phase 4, where its signal is consumed.
+      UC-12 A provider that removes, replaces or adds to the frame's parts, or registers a tool through a
+            side door, refuses startup naming the provider.
+    tier_3: |
+      G-1  (UC-1) Policy types per roadmap 3.2 plus ResourcePolicy and PromptPolicy, declared in code;
+           providers become IProviderModule modules; McpProvider/McpScope attributes removed - one source
+           of truth.
+      G-2  (UC-1, UC-9) PolicyValidator at startup: roadmap 3.2 rules plus resources/prompts covered,
+           configured hosts declared, enabled providers exist. sys_startup CRITICAL, exit 78.
+      G-3  (all) One setup: the frame is composed in one method called by HTTP, stdio and the test
+           server; the harness's copy is deleted. Lesson of contract-002.
+      G-4  (UC-2, UC-3) Request gate: principal -> known item -> idp-binding -> scope -> risk -> limits ->
+           arguments, over tools/call, resources/read, prompts/get, completion/complete (scope of the
+           referenced prompt or resource); list filters for tools, resources, resource templates,
+           prompts. Distinct rule name and logged event per refusal.
+      G-5  (UC-5) Refuse by default: an incoming message filter admits only a named list of methods.
+      G-6  (UC-4) Argument guard: JsonSchema.Net 9.4.0 against the tool's declared schema; unknown names
+           (malicious_extraneous), MaxStringArgLength, non-finite numbers.
+      G-7  (UC-6, UC-7) Risk gates. Confirmation nonce = HMAC(key; idp:sub, tool, SHA-256(args), time);
+           its id recorded in Redis on first use and refused after. Key >= 32 bytes, required when an
+           Irreversible tool is enabled. Annotations derived from risk. A test-only tool exercises it.
+      G-8  (UC-8) L2/L3 sliding 1-minute windows in Redis (StackExchange.Redis 3.3.1), key {idp}:{sub};
+           Production requires Redis; error -> deny; in-memory Development only; ToolCallThrottleFilter
+           removed. L4 (provider concurrency, daily budget) belongs to the second contract.
+      G-9  (UC-11) Per-tool MaxOutputBytes.
+      G-10 (UC-9) Providers:Enabled; per-provider registrations and caches.
+      G-11 (UC-10) Settings allowlist per governed section; unknown key refuses startup naming the key
+           and nearest known match.
+      G-12 (UC-12) Frame integrity: providers register first, the frame last; installed request filters,
+           message filters, gate services and policies are compared at startup with what the frame
+           registered; any difference, or a tool outside a module's policy, refuses startup naming the
+           provider.
+      G-13 (UC-8) JsonSchema.Net, StackExchange.Redis, Testcontainers.Redis 4.15.0 (tests), locked restore
+           and audit; CI runs the Redis tests; a missing Redis fails, never skips.
+      G-14 (UC-3, UC-4) stdio Development runs the same gate.
+      Novel, observations due after: G-3, G-5, G-11, G-12.
+    disappointment: |
+      None given per guarantee; the pre-mortem stands for every guarantee (contract-015 default).
+    premortem: |
+      Pre mortem is if there are holes or security issues as a result of our work here.
+    tier_4: |
+      T-1  (G-2) Startup refusals, each exit 78 with a message naming the problem: no policy; policy for
+           nothing; resource with no policy; scope not issuable; wildcard host; IP host; contradictory
+           timeouts; wrong annotation; undeclared configured host; unknown enabled provider;
+           Irreversible without key; Production without Redis (real process).
+      T-2  (G-4) A weather-only token lists only weather tools, resources and prompts; a token from the
+           other identity provider sees none of them.
+      T-3  (G-4) Hidden tool called, wrong-idp resource read, unscoped prompt, unscoped completion: each
+           refused with its own rule; fails if any returns content.
+      T-4  (G-5) resources/subscribe, logging/setLevel and an invented method each get a JSON-RPC error
+           and no handler runs.
+      T-5  (G-6) Extra argument, wrong type, over-long string, NaN: each refused; the fake upstream
+           records zero requests.
+      T-6  (G-7) Write tool: iat 6 min old refused; 1 min old allowed.
+      T-7  (G-7) Irreversible test tool: no confirmation -> asks; valid -> runs once; the same
+           confirmation again within 120 s -> refused; different args, 121 s, altered, client without
+           elicitation -> refused. Fails if it ever runs twice on one confirmation or without one.
+      T-8  (G-8) Two instances, one Redis container: the limit carries across; another caller is
+           unaffected; the same sub from another idp is a separate caller; Redis stopped -> refused.
+      T-9  (G-9) Oversized output refused, cap named.
+      T-10 (G-3) Test server and program built by the same method; a test compares the installed request
+           filters, message filters and policies of each - any difference fails. A real process in
+           Production configuration with Redis repeats T-3's and T-5's refusals.
+      T-11 (G-10) The real process in Production lists no demo tools.
+      T-12 (G-11) A typo in a governed key and the retired throttle setting each refuse startup naming the
+           key and nearest match.
+      T-13 (G-12) Test-only modules that remove the gate, add a request filter, or add a tool without a
+           policy each refuse startup naming the provider.
+      T-14 (G-13) Locked restore, warnings-as-errors build, clean audit; CI runs the Redis tests, green.
+      T-15 (G-14) stdio Development refuses an extra argument as HTTP does.
+      T-16 (G-1) grep for McpProvider/McpScope attribute use in Providers returns zero.
+      untested: argument value meaning (by design the provider's); whether a human answered a
+      confirmation (no server can see it); recent sign-in (the gate bounds revocation, not presence);
+      policy immutability at runtime (held by types, not a test that tries); per-provider cache
+      separation (checked as registrations, not by a cross-provider read).
+      realigned: none
+    red_test: null
+    approval: approved-at-gate
+    status: approved
+    verification_state: none
+    audited: false
+    file: docs/contracts/contract-003-governed-requests.html
+    artifact: https://claude.ai/artifact/7C7n2PhiyXwjYBuiYvraHi
+    work_id: null
   - contract_id: report-007
     feature: the-first-review
     type: analysis-report
