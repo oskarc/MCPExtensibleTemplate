@@ -13,6 +13,12 @@ namespace McpServerTemplate.Tests.Frame;
 [McpServerToolType]
 public static class TestActTools
 {
+    /// <summary>
+    /// Tests that count this class's calls run in one sequential collection: the counters are
+    /// static, and a test class calling the same tool in parallel would move them.
+    /// </summary>
+    public const string Collection = "TestActTools counters";
+
     private static int _runs;
 
     private static int _echoes;

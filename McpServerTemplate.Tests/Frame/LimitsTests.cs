@@ -7,6 +7,7 @@ namespace McpServerTemplate.Tests.Frame;
 /// and a limit store that cannot answer is a refusal, never permission. Two in-process servers
 /// share one Redis container of this test's own, which the last step stops.
 /// </summary>
+[Collection(TestActTools.Collection)]
 public class LimitsTests
 {
     [Fact]

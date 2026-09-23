@@ -14,6 +14,7 @@ namespace McpServerTemplate.Tests.Frame;
 /// never for a client that cannot be asked. The real client confirms once; the retry it sends is
 /// captured, and then replayed, altered and aged by hand.
 /// </summary>
+[Collection(TestActTools.Collection)]
 public class ConfirmationTests
 {
     private static readonly IReadOnlyList<IProviderModule> Everything = [.. BuiltInProviders.Create(), new TestModule()];

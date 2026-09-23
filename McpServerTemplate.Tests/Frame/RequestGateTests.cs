@@ -9,6 +9,7 @@ namespace McpServerTemplate.Tests.Frame;
 /// contract-003 · T-2, T-3, T-4, T-5, T-6, T-9 (G-4, G-5, G-6, G-7, G-9) — the request gate,
 /// exercised through the SDK's own client against the server composed the shipped way.
 /// </summary>
+[Collection(TestActTools.Collection)]
 public class RequestGateTests
 {
     private static readonly IReadOnlyList<McpServerTemplate.Infrastructure.Frame.IProviderModule> Everything =
