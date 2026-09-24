@@ -192,6 +192,8 @@ flowchart TB
 
 ---
 
+> **Amended 2026-09-24 (contract-003 as built).** Before any of the refusals above, an incoming-message gate refuses any request kind the frame does not govern. The binding and scope refusals apply to resources, prompts and completions as well as tools, and a hidden item is refused in the same words as a forbidden one, so a refusal does not confirm it exists.
+
 ## 4. Routing a token to its identity provider
 
 Several identity providers, each with its own keys and claim names. The subtle part is at the top: the `iss` claim is read **without being trusted**, purely to pick a scheme. All real validation happens after the fork.
@@ -360,6 +362,8 @@ sequenceDiagram
 
 ---
 
+> **Amended 2026-09-24 (contract-003 as built).** A confirmation is also single-use: its id is claimed in Redis on first use, and the same confirmation presented again within its 120 seconds is refused. Without that, the stateless check above would run an irreversible tool twice on one confirmation. A client reaches the round-trip on the 2026-07-28 protocol revision, through `server/discover`.
+
 ## 8. The egress guard
 
 Provider code never constructs an `HttpClient`; it receives one the framework built, with this handler already attached. That is what makes a provider's allowance a fact rather than a promise.
@@ -426,6 +430,8 @@ flowchart TB
 → Roadmap §3.6
 
 ---
+
+> **Amended 2026-09-24 (contract-003 as built).** L2 and L3 are built, in Redis. L4 — provider concurrency and the daily budget — is built with the egress guard, in the second half of Phase 2.
 
 ## 10. The strike ladder
 
@@ -576,6 +582,8 @@ flowchart TB
 → Roadmap §3.2, P5.1
 
 ---
+
+> **Amended 2026-09-24 (contract-003 as built).** Startup also refuses: a setting in a governed section the server does not read (a typo or a retired key, named with the nearest real one); a provider that removed a registration, or registered one belonging to the frame, the SDK, the identity layer or the host; request checks installed that are not the frame's; and a primitive a module declares that the server does not serve.
 
 ## 14. What happens when a dependency is down
 

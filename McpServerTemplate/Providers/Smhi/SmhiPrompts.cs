@@ -19,7 +19,9 @@ namespace McpServerTemplate.Providers.Smhi;
 ///   - Complex multi-step workflows that benefit from guided structure
 ///   - Scenarios where the LLM needs specific instructions to produce good output
 ///
-/// Prompts are OPTIONAL — a minimal provider only needs Tools.
+/// Prompts are OPTIONAL — a minimal provider only needs Tools. Each prompt needs a scope
+/// in its provider's policy, keyed by its name; a caller without that scope does not see
+/// it listed, cannot get it, and cannot complete its arguments.
 /// </summary>
 // contract-002 · G-4 — defence in depth beneath the frame's request gate (contract-003). If a
 // future endpoint is mapped without RequireAuthorization, these types are still closed.

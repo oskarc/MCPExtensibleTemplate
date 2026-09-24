@@ -2,26 +2,33 @@
 
 ## Overview
 
-The MCP Server Template uses a hierarchical configuration system where settings can come from multiple sources, with clear precedence rules. This guide explains all configuration options and how to set them up.
+The MCP Server Template uses a hierarchical configuration system where settings can come from multiple sources, with clear precedence rules. This guide explains every setting the server reads and how to set them.
+
+One rule shapes everything below: **in the sections the frame governs — `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development` — a key the server does not read stops it from starting.** A misspelled key is otherwise ignored silently, and an operator believes it is in force. The startup message names the key and the nearest real one.
 
 ---
 
 ## Configuration Hierarchy (Top Priority First)
 
-1. **Environment Variables** (highest priority)
-2. **appsettings.{Environment}.json** (Development, Production, Staging, etc.)
-3. **appsettings.json** (base/default)
-4. **Hard-coded defaults in code** (lowest priority)
+1. **Command-line arguments** (highest priority), for example `--Transport http`
+2. **Environment Variables**
+3. **User secrets** (Development only — `dotnet user-secrets`)
+4. **appsettings.{Environment}.json** (Development, Production, Staging, etc.)
+5. **appsettings.json** (base/default)
+6. **Defaults in code** (lowest priority)
 
-**Example**: If a setting exists in all three, the environment variable wins.
+**Example**: If a setting exists in all of them, the command-line argument wins.
 
 ```
+Command line: --MyValue cli
 Environment Variable: MyValue=env
     appsettings.Production.json: MyValue=prod
     appsettings.json: MyValue=default
-    
-→ Result: env
+
+→ Result: cli
 ```
+
+**Arrays merge by index, not as a whole.** If the base file lists three providers under `Providers:Enabled` and an environment file lists two, the result keeps the base file's third entry. That is why `Providers:Enabled` is set only in the environment files, never in `appsettings.json`.
 
 ---
 
@@ -39,65 +46,48 @@ This is the **default configuration** that applies to all environments.
     "BindAddress": "localhost",
     "AllowedOrigins": []
   },
-  "Authentication": {
-    "ApiKey": ""
-  },
-  "RateLimit": {
-    "MaxCallsPerToolPerMinute": 10
-  },
-  "Serilog": {
-    "MinimumLevel": {
-      "Default": "Information",
-      "Override": {
-        "Microsoft": "Warning",
-        "System": "Warning"
-      }
-    },
-    "WriteTo": [
-      {
-        "Name": "Console",
-        "Args": {
-          "standardErrorFromLevel": "Verbose",
-          "outputTemplate": "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}"
-        }
-      },
-      {
-        "Name": "File",
-        "Args": {
-          "path": "logs/mcp-server-.log",
-          "rollingInterval": "Day",
-          "retainedFileCountLimit": 14
-        }
-      }
-    ]
-  },
+  "Serilog": { "...": "console to stderr, rolling files under logs/" },
   "Providers": {
-    "JsonPlaceholder": {
-      "BaseUrl": "https://jsonplaceholder.typicode.com",
-      "UserAgent": "McpServerTemplate/1.0"
-    },
     "Smhi": {
       "BaseUrl": "https://opendata-download-metfcst.smhi.se",
-      "UserAgent": "McpServerTemplate/1.0"
+      "UserAgent": "McpServerTemplate/1.0",
+      "IdentityProvider": "corp"
+    },
+    "SmhiObs": {
+      "BaseUrl": "https://opendata-download-metobs.smhi.se",
+      "UserAgent": "McpServerTemplate/1.0",
+      "IdentityProvider": "corp"
+    },
+    "JsonPlaceholder": {
+      "BaseUrl": "https://jsonplaceholder.typicode.com",
+      "UserAgent": "McpServerTemplate/1.0",
+      "IdentityProvider": "corp"
     }
+  },
+  "Limits": {
+    "PerPrincipalPerMinute": 120
   }
 }
 ```
 
 ### 2. appsettings.Development.json
 
-Applied **only** when `ASPNETCORE_ENVIRONMENT=Development`.
+Applied **only** when the environment is `Development`.
 
-Used for **local development** with relaxed limits and verbose logging.
+Used for **local development**: verbose logging, every provider enabled, and the principal a stdio run acts as.
 
 ```json
 {
-  "RateLimit": {
-    "MaxCallsPerToolPerMinute": 30
+  "Transport": "stdio",
+  "Providers": {
+    "Enabled": [ "Smhi", "SmhiObs", "JsonPlaceholder" ]
   },
-  "Serilog": {
-    "MinimumLevel": {
-      "Default": "Debug"
+  "Development": {
+    "DevPrincipal": {
+      "IdentityProvider": "corp",
+      "Subject": "dev-user",
+      "ClientId": "dev-ide",
+      "Scopes": [ "weather:read", "observations:read", "demo:read", "demo:write" ]
     }
   }
 }
@@ -105,19 +95,17 @@ Used for **local development** with relaxed limits and verbose logging.
 
 ### 3. appsettings.Production.json
 
-Applied **only** when `ASPNETCORE_ENVIRONMENT=Production`.
+Applied **only** when the environment is `Production` — which is also what the server runs as when no environment is set.
 
-Used for **hosted deployments** with strict limits and minimal logging.
+Used for **hosted deployments**: minimal logging, and only the SMHI providers. The demo provider is not enabled in Production.
 
 ```json
 {
-  "RateLimit": {
-    "MaxCallsPerToolPerMinute": 10
+  "Providers": {
+    "Enabled": [ "Smhi", "SmhiObs" ]
   },
   "Serilog": {
-    "MinimumLevel": {
-      "Default": "Warning"
-    }
+    "MinimumLevel": { "Default": "Warning" }
   }
 }
 ```
@@ -133,25 +121,17 @@ Used for **hosted deployments** with strict limits and minimal logging.
 - **Options**: `"stdio"`, `"http"`
 - **Default**: `"stdio"`
 - **Description**: How the server communicates with clients
-  - `stdio`: Communicates via stdin/stdout (local development, IDE integration)
-  - `http`: Runs as a web server with HTTP + SSE (hosted multi-client deployments)
-
-**Example**:
-```json
-{
-  "Transport": "http"
-}
-```
+  - `stdio`: stdin/stdout for a local IDE. **Development only** — anywhere else the server refuses to start. Runs as the Development principal (below), through the same checks as HTTP.
+  - `http`: A hosted server using stateless streamable HTTP. The MCP endpoint is the server root, `/`.
 
 ---
 
 ### HTTP Transport Settings
 
 #### `HttpTransport:Port`
-- **Type**: `int`
+- **Type**: `int` (1–65535)
 - **Default**: `3001`
 - **Applies**: Only when `Transport=http`
-- **Description**: The port the HTTP server listens on
 
 ```powershell
 # Set via environment variable in PowerShell
@@ -161,112 +141,152 @@ $env:HttpTransport__Port = "8080"
 ```bash
 # Set via environment variable in bash/zsh
 export HttpTransport__Port=8080
-
-# Set via appsettings.json
-{
-  "HttpTransport": {
-    "Port": 8080
-  }
-}
 ```
 
 #### `HttpTransport:BindAddress`
 - **Type**: `string`
 - **Default**: `"localhost"`
-- **Applies**: Only when `Transport=http`
-- **Description**: The IP address to bind to
+- **Description**: The address to bind to
   - `"localhost"` or `"127.0.0.1"`: Only accessible from this machine
-  - `"0.0.0.0"`: Accessible from any IP (use only behind a firewall!)
+  - `"0.0.0.0"`: Accessible from any address — only behind a proxy and firewall
 
-```json
-{
-  "HttpTransport": {
-    "BindAddress": "0.0.0.0"
-  }
-}
-```
+#### `HttpTransport:AllowedHosts`
+- **Type**: `string[]`
+- **Default**: `localhost`, `127.0.0.1`, `[::1]` when bound to loopback; otherwise the bind address
+- **Description**: The `Host` header values this server answers for. Stops DNS rebinding. Set it to your public host name.
 
 #### `HttpTransport:AllowedOrigins`
-- **Type**: `string[]` (array of URLs)
+- **Type**: `string[]`
 - **Default**: `[]` (deny all)
-- **Applies**: Only when `Transport=http`
-- **Description**: CORS allowed origins (for browser-based clients)
-  - Empty = deny all cross-origin requests (safest default)
-  - List origins like `"https://example.com"`
+- **Description**: Origins a browser-based client may call from. Empty denies every cross-origin request, and a request carrying any other `Origin` is refused before its token is read.
 
-```json
-{
-  "HttpTransport": {
-    "AllowedOrigins": [
-      "https://example.com",
-      "https://app.example.com"
-    ]
-  }
-}
-```
+#### `HttpTransport:KnownProxies` and `HttpTransport:KnownNetworks`
+- **Type**: `string[]` — addresses, and networks in CIDR form (`10.0.0.0/8`)
+- **Default**: none (only loopback is trusted for forwarded headers)
+- **Description**: The proxies allowed to set forwarded headers. **In Production the server refuses to start unless one is set**: it must sit behind a proxy it trusts explicitly, which terminates TLS.
 
 ---
 
 ### Authentication Settings
 
-#### `Authentication:ApiKey`
-- **Type**: `string`
-- **Default**: `""` (empty — **required** when using HTTP transport)
-- **Applies**: Only when `Transport=http`
-- **Description**: Secret key used to authenticate HTTP requests
-  - The middleware **throws at startup** if this is empty when HTTP transport is enabled
-  - Clients must send `X-Api-Key: {this-key}` header with every request
-  - Use a strong random string (minimum 32 characters recommended)
-  - Never commit real keys to git; use environment variables instead
+Required for `Transport=http`. Callers present a bearer token issued by one of these identity providers.
 
-```powershell
-# Generate a secure key in PowerShell
-[Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
-```
+#### `Authentication:Resource`
+- **Type**: `string` — an absolute `https` URI
+- **Description**: This server's identity as an OAuth resource. Every identity provider must issue tokens whose audience is exactly this value. Published in the protected-resource metadata at `/.well-known/oauth-protected-resource`.
+
+#### `Authentication:IdentityProviders:{name}:*`
+
+One section per identity provider, under a name of your choosing (the examples use `corp`):
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `Authentication:IdentityProviders:{name}:Authority` | Yes | Absolute `https` URI; discovery and signing keys are fetched from it |
+| `Authentication:IdentityProviders:{name}:Issuer` | Yes | The exact `iss` value tokens must carry |
+| `Authentication:IdentityProviders:{name}:Algorithms` | Yes | One or more of `RS256`, `PS256`, `ES256` |
+| `Authentication:IdentityProviders:{name}:ScopeCatalog` | Yes | Every scope this identity provider may assert; no wildcards |
+| `Authentication:IdentityProviders:{name}:ScopeClaim` | No | The claim carrying scopes: `scope` (default; Keycloak, Auth0) or `scp` (Entra ID) |
+| `Authentication:IdentityProviders:{name}:ClientIdClaim` | No | `client_id` (default) or `azp` |
+
+Tokens must also carry `sub`, `jti`, `client_id` (or `azp`) and `iat`, and are refused over 8 KB.
+
+#### `Authentication:AdminIdentityProvider`
+- **Type**: `string`
+- **Default**: not set
+- **Description**: The one identity provider whose `mcp:admin` scope is honoured. When set, it must name a configured identity provider whose catalog contains `mcp:admin`. (The administrative plane itself arrives in a later phase.)
 
 ```bash
-# Generate a secure key in bash/zsh
-openssl rand -hex 32
-
-# Result: a3f5b9c2d1e4f8a6b2c5d9e3f1a4b7c0d2e5f8a1b4c7d0e3f6a9b2c5d8e1f4
-
-# Set via environment variable in bash/zsh (never in code!)
-export Authentication__ApiKey=a3f5b9c2d1e4f8a6b2c5d9e3f1a4b7c0d2e5f8a1b4c7d0e3f6a9b2c5d8e1f4
-```
-
-```powershell
-# Set via environment variable in PowerShell (never in code!)
-$env:Authentication__ApiKey = "a3f5b9c2d1e4f8a6b2c5d9e3f1a4b7c0d2e5f8a1b4c7d0e3f6a9b2c5d8e1f4"
+# An identity provider named corp, from environment variables
+export Authentication__Resource=https://mcp.example.com/
+export Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
+export Authentication__IdentityProviders__corp__Issuer=https://login.example.com/realms/corp
+export Authentication__IdentityProviders__corp__Algorithms__0=RS256
+export Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
 ```
 
 ---
 
-### Rate Limiting Settings
+### Provider Settings
 
-#### `RateLimit:MaxCallsPerToolPerMinute`
-- **Type**: `int`
-- **Default**: `10`
-- **Description**: Maximum number of times a single tool can be called per minute
-  - Prevents agentic loops and runaway AI processes
-  - Applied per tool (not globally)
-  - Examples:
-    - `10`: Moderate (good for production)
-    - `100`: Relaxed (good for development)
-    - `1000`: Very relaxed (good for manual testing)
+#### `Providers:Enabled`
+- **Type**: `string[]`
+- **Default**: every built-in provider in Development; **required** everywhere else
+- **Description**: The providers this deployment serves. A name that is not a provider this server has stops it from starting.
+
+#### `Providers:{Name}:IdentityProvider`
+- **Type**: `string`
+- **Required**: Yes, for every enabled provider
+- **Description**: The one identity provider this provider answers to. A caller from any other identity provider cannot see or use its tools, resources or prompts. Two providers may share an identity provider; no provider may have none.
+
+#### `Providers:{Name}:BaseUrl`
+- **Type**: `string` — an absolute `https` URL
+- **Description**: The upstream the provider calls. Its host must be one of the hosts the provider's policy allows, or the server refuses to start.
+
+#### `Providers:{Name}:UserAgent`
+- **Type**: `string`
+- **Description**: The `User-Agent` sent upstream. A setting the built-in providers declare; a provider of your own reads whatever settings its module declares.
 
 ```json
 {
-  "RateLimit": {
-    "MaxCallsPerToolPerMinute": 20
+  "Providers": {
+    "Smhi": {
+      "BaseUrl": "https://opendata-download-metfcst.smhi.se",
+      "UserAgent": "McpServerTemplate/1.0",
+      "IdentityProvider": "corp"
+    }
   }
 }
 ```
 
-**What happens when limit is exceeded**:
+Tools' scopes, risk classes, per-tool limits and allowed hosts are **not** configuration: they are the provider's policy, declared in its module in code.
+
+---
+
+### Limits Settings
+
+#### `Limits:Redis`
+- **Type**: `string` — a StackExchange.Redis connection string, for example `redis.internal:6379,password=...`
+- **Default**: not set; **required outside Development**
+- **Description**: Where per-caller limits and used confirmations are kept, so they hold on every instance. Without it, Development keeps them in memory; any other environment refuses to start. If Redis becomes unreachable while running, requests are refused, not let through unlimited.
+
+#### `Limits:PerPrincipalPerMinute`
+- **Type**: `int` (1–1,000,000)
+- **Default**: `120`
+- **Description**: How many requests one caller — one identity provider plus subject — may make per minute, across all instances. Each tool also has its own per-caller limit in its provider's policy.
+
+**What happens when a limit is exceeded** (the caller receives an MCP error):
 ```
-✗ 429 Too Many Requests
-Tool 'get_blog_post' exceeded rate limit: 10 calls per minute
+excess_rate_limit_exceeded (rule: caller-rate). You have made 120 requests in the last minute, which is your limit. Wait and try again.
 ```
+
+Separately, HTTP requests are limited to 60 per minute per client address before any token is examined; over that, the server answers `429 Too Many Requests`.
+
+---
+
+### Confirmation Settings
+
+#### `Confirmation:Key`
+- **Type**: `string` — base64, at least 32 bytes decoded
+- **Required**: when any enabled provider has a tool whose policy marks it *Irreversible*
+- **Description**: Signs the confirmations irreversible tools require. Generate one with `openssl rand -base64 32` and keep it in a secret store.
+
+---
+
+### Development Settings
+
+#### `Development:DevPrincipal:*`
+
+The principal a stdio run acts as. Development only.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Development:DevPrincipal:IdentityProvider` | `development` | The identity provider it claims; must match the providers' bindings to reach them |
+| `Development:DevPrincipal:Subject` | `dev-user` | Its subject |
+| `Development:DevPrincipal:ClientId` | `dev-ide` | Its client |
+| `Development:DevPrincipal:Scopes` | none | Its scopes; with identity providers configured, each must be in the catalog |
+
+With no identity providers configured, a stdio run synthesizes one per name the providers are bound to, able to issue exactly the scopes their policies require.
 
 ---
 
@@ -276,13 +296,6 @@ Tool 'get_blog_post' exceeded rate limit: 10 calls per minute
 - **Type**: `string`
 - **Options**: `"Verbose"`, `"Debug"`, `"Information"`, `"Warning"`, `"Error"`, `"Fatal"`
 - **Default**: `"Information"`
-- **Description**: Global log level (what messages are recorded)
-  - `Verbose`: Most detailed (includes framework chatter)
-  - `Debug`: Detailed (good for development)
-  - `Information`: Normal (good for production)
-  - `Warning`: Only problems
-  - `Error`: Only errors
-  - `Fatal`: Only fatal crashes
 
 ```json
 {
@@ -296,120 +309,47 @@ Tool 'get_blog_post' exceeded rate limit: 10 calls per minute
 
 #### `Serilog:MinimumLevel:Override`
 - **Type**: `object`
-- **Description**: Override log levels for specific namespaces
-  - Useful to suppress verbose logs from framework libraries
-
-```json
-{
-  "Serilog": {
-    "MinimumLevel": {
-      "Default": "Debug",
-      "Override": {
-        "Microsoft": "Warning",      // Suppress ASP.NET Core debug logs
-        "System": "Warning",         // Suppress System namespace logs
-        "System.Net": "Information"  // But keep System.Net at Information
-      }
-    }
-  }
-}
-```
+- **Description**: Override log levels for specific namespaces. Production keeps `McpServerTemplate` at `Information`, so security events and the startup record of the installed frame are written.
 
 #### `Serilog:WriteTo`
 - **Type**: `array`
-- **Description**: Where logs are written (console, files, etc.)
-
-**Console output**:
-```json
-{
-  "Name": "Console",
-  "Args": {
-    "standardErrorFromLevel": "Verbose",
-    "outputTemplate": "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}"
-  }
-}
-```
-
-**File output**:
-```json
-{
-  "Name": "File",
-  "Args": {
-    "path": "logs/mcp-server-.log",
-    "rollingInterval": "Day",
-    "retainedFileCountLimit": 14,
-    "fileSizeLimitBytes": 10485760
-  }
-}
-```
+- **Description**: Where logs are written. The console sink writes to **stderr**, so stdout stays clean for the MCP protocol. A file path containing `..` is refused at startup.
 
 ---
 
-### Provider Settings
+### Retired Settings
 
-Each provider has its own configuration section.
+<!-- retired -->
+These are refused at startup, with the reason:
 
-#### Example: JsonPlaceholder Provider
-
-```json
-{
-  "Providers": {
-    "JsonPlaceholder": {
-      "BaseUrl": "https://jsonplaceholder.typicode.com",
-      "UserAgent": "McpServerTemplate/1.0"
-    }
-  }
-}
-```
-
-- **BaseUrl**: URL of the external API
-  - Must be HTTPS (validated for security)
-  - Prevents SSRF attacks
-- **UserAgent**: HTTP User-Agent header
-  - Identifies your server to the external API
-
-#### Example: Weather (SMHI) Provider
-
-```json
-{
-  "Providers": {
-    "Smhi": {
-      "BaseUrl": "https://opendata-download-metfcst.smhi.se",
-      "UserAgent": "McpServerTemplate/1.0"
-    }
-  }
-}
-```
+| Setting | Retired | Instead |
+|---------|---------|---------|
+| `Authentication:ApiKey` | Phase 1 | Callers present a bearer token from a configured identity provider |
+| `RateLimit:MaxCallsPerToolPerMinute` | Phase 2 | `Limits:PerPrincipalPerMinute`, and each tool's own limit in its provider's policy |
+<!-- /retired -->
 
 ---
 
 ## Environment Variables
 
-Use environment variables to override any JSON configuration (highest priority).
+Use environment variables to override any JSON configuration.
 
 ### Naming Convention
 
-JSON nested keys → environment variables using `__` (double underscore)
-
-**Examples**:
+JSON nested keys → environment variables using `__` (double underscore); array entries use their index.
 
 ```json
 // appsettings.json
 {
   "Transport": "stdio",
-  "HttpTransport": {
-    "Port": 3001
-  },
-  "Providers": {
-    "JsonPlaceholder": {
-      "BaseUrl": "https://..."
-    }
-  }
+  "HttpTransport": { "Port": 3001 },
+  "Providers": { "Enabled": [ "Smhi" ] }
 }
 
 // Equivalent environment variables:
 $env:Transport = "http"
 $env:HttpTransport__Port = "8080"
-$env:Providers__JsonPlaceholder__BaseUrl = "https://custom-api.com"
+$env:Providers__Enabled__0 = "Smhi"
 ```
 
 ### Setting Environment Variables
@@ -417,8 +357,8 @@ $env:Providers__JsonPlaceholder__BaseUrl = "https://custom-api.com"
 **Linux/Mac**:
 ```bash
 export Transport=http
-export Authentication__ApiKey=your-secret-key
-export RateLimit__MaxCallsPerToolPerMinute=20
+export Limits__Redis=localhost:6379
+export Limits__PerPrincipalPerMinute=60
 
 dotnet run
 ```
@@ -426,28 +366,31 @@ dotnet run
 **Windows PowerShell**:
 ```powershell
 $env:Transport = "http"
-$env:Authentication__ApiKey = "your-secret-key"
-$env:RateLimit__MaxCallsPerToolPerMinute = "20"
+$env:Limits__Redis = "localhost:6379"
+$env:Limits__PerPrincipalPerMinute = "60"
 
 dotnet run
-```
-
-**Docker**:
-```dockerfile
-ENV Transport=http
-ENV Authentication__ApiKey=your-secret-key
-ENV RateLimit__MaxCallsPerToolPerMinute=20
 ```
 
 **Docker Compose**:
 ```yaml
 services:
+  redis:
+    image: redis:7.4-alpine
   mcp-server:
     image: mcp-server:latest
     environment:
+      - ASPNETCORE_ENVIRONMENT=Production
       - Transport=http
-      - Authentication__ApiKey=your-secret-key
-      - RateLimit__MaxCallsPerToolPerMinute=20
+      - HttpTransport__BindAddress=0.0.0.0
+      - HttpTransport__KnownNetworks__0=172.16.0.0/12
+      - Limits__Redis=redis:6379
+      - Authentication__Resource=https://mcp.example.com/
+      - Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
+      - Authentication__IdentityProviders__corp__Issuer=https://login.example.com/realms/corp
+      - Authentication__IdentityProviders__corp__Algorithms__0=RS256
+      - Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
+      - Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
     ports:
       - "3001:3001"
 ```
@@ -456,13 +399,13 @@ services:
 
 ## Environment Selection
 
-The server automatically selects configuration based on the `ASPNETCORE_ENVIRONMENT` variable.
+The server selects configuration from `ASPNETCORE_ENVIRONMENT`, or `DOTNET_ENVIRONMENT` when that is not set.
 
 ### Default Behavior
 
-1. If `ASPNETCORE_ENVIRONMENT` is not set → treated as `"Production"`
-2. If `ASPNETCORE_ENVIRONMENT=Development` → load `appsettings.Development.json`
-3. If `ASPNETCORE_ENVIRONMENT=Production` → load `appsettings.Production.json`
+1. If neither is set → **Production**
+2. `Development` → loads `appsettings.Development.json`; stdio allowed; limits may be in memory
+3. `Production` → loads `appsettings.Production.json`; stdio refused; Redis, `Providers:Enabled` and a declared proxy required
 
 ### Setting the Environment
 
@@ -478,37 +421,16 @@ $env:ASPNETCORE_ENVIRONMENT = "Development"
 dotnet run
 ```
 
-**appsettings.json** (base):
-```json
-{
-  "RateLimit": { "MaxCallsPerToolPerMinute": 10 }
-}
-```
-
-**appsettings.Development.json** (override):
-```json
-{
-  "RateLimit": { "MaxCallsPerToolPerMinute": 30 }
-}
-```
-
-**Result** (when `ASPNETCORE_ENVIRONMENT=Development`):
-```
-MaxCallsPerToolPerMinute = 30  (from Development file, overrides base)
-```
-
 ---
 
 ## Common Configuration Scenarios
 
-### Scenario 1: Local Development
+### Scenario 1: Local Development (stdio)
 
-**Goal**: Fast iteration, relaxed limits, verbose logging
+**Goal**: Fast iteration, verbose logging, every provider
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = "Development"
-$env:Transport = "stdio"
-
 dotnet run
 ```
 
@@ -516,84 +438,77 @@ Or on bash/zsh:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
-export Transport=stdio
-
 dotnet run
 ```
 
 **Effective config**:
-- Transport: stdio
-- Max calls per tool per minute: 30
+- Transport: stdio, as the Development principal (`corp:dev-user`, all four scopes)
+- Providers: all three
+- Limits: in memory, 120 requests per minute per caller
 - Log level: Debug
-- Server listens on stdin/stdout
 
 ---
 
 ### Scenario 2: Local Testing (HTTP Mode)
 
-**Goal**: Test HTTP mode locally
-
-```powershell
-$env:Transport = "http"
-$env:HttpTransport__Port = "3001"
-$env:HttpTransport__BindAddress = "localhost"
-$env:Authentication__ApiKey = "test-key-12345"
-
-dotnet run
-```
-
-Or on bash/zsh:
+**Goal**: Test HTTP mode locally. You need an identity provider that issues tokens — a local Keycloak works (`docker run -p 8080:8080 quay.io/keycloak/keycloak start-dev`), though its authority must be reachable over `https`.
 
 ```bash
+export ASPNETCORE_ENVIRONMENT=Development
 export Transport=http
-export HttpTransport__Port=3001
-export HttpTransport__BindAddress=localhost
-export Authentication__ApiKey=test-key-12345
+export Authentication__Resource=https://localhost:3001/
+export Authentication__IdentityProviders__corp__Authority=https://your-idp/realms/corp
+export Authentication__IdentityProviders__corp__Issuer=https://your-idp/realms/corp
+export Authentication__IdentityProviders__corp__Algorithms__0=RS256
+export Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__2=demo:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__3=demo:write
 
 dotnet run
 ```
 
 **Then test**:
 ```bash
-curl -H "X-Api-Key: test-key-12345" http://localhost:3001/mcp
+curl http://localhost:3001/healthz                     # alive, no credential needed
+curl -X POST http://localhost:3001/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
+
+Without a token the server answers `401` with a `WWW-Authenticate` header naming its resource metadata, which tells a client where to get one.
 
 ---
 
 ### Scenario 3: Production Deployment
 
-**Goal**: Secure, monitored, strict limits
-
-```powershell
-$env:ASPNETCORE_ENVIRONMENT = "Production"
-$env:Transport = "http"
-$env:HttpTransport__Port = "3001"
-$env:HttpTransport__BindAddress = "0.0.0.0"
-$env:Authentication__ApiKey = [Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
-$env:RateLimit__MaxCallsPerToolPerMinute = "10"
-
-dotnet run
-```
-
-Or on bash/zsh:
+**Goal**: Secure, monitored, multi-instance
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Production
 export Transport=http
-export HttpTransport__Port=3001
 export HttpTransport__BindAddress=0.0.0.0
-export Authentication__ApiKey=$(openssl rand -hex 32)
-export RateLimit__MaxCallsPerToolPerMinute=10
+export HttpTransport__AllowedHosts__0=mcp.example.com
+export HttpTransport__KnownNetworks__0=10.0.0.0/8      # the proxy that terminates TLS
+export Limits__Redis=redis.internal:6379
+export Authentication__Resource=https://mcp.example.com/
+export Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
+export Authentication__IdentityProviders__corp__Issuer=https://login.example.com/realms/corp
+export Authentication__IdentityProviders__corp__Algorithms__0=RS256
+export Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
 
 dotnet run
 ```
 
 **Effective config**:
-- Transport: HTTP (open to network)
-- Rate limit: 10 calls per tool per minute (strict)
-- Log level: Warning (minimal)
-- API key required for all requests
-- Logs written to file with rolling interval (14 day retention)
+- Transport: HTTP behind a declared proxy, TLS at the proxy
+- Providers: Smhi and SmhiObs (from appsettings.Production.json)
+- Limits: in Redis, 120 per caller per minute, plus each tool's own limit
+- Log level: Warning, with the server's own security events at Information
+- Every request: a bearer token from `corp`
 
 ---
 
@@ -621,95 +536,72 @@ dotnet run
 }
 ```
 
-**Result**: Auto-switches API based on environment
+**Result**: the provider calls the development API in Development — **provided its policy allows both hosts**. A `BaseUrl` whose host the policy does not list stops the server from starting, so `MyApiModule` must declare `api.example.com` and `dev-api.example.com`.
 
 ---
 
 ## Validation & Security
 
-### HTTPS-Only Validation
+Every one of these stops the server at startup, with a message saying what to fix, and exit code 78:
 
-All provider `BaseUrl` values must be HTTPS:
-
-```csharp
-// In JsonPlaceholderServiceRegistration.cs
-if (!Uri.TryCreate(config.BaseUrl, UriKind.Absolute, out var baseUri) ||
-    baseUri.Scheme != "https")
-{
-    throw new InvalidOperationException(
-        $"BaseUrl must be HTTPS, got: '{config.BaseUrl}'");
-}
-```
-
-**Why**: Prevents accidental use of unencrypted HTTP in production (SSRF vulnerability)
-
-### API Key Validation
-
-The API key must be present when running in HTTP mode. If the key is empty or missing, the middleware **throws at startup**:
-
-```csharp
-// In ApiKeyMiddleware.cs
-if (string.IsNullOrWhiteSpace(apiKey))
-{
-    throw new InvalidOperationException(
-        "Authentication:ApiKey must be configured when using HTTP transport.");
-}
-```
-
-**Why**: Prevents unauthorized access to your MCP tools
+| Check | Why |
+|-------|-----|
+| A governed key the server does not read, or a retired one | A setting that is ignored answers a question falsely |
+| `Transport=stdio` outside Development | stdio authenticates nobody |
+| HTTP with no identity provider, or with a non-`https` authority or resource | The server could verify no token, or would fetch keys over plaintext |
+| Production without a declared proxy | Bearer tokens over plaintext can be read and replayed |
+| `Providers:Enabled` missing outside Development, or naming an unknown provider | A deployment says which providers it serves |
+| A provider with no `IdentityProvider`, or one not configured | A provider with no trust domain would be reachable from all of them |
+| A scope a provider's identity provider cannot issue | The tool would be unreachable, and nobody would know |
+| A `BaseUrl` that is not `https`, or whose host the policy does not allow | Keeps upstream calls to the declared hosts |
+| `Limits:Redis` missing outside Development | Limits must hold on every instance |
+| An irreversible tool without `Confirmation:Key` | It could never run safely |
 
 ---
 
 ## Troubleshooting
 
-### "Configuration section 'Providers:JsonPlaceholder' not found"
+### "'…' is not a setting this server reads. Did you mean '…'?"
 
-**Cause**: The JSON section is missing from `appsettings.json`
+**Cause**: A key in `Authentication`, `Providers`, `Limits`, `Confirmation` or `Development` is misspelled, or belongs to a provider this server does not have.
 
-**Fix**: Add the provider section:
-```json
-{
-  "Providers": {
-    "JsonPlaceholder": {
-      "BaseUrl": "https://jsonplaceholder.typicode.com"
-    }
-  }
-}
-```
+**Fix**: Use the key the message suggests, or remove it.
 
 ---
 
-### "API must be HTTPS"
+### "'…' is retired"
 
-**Cause**: Provider URL is `http://` instead of `https://`
+**Cause**: A setting that no longer does anything — see [Retired Settings](#retired-settings).
 
-**Fix**: Use HTTPS:
-```json
-{
-  "Providers": {
-    "MyApi": {
-      "BaseUrl": "https://my-api.com"  // ← https not http
-    }
-  }
-}
-```
+**Fix**: Remove it; the message says what replaced it.
+
+---
+
+### "Providers:Enabled is required outside Development"
+
+**Fix**: Name the providers this deployment serves, in `appsettings.{Environment}.json` or `Providers__Enabled__0`, `Providers__Enabled__1`, …
+
+---
+
+### "Limits:Redis is required outside Development"
+
+**Fix**: Point `Limits:Redis` at a Redis every instance can reach.
+
+---
+
+### "Transport 'stdio' is permitted only in Development"
+
+**Cause**: No environment was set, so the server ran as Production.
+
+**Fix**: Set `ASPNETCORE_ENVIRONMENT=Development` for a local stdio run.
 
 ---
 
 ### Rate Limit Exceeded
 
-**Cause**: Tool called too many times in one minute
+**Cause**: `caller-rate` — the caller's requests per minute; `tool-rate` — the caller's calls to one tool per minute, from its policy; `429` — the per-address HTTP limit.
 
-**Current limit**: Check `RateLimit:MaxCallsPerToolPerMinute`
-
-**Fix**: Either wait 1 minute, or increase the limit:
-```powershell
-$env:RateLimit__MaxCallsPerToolPerMinute = "100"
-```
-
-```bash
-export RateLimit__MaxCallsPerToolPerMinute=100
-```
+**Fix**: Wait a minute, or raise `Limits:PerPrincipalPerMinute`. A tool's own limit is in its provider's policy.
 
 ---
 
@@ -734,13 +626,12 @@ export Serilog__MinimumLevel__Default=Debug
 
 The configuration system provides:
 
-- ✅ Hierarchy with clear precedence (env vars > env-specific files > base)
-- ✅ Environment-specific configs (Development vs Production)
-- ✅ Security validation (HTTPS-only, API keys, etc.)
+- ✅ Hierarchy with clear precedence (command line > env vars > user secrets > env-specific files > base)
+- ✅ Environment-specific configs (Development vs Production), Production by default
+- ✅ Refusal over silence: a key the server would ignore, or a deployment it cannot secure, stops it from starting
 - ✅ Flexibility (JSON files or environment variables)
-- ✅ Easy debugging (override any setting without code changes)
 
 Use this for:
-- **Development**: Relax limits, verbose logging
-- **Testing**: Use test API endpoints, high rate limits
-- **Production**: Strict limits, minimal logging, HTTPS enforced
+- **Development**: stdio as the Development principal, every provider, limits in memory
+- **Testing**: HTTP against a real identity provider
+- **Production**: identity providers, Redis, a declared proxy, the providers you serve

@@ -10,8 +10,9 @@ namespace McpServerTemplate.Providers.JsonPlaceholder;
 /// DI registration entry point for the JSONPlaceholder provider.
 ///
 /// TEMPLATE GUIDANCE:
-/// This is the single method called from Program.cs:
-///   <c>builder.Services.AddJsonPlaceholderProvider(builder.Configuration);</c>
+/// This is the single method the provider's module calls, from
+/// <see cref="JsonPlaceholderModule.Register"/>:
+///   <c>services.AddJsonPlaceholderProvider(configuration, Policy.Egress);</c>
 ///
 /// It registers everything the provider needs:
 ///   1. Strongly-typed configuration (bound from appsettings.json via IOptions)
@@ -19,9 +20,10 @@ namespace McpServerTemplate.Providers.JsonPlaceholder;
 ///   3. The API client as a singleton/scoped service
 ///
 /// When creating your own provider, follow this pattern:
-///   - Create <c>Add{YourProvider}Provider</c> extension method
+///   - Create <c>Add{YourProvider}Provider</c> extension method, taking the policy's egress
 ///   - Bind config from <c>Configuration.GetSection("Providers:{YourProvider}")</c>
-///   - Register your API client with a typed HttpClient
+///   - Register your API client with a typed HttpClient, timed by the egress policy
+///   - Call it from your module's <c>Register</c>
 /// </summary>
 public static class JsonPlaceholderServiceRegistration
 {

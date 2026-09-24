@@ -47,21 +47,42 @@ public static partial class SettingsAllowlist
     public static readonly IReadOnlyList<string> GovernedSections =
         ["Authentication", "Providers", "Limits", "Confirmation", "Development", "RateLimit"];
 
+    /// <summary>
+    /// Whether <paramref name="key"/> is a setting the server reads in a governed section. The same
+    /// matcher <see cref="Validate"/> uses, so a document can be checked against what the server
+    /// would refuse (contract-004 · G-2).
+    /// </summary>
+    public static bool IsKnown(string key, IEnumerable<IProviderModule> modules)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        return !Retired.ContainsKey(key) && Patterns(modules).Any(p => p.Pattern.IsMatch(key));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="prefix"/> names a section that holds settings the server reads —
+    /// <c>Development:DevPrincipal</c>, say — rather than a setting itself.
+    /// </summary>
+    public static bool IsKnownSection(string prefix, IEnumerable<IProviderModule> modules)
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+        var depth = prefix.Split(':').Length;
+        return Patterns(modules).Any(p =>
+        {
+            var segments = p.Key.Split(':');
+            return segments.Length > depth && ToRegex(string.Join(":", segments.Take(depth))).IsMatch(prefix);
+        });
+    }
+
+    /// <summary>Whether <paramref name="key"/> is retired, and why.</summary>
+    public static bool IsRetired(string key, out string? why) => Retired.TryGetValue(key, out why);
+
     /// <summary>Throws when a governed section holds a key the frame does not know.</summary>
     public static void Validate(IConfiguration configuration, IEnumerable<IProviderModule> modules)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(modules);
 
-        var known = FrameKeys.ToList();
-        foreach (var module in modules)
-        {
-            known.Add($"Providers:{module.Name}:IdentityProvider");
-            known.Add($"Providers:{module.Name}:BaseUrl");
-            known.AddRange(module.Settings.Select(s => $"Providers:{module.Name}:{s}"));
-        }
-
-        var patterns = known.Select(k => (Key: k, Pattern: ToRegex(k))).ToArray();
+        var patterns = Patterns(modules);
         var problems = new List<string>();
 
         foreach (var section in GovernedSections)
@@ -91,6 +112,21 @@ public static partial class SettingsAllowlist
                 "Configuration names settings the server would silently ignore, so what it says would not "
                 + "be what the server does:\n  " + string.Join("\n  ", problems));
         }
+    }
+
+    private static (string Key, Regex Pattern)[] Patterns(IEnumerable<IProviderModule> modules)
+    {
+        ArgumentNullException.ThrowIfNull(modules);
+
+        var known = FrameKeys.ToList();
+        foreach (var module in modules)
+        {
+            known.Add($"Providers:{module.Name}:IdentityProvider");
+            known.Add($"Providers:{module.Name}:BaseUrl");
+            known.AddRange(module.Settings.Select(s => $"Providers:{module.Name}:{s}"));
+        }
+
+        return [.. known.Select(k => (Key: k, Pattern: ToRegex(k)))];
     }
 
     private static Regex ToRegex(string key) => new(

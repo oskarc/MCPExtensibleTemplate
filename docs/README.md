@@ -172,7 +172,7 @@ Test coverage → [03-TESTING-STRATEGY.md](03-TESTING-STRATEGY.md)
 
 - [ ] Read [Key Concepts](05-USAGE-GUIDE-BEGINNERS.md#key-concepts-simple-explanations) (5 min)
 - [ ] Follow [Getting Started](05-USAGE-GUIDE-BEGINNERS.md#getting-started-step-by-step) (10 min)
-- [ ] Run the server locally: `dotnet run` (2 min)
+- [ ] Run the server locally: set `ASPNETCORE_ENVIRONMENT=Development`, then `dotnet run` (2 min)
 - [ ] Connect your AI assistant (VS Code or Claude Desktop) (5 min)
 - [ ] Ask your AI to use a tool (e.g., "Get blog post #1") (2 min)
 - [ ] ✅ You're now using an MCP Server!
@@ -249,8 +249,8 @@ Test coverage → [03-TESTING-STRATEGY.md](03-TESTING-STRATEGY.md)
 - [Security Flowcharts](07-SECURITY-FLOWCHARTS.md)
 - [MCP Hardening Field Guide (interactive)](artifacts/security-guide/index.html)
 - [Security Model](01-ARCHITECTURE.md#security-model)
-- [HTTPS Validation](04-CONFIGURATION.md#https-only-validation)
-- [API Key Management](04-CONFIGURATION.md#authenticationapikey)
+- [What Stops the Server Starting](04-CONFIGURATION.md#validation--security)
+- [Identity Providers & Tokens](04-CONFIGURATION.md#authentication-settings)
 
 ### Testing
 - [Test Structure](03-TESTING-STRATEGY.md#current-test-structure)
@@ -311,7 +311,7 @@ A: Some parts are specific to this .NET template, but concepts (architecture, te
 
 - [MCP Specification](https://modelcontextprotocol.io)
 - [C# MCP SDK GitHub](https://github.com/modelcontextprotocol/csharp-sdk)
-- [.NET 8 Documentation](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-8)
+- [.NET 10 Documentation](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-10/overview)
 - [Serilog Logging](https://serilog.net/)
 - [OWASP Security Best Practices](https://owasp.org)
 

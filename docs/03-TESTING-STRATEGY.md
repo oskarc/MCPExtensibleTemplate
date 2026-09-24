@@ -27,20 +27,22 @@ The testing strategy covers **4 layers**:
 **Example**: Test that the `get_forecast` tool correctly receives config, calls API client, and formats output
 
 ### 3. **E2E Tests** (full system scope)
-- Test the complete request lifecycle
-- Hit real MCP protocol entry points
-- Slower execution
-- Verify the entire flow works
+- Test the complete request lifecycle through real MCP entry points
+- Two forms, and the difference matters:
+  - **In-process server** (`Identity/InProcessServer.cs`) — the shipped HTTP server, composed by the same method the program calls, with each identity provider's key lookups answered in-process. This is how a test can present a token the server accepts. Tests drive it with the SDK's own client or with raw JSON-RPC.
+  - **Real process** (`ServerProcessTests.cs`) — the built program started as a child process, over stdio or HTTP. It cannot be given a token (it fetches signing keys from a real identity provider over HTTPS), so it proves startup, refusals before authentication, local-mode behaviour, and that it installs exactly the frame the in-process tests exercise.
+- Redis runs in a container started by **Testcontainers**, so Docker must be running
 
-**Example**: Simulate an MCP client calling `get_blog_post` and verifying the response format matches MCP spec
+**Example**: The SDK's client calls an irreversible tool, confirms, and the tool runs once; the captured confirmation is then replayed, altered and aged, and the tool never runs again (`Frame/ConfirmationTests.cs`)
 
 ### 4. **Security & Load Tests** (non-functional)
-- Rate limiting enforcement
-- Authentication validation
-- Input validation and injection prevention
-- Concurrent load simulation
+- Every refusal the frame can make, one test each (`Frame/RequestGateTests.cs`)
+- Startup refusals: every way a policy or setting can disagree with what is served (`Frame/StartupRefusalTests.cs`)
+- A provider that tries to remove or add to the frame's checks (`Frame/FrameIntegrityTests.cs`)
+- Per-caller limits across two server instances sharing one Redis (`Frame/LimitsTests.cs`)
+- Token validation: the six ways a token is refused (`Identity/TokenRejectionTests.cs`)
 
-**Example**: Verify that calling a tool 11 times in 1 minute is rejected
+**Example**: A caller at their limit on one instance is refused on the other; another caller is not; with Redis stopped, requests are refused rather than let through
 
 ---
 
@@ -48,14 +50,28 @@ The testing strategy covers **4 layers**:
 
 ```
 McpServerTemplate.Tests/
-├── Providers/
+├── Frame/                          # The policy frame
+│   ├── StartupRefusalTests.cs      # Declarations the server refuses to start with
+│   ├── RequestGateTests.cs         # Every refusal on the request path
+│   ├── ConfirmationTests.cs        # The irreversible-tool round-trip
+│   ├── LimitsTests.cs              # Limits across instances, failing closed
+│   ├── FrameIntegrityTests.cs      # Providers that reach into the frame; settings typos
+│   ├── FrameHarness.cs             # Composes the frame without a transport
+│   ├── GateClient.cs               # SDK client and raw JSON-RPC helpers
+│   └── TestModules.cs              # Provider modules that exist only in the tests
+├── Identity/                       # Bearer tokens, trust domains, transport
+│   ├── InProcessServer.cs          # The shipped HTTP server, in-process
+│   ├── TestIdentityProvider.cs     # Mints tokens; answers discovery and key lookups in-process
+│   └── ...Tests.cs
+├── Infrastructure/                 # Configuration failures, resilience budgets
+├── Providers/                      # Formatters, validation, round trips per provider
+│   ├── JsonPlaceholder/
 │   ├── Smhi/
-│   │   ├── SmhiCoordinateValidationTests.cs
-│   │   ├── SmhiFormattersTests.cs
-│   │   └── WeatherSymbolTests.cs
 │   └── SmhiObs/
-│       └── SmhiObsFormattersTests.cs
-└── [Other shared tests would go here]
+├── ServerProcessTests.cs           # The real program, as a child process
+├── DocumentationTests.cs           # Documents and comments match the server
+├── RepositoryInvariantsTests.cs    # Build settings, secrets, provider declarations
+└── TestRedis.cs                    # One Redis container for the test run
 ```
 
 ---
@@ -252,9 +268,11 @@ public class WeatherSymbolTests
 ## How to Run Tests
 
 ### Run All Tests
+
+Docker must be running: the tests start Redis in a container, and a missing Redis fails them rather than skipping them.
+
 ```bash
-cd McpServerTemplate.Tests
-dotnet test
+dotnet test McpServerTemplate.sln
 ```
 
 ### Run Tests with Verbose Output
@@ -275,6 +293,34 @@ dotnet test --collect:"XPlat Code Coverage"
 ---
 
 ## Writing Tests for Your New Provider
+
+### Template: The Policy Starts
+
+The first test a provider needs is that the server starts with it: every tool has a policy, every scope is issuable, every host is declared. `FrameHarness` composes the frame the way the shipped server does:
+
+```csharp
+using McpServerTemplate.Infrastructure.Frame;
+using McpServerTemplate.Providers.YourProvider;
+using McpServerTemplate.Tests.Frame;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace McpServerTemplate.Tests.Providers.YourProvider;
+
+public class YourProviderPolicyTests
+{
+    [Fact]
+    public void The_provider_starts_with_its_policy()
+    {
+        IReadOnlyList<IProviderModule> modules = [new YourProviderModule()];
+        var settings = FrameHarness.Settings(modules);
+        settings["Providers:YourProvider:BaseUrl"] = "https://api.example.com";
+
+        using var server = FrameHarness.Compose(modules, settings, FrameHarness.Identity("your:read"));
+
+        Assert.Contains("your_tool", server.GetRequiredService<PolicyRegistry>().Tools.Keys);
+    }
+}
+```
 
 ### Template: Formatter Tests
 
@@ -469,20 +515,20 @@ public class YourProviderToolsTests : IClassFixture<YourProviderTestFixture>
 
 ## CI/CD Integration
 
-Add this to your CI pipeline (GitHub Actions, GitLab CI, etc.):
+The repository's workflow (`.github/workflows/ci.yml`) runs on every push, on a runner with Docker:
 
 ```yaml
-- name: Run Tests
-  run: |
-    cd McpServerTemplate.Tests
-    dotnet test --configuration Release --verbosity normal --logger "trx"
+- name: Restore (locked)
+  run: dotnet restore McpServerTemplate.sln --locked-mode
 
-- name: Upload Test Results
-  uses: actions/upload-artifact@v2
-  with:
-    name: test-results
-    path: "**/TestResults/*.trx"
+- name: Build (warnings are errors)
+  run: dotnet build McpServerTemplate.sln --no-restore --configuration Release -warnaserror
+
+- name: Test
+  run: dotnet test McpServerTemplate.sln --no-build --configuration Release --verbosity normal
 ```
+
+followed by a vulnerable-package audit and a secret scan. The Redis tests run there as they do locally.
 
 ---
 
@@ -511,6 +557,7 @@ The testing strategy ensures:
 5. **Confidence**: Changes don't break existing functionality
 
 When adding a new provider, write tests for:
+- ✅ The policy starts (every tool declared, scopes issuable, hosts declared)
 - ✅ Formatters (output correctness)
 - ✅ Validators (input security)
 - ✅ Models (data deserialization)

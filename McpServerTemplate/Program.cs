@@ -27,7 +27,8 @@ using Serilog.Events;
 //
 // TRANSPORT:
 //   Transport=stdio — (default) stdin/stdout, for a local IDE. Development only: it builds a
-//                     plain host with no web server and authenticates nobody.
+//                     plain host with no web server and verifies no token; it runs as the
+//                     Development principal, through the same checks as an HTTP caller.
 //   Transport=http  — a hosted server behind the middleware pipeline fixed below.
 //
 // EXIT CODES (contract-001 · G-2):

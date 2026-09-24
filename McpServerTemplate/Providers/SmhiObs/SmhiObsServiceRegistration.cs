@@ -8,7 +8,7 @@ namespace McpServerTemplate.Providers.SmhiObs;
 
 /// <summary>
 /// DI registration entry point for the SMHI Observations provider.
-/// Called from Program.cs alongside the forecast provider.
+/// Called from <see cref="SmhiObsModule.Register"/>, with the timings from its policy.
 /// </summary>
 public static class SmhiObsServiceRegistration
 {
@@ -39,7 +39,6 @@ public static class SmhiObsServiceRegistration
         // first HttpClient is built, which is a tool call, not startup.
         var budget = ResilienceBudget.Create(
             providerName: "SmhiObs",
-            // Historical observation series are larger and slower than a forecast.
             attemptTimeout: egress.AttemptTimeout,
             maxRetryAttempts: egress.MaxRetryAttempts,
             totalTimeout: egress.TotalTimeout,

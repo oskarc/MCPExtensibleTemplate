@@ -21,7 +21,8 @@ public static class ExitCode
 
 /// <summary>
 /// Thrown when configuration asks for something the server will not do — an unknown transport,
-/// stdio outside Development, a missing API key. Distinguished from every other failure so the
+/// stdio outside Development, a setting it would ignore, a provider whose policy does not match
+/// what it serves. Distinguished from every other failure so the
 /// process can exit <see cref="ExitCode.Configuration"/> rather than <see cref="ExitCode.Software"/>:
 /// the operator needs to know whether to fix the deployment or read a stack trace.
 /// </summary>

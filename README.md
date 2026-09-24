@@ -1,10 +1,10 @@
 # MCP Server Template
 
-A production-ready [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server built with .NET 8 and the official [C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk). Ships with three working providers — SMHI weather forecasts, historical observations, and JSONPlaceholder (fake REST API for testing) — that serve as working examples you can replace with your own API integrations.
+A production-ready [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server built with .NET 10 and the official [C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk). Ships with three working providers — SMHI weather forecasts, historical observations, and JSONPlaceholder (fake REST API for testing) — that serve as working examples you can replace with your own API integrations.
 
 ## Features
 
-- **Dual transport** — stdio for IDE/local use, HTTP with SSE for hosted multi-client deployments
+- **Dual transport** — stdio for IDE/local use (Development only), stateless streamable HTTP for hosted multi-client deployments
 - **Bearer-token identity** — OAuth 2.1 resource server; each provider answers to exactly one configured identity provider
 - **A policy per provider** — every tool, resource and prompt declares its scope, risk class and limits; anything undeclared refuses startup, and any request kind the frame does not govern is refused
 - **Per-caller rate limiting** — sliding windows per caller and per caller per tool, held in Redis so they apply across instances
@@ -16,8 +16,8 @@ A production-ready [Model Context Protocol](https://modelcontextprotocol.io/) (M
 - **Response guardrails** — byte-level size limits, schema validation on upstream data
 - **Kestrel hardening** — request body size cap, connection limits, header timeouts
 - **CORS control** — deny-all by default, configurable allowed origins
-- **Environment configs** — Development (verbose, relaxed limits) and Production (warnings, strict)
-- **35 unit tests** — xUnit, covering formatters, coordinate validation, error mapping
+- **Environment configs** — Development (verbose, every provider, stdio allowed) and Production (warnings, Redis and a declared proxy required); Production is the default
+- **Tested end to end** — xUnit: unit tests, the shipped HTTP server composed in-process with real tokens, the real program as a child process, and Redis in a container via Testcontainers
 
 ## Project Structure
 
@@ -28,9 +28,11 @@ McpServerTemplate/
 │   ├── Frame/                        # The policy frame: policies, request gate, limits, confirmation, startup checks
 │   ├── Identity/                     # Bearer-token identity, one scheme per identity provider
 │   ├── ToolCallLoggingFilter.cs      # Correlation IDs, timing, arg sanitization
-│   └── HealthProbe.cs               # Startup upstream connectivity check
+│   └── HealthEndpoints.cs            # /healthz and /readyz
 ├── Providers/
+│   ├── BuiltInProviders.cs           # The provider modules this server ships with
 │   ├── JsonPlaceholder/              # Fake REST API provider (testing/demo)
+│   │   ├── JsonPlaceholderModule.cs          # Name, policy, types, settings
 │   │   ├── JsonPlaceholderApiClient.cs       # Typed HTTP client
 │   │   ├── JsonPlaceholderConfig.cs          # Strongly-typed config
 │   │   ├── JsonPlaceholderFormatters.cs      # LLM-optimized output
@@ -38,6 +40,7 @@ McpServerTemplate/
 │   │   ├── JsonPlaceholderTools.cs           # MCP tools (get_blog_post, create_blog_post, etc.)
 │   │   └── Models/                           # DTOs (Post, Comment, Todo)
 │   ├── Smhi/                         # Weather forecast provider (example)
+│   │   ├── SmhiModule.cs             # Name, policy, types, settings
 │   │   ├── SmhiApiClient.cs          # Typed HTTP client with resilience
 │   │   ├── SmhiConfig.cs             # Strongly-typed config
 │   │   ├── SmhiFormatters.cs         # LLM-optimized output formatting
@@ -51,8 +54,8 @@ McpServerTemplate/
 │       ├── SmhiObsTools.cs           # get_recent_temperature, get_temperature_history, etc.
 │       └── ...
 ├── appsettings.json                  # Base configuration
-├── appsettings.Development.json      # Debug logging, relaxed rate limits
-├── appsettings.Production.json       # Warning level, strict limits
+├── appsettings.Development.json      # Debug logging, every provider, the stdio principal
+├── appsettings.Production.json       # Warning level, the SMHI providers only
 └── docs/                             # Comprehensive documentation
     ├── README.md                     # Documentation index and navigation
     ├── 01-ARCHITECTURE.md            # Technical deep dive & design patterns
@@ -69,7 +72,8 @@ McpServerTemplate/
 
 ### Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [Docker](https://www.docker.com/), to run the tests (they start Redis in a container)
 
 ### Build
 
@@ -80,47 +84,52 @@ dotnet build
 
 ### Run in stdio mode (IDE / local)
 
+stdio runs only in Development; with no environment set the server runs as Production and refuses it.
+
 ```bash
 cd McpServerTemplate
+export ASPNETCORE_ENVIRONMENT=Development    # PowerShell: $env:ASPNETCORE_ENVIRONMENT = "Development"
 dotnet run
 ```
 
-The server communicates over stdin/stdout using the MCP protocol. Connect it from any MCP-compatible client (VS Code, Claude Desktop, etc.).
+The server communicates over stdin/stdout using the MCP protocol, as the Development principal declared under `Development:DevPrincipal`, through the same checks an HTTP caller meets. Connect it from any MCP-compatible client (VS Code, Claude Desktop, etc.).
 
 ### Run in HTTP mode (hosted)
 
+HTTP mode needs an identity provider that issues the bearer tokens callers present:
+
 ```bash
 cd McpServerTemplate
-dotnet run -- --Transport http --Authentication:ApiKey "your-secret-key"
-```
-
-Or via environment variables:
-
-```powershell
-$env:Transport = "http"
-$env:Authentication__ApiKey = "your-secret-key"
-dotnet run
-```
-
-Or on bash/zsh:
-
-```bash
+export ASPNETCORE_ENVIRONMENT=Development
 export Transport=http
-export Authentication__ApiKey=your-secret-key
+export Authentication__Resource=https://localhost:3001/
+export Authentication__IdentityProviders__corp__Authority=https://your-idp/realms/corp
+export Authentication__IdentityProviders__corp__Issuer=https://your-idp/realms/corp
+export Authentication__IdentityProviders__corp__Algorithms__0=RS256
+export Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__2=demo:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__3=demo:write
 dotnet run
 ```
 
-The server starts on `http://localhost:3001`. All requests require the `X-Api-Key` header:
+The MCP endpoint is the server root, `http://localhost:3001/`. Every request carries a token; without one the server answers `401`, naming its resource metadata so a client knows where to sign in:
 
 ```bash
-curl -H "X-Api-Key: your-secret-key" http://localhost:3001/mcp
+curl http://localhost:3001/healthz
+curl -X POST http://localhost:3001/ -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
+
+Outside Development it also needs `Limits:Redis` and a declared proxy. See [docs/04-CONFIGURATION.md](docs/04-CONFIGURATION.md).
 
 ### Run tests
 
+With Docker running:
+
 ```bash
-cd McpServerTemplate.Tests
-dotnet test
+dotnet test McpServerTemplate.sln
 ```
 
 ## Client Configuration
@@ -134,21 +143,22 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "weather": {
       "command": "dotnet",
-      "args": ["run", "--project", "/absolute/path/to/McpServerTemplate"]
+      "args": ["run", "--project", "/absolute/path/to/McpServerTemplate"],
+      "env": { "ASPNETCORE_ENVIRONMENT": "Development" }
     }
   }
 }
 ```
 
-Or connect to a running HTTP instance:
+Or connect to a running HTTP instance — clients that support MCP authorization discover the identity provider from the server's `401`; otherwise pass a token:
 
 ```json
 {
   "mcpServers": {
     "weather": {
-      "url": "http://localhost:3001/mcp",
+      "url": "http://localhost:3001/",
       "headers": {
-        "X-Api-Key": "your-secret-key"
+        "Authorization": "Bearer <token>"
       }
     }
   }
@@ -164,7 +174,8 @@ Add to your `.vscode/mcp.json`:
   "servers": {
     "weather": {
       "command": "dotnet",
-      "args": ["run", "--project", "/absolute/path/to/McpServerTemplate"]
+      "args": ["run", "--project", "/absolute/path/to/McpServerTemplate"],
+      "env": { "ASPNETCORE_ENVIRONMENT": "Development" }
     }
   }
 }
@@ -179,7 +190,8 @@ Add to your Cursor MCP settings:
   "mcpServers": {
     "weather": {
       "command": "dotnet",
-      "args": ["run", "--project", "/absolute/path/to/McpServerTemplate"]
+      "args": ["run", "--project", "/absolute/path/to/McpServerTemplate"],
+      "env": { "ASPNETCORE_ENVIRONMENT": "Development" }
     }
   }
 }
@@ -187,7 +199,7 @@ Add to your Cursor MCP settings:
 
 ## Configuration
 
-All settings live in `appsettings.json` and can be overridden via environment variables or command-line args.
+All settings live in `appsettings.json` and can be overridden via environment variables or command-line args. The full reference is [docs/04-CONFIGURATION.md](docs/04-CONFIGURATION.md).
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -338,7 +350,7 @@ Nothing is found by scanning the assembly: a class no module names is not served
 - **Authentication** — a bearer token from a configured identity provider on every HTTP request; the caller's trust domain decides which providers it can reach
 - **Policy frame** — every request is checked against its provider's declared policy; a provider cannot remove or add to the frame's checks
 - **Input validation** — coordinates, parameter IDs, and period values are validated against allowlists
-- **Response limits** — upstream responses are byte-counted (not Content-Length) and capped
+- **Response limits** — every tool's answer is capped by its policy; the SMHI clients also byte-count upstream responses (enforcing each provider's declared upstream cap for every provider is the next phase's work)
 - **HTTPS enforcement** — provider base URLs must be absolute HTTPS at startup
 - **Kestrel hardening** — 1 MB request body limit, 100 max connections, 30 s header timeout
 - **Rate limiting** — per caller and per caller per tool, across instances (agentic loop protection) + per-IP (HTTP abuse protection)
@@ -350,21 +362,24 @@ Nothing is found by scanning the assembly: a class no module names is not served
 
 | Problem | Solution |
 |---------|----------|
-| Server exits immediately in stdio mode | This is normal if no client is connected. Use a MCP client (Claude Desktop, VS Code) to connect. |
-| `401 Unauthorized` in HTTP mode | Ensure the `X-Api-Key` header matches the configured `Authentication:ApiKey` value. |
-| `429 Too Many Requests` on tool calls | Rate limit hit. Default is 10 calls/tool/min. Increase `RateLimit:MaxCallsPerToolPerMinute` or wait. |
+| Server exits with code 78 | A configuration problem; the last log line names it. In stdio mode the usual cause is a missing `ASPNETCORE_ENVIRONMENT=Development`. A misspelled setting is named with the nearest real key. |
+| `401 Unauthorized` in HTTP mode | Present a bearer token from a configured identity provider, issued for exactly the audience in `Authentication:Resource`. |
+| `429 Too Many Requests` | The per-address HTTP limit (60 per minute). |
+| `excess_rate_limit_exceeded` from a tool | Your per-caller limit (`caller-rate`, from `Limits:PerPrincipalPerMinute`) or the tool's own (`tool-rate`, in its provider's policy). Wait a minute. |
 | Upstream API errors / timeouts | Check your network connection. The circuit breaker will auto-recover after 15 s. See logs for details. |
 | `HTTPS required` startup error | Provider `BaseUrl` values in config must use `https://`. HTTP is not allowed for security. |
-| No tools showing up in client | Ensure the project builds successfully. Tool classes need the `[McpServerToolType]` attribute. |
+| No tools showing up in client | A caller sees only the tools whose scope it holds, from providers bound to its identity provider. Check the token's scopes (or `Development:DevPrincipal:Scopes`) and `Providers:Enabled`. |
 
 ## Dependencies
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) | 1.2.0 | Official MCP SDK |
-| [ModelContextProtocol.AspNetCore](https://www.nuget.org/packages/ModelContextProtocol.AspNetCore) | 1.2.0 | HTTP/SSE transport |
+| [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) | 2.2.0 | Official MCP SDK |
+| [ModelContextProtocol.AspNetCore](https://www.nuget.org/packages/ModelContextProtocol.AspNetCore) | 2.2.0 | Streamable HTTP transport, protected-resource metadata |
+| [Microsoft.AspNetCore.Authentication.JwtBearer](https://www.nuget.org/packages/Microsoft.AspNetCore.Authentication.JwtBearer) | 10.0.11 | Bearer-token validation |
+| [JsonSchema.Net](https://www.nuget.org/packages/JsonSchema.Net) | 9.4.0 | Tool arguments checked against their schema |
+| [StackExchange.Redis](https://www.nuget.org/packages/StackExchange.Redis) | 3.3.1 | Per-caller limits and used confirmations, across instances |
 | [Microsoft.Extensions.Http.Resilience](https://www.nuget.org/packages/Microsoft.Extensions.Http.Resilience) | 10.1.0 | Retry + circuit breaker |
-| [Microsoft.Extensions.Caching.Memory](https://www.nuget.org/packages/Microsoft.Extensions.Caching.Memory) | 10.0.5 | Station metadata caching |
 | [Serilog.AspNetCore](https://www.nuget.org/packages/Serilog.AspNetCore) | 9.0.0 | Structured logging |
 | [Serilog.Sinks.File](https://www.nuget.org/packages/Serilog.Sinks.File) | 6.0.0 | Rolling file log sink |
 

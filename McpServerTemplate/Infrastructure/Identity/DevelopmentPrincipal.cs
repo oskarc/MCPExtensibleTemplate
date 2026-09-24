@@ -29,10 +29,11 @@ public static class DevelopmentPrincipal
     /// </summary>
     /// <param name="configuration">Configuration to read the principal from.</param>
     /// <param name="identity">
-    /// The identity configuration, when there is one. Running a server over stdio for a local IDE
-    /// should not require configuring identity providers it will never call — so this is optional,
-    /// and the scope check below happens only when there is a catalog to check against. Requiring
-    /// it would have made the template unrunnable locally without a production-shaped config file.
+    /// The identity configuration: the configured one, or — for a local stdio run that configured
+    /// none — the one <see cref="SynthesizeIdentity"/> builds from the providers' policies, so a
+    /// local run needs no production-shaped config file and still meets every check. The scope
+    /// check below runs whenever there is a catalog to check against; null is accepted for callers
+    /// that have no identity at all, and then the principal is built unchecked.
     /// </param>
     public static ClaimsPrincipal Create(IConfiguration configuration, AuthenticationConfig? identity)
     {

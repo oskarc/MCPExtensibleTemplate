@@ -85,8 +85,9 @@ Each provider contains:
 
 **Examples**:
 - Which port to listen on? (3001, 8080, 9000?)
-- How fast can my AI call tools? (10 times per minute? 100?)
-- What's my API key? (security password)
+- How many requests may one caller make per minute? (120? 60?)
+- Which identity provider signs the tokens callers present?
+- Which providers does this server offer?
 - Should I show verbose logs or minimal logs?
 
 You don't hardcode these; you configure them so you can change them later without modifying code.
@@ -116,8 +117,9 @@ MCP Server (listening on port 3001)
     ↓ (HTTP requests)
 Multiple Clients (Claude, VS Code, Mobile App, etc.)
 
-Works across the internet. Requires authentication.
-Needs rate limiting to prevent abuse.
+Works across the internet. Every caller presents a sign-in
+token from an identity provider, and each caller's requests
+are limited.
 ```
 
 ---
@@ -126,25 +128,35 @@ Needs rate limiting to prevent abuse.
 
 ### Step 1: Install Prerequisites
 
-You need **one thing**: .NET 8 SDK
+You need **the .NET 10 SDK** — and, to run the tests, **Docker**.
 
-Download from: https://dotnet.microsoft.com/download/dotnet/8.0
+Download from: https://dotnet.microsoft.com/download/dotnet/10.0
 
 Verify it's installed:
 ```bash
 dotnet --version
-# Output: 8.0.x (or higher)
+# Output: 10.0.x
 ```
 
 ### Step 2: Open the Project
 
 ```bash
-cd d:\projects\mcp\McpServerTemplate
+cd McpServerTemplate
 ```
 
 ### Step 3: Run the Server (Stdio Mode - Local)
 
+Local (stdio) mode runs only in **Development**. With no environment set, the server runs as Production and refuses to start in stdio mode, so set it first:
+
+```powershell
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+dotnet run
+```
+
+Or on bash/zsh:
+
 ```bash
+export ASPNETCORE_ENVIRONMENT=Development
 dotnet run
 ```
 
@@ -152,7 +164,8 @@ dotnet run
 - The server starts
 - It listens on stdin/stdout
 - Clients (like VS Code or Claude Desktop) can now connect
-- You should see log output in your terminal indicating the server has started
+- You act as the *Development principal* (`dev-user`), which holds every scope the built-in tools need
+- You should see log output in your terminal, including a `Frame installed:` line listing every tool and the scope it requires
 
 > **Note**: In stdio mode, the server communicates over stdin/stdout. Log messages are written to stderr and to the `logs/` folder.
 
@@ -175,7 +188,8 @@ dotnet run
      "mcpServers": {
        "my-mcp": {
          "command": "dotnet",
-         "args": ["run", "--project", "d:/projects/mcp/McpServerTemplate"]
+         "args": ["run", "--project", "/absolute/path/to/McpServerTemplate"],
+         "env": { "ASPNETCORE_ENVIRONMENT": "Development" }
        }
      }
    }
@@ -198,7 +212,7 @@ dotnet run
 
 1. Claude sees you have a `get_blog_post` tool available
 2. Claude calls: `get_blog_post(postId=1)`
-3. MCP Server receives this request
+3. MCP Server receives this request, and **checks it** — the tool exists, you hold its scope (`demo:read`), you're within your limits, and `postId` is a number
 4. **Tool Execution**:
    - Tool calls JsonPlaceholderApiClient
    - ApiClient makes HTTP request to https://jsonplaceholder.typicode.com/posts/1
@@ -234,7 +248,7 @@ Title: sunt aut facere repellat provident occaecati excepturi optio reprehenderi
 ```
 You: "Show me blog post #99999"
 Claude: Calls get_blog_post(99999)
-MCP Server: "Post not found"
+MCP Server: "Post ID 99999 is out of range. JSONPlaceholder serves posts 1-100; ask for an id in that range."
 Claude: "I couldn't find post #99999. Valid posts are 1-100."
 ```
 
@@ -242,18 +256,26 @@ Claude: "I couldn't find post #99999. Valid posts are 1-100."
 
 ```
 You: "Create 50 new posts" (calling create_blog_post 50 times in 1 minute)
-Config says: Max 10 calls per minute
-MCP Server: "🛑 Rate limit exceeded!"
+Its policy says: 10 calls per caller per minute
+MCP Server: "excess_rate_limit_exceeded (rule: tool-rate). You have called 'create_blog_post' 10 times in the last minute, which is its limit. Wait and try again."
 Claude: "I've been rate-limited. Please wait a minute before trying again."
 ```
 
-### Error 3: External API is Down
+### Error 3: A Tool You May Not Use
+
+```
+Claude: Calls get_forecast(...) with a token that only holds observations:read
+MCP Server: "authz_fail (rule: insufficient_scope). The tool 'get_forecast' requires the scope 'weather:read', which your token does not carry. Request a token with that scope and call again."
+Claude: "I'm not permitted to use the forecast tool with the current sign-in."
+```
+
+### Error 4: External API is Down
 
 ```
 Claude: Calls get_blog_post(1)
 MCP Server: Makes HTTP request to external API
 External API: (no response - server is down)
-MCP Server: Retries (up to 3 times) with backoff
+MCP Server: Tries up to 3 times with backoff, within the provider's time limits
 MCP Server: "😞 External service is unavailable"
 Claude: "The blog service is currently unavailable."
 ```
@@ -264,113 +286,78 @@ Claude: "The blog service is currently unavailable."
 
 ### Scenario 1: Running Locally (Development)
 
-This is what you have right now. No configuration needed!
+This is Step 3 above.
 
 **Command**:
-```bash
-dotnet run
-```
-
-**What's happening**:
-- Transport: stdio (local only)
-- Rate limit: 10 calls per tool per minute (base config)
-- Logs: Information level (base config)
-
-> **Tip**: To get relaxed limits (30 calls/min) and Debug logging, set the environment first:
-> ```powershell
-> $env:ASPNETCORE_ENVIRONMENT = "Development"
-> dotnet run
-> ```
-> Without this, `appsettings.Development.json` is **not** loaded.
-
----
-
-### Scenario 2: Running on the Network (Testing)
-
-Want to test from another computer? Switch to HTTP mode.
-
-**Step 1**: Create file `appsettings.Development.json` (already exists, but let's check it):
-
-```json
-{
-  "Transport": "http",
-  "HttpTransport": {
-    "Port": 3001,
-    "BindAddress": "0.0.0.0"
-  },
-  "Authentication": {
-    "ApiKey": "test-key-12345"
-  }
-}
-```
-
-**Step 2**: Run the server
-
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 dotnet run
 ```
 
-Or on bash/zsh:
+**What's happening**:
+- Transport: stdio (local only), as the Development principal
+- Providers: all three, including the demo blog/todo provider
+- Limits: 120 requests per minute for you, plus each tool's own limit; kept in memory
+- Logs: Debug level
+
+> **Tip**: Without `ASPNETCORE_ENVIRONMENT=Development` the server runs as Production, where stdio is refused and `appsettings.Development.json` is **not** loaded.
+
+---
+
+### Scenario 2: Running on the Network (Testing)
+
+Want to test from another computer? Switch to HTTP mode. HTTP mode needs one more thing than stdio: an **identity provider** — a sign-in service such as Keycloak, Entra ID or Auth0 — that issues the tokens callers present. Nobody can call the server without one.
+
+**Step 1**: Tell the server about your identity provider and switch to HTTP. The exact settings are in [Configuration Guide → Scenario 2](04-CONFIGURATION.md#scenario-2-local-testing-http-mode); in short:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
+export Transport=http
+export HttpTransport__BindAddress=0.0.0.0
+export Authentication__Resource=https://<your-computer-name>:3001/
+export Authentication__IdentityProviders__corp__Authority=https://<your-identity-provider>
+export Authentication__IdentityProviders__corp__Issuer=https://<your-identity-provider>
+export Authentication__IdentityProviders__corp__Algorithms__0=RS256
+export Authentication__IdentityProviders__corp__ScopeCatalog__0=demo:read
+```
+
+**Step 2**: Run the server
+
+```bash
 dotnet run
 ```
 
-**Step 3**: Test from another computer
+**Step 3**: Test from another computer, with a token from your identity provider
 
 ```bash
 # From another computer on the same network
-curl -H "X-Api-Key: test-key-12345" \
-  http://<your-computer-ip>:3001/mcp
+curl http://<your-computer-ip>:3001/healthz          # "alive" — no token needed
+curl -X POST http://<your-computer-ip>:3001/ \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
+
+Without a token you get `401`, with a header telling your client where to sign in.
 
 ---
 
 ### Scenario 3: Production Deployment (Secure, Internet-Facing)
 
-**Create** `appsettings.Production.json`:
+`appsettings.Production.json` already exists: it enables only the weather providers and keeps logging minimal. Production also **requires**, and refuses to start without:
 
-```json
-{
-  "Transport": "http",
-  "RateLimit": {
-    "MaxCallsPerToolPerMinute": 10
-  },
-  "Serilog": {
-    "MinimumLevel": {
-      "Default": "Warning"
-    }
-  }
-}
-```
+- **An identity provider** — `Authentication:IdentityProviders:…`, as in Scenario 2
+- **Redis** — `Limits:Redis`, so each caller's limits hold on every copy of the server you run
+- **A trusted proxy in front** — `HttpTransport:KnownProxies` or `HttpTransport:KnownNetworks`, the proxy that handles HTTPS
 
-**Set environment variables** (securely, not in code):
+The full example is in [Configuration Guide → Scenario 3](04-CONFIGURATION.md#scenario-3-production-deployment).
 
-```powershell
-$env:ASPNETCORE_ENVIRONMENT = "Production"
-$env:Transport = "http"
-$env:HttpTransport__Port = "3001"
-$env:Authentication__ApiKey = [Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
-$env:HttpTransport__BindAddress = "0.0.0.0"
-```
-
-Or on bash/zsh:
-
-```bash
-export ASPNETCORE_ENVIRONMENT=Production
-export Transport=http
-export HttpTransport__Port=3001
-export Authentication__ApiKey=$(openssl rand -hex 32)  # Very long random key
-export HttpTransport__BindAddress=0.0.0.0
-```
-
-**Why these changes**?
-- Stricter rate limit (prevents abuse)
-- Minimal logging (faster, less disk space)
-- Long random API key (more secure)
-- Bound to all IPs (accessible from internet)
+**Why these requirements**?
+- Tokens instead of shared passwords: the server knows *who* is calling, and each provider answers only to its own identity provider
+- Redis: a caller cannot escape their limit by spreading requests across servers
+- A proxy: tokens never travel over plain HTTP
+- Refusing to start: a server that cannot be secured never comes up half-secured
 
 ---
 
@@ -394,28 +381,26 @@ Providers/
 
 **Step 2**: Implement each file (I can help with this!)
 
-**Step 3**: Register in Program.cs
+**Step 3**: Write `GithubModule.cs` — the provider's **policy**: for each tool, the scope a caller needs, whether it reads, writes or does something irreversible, and how often one caller may use it; and the hosts it may call (`api.github.com`). Then list the module in `Providers/BuiltInProviders.cs`.
 
-```csharp
-builder.Services.AddGithubProvider(builder.Configuration);
-```
-
-**Step 4**: Add config to appsettings.json
+**Step 4**: Add config to appsettings.json, and enable it
 
 ```json
 {
   "Providers": {
+    "Enabled": [ "Smhi", "SmhiObs", "JsonPlaceholder", "Github" ],
     "Github": {
       "BaseUrl": "https://api.github.com",
-      "UserAgent": "MyMcpServer/1.0"
+      "UserAgent": "MyMcpServer/1.0",
+      "IdentityProvider": "corp"
     }
   }
 }
 ```
 
-**Step 5**: Your tools are now available!
+**Step 5**: Start the server. If a tool has no policy, or a scope your identity provider cannot issue, the server refuses to start and tells you which. Once it starts, your tools are available to callers who hold their scopes.
 
-Claude can call `GetRepository`, `CreateIssue`, etc.
+Claude can call your new tools, for example `fetch_repository` or `open_issue`.
 
 ---
 
@@ -459,10 +444,13 @@ Now you'll see:
 Use curl to test:
 
 ```bash
-# Test that server is running
-curl -H "X-Api-Key: test-key-12345" http://localhost:3001/mcp
+# Test that the server is running (HTTP mode)
+curl http://localhost:3001/healthz
 
-# (Exact endpoint depends on MCP client implementation)
+# Call the MCP endpoint — the server root — with a token
+curl -X POST http://localhost:3001/ -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
 ---
@@ -477,7 +465,7 @@ A: Yes! The server is just a framework. You can create mock providers that retur
 
 **Q: What happens if the external API goes down?**
 
-A: The server has built-in retry logic (up to 3 attempts). If the API is still down, it returns a friendly error to Claude.
+A: The server tries up to 3 times, within the time limits in the provider's policy. If the API is still down, it returns a friendly error to Claude.
 
 ---
 
@@ -489,7 +477,7 @@ A: Deploy it to the cloud (Azure, AWS, Heroku) or use a service manager like sys
 
 **Q: Is my data secure?**
 
-A: Yes! The server validates all inputs, requires API keys (in HTTP mode), rate-limits requests, and uses HTTPS-only connections to external APIs.
+A: The server checks every request: in HTTP mode the caller must present a valid token from a configured identity provider, hold the scope the tool requires, stay within their limits, and send arguments of the right shape. Providers may only call the HTTPS hosts their policy allows.
 
 ---
 
@@ -501,13 +489,13 @@ A: Yes! In HTTP mode, multiple AI assistants can connect simultaneously. The ser
 
 **Q: How do I modify how tools work?**
 
-A: Edit the tool in `Providers/YourProvider/YourProviderTools.cs`. The MCP server auto-discovers changes when you restart.
+A: Edit the tool in `Providers/YourProvider/YourProviderTools.cs` and restart. A new tool also needs an entry in the provider's policy, or the server refuses to start and names it.
 
 ---
 
 ## Next Steps
 
-1. **Get it running**: `dotnet run` in stdio mode
+1. **Get it running**: `dotnet run` in stdio mode, with `ASPNETCORE_ENVIRONMENT=Development`
 2. **Connect an AI**: Set up VS Code Copilot or Claude Desktop
 3. **Test a tool**: Ask Claude to get a blog post
 4. **Create your own provider**: Replace JsonPlaceholder with your API
@@ -523,24 +511,25 @@ A: Edit the tool in `Providers/YourProvider/YourProviderTools.cs`. The MCP serve
 **Cause**: Claude isn't discovering the tools
 
 **Solution**: 
-1. Make sure the server is running: `dotnet run`
-2. Restart your Claude Desktop or VS Code
-3. Check logs for errors: in PowerShell run `$env:Serilog__MinimumLevel__Default = "Debug"`, then run again
+1. Make sure the server is running as Development: `ASPNETCORE_ENVIRONMENT=Development`, then `dotnet run`
+2. Check the Development principal holds the tool's scope: `Development:DevPrincipal:Scopes`
+3. Restart your Claude Desktop or VS Code
+4. Check logs for errors: in PowerShell run `$env:Serilog__MinimumLevel__Default = "Debug"`, then run again
 
 ### Pitfall 2: "Rate limit keeps hitting me"
 
-**Cause**: You're calling tools too fast (~10+ times per minute)
+**Cause**: You're calling faster than your limit — `caller-rate` for all your requests, `tool-rate` for one tool
 
-**Solution**: Increase the rate limit for development:
+**Solution**: Raise your overall limit for development:
 ```powershell
-$env:RateLimit__MaxCallsPerToolPerMinute = "100"
+$env:Limits__PerPrincipalPerMinute = "600"
 ```
 
 ```bash
-export RateLimit__MaxCallsPerToolPerMinute=100
+export Limits__PerPrincipalPerMinute=600
 ```
 
-Or just wait a minute before retrying.
+A single tool's limit is in its provider's policy. Or just wait a minute before retrying.
 
 ### Pitfall 3: "Getting weird JSON errors"
 
@@ -553,9 +542,9 @@ Or just wait a minute before retrying.
 **Cause**: Configuration error or port already in use
 
 **Solution**:
-1. Check PORT: Is 3001 already in use? In PowerShell use `$env:HttpTransport__Port = "3002"`
-2. Check CONFIG: Review `appsettings.json` for syntax errors
-3. Check LOGS: Run with all logs enabled to see the real error
+1. Read the last line it printed: a configuration problem exits with code 78 and says exactly which setting to fix — including a misspelled one, with the nearest real name
+2. Check PORT: Is 3001 already in use? In PowerShell use `$env:HttpTransport__Port = "3002"`
+3. Check CONFIG: Review `appsettings.json` for syntax errors
 
 ---
 
@@ -583,21 +572,23 @@ For detailed technical info, see:
 
 These are the names the server exposes over MCP. A client calls them exactly as written here.
 
-| Tool | What it does |
-|---|---|
-| `get_blog_post` | Retrieve a blog post by id |
-| `create_blog_post` | Create a blog post |
-| `get_post_comments` | List the comments on a post |
-| `add_post_comment` | Add a comment to a post |
-| `get_user_todos` | List a user's todo items |
-| `create_user_todo` | Create a todo item for a user |
-| `get_current_weather` | Current conditions at a coordinate in Sweden |
-| `get_forecast` | Forecast for a coordinate in Sweden |
-| `get_forecast_model_info` | Metadata about the forecast model |
-| `get_recent_temperature` | Recent temperature readings from the nearest station |
-| `get_temperature_history` | Daily temperature summary, last ~4 months |
-| `get_precipitation_history` | Daily precipitation totals, last ~4 months |
-| `get_monthly_climate` | One month of the year across all archived years |
+| Tool | What it does | Scope a caller needs |
+|---|---|---|
+| `get_blog_post` | Retrieve a blog post by id | `demo:read` |
+| `create_blog_post` | Create a blog post | `demo:write` |
+| `get_post_comments` | List the comments on a post | `demo:read` |
+| `add_post_comment` | Add a comment to a post | `demo:write` |
+| `get_user_todos` | List a user's todo items | `demo:read` |
+| `create_user_todo` | Create a todo item for a user | `demo:write` |
+| `get_current_weather` | Current conditions at a coordinate in Sweden | `weather:read` |
+| `get_forecast` | Forecast for a coordinate in Sweden | `weather:read` |
+| `get_forecast_model_info` | Metadata about the forecast model | `weather:read` |
+| `get_recent_temperature` | Recent temperature readings from the nearest station | `observations:read` |
+| `get_temperature_history` | Daily temperature summary, last ~4 months | `observations:read` |
+| `get_precipitation_history` | Daily precipitation totals, last ~4 months | `observations:read` |
+| `get_monthly_climate` | One month of the year across all archived years | `observations:read` |
+
+The demo tools (the first six) are enabled in Development only. The `demo:write` tools also need a token issued within the last 5 minutes.
 
 Verify this list against a running server at any time:
 

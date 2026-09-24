@@ -10,8 +10,10 @@ namespace McpServerTemplate.Providers.Smhi;
 /// DI registration entry point for the SMHI provider.
 ///
 /// TEMPLATE GUIDANCE:
-/// This is the single method called from Program.cs:
-///   <c>builder.Services.AddSmhiProvider(builder.Configuration);</c>
+/// This is the single method the provider's module calls, from <see cref="SmhiModule.Register"/>:
+///   <c>services.AddSmhiProvider(configuration, Policy.Egress);</c>
+/// The frame watches that call: a registration here that removes anything, or that belongs to the
+/// frame, the MCP SDK or the identity layer, stops the server from starting.
 ///
 /// It registers everything the provider needs:
 ///   1. Strongly-typed configuration (bound from appsettings.json via IOptions)
@@ -19,9 +21,10 @@ namespace McpServerTemplate.Providers.Smhi;
 ///   3. The API client as a singleton/scoped service
 ///
 /// When creating your own provider, follow this pattern:
-///   - Create <c>Add{YourProvider}Provider</c> extension method
+///   - Create <c>Add{YourProvider}Provider</c> extension method, taking the policy's egress
 ///   - Bind config from <c>Configuration.GetSection("Providers:{YourProvider}")</c>
-///   - Register your API client with a typed HttpClient
+///   - Register your API client with a typed HttpClient, timed by the egress policy
+///   - Call it from your module's <c>Register</c>
 /// </summary>
 public static class SmhiServiceRegistration
 {
@@ -51,7 +54,6 @@ public static class SmhiServiceRegistration
         // first HttpClient is built, which is a tool call, not startup.
         var budget = ResilienceBudget.Create(
             providerName: "Smhi",
-            // A forecast is a small document; an attempt that has not answered in 10s is stuck.
             attemptTimeout: egress.AttemptTimeout,
             maxRetryAttempts: egress.MaxRetryAttempts,
             totalTimeout: egress.TotalTimeout,

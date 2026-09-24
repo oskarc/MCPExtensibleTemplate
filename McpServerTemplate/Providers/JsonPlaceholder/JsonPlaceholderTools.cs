@@ -28,6 +28,10 @@ namespace McpServerTemplate.Providers.JsonPlaceholder;
 ///
 ///   6. GRANULARITY: One tool per coherent user action.
 ///
+///   7. POLICY: Every tool needs an entry in its provider's policy (JsonPlaceholderModule).
+///      A tool that changes something is a Write tool with its own scope (demo:write), so a
+///      caller who may read cannot write, and a revoked caller loses write access within minutes.
+///
 /// DI NOTE: The SDK automatically resolves registered services as method parameters.
 /// <c>JsonPlaceholderApiClient</c> is injected because it was registered in <c>JsonPlaceholderServiceRegistration</c>.
 /// </summary>

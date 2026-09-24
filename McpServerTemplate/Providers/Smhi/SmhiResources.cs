@@ -20,7 +20,9 @@ namespace McpServerTemplate.Providers.Smhi;
 /// Unlike tools, resources don't take dynamic parameters from the LLM.
 /// The LLM (or client) reads them to build context before reasoning.
 ///
-/// Resources are OPTIONAL — a minimal provider only needs Tools.
+/// Resources are OPTIONAL — a minimal provider only needs Tools. Each resource needs a
+/// scope in its provider's policy, keyed by its URI; a caller without that scope does not
+/// see it listed and cannot read it.
 /// </summary>
 // contract-002 · G-4 — defence in depth beneath the frame's request gate (contract-003). If a
 // future endpoint is mapped without RequireAuthorization, these types are still closed.

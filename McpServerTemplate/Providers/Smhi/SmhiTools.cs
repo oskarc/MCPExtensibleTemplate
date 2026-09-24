@@ -30,6 +30,10 @@ namespace McpServerTemplate.Providers.Smhi;
 ///
 ///   7. OUTPUT SIZE: Be concise. A 70-entry hourly forecast should be summarized.
 ///
+///   8. POLICY: Every tool needs an entry in its provider's policy (SmhiModule) — the
+///      scope a caller must hold, whether it reads, writes or is irreversible, and how
+///      often one caller may use it. A tool without one stops the server from starting.
+///
 /// DI NOTE: The SDK automatically resolves registered services as method parameters.
 /// <c>SmhiApiClient</c> is injected because it was registered in <c>SmhiServiceRegistration</c>.
 /// </summary>

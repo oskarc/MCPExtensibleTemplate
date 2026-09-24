@@ -418,6 +418,22 @@ Phases are ordered by dependency: identity before policy (policy is keyed on the
 
 **Effort.** 8–12 days. **Depends on.** Phase 1.
 
+**Amended 2026-09-23 (contract-003, approved 2026-09-23; built 2026-09-23).** Where Phase 2 as built departs from the text above. The first four were the pioneer's answers at contract-003's spec lock; the next three came from the pioneer's challenge of the first draft ("redraw it, good findings"); the rest were decided in the approved contract or found while building it.
+
+- **Phase 2 is two contracts.** The first governs every incoming request (P2.1–P2.5, P2.11–P2.13, and L2/L3 of P2.4). The second governs every outbound call (P2.6–P2.10) and takes L4 — provider concurrency and the daily budget — which P2.4 placed in `PolicyFilter`: it protects the upstream, so it belongs with the outbound calls.
+- **Every request kind is governed, not only tools.** Resources, resource templates, prompts and completions pass the same binding and scope checks, from `ResourcePolicy` and `PromptPolicy` beside `ToolPolicy`. An incoming-message gate admits only the request kinds the frame governs — initialize, `server/discover`, ping, listing and using tools, resources, templates, prompts and completions, and the initialized and cancelled notifications — and refuses the rest. `server/discover` is admitted because it is how a client reaches the 2026-07-28 revision, which carries the input-required round-trip §3.4 depends on.
+- **Limits live in Redis now**, as D2's default says; in memory only in Development. A Redis error refuses the request (D7's default).
+- **The confirmation gate is built now**, exercised by a test-only irreversible tool.
+- **A confirmation is single-use.** §3.4's HMAC makes verification stateless, and a stateless check cannot tell a first use from a second: the same confirmation could run an irreversible tool twice within its 120 seconds. Each confirmation's id is claimed in Redis on first use and refused after.
+- **Providers cannot switch the frame off.** Providers register first and the frame last; a provider that removes a registration, or adds one belonging to the frame, the SDK, the identity layer or the host pipeline, refuses startup by name. After build, the installed request and message filters are compared with the frame's own.
+- **Unknown settings refuse startup.** In `Authentication`, `Providers`, `Limits`, `Confirmation` and `Development`, a key the server does not read — a typo, or a retired setting such as `RateLimit:MaxCallsPerToolPerMinute` — stops it, naming the nearest real key.
+- **The Irreversible gate, without introspection,** requires a token issued within 60 seconds (§3.3's "60 s token lifetime", read as freshness). The Write gate uses `iat` freshness only; introspection arrives with the identity-provider adapters of Phase 4.
+- **An answer over its cap is withheld, not truncated.** Injection heuristics on tool output (P2.3's `OutputGuardFilter`) move to Phase 4, where their signal is consumed.
+- **Primitive types are static classes named by their module.** Nothing is found by assembly scanning, and the frame learns each primitive's name at startup without constructing anything.
+- **`AdminIdentityProvider` is checked when it is set.** It is not required until the administrative plane exists (Phase 4).
+- **The demo provider keeps its name**, `JsonPlaceholder`, rather than `Demo`; its three create tools are Write tools under `demo:write`. It is left out of `Providers:Enabled` in Production.
+- **The trust domain is the frame's to name.** Claims under the names the frame reads (`idp`, `mcp_scope`, `principal`) are removed from a validated token before the frame writes its own; an identity provider's own `idp` claim (Entra ID issues one for guest users) could otherwise have chosen the trust domain.
+
 ### Phase 3 — Audit pipeline
 
 **Goal.** Every decision is recorded in a form a SIEM can alert on and an investigator can trust.

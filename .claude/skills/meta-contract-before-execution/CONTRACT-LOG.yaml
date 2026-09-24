@@ -186,13 +186,29 @@ contracts:
       untested: prose accuracy beyond the named terms and keys (read by the verifier); whether the
       diagrams render; whether the beginner's guide works when followed end to end.
       realigned: none
-    red_test: null
+    red_test:
+      broke: G-4
+      went_red: T-3
+      note: |
+        One anchor in docs/README.md was misspelled on purpose (#environment-selektion). T-3 went red
+        naming the file and the missing heading; restored, green. T-3 had passed from its first run,
+        so this was also the check that it can fail at all.
     approval: approved-at-gate
-    status: approved
+    status: implemented
     verification_state: none
     audited: false
     file: docs/contracts/contract-004-docs-that-match.html
     artifact: https://claude.ai/artifact/ERF8TjyxtC1yCMMfL3ehzM
+    observations: [O-070, O-071, O-072]
+    transcript: 40478952-60db-48c0-8fd4-97b093d57259
+    tests_run:
+      date: 2026-09-24
+      command: dotnet test McpServerTemplate.sln --configuration Release
+      result: 262 passed, 0 failed
+    evidence_T5: |
+      git diff --numstat docs/06-SECURITY-ROADMAP.md docs/07-SECURITY-FLOWCHARTS.md -> 16 0, 8 0:
+      additions only.
+    cost: null
     work_id: null
   - contract_id: contract-003
     feature: phase-2a-governed-requests

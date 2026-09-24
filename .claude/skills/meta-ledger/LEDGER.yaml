@@ -1888,6 +1888,70 @@ observations:
     stewarded: n/a
 
 
+  - obs_id: O-070
+    date: 2026-09-24
+    source: ser
+    contract_id: contract-004
+    refs: []
+    statement: |
+      M-11
+      
+      Documentation describes intentions; only the running program says what a reader will meet. The
+      first command in the README and the beginner's guide - a plain `dotnet run` - exits 78, because with
+      no environment set the server runs as Production and refuses stdio; and every HTTP example used
+      /mcp, which answers 404 because the endpoint is the server root. Both were found by running the
+      real program while rewriting the documents, not by reading them or the code. A document's
+      instructions are claims to run, not prose to proofread.
+    level_guess: pattern
+    stated_confidence: 0.65
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+  - obs_id: O-071
+    date: 2026-09-24
+    source: ser
+    contract_id: contract-004
+    refs: []
+    statement: |
+      M-11
+      
+      Two sources of truth for one limit, and a plan claim that never became code. The SMHI clients
+      cap upstream responses at 1 MB and 5 MB; contract-003's policies declare 4 MB and 8 MB for the same
+      providers - numbers chosen without reading the clients. And the demo provider's client has no
+      response cap at all, although the roadmap's Phase 0 (P0.6, DEF-03) says it gained one. Neither is
+      wrong at run time yet, because the policy value is not enforced; the egress contract must
+      reconcile them to one value, enforced by the frame, for every provider.
+    level_guess: implementation
+    stated_confidence: 0.6
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+  - obs_id: O-072
+    date: 2026-09-24
+    source: ser
+    contract_id: contract-004
+    refs: []
+    statement: |
+      M-11
+      
+      The OAuth resource identifier and the MCP endpoint disagree. Every configuration example and test
+      uses a resource like https://mcp.example.com/mcp, while the server answers MCP at /. RFC 9728 has a
+      client derive where to fetch protected-resource metadata from the resource URL it was given; a
+      client pointed at the documented /mcp gets 404, and one given the root may look for metadata at a
+      path the server does not serve. Unverified against a real OAuth-capable MCP client - which is
+      itself the gap end-to-end testing would close.
+    level_guess: pattern
+    stated_confidence: 0.5
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
+
 candidates:
   - cand_id: K-001
     created: 2026-09-17
