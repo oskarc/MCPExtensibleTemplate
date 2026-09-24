@@ -1,0 +1,195 @@
+<title>Docs That Match</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --paper:#F2F4F1; --surface:#FFFFFF; --ink:#17201D; --muted:#5F706B;
+    --rule:#CFD8D4; --rule-strong:#AEBBB6;
+    --accent:#0E6B66; --accent-ink:#0B5551; --accent-soft:#DDEDEA; --on-accent:#FFFFFF;
+    --kept:#2F7D4F; --kept-soft:#E0F0E6;
+    --new:#B7791F; --new-soft:#F7ECD9;
+    --open:#B3352C; --open-soft:#F6E3E1;
+    --code-bg:#E3EAE7;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#141B18; --surface:#1C2522; --ink:#E6ECE9; --muted:#9AABA5;
+      --rule:#2B3733; --rule-strong:#3B4945;
+      --accent:#58C4BB; --accent-ink:#7FD6CE; --accent-soft:#1E3B38; --on-accent:#0B1512;
+      --kept:#6CC08B; --kept-soft:#1E3427;
+      --new:#E0AE5A; --new-soft:#3A2F1C;
+      --open:#E37A72; --open-soft:#3A2321;
+      --code-bg:#101614;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#141B18; --surface:#1C2522; --ink:#E6ECE9; --muted:#9AABA5;
+    --rule:#2B3733; --rule-strong:#3B4945;
+    --accent:#58C4BB; --accent-ink:#7FD6CE; --accent-soft:#1E3B38; --on-accent:#0B1512;
+    --kept:#6CC08B; --kept-soft:#1E3427;
+    --new:#E0AE5A; --new-soft:#3A2F1C;
+    --open:#E37A72; --open-soft:#3A2321;
+    --code-bg:#101614;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Source Sans 3", system-ui, "Segoe UI", sans-serif;
+    font-size:16.5px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:940px; margin:0 auto; padding-inline:24px; padding-block:32px 96px; }
+  h1,h2,h3 { font-family:"Archivo","Helvetica Neue",Arial,sans-serif; line-height:1.15; letter-spacing:-0.01em; text-wrap:balance; margin:0; }
+  h1 { font-size:40px; font-weight:800; }
+  h2 { font-size:24px; font-weight:700; margin-block:52px 12px; padding-top:22px; border-top:1px solid var(--rule-strong); }
+  h3 { font-size:16px; font-weight:700; margin-block:22px 8px; }
+  p { margin:0 0 12px; max-width:68ch; }
+  a { color:var(--accent-ink); }
+  code, .mono { font-family:"IBM Plex Mono","Cascadia Mono",Consolas,monospace; font-size:0.86em; }
+  code { background:var(--code-bg); padding:1px 5px; border-radius:3px; }
+  .num { font-variant-numeric:tabular-nums; }
+  .eyebrow { font-family:"IBM Plex Mono",monospace; font-size:12.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 10px; }
+  .lede { font-size:19px; line-height:1.45; max-width:60ch; margin-top:14px; }
+
+  .state { display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline;
+    margin-top:22px; padding:12px 16px; border-left:4px solid var(--kept); background:var(--kept-soft); }
+  .state b { font-weight:700; }
+  .state span { font-size:14.5px; }
+
+  .tally { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px; background:var(--rule);
+    border:1px solid var(--rule); margin-top:20px; }
+  .tally div { background:var(--surface); padding:12px 14px; }
+  .tally .v { font-family:"Archivo",sans-serif; font-weight:700; font-size:26px; line-height:1; font-variant-numeric:tabular-nums; }
+  .tally .k { font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--muted); margin-top:7px; }
+  .tally .hot .v { color:var(--open); }
+
+  blockquote { margin:0 0 12px; padding:10px 16px; border-left:3px solid var(--accent); background:var(--surface); font-size:15.5px; }
+  blockquote p { margin:0 0 8px; }
+  blockquote p:last-child { margin:0; }
+  blockquote cite { display:block; margin-top:8px; font-style:normal; font-size:13px; color:var(--muted); }
+
+  .table-wrap { overflow-x:auto; margin:12px 0 18px; }
+  table { border-collapse:collapse; width:100%; font-size:14.5px; }
+  th, td { text-align:left; vertical-align:top; padding:8px 12px 8px 0; border-bottom:1px solid var(--rule); }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--muted); border-bottom:1px solid var(--rule-strong); font-weight:600; }
+  td.id, th.id { font-family:"IBM Plex Mono",monospace; font-size:13px; white-space:nowrap; color:var(--accent-ink); }
+  td.holds { font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--muted); white-space:nowrap; }
+
+  .chip { display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:11.5px; padding:1px 7px; border-radius:3px; border:1px solid; white-space:nowrap; }
+  .chip.new { background:var(--new-soft); color:var(--new); border-color:var(--new); }
+  .chip.kept { background:var(--kept-soft); color:var(--kept); border-color:var(--kept); }
+  .chip.open { background:var(--open-soft); color:var(--open); border-color:var(--open); }
+
+  figure { margin:18px 0 8px; }
+  .fig-scroll { overflow-x:auto; }
+  figure svg { display:block; width:100%; min-width:620px; height:auto; color:var(--ink); }
+  figcaption { font-size:13px; color:var(--muted); padding-top:8px; max-width:78ch; }
+  .nd rect { fill:var(--surface); stroke:var(--rule-strong); stroke-width:1.25; }
+  .nd text { fill:currentColor; font:500 12.5px "Source Sans 3",system-ui,sans-serif; }
+  .nd .m { font-family:"IBM Plex Mono",monospace; font-size:11.5px; }
+  .nd.new rect { fill:var(--new-soft); stroke:var(--new); }
+  .nd.stop rect { fill:var(--open-soft); stroke:var(--open); }
+  .nd.good rect { fill:var(--kept-soft); stroke:var(--kept); }
+  .edge { fill:none; stroke:var(--muted); stroke-width:1.3; }
+  .edge.stop { stroke:var(--open); }
+  .elabel { fill:var(--muted); font:500 11px "Source Sans 3",sans-serif; }
+
+  .matrix td, .matrix th { text-align:center; padding:6px 4px; }
+  .matrix td:first-child, .matrix th:first-child { text-align:left; padding-right:10px; }
+  .matrix .hit { color:var(--accent-ink); font-weight:700; }
+  .matrix .dot { color:var(--rule-strong); }
+
+  ul { padding-left:20px; max-width:68ch; }
+  li { margin-bottom:6px; }
+  .gate { border:1px solid var(--rule-strong); border-radius:3px; background:var(--surface); padding:18px 20px; margin-top:16px; }
+  .gate h3 { margin-top:0; }
+  .foot { margin-top:44px; padding-top:18px; border-top:1px solid var(--rule-strong); font-size:13.5px; color:var(--muted); }
+  .foot b { color:var(--ink); }
+
+  @media (max-width:760px) {
+    .wrap { padding-inline:16px; }
+    h1 { font-size:30px; }
+    .tally { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
+</style>
+<style>
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:11.5px;padding:1px 7px;border-radius:3px}
+.chip.kept{background:var(--kept-soft);color:var(--kept)} .chip.new{background:var(--new-soft);color:var(--new)}
+.mat td,.mat th{text-align:center;padding:5px 6px;font-size:12.5px} .mat td:first-child{text-align:left}
+pre.tier{white-space:pre-wrap;background:var(--surface);border:1px solid var(--rule);padding:12px 14px;font-size:14px;font-family:"Source Sans 3",sans-serif}
+</style>
+<div class="wrap">
+<p class="eyebrow">contract-004 &middot; execution contract &middot; documentation</p>
+<h1>Docs That Match</h1>
+<p class="lede">An operator following these documents today sets an API key and a per-tool throttle that no longer exist &mdash; this contract makes what the documents and comments say what the server does, and checks it on every build.</p>
+<div class="state"><b>Approved at the gate, 2026-09-24.</b><span>Implementation has not started. Status lives in the contract log; this page is the approved text.</span></div>
+<div class="tally">
+<div><div class="v">7</div><div class="k">use cases</div></div>
+<div><div class="v">8</div><div class="k">guardrails</div></div>
+<div><div class="v">7</div><div class="k">tests</div></div>
+<div><div class="v">0</div><div class="k">behaviour changes</div></div>
+<div class="hot"><div class="v">0</div><div class="k">decisions open</div></div>
+</div>
+
+<h2>Direction</h2>
+<blockquote><p>After this contract, what the documents and code comments say is what the server does - bearer tokens, a policy per provider, the frame&#x27;s checks, limits held in Redis - and a repository test fails whenever a document names a setting the server would refuse, a retired mechanism, or a link to nothing. The bet is that documentation stays true only where its checkable claims are checked on every build; the rest is prose a reader must be able to trust, and is verified by reading.</p><cite>The bearing. If it and the tiers disagree, the bearing wins.</cite></blockquote>
+
+<h2>What the pioneer locked</h2>
+<p>A clause that cannot be traced to one of these is wrong, not merely debatable.</p>
+<ul>
+<li>&ldquo;update the docs, then draw the next contract&rdquo;</li>
+<li>&ldquo;update comments as well&rdquo;</li>
+<li>Approved: &ldquo;Its approved&rdquo;, with testing redirected toward end-to-end (recorded separately as a correction to contract-003).</li>
+</ul>
+<blockquote><p><b>Pre-mortem:</b> None given. The approval (&quot;Its approved&quot;) came with a redirection of contract-003&#x27;s test
+changes toward end-to-end testing, recorded as C-032.</p><p><b>Disappointment lines:</b> None given.</p></blockquote>
+
+<h2>The mechanism: what keeps the documents true</h2>
+<div class="table-wrap"><table><tr><th>Check</th><th></th><th>What it catches</th></tr>
+<tr><td><b>Tool names</b></td><td><span class="chip kept">existing</span></td><td>A documented tool the server does not serve, or a served tool no document names (contract-001 T-12)</td></tr>
+<tr><td><b>Configuration keys</b></td><td><span class="chip new">added</span></td><td>A governed key a document tells an operator to set that the server&rsquo;s own settings check would refuse</td></tr>
+<tr><td><b>Retired mechanisms</b></td><td><span class="chip new">added</span></td><td>A document or code comment describing the API key, the throttle, assembly scanning, the health probe, the old markers or .NET 8 outside a marked retired block</td></tr>
+<tr><td><b>Links</b></td><td><span class="chip new">added</span></td><td>A relative link or anchor that resolves nowhere</td></tr>
+</table></div>
+<p>Prose beyond these is read, not tested: the verifier checks it against the code.</p>
+
+<h2>Tier 1 &mdash; who it is for</h2>
+<pre class="tier">Who: a team adopting the template, an organisation&#x27;s platform team configuring it, a security
+reviewer, and anyone reading the code.
+What they want: to run, configure, extend and judge the server from its documentation,
+without reading its source.
+Success: every setting the documents say to set is one the server reads; adding a provider as
+documented works first time; the diagrams show components that exist.
+Cost today: the documents describe .NET 8, an API key (removed in Phase 1, now refused), a
+per-tool throttle (retired, now refused), a startup health probe (replaced) and adding
+providers by scanning (now serves nothing); several comments give advice that fails at startup.</pre>
+<h2>Tier 2 &mdash; use cases</h2>
+<div class="table-wrap"><table><tr><td class="mono"><b>UC-1</b></td><td>Configuring: the configuration guide and README name every key the server needs - identity providers, enabled providers, each provider&#x27;s identity provider, Redis, the confirmation key; every key named is read; retired keys appear only in a retired-settings table with their replacements.</td></tr><tr><td class="mono"><b>UC-2</b></td><td>Adding a provider: module, policy, registration list, enabled list; the startup refusals explained.</td></tr><tr><td class="mono"><b>UC-3</b></td><td>A first local run from the beginner&#x27;s guide: .NET 10, stdio as the Development principal, error examples quoting real refusals.</td></tr><tr><td class="mono"><b>UC-4</b></td><td>Understanding the architecture: diagrams and text show the real middleware and the frame&#x27;s gate in order; no removed components.</td></tr><tr><td class="mono"><b>UC-5</b></td><td>Testing: the testing guide lists the test project as it is, including Docker for Redis.</td></tr><tr><td class="mono"><b>UC-6</b></td><td>Reading the code: no comment describes a removed mechanism or gives advice that now fails.</td></tr><tr><td class="mono"><b>UC-7</b></td><td>The roadmap and security flowcharts record where contract-003 decided differently from the plan, as dated amendments, never rewrites. Decided: these were the pioneer&#x27;s spec-lock decisions; recording them is how P1.6 was recorded.</td></tr></table></div>
+<h2>Tier 3 &mdash; guardrails</h2>
+<div class="table-wrap"><table><tr><td class="mono"><b>G-1</b></td><td>(UC-1..5) Correct, don&#x27;t expand: each document keeps its purpose and structure; sections on removed mechanisms are rewritten to the current one; no new documents.</td></tr><tr><td class="mono"><b>G-2</b></td><td>(UC-1) A repository test extracts every configuration key the documents name in the governed sections and checks it with the server&#x27;s own settings matcher.</td></tr><tr><td class="mono"><b>G-3</b></td><td>(UC-1..6) A repository test fails if documents or C# comments name a retired mechanism - API key, throttle filter or its setting, assembly scanning, HealthProbe, the provider/scope attributes, .NET 8 - outside a marked retired block; the roadmap, reports and contracts are history and excluded.</td></tr><tr><td class="mono"><b>G-4</b></td><td>(UC-2..4) A repository test fails on any relative link or anchor in the documents that resolves nowhere.</td></tr><tr><td class="mono"><b>G-5</b></td><td>(UC-3) Refusal examples quote the frame&#x27;s real rule names.</td></tr><tr><td class="mono"><b>G-6</b></td><td>(UC-6) The survey&#x27;s stale comments are rewritten; the tool-design guidance gains the policy rule.</td></tr><tr><td class="mono"><b>G-7</b></td><td>(UC-7) The roadmap and security flowcharts gain dated amendments only; nothing is deleted.</td></tr><tr><td class="mono"><b>G-8</b></td><td>No behaviour changes; build and tests green; CI green; committed alone.</td></tr></table></div>
+<p>Novel to the kit, observations due after: G-3, G-5, G-11, G-12.</p>
+<h2>Tier 4 &mdash; acceptance tests</h2>
+<div class="table-wrap"><table><tr><td class="mono"><b>T-1</b></td><td>(G-2) Every governed key named in the documents passes the server&#x27;s settings matcher; fails naming the key and file.</td></tr><tr><td class="mono"><b>T-2</b></td><td>(G-3) No retired-mechanism term in documents or C# comments outside a marked retired block; fails naming file and line.</td></tr><tr><td class="mono"><b>T-3</b></td><td>(G-4) Every relative link and anchor in the documents resolves.</td></tr><tr><td class="mono"><b>T-4</b></td><td>(G-6) The survey&#x27;s stale phrases return zero: &quot;called from Program.cs&quot;, &quot;becomes inert&quot;, &quot;a missing API key&quot;, the provider API-key example.</td></tr><tr><td class="mono"><b>T-5</b></td><td>(G-7) The diff of the roadmap and security flowcharts shows additions only, and one amendment per decision contract-003 changed.</td></tr><tr><td class="mono"><b>T-6</b></td><td>(G-8) Build with warnings as errors, full suite green, CI green.</td></tr><tr><td class="mono"><b>T-7</b></td><td>The existing checks that documented tool names match served tools still pass.</td></tr></table></div>
+<pre class="tier">untested: prose accuracy beyond the named terms and keys (read by the verifier); whether the
+diagrams render; whether the beginner&#x27;s guide works when followed end to end.
+realigned: none</pre>
+
+<h2>Traceability</h2>
+<p>Use cases against the guardrails that hold them. No use case is unprotected. G-8 holds no use case: it is a boundary on the work itself (no behaviour change, build and CI green), not a protection of a reader task.</p>
+<div class="table-wrap"><table class="mat"><tr><th></th><th class="mono">G-1</th><th class="mono">G-2</th><th class="mono">G-3</th><th class="mono">G-4</th><th class="mono">G-5</th><th class="mono">G-6</th><th class="mono">G-7</th><th class="mono">G-8</th></tr><tr><td class="mono"><b>UC-1</b></td><td>&#9679;</td><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-2</b></td><td>&#9679;</td><td></td><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-3</b></td><td>&#9679;</td><td></td><td>&#9679;</td><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-4</b></td><td>&#9679;</td><td></td><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-5</b></td><td>&#9679;</td><td></td><td>&#9679;</td><td></td><td></td><td></td><td></td><td></td></tr><tr><td class="mono"><b>UC-6</b></td><td></td><td></td><td>&#9679;</td><td></td><td></td><td>&#9679;</td><td></td><td></td></tr><tr><td class="mono"><b>UC-7</b></td><td></td><td></td><td></td><td></td><td></td><td></td><td>&#9679;</td><td></td></tr></table></div>
+
+<h2>Boundaries</h2>
+<ul>
+<li>No behaviour changes: comments and documents only, plus the repository tests that check them.</li>
+<li>The roadmap and the security flowcharts gain dated amendments; nothing in them is rewritten.</li>
+<li>Reports, contracts and the interactive field guide are history or presentation of the plan, and are not edited.</li>
+</ul>
+
+<h2>The gate</h2>
+<p>Approval authorises building exactly these clauses. A deviation found in flight stops the work and is put to the pioneer; it is not resolved quietly. After the build one check is broken on purpose and the test that goes red is recorded before the contract reads implemented.</p>
+
+<h2>Verified this session</h2>
+<p>Every document in <code>docs/</code> and the README, searched for retired mechanisms and outlined; every C# comment searched by the concepts contract-003 changed; the provider files&rsquo; header comments read; the existing documentation tests read. <b>No code has changed.</b></p>
+</div>

@@ -1031,6 +1031,37 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-032
+    date: 2026-09-24
+    contract_id: contract-003
+    moment: M-06
+    grade: option-override
+    intervention: hinted
+    agent_offered: |
+      Two test changes, put for approval: T-10 promised that a real server process in Production
+      configuration repeats T-3's and T-5's refusals; offered instead, the real Production process's
+      logged frame manifest must equal the tested server's, and the real program over stdio with
+      Redis repeats the refusals. T-3 promised the frame's own completion rule refuses an unscoped
+      completion; offered instead, "refused, nothing returned", with the frame's rule untested by a
+      request until a provider offers completion.
+    pioneer_said: |
+      Its approved, regarding testing i want us to thing about E2E testing, we can use test
+      containers or think further here, testing is central.
+    reason_given: |
+      testing is central
+    noticed: |
+      asked 2026-09-24, awaiting answer
+    would_have_been_right: |
+      asked 2026-09-24, awaiting answer
+    seen_before: |
+      asked 2026-09-24, awaiting answer
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-22
   by_contract:

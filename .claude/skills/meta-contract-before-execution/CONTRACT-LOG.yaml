@@ -98,6 +98,102 @@
 # contract it led to). See meta-contract-artifact/SKILL.md.
 
 contracts:
+  - contract_id: contract-004
+    feature: docs-and-comments-describe-the-server
+    type: contract
+    date_proposed: 2026-09-24
+    date_approved: 2026-09-24
+    bearing: |
+      After this contract, what the documents and code comments say is what the server does -
+      bearer tokens, a policy per provider, the frame's checks, limits held in Redis - and a
+      repository test fails whenever a document names a setting the server would refuse, a retired
+      mechanism, or a link to nothing. The bet is that documentation stays true only where its
+      checkable claims are checked on every build; the rest is prose a reader must be able to trust,
+      and is verified by reading.
+    ground: |
+      Surveyed before drawing. Retired-mechanism references per file: 01-ARCHITECTURE 11,
+      02-ARCHITECTURE-FLOWCHARTS 17, 04-CONFIGURATION 33, 05-USAGE-GUIDE-BEGINNERS 10,
+      docs/README 1, README 11 (after contract-003's partial README fix); 03-TESTING-STRATEGY and
+      07-SECURITY-FLOWCHARTS none by name. The staleness predates contract-003: .NET 8, the API key,
+      HealthProbe and assembly scanning were replaced in Phases 0 and 1. Stale comments found by
+      searching comments for the concepts that changed, not only removed names: StartupExit (a
+      missing API key), DevelopmentPrincipal (identity described as optional), the three provider
+      registrations (called from Program.cs), SmhiConfig (API-key example; deleted provider
+      sections "become inert"), Program header (stdio "authenticates nobody"), two timeout
+      rationale comments left beside values that moved to the modules, and the tool-design
+      guidance lacking the policy rule. Existing tests already check that tool names in the
+      documents match the served tools (contract-001 T-12). The pioneer added mid-draw: "update
+      comments as well".
+    tier_1: |
+      Who: a team adopting the template, an organisation's platform team configuring it, a security
+      reviewer, and anyone reading the code.
+      What they want: to run, configure, extend and judge the server from its documentation,
+      without reading its source.
+      Success: every setting the documents say to set is one the server reads; adding a provider as
+      documented works first time; the diagrams show components that exist.
+      Cost today: the documents describe .NET 8, an API key (removed in Phase 1, now refused), a
+      per-tool throttle (retired, now refused), a startup health probe (replaced) and adding
+      providers by scanning (now serves nothing); several comments give advice that fails at startup.
+    tier_2: |
+      UC-1 Configuring: the configuration guide and README name every key the server needs -
+           identity providers, enabled providers, each provider's identity provider, Redis, the
+           confirmation key; every key named is read; retired keys appear only in a retired-settings
+           table with their replacements.
+      UC-2 Adding a provider: module, policy, registration list, enabled list; the startup refusals
+           explained.
+      UC-3 A first local run from the beginner's guide: .NET 10, stdio as the Development principal,
+           error examples quoting real refusals.
+      UC-4 Understanding the architecture: diagrams and text show the real middleware and the frame's
+           gate in order; no removed components.
+      UC-5 Testing: the testing guide lists the test project as it is, including Docker for Redis.
+      UC-6 Reading the code: no comment describes a removed mechanism or gives advice that now fails.
+      UC-7 The roadmap and security flowcharts record where contract-003 decided differently from the
+           plan, as dated amendments, never rewrites. Decided: these were the pioneer's spec-lock
+           decisions; recording them is how P1.6 was recorded.
+    tier_3: |
+      G-1 (UC-1..5) Correct, don't expand: each document keeps its purpose and structure; sections on
+          removed mechanisms are rewritten to the current one; no new documents.
+      G-2 (UC-1) A repository test extracts every configuration key the documents name in the
+          governed sections and checks it with the server's own settings matcher.
+      G-3 (UC-1..6) A repository test fails if documents or C# comments name a retired mechanism -
+          API key, throttle filter or its setting, assembly scanning, HealthProbe, the provider/scope
+          attributes, .NET 8 - outside a marked retired block; the roadmap, reports and contracts are
+          history and excluded.
+      G-4 (UC-2..4) A repository test fails on any relative link or anchor in the documents that
+          resolves nowhere.
+      G-5 (UC-3) Refusal examples quote the frame's real rule names.
+      G-6 (UC-6) The survey's stale comments are rewritten; the tool-design guidance gains the policy
+          rule.
+      G-7 (UC-7) The roadmap and security flowcharts gain dated amendments only; nothing is deleted.
+      G-8 No behaviour changes; build and tests green; CI green; committed alone.
+    disappointment: |
+      None given.
+    premortem: |
+      None given. The approval ("Its approved") came with a redirection of contract-003's test
+      changes toward end-to-end testing, recorded as C-032.
+    tier_4: |
+      T-1 (G-2) Every governed key named in the documents passes the server's settings matcher; fails
+          naming the key and file.
+      T-2 (G-3) No retired-mechanism term in documents or C# comments outside a marked retired block;
+          fails naming file and line.
+      T-3 (G-4) Every relative link and anchor in the documents resolves.
+      T-4 (G-6) The survey's stale phrases return zero: "called from Program.cs", "becomes inert",
+          "a missing API key", the provider API-key example.
+      T-5 (G-7) The diff of the roadmap and security flowcharts shows additions only, and one
+          amendment per decision contract-003 changed.
+      T-6 (G-8) Build with warnings as errors, full suite green, CI green.
+      T-7 The existing checks that documented tool names match served tools still pass.
+      untested: prose accuracy beyond the named terms and keys (read by the verifier); whether the
+      diagrams render; whether the beginner's guide works when followed end to end.
+      realigned: none
+    red_test: null
+    approval: approved-at-gate
+    status: approved
+    verification_state: none
+    audited: false
+    file: docs/contracts/contract-004-docs-that-match.html
+    artifact: https://claude.ai/artifact/ERF8TjyxtC1yCMMfL3ehzM
+    work_id: null
   - contract_id: contract-003
     feature: phase-2a-governed-requests
     type: contract
