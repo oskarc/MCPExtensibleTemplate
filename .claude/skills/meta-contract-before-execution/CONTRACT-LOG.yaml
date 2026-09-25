@@ -98,6 +98,309 @@
 # contract it led to). See meta-contract-artifact/SKILL.md.
 
 contracts:
+  - contract_id: contract-005
+    feature: shipped-image-under-test
+    type: contract
+    date_proposed: 2026-09-25
+    date_approved: 2026-09-26
+    bearing: |
+      After this contract, the thing that ships is the thing under test: the server image built from the
+      repository's Dockerfile. It runs on its own network behind a TLS front, against a real identity
+      provider over HTTPS, test issuers, Redis and recording fakes of its upstreams. The tests see it only
+      as a client and an operator would: through its network edges, its logs and its exit codes.
+      contract-003's end-to-end clauses run on it as written, and the five defects this environment found
+      on arrival are fixed, each seen failing first. The bet is that four named extension points let
+      egress, audit, guardrails, hardening and compliance each add their part without rebuilding the core:
+      start a server with a settings delta, the upstream registry, the issuer registry and the network
+      constant.
+    ground: |
+      Surveyed before drawing by workflow wf_8aea2855-ced (survey, three designs, two judges; a spike
+      on this machine ran the unmodified server in the aspnet image against Keycloak 26.7.4 over
+      HTTPS and reproduced five defects). The draft was then challenged by workflow wf_680bf231-f85:
+      five lenses (fixes, harness, containment, feasibility, evolution), each finding refuted-or-kept
+      by a second reader against the code and survey; 34 stood, 6 were refused, all 34 folded in.
+      Spec locked 2026-09-25: one multi-container environment; e2e before egress; endpoint to /mcp;
+      the five defects fixed here; test image built now; contract-003 T-10 and T-3 run as written;
+      after the build, adversarial rounds until resolved (C-033). Precedent applied: P-032.
+      Choices made at the draw and approved as made: completion leg on the test host in Production;
+      ClientIdClaim applied rather than retired (vendor claim names from the agent's knowledge, to
+      be checked first in the build); test issuer as its own container; nothing moved out of the
+      fast suite; nginx as the TLS front.
+    tier_1: |
+      Who: the teams adopting and maintaining the template, an organisation's platform and security
+      functions who deploy the image, and the pioneer judging whether the frame holds.
+      What they want: to know that the artifact they deploy - not an in-process imitation - holds the
+      frame against real clients, real tokens and real upstreams, and keeps holding it as phases add to it.
+      Success: the guarantees in the coverage table below are proven on the image, and each one that is
+      not is named there with its reason. A standard OAuth client connects to https://host/mcp as the docs
+      say. The documented deployment runs as written. A defect in the running program fails a test before
+      it ships.
+      What it does not promise: that a real person's browser login works (Phase 4); how the egress guard
+      will treat the identity provider's own traffic (the egress contract); IPv6 networking; a hardened
+      image (Phase 6).
+      Cost today: the shipped program has never accepted a token in a test; a standard OAuth client cannot
+      connect as documented; five defects were invisible to all 262 tests.
+    tier_2: |
+      UC-1 Walking skeleton first. The image builds from the repository's Dockerfile, the environment
+           starts, and one call with a real Keycloak token succeeds through the TLS front. This runs on
+           Windows with Docker Desktop and on GitHub's runner, with a timing recorded for each phase,
+           before any other end-to-end test is written. It also proves the mechanics later tests rely on:
+           the test issuer is reachable by the same name from the server and from the test, the client's
+           whole OAuth flow travels through the test's name map, and the front's forwarded address is
+           honoured. Edge: faults in the environment rather than the product (Docker down, trust missing,
+           clock skew, subnet taken, forwarded headers ignored) are reported naming their cause, never as
+           a product failure.
+      UC-2 contract-003's T-10 on the artifact. The shipped image runs in Production with Redis and
+           repeats every refusal from contract-003's T-3 and T-5: a hidden tool, another trust domain's
+           resource, an unscoped prompt, an extra argument, a wrong type, an over-long string, NaN. Each
+           is refused with its own rule, returns no result and reaches no upstream. The unscoped
+           completion needs a provider that offers completion, so it runs on the test host, also in
+           Production (UC-8).
+      UC-3 Token refusals on the artifact: no token (a 401 naming the metadata), wrong audience, expired,
+           alg none, HS256, cross-signed, each required claim missing, and a write made with a token
+           issued six minutes ago. An unregistered issuer is refused with zero key lookups at any issuer.
+      UC-4 A standard client connects. The SDK's OAuth client is given only https://mcp.e2e.test/mcp. From
+           the 401 it discovers the authorization server, completes the authorization-code flow with PKCE,
+           and calls a tool.
+      UC-5 Two trust domains. A provider bound to one identity provider is invisible to callers from the
+           other, and each of its tools, resources and prompts refuses them.
+      UC-6 Upstreams. Every served tool reaches its fake at the real upstream host name over HTTPS. The
+           fakes record every request. No upstream request carries the caller's token in any header, URL
+           or body, and no request reaches the real internet.
+      UC-7 Limits on the artifact. Two server instances sharing Redis count one caller together. Another
+           caller, and the same subject arriving from the other identity provider, are counted separately.
+           The per-address limit throttles one address and not another. With Redis stopped, requests are
+           refused.
+      UC-8 The test-only server image. The irreversible confirmation round-trip runs exactly once, and
+           every tampering attempt is refused for its own reason. The frame's own completion refusal
+           (contract-003's T-3) runs in Production with Redis. Whatever its environment name, the test
+           image serves only identity providers under .test, and it never ships.
+      UC-9 The documented deployment runs as written. docs/04's production configuration starts, accepts a
+           real token and lists tools. The only changes allowed are declared substitutions of host names
+           and of test trust.
+      UC-10 The artifact starts and stops properly. Representative misconfigurations exit with code 78,
+            naming the cause. SIGTERM stops it cleanly. Request kinds nobody governs are refused.
+      UC-11 The five defects are fixed, each seen failing on the artifact first, with no variant left
+            open. (1) The endpoint and the resource disagree. (2) Host filtering is off on a wildcard bind
+            or with a wildcard allowed host. (3) ClientIdClaim is never read. (4) The metadata publishes
+            Authority instead of an https issuer. (5) A log sink writes nothing and says nothing.
+      UC-12 The fast suite stays fast and whole. End-to-end tests have their own project and CI job, and
+            no fast-suite test is moved or removed.
+      UC-13 After the build, adversarial agents attack the finished work. Every confirmed bug or issue is
+            fixed with a test, and the agents rerun until a round finds nothing new.
+    tier_3: |
+      G-1 (UC-1, 10, 11) A Dockerfile and a .dockerignore at the repository root; the ignore file excludes
+          **/bin, **/obj, **/logs, .claude/, .git and docs/. The build is multi-stage. The SDK image
+          matches global.json, the runtime is aspnet:10.0-noble-chiseled, and both are pinned by their
+          multi-arch index digest. The container runs non-root (user 1654) with WORKDIR /app and a log
+          directory the app user can write to. There is no test stage and no test material. Further
+          hardening belongs to Phase 6.
+      G-2 (UC-2-11) A new project, McpServerTemplate.E2E (xUnit, in the solution, with its own lock file).
+          It has no ProjectReference to the product or the test host, and sees them only through their
+          network edges, logs and exit codes.
+      G-3 (UC-3-6) A new library, McpServerTemplate.Testing, holding the token minting:
+          TestIdentityProvider moves here from the fast suite, and both suites use it. It also holds a
+          test PKI generated when a run starts: one CA plus leaf certificates covering every host name the
+          environment serves. The key material lives in a temporary directory outside the repository, is
+          mounted read-only, and is deleted after the run. Nothing of it is committed.
+      G-4 (UC-1-10) One user-defined Docker network per run, with its IPv4 subnet a slice of
+          198.51.100.0/24, held in one harness constant. The front and the proxies get static addresses.
+          The slice lies outside P2.7's list as the roadmap states it today. Which ranges the egress guard
+          blocks is the egress contract's decision, and no test-only relaxation of address checking is
+          allowed.
+      G-5 (UC-1, 2, 5, 6, 7, 9) Keycloak 26.7.4, pinned by digest, run through the generic container
+          builder in start mode. It serves HTTPS with a test-CA leaf, with its hostname pinned to
+          https://keycloak.e2e.test:8443. One realm is imported, with a client-credentials client per test
+          class, an audience mapper equal to Authentication:Resource and an explicit basic scope. It
+          starts once per run and is shared by every test class.
+      G-6 (UC-2-5, 7) A test issuer: a test-only container built from McpServerTemplate.TestIssuer (a
+          small web project over the Testing library). It sits on the network under two issuer names,
+          idp-a.e2e.test and idp-b.e2e.test, and serves each one:; discovery and JWKS, counting every
+          request per name; an authorization-code endpoint: RFC 8414 metadata advertising S256; an auto-
+          approving /authorize that returns code, state and iss; a /token that checks PKCE and mints the
+          audience from the resource parameter; an admin endpoint the test uses to mint tokens Keycloak
+          will not (wrong audience, expired, alg none, HS256, cross-signed, missing claims, stale iat).
+          Its keys are generated when the container starts and never leave it. The test reaches it under
+          the same names the server uses, through a name map in its HTTP client that validates TLS against
+          the test CA. Placement chosen: its own container rather than a host port exposed into the
+          network, so both platforms use the same mechanism and no SSH sidecar is needed.
+      G-7 (UC-2, 6, 8) Upstream fakes behind an upstream registry, in which each upstream host name
+          belongs to exactly one container. One WireMock (sheyenrath/wiremock.net-alpine, pinned by
+          digest) serves opendata-download-metfcst.smhi.se, opendata-download-metobs.smhi.se and
+          jsonplaceholder.typicode.com over HTTPS with a test-CA leaf. It also answers on a neutral alias,
+          wiremock.e2e.test. Its journal is read through its admin REST API with a plain HttpClient, with
+          no WireMock client package.
+      G-8 (UC-1-11) The server under test.; Build: built with the Testcontainers Dockerfile builder,
+          tagged by a hash of the whole build context as .dockerignore filters it, and reused only while
+          that hash is unchanged. A revision label is checked against the checkout before any test runs.;
+          Configuration: environment only, through one harness entry point, start a server with a settings
+          delta. An unknown key in a delta fails the server's own startup check.; Trust: SSL_CERT_FILE and
+          SSL_CERT_DIR both point at the test CA only, so a call to a host with no fake fails TLS instead
+          of reaching the internet.; Transport: BindAddress is 0.0.0.0, AllowedHosts is mcp.e2e.test only,
+          and KnownProxies is the front's address only.; Running: stderr is captured, and the server
+          counts as ready when /readyz answers directly, not through the front. There is one server
+          container per test class, so counts never leak between classes; UC-7 starts two.
+      G-9 (UC-1, 4, 7, 9, 11) A TLS front: nginx, pinned by digest, at a static address, holding a test-CA
+          leaf for mcp.e2e.test. It terminates TLS, keeps the Host header, sets X-Forwarded-Proto: https,
+          and sets X-Forwarded-For to the client address the test names in a test-only header. That header
+          is a declared harness device standing for many clients behind one proxy, and the product trusts
+          the address only because it arrives from KnownProxies. Every client-facing test dials
+          https://mcp.e2e.test through the front.
+      G-10 (UC-8) The test host is a separate project, McpServerTemplate.E2EHost. It composes the public
+           AddHttpServer and UseHttpServer with the built-in providers plus test modules, which are
+           defined only there:; an irreversible tool whose every run sends one request carrying a unique
+           marker to wiremock.e2e.test, a witness outside its own process; a prompt provider that offers
+           completions. It has its own image name (mcp-e2e-testhost) and a test-only label. Containment
+           does not depend on the environment name: the test host refuses to start (exit code 78) unless
+           Authentication:Resource and every identity provider's Authority and Issuer are hosts under
+           .test, checked on the fully built configuration. It runs in Production with Redis, and it never
+           passes configureIdentityForTests. The product project has no ProjectReference at all, and no
+           workflow pushes any image.
+      G-11 (UC-2-11) Harness discipline.; Sabotage: every end-to-end test has a named sabotage that acts
+           only in the E2E fixture (its inputs, container environment or network) and weakens one thing
+           for one test. Its recorded red fails on the assertion that carries the test's claim, and the
+           failure message is recorded with it. A red at a self-check, a positive control or startup does
+           not count. CI fails if MCP_E2E_SABOTAGE is set.; Absence: asserting that nothing happened is
+           legal only on a witness that recorded something earlier in the same test, and whose cache, if
+           it has one, was cold when the absence was checked.; Expected sets: the served tools, resources,
+           prompts and governed request kinds come from the image's own startup line, which gains the
+           request kinds. The fast suite's rule matrices remain the independent check on that line.; Self-
+           checks: the fixture's self-checks name the phase and the cause of an environment fault.
+      G-12 (UC-11) The five fixes. Each lands only after its end-to-end test has been seen red on the
+           current code. (1) MCP answers at /mcp. Startup refuses (78, naming Authentication:Resource)
+           when the Resource's path, with a trailing slash trimmed, is not /mcp. The URL named in the
+           challenge and RFC 9728's well-known location for that resource both answer with the same
+           document. Docs and test constants are updated. (2) Startup refuses (78, naming the key) when a
+           non-loopback BindAddress has no AllowedHosts, or when any AllowedHosts entry is *, 0.0.0.0,
+           [::] or ::. HttpTransport joins the sections the settings allowlist governs. (3) ClientIdClaim
+           is applied, so the claim it names is the one a token must carry. A value that is a registered
+           JWT claim (iss, sub, aud, exp, nbf, iat, jti) or equals the provider's ScopeClaim refuses
+           startup, because such a claim is always present or means something else and would switch the
+           requirement off. (4) authorization_servers lists each identity provider's Issuer. An Issuer
+           must be an absolute https URI, the same rule as Authority, since clients are sent to it. (5)
+           Startup checks every File entry under Serilog:WriteTo, resolving its path the way the sink
+           does, against the working directory, and refuses naming the resolved path if it cannot write
+           there. Serilog's self-log goes to stderr, so a sink that fails later says so.
+      G-13 (UC-9) Docs profile: docs/04's production configuration and compose file run verbatim through a
+           declared substitution table. The table has two kinds of row: host names and addresses (identity
+           provider, resource, proxy), and test-trust additions (SSL_CERT_* and the read-only CA mount),
+           each with its reason. For that run the image is tagged with the name the compose file uses.
+      G-14 (UC-1, 12) CI.; Jobs: a separate end-to-end job on ubuntu-latest, running in parallel with the
+           fast job on every push. The fast job runs McpServerTemplate.Tests by project path.; Budget: the
+           wall-clock budget is the walking skeleton's measured job time plus a stated margin, and counts
+           the confirmation-expiry wait. It is recorded on the contract before T-2 onward are written.
+           Exceeding it fails the job and puts reshaping to the pioneer.; Failures: a diagnostics bundle
+           (container logs, journals, timings) is uploaded, and a hang timeout applies.
+      G-15 (UC-2, 8) Closing contract-003. Each clause of its T-3, T-5 and T-10 maps to the test that
+           closes it (table below). T-10's first sentence (test server and program install the same frame)
+           stays closed by the fast suite's existing comparison, which this contract does not move.
+      G-16 (UC-6; the bearing) Four named extension points, each one type in the harness: start a server
+           with a settings delta; the upstream registry; the issuer registry; the network constant. Later
+           contracts add through them. For example, egress puts a fault proxy in front of an upstream by
+           registering it in place of the fake.
+      G-17 (UC-13) Adversarial rounds after the build, one lens each: the security of the fixes, the
+           honesty of the harness, containment of the test image, flakiness on both platforms, and docs
+           against behaviour. Confirmed findings are fixed with a test each. Rounds repeat until one finds
+           nothing new, and every round's findings are recorded on the contract.
+      Novel, observations due after: G-9, G-10, G-11, G-16.
+    disappointment: |
+      "pre mortem and guarantees are the same as before." Read as: no line per guarantee; each is
+      met as it says, and contract-003's pre-mortem stands for every guarantee.
+    premortem: |
+      Carried from contract-003 at the pioneer's word: "Pre mortem is if there are holes or security
+      issues as a result of our work here."
+    tier_4: |
+      T-1 (G-1, 4-9, 14 - UC-1) Walking skeleton. The image builds, the environment starts, and one
+          Keycloak-token tools/list through the front succeeds, with per-phase timings logged. It runs
+          locally on Windows and in CI. It also proves the mechanics named in UC-1. Fails if any phase
+          fails without naming its cause, or either platform is not run.
+      T-2 (G-8, 11, 15 - UC-2) contract-003's refusals on the shipped image, in Production with Redis. The
+          startup line reads limits=Redis, and each refusal carries its rule:; a hidden tool gives
+          insufficient_scope; another trust domain's resource gives not-permitted; an unscoped prompt
+          gives not-permitted; an extra argument gives extraneous-argument; latitude=true gives argument-
+          schema; a 513-character string gives argument-length; "NaN" gives not-a-number. Fails if any
+          refusal returns content, or the fake records a request for any of them after it recorded the
+          permitted call made in the same test.
+      T-3 (G-6, 11 - UC-3) Token refusals on the image. No token gives a 401 whose challenge names
+          https://mcp.e2e.test/... metadata. Wrong audience, expired, alg none, HS256, cross-signed, and
+          each of sub, jti, the client claim and iat missing: each gives a 401, with its reason in the
+          log. A write tool called with a token issued six minutes ago gives token-age. Unregistered
+          issuer: on a freshly started server whose issuers are both test issuers, the stranger's token is
+          the first request. The test checks zero discovery and zero JWKS requests at every issuer name,
+          then sees a registered token raise that issuer's counts from zero in the same test.
+      T-4 (G-6, 9, 12 - UC-4) A standard client connects. The SDK client is given only
+          https://mcp.e2e.test/mcp, with no extra headers. It discovers the authorization server,
+          authorizes and calls a tool. /authorize and /token each saw exactly one request, carrying
+          resource=https://mcp.e2e.test/mcp and S256. Seen red on the current code.
+      T-5 (G-5, 6 - UC-5) Two trust domains on the image. A caller from the other issuer sees none of the
+          bound provider's tools, resources or prompts in the lists. Calling, reading and getting each one
+          is refused, in the same words as for an item that does not exist.
+      T-6 (G-7, 8, 11 - UC-6) Upstreams. Every tool on the startup line is called once and seen at its
+          fake; the forecast is called while its cache is cold, as the first SMHI call on a fresh server.
+          No journal entry anywhere in the run contains the caller's token in any header, URL or body.
+          With one fake's alias removed, that tool's call fails TLS and nothing reaches the internet.
+      T-7 (G-8, 9 - UC-7) Limits on the image. Two servers share Redis, with Limits:PerPrincipalPerMinute
+          set below the tool limits and the per-address 60, and the value stated in the test. One caller's
+          count carries across both servers and is refused with caller-rate. Another caller, and the same
+          subject from the other issuer, still pass. One forwarded address gets 429 on its 61st request in
+          a window while another gets 200. With Redis stopped, requests are refused with limits-
+          unavailable.
+      T-8 (G-10, 15 - UC-8) The test host, in Production with Redis.; Confirmation: after five tampering
+          attempts (a replay, other arguments, an altered confirmation, an expired one waited out past 120
+          s, another caller), each refused with its own reason on a token issued under 60 s earlier, the
+          witness shows exactly one run.; Completion: an unscoped completion is refused with not-permitted
+          and no result, and the matching refusal appears on stderr.; Containment: the test host exits 78
+          when given a non-.test authority, both under Production and under Staging.; Same frame: its
+          whole Frame installed line equals the shipped image's, except that providers= adds only the test
+          modules and the manifest adds only their lines. Both lines read limits=Redis.
+      T-9 (G-13 - UC-9) The docs profile starts, accepts a real token and lists tools. Seen red against
+          the documents as they stand when the fixes land; the documents are then corrected until the test
+          passes.
+      T-10 (G-1, 8 - UC-10) Startup and shutdown. An unknown setting, Production without Redis, an http
+           Authority and a missing AllowedHosts each exit 78, naming the cause. SIGTERM exits cleanly
+           within Docker's 10-second stop grace, with a shutdown line. resources/subscribe,
+           logging/setLevel and an invented method each give request-kind.
+      T-11 (G-12 - UC-11) Each defect, red before its fix and green after, with its variants. (1) The SDK
+           client fails today. After the fix, Resource=https://host/ exits 78, and both metadata locations
+           answer. (2) Host: attacker.example.com gets 200 today on a 0.0.0.0 bind, and also with
+           AllowedHosts=0.0.0.0. After the fix each of those exits 78, and once a real name is set the
+           attacker gets 400. (3) With ClientIdClaim=client_id, a Keycloak token that carries only azp is
+           accepted today and refused after the fix. ClientIdClaim=sub exits 78. (4) The metadata lists
+           the Authority today and the Issuer after the fix. An http Issuer starts today and exits 78
+           after. (5) A File sink at an index other than 1, pointed at an unwritable directory, writes
+           nothing and says nothing today. After the fix it exits 78, naming the resolved path.
+      T-12 (G-11) Every end-to-end test has a named sabotage and a recorded red that failed on its claim's
+           assertion, with the message kept. CI refuses to run with MCP_E2E_SABOTAGE set.
+      T-13 (G-1, 2, 3, 10 - UC-8, 12) Repository invariants.; McpServerTemplate.csproj has no
+           ProjectReference, and the E2E project references neither the product nor the test host.; The
+           Dockerfile has no test stage and copies no test material, and every image reference is pinned
+           by digest.; No product or test-host file reads MCP_E2E_*.; Nothing outside the fast suite
+           passes configureIdentityForTests.; No workflow pushes an image.; No key or certificate is
+           tracked by git or left behind after a run.
+      T-14 (G-14 - UC-1, 12) CI. The end-to-end job is green on push, within the recorded budget. No fast-
+           suite test has been removed, and the fast job's test step stays within 10 seconds of the 21 s
+           it takes today.
+      T-15 (G-16 - the bearing) An extension point works. A stand-in fake registered for one provider host
+           through the upstream registry receives the server's call.
+      T-16 (G-17 - UC-13) Adversarial rounds are recorded on the contract. The last round finds nothing
+           new, and every confirmed finding has a fix and a test.
+      untested: IPv6 networking (the network is IPv4; T-11 refuses the IPv6 wildcard forms at startup);
+      Docker Hub pull limits (until they bite; digest pins make a retry safe); a real person's browser login
+      at Keycloak (Phase 4 - T-4 proves the standard client's flow against the test issuer, not a real
+      provider's login screen); how the egress guard will treat the identity provider's own traffic (the
+      egress contract); the output cap on the image (the response caps disagree today - the egress contract
+      reconciles them and proves the cap on the image); per-address limiting from truly distinct source
+      addresses (the front stands in for many clients); contract-003's tampering matrix for the frame itself
+      (it needs a modified build, so it stays in the fast suite).
+      realigned: none - the pioneer gave no disappointment line that reads a guarantee differently.
+    red_test: null
+    approval: approved-at-gate
+    status: approved
+    verification_state: none
+    audited: false
+    file: docs/contracts/contract-005-shipped-image-under-test.html
+    artifact: https://claude.ai/artifact/TAR5LSeduC1EVKgYwSA58E
+    work_id: null
   - contract_id: contract-004
     feature: docs-and-comments-describe-the-server
     type: contract

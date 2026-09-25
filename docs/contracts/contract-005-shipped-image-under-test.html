@@ -1,0 +1,334 @@
+<title>Shipped Image Under Test</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --paper:#F2F4F1; --surface:#FFFFFF; --ink:#17201D; --muted:#5F706B;
+    --rule:#CFD8D4; --rule-strong:#AEBBB6;
+    --accent:#0E6B66; --accent-ink:#0B5551; --accent-soft:#DDEDEA; --on-accent:#FFFFFF;
+    --kept:#2F7D4F; --kept-soft:#E0F0E6;
+    --new:#B7791F; --new-soft:#F7ECD9;
+    --open:#B3352C; --open-soft:#F6E3E1;
+    --code-bg:#E3EAE7;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#141B18; --surface:#1C2522; --ink:#E6ECE9; --muted:#9AABA5;
+      --rule:#2B3733; --rule-strong:#3B4945;
+      --accent:#58C4BB; --accent-ink:#7FD6CE; --accent-soft:#1E3B38; --on-accent:#0B1512;
+      --kept:#6CC08B; --kept-soft:#1E3427;
+      --new:#E0AE5A; --new-soft:#3A2F1C;
+      --open:#E37A72; --open-soft:#3A2321;
+      --code-bg:#101614;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#141B18; --surface:#1C2522; --ink:#E6ECE9; --muted:#9AABA5;
+    --rule:#2B3733; --rule-strong:#3B4945;
+    --accent:#58C4BB; --accent-ink:#7FD6CE; --accent-soft:#1E3B38; --on-accent:#0B1512;
+    --kept:#6CC08B; --kept-soft:#1E3427;
+    --new:#E0AE5A; --new-soft:#3A2F1C;
+    --open:#E37A72; --open-soft:#3A2321;
+    --code-bg:#101614;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Source Sans 3", system-ui, "Segoe UI", sans-serif;
+    font-size:16.5px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:940px; margin:0 auto; padding-inline:24px; padding-block:32px 96px; }
+  h1,h2,h3 { font-family:"Archivo","Helvetica Neue",Arial,sans-serif; line-height:1.15; letter-spacing:-0.01em; text-wrap:balance; margin:0; }
+  h1 { font-size:40px; font-weight:800; }
+  h2 { font-size:24px; font-weight:700; margin-block:52px 12px; padding-top:22px; border-top:1px solid var(--rule-strong); }
+  h3 { font-size:16px; font-weight:700; margin-block:22px 8px; }
+  p { margin:0 0 12px; max-width:68ch; }
+  a { color:var(--accent-ink); }
+  code, .mono { font-family:"IBM Plex Mono","Cascadia Mono",Consolas,monospace; font-size:0.86em; }
+  code { background:var(--code-bg); padding:1px 5px; border-radius:3px; }
+  .num { font-variant-numeric:tabular-nums; }
+  .eyebrow { font-family:"IBM Plex Mono",monospace; font-size:12.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 10px; }
+  .lede { font-size:19px; line-height:1.45; max-width:60ch; margin-top:14px; }
+
+  .state { display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline;
+    margin-top:22px; padding:12px 16px; border-left:4px solid var(--kept); background:var(--kept-soft); }
+  .state b { font-weight:700; }
+  .state span { font-size:14.5px; }
+
+  .tally { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px; background:var(--rule);
+    border:1px solid var(--rule); margin-top:20px; }
+  .tally div { background:var(--surface); padding:12px 14px; }
+  .tally .v { font-family:"Archivo",sans-serif; font-weight:700; font-size:26px; line-height:1; font-variant-numeric:tabular-nums; }
+  .tally .k { font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--muted); margin-top:7px; }
+  .tally .hot .v { color:var(--open); }
+
+  blockquote { margin:0 0 12px; padding:10px 16px; border-left:3px solid var(--accent); background:var(--surface); font-size:15.5px; }
+  blockquote p { margin:0 0 8px; }
+  blockquote p:last-child { margin:0; }
+  blockquote cite { display:block; margin-top:8px; font-style:normal; font-size:13px; color:var(--muted); }
+
+  .table-wrap { overflow-x:auto; margin:12px 0 18px; }
+  table { border-collapse:collapse; width:100%; font-size:14.5px; }
+  th, td { text-align:left; vertical-align:top; padding:8px 12px 8px 0; border-bottom:1px solid var(--rule); }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--muted); border-bottom:1px solid var(--rule-strong); font-weight:600; }
+  td.id, th.id { font-family:"IBM Plex Mono",monospace; font-size:13px; white-space:nowrap; color:var(--accent-ink); }
+  td.holds { font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--muted); white-space:nowrap; }
+
+  .chip { display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:11.5px; padding:1px 7px; border-radius:3px; border:1px solid; white-space:nowrap; }
+  .chip.new { background:var(--new-soft); color:var(--new); border-color:var(--new); }
+  .chip.kept { background:var(--kept-soft); color:var(--kept); border-color:var(--kept); }
+  .chip.open { background:var(--open-soft); color:var(--open); border-color:var(--open); }
+
+  figure { margin:18px 0 8px; }
+  .fig-scroll { overflow-x:auto; }
+  figure svg { display:block; width:100%; min-width:620px; height:auto; color:var(--ink); }
+  figcaption { font-size:13px; color:var(--muted); padding-top:8px; max-width:78ch; }
+  .nd rect { fill:var(--surface); stroke:var(--rule-strong); stroke-width:1.25; }
+  .nd text { fill:currentColor; font:500 12.5px "Source Sans 3",system-ui,sans-serif; }
+  .nd .m { font-family:"IBM Plex Mono",monospace; font-size:11.5px; }
+  .nd.new rect { fill:var(--new-soft); stroke:var(--new); }
+  .nd.stop rect { fill:var(--open-soft); stroke:var(--open); }
+  .nd.good rect { fill:var(--kept-soft); stroke:var(--kept); }
+  .edge { fill:none; stroke:var(--muted); stroke-width:1.3; }
+  .edge.stop { stroke:var(--open); }
+  .elabel { fill:var(--muted); font:500 11px "Source Sans 3",sans-serif; }
+
+  .matrix td, .matrix th { text-align:center; padding:6px 4px; }
+  .matrix td:first-child, .matrix th:first-child { text-align:left; padding-right:10px; }
+  .matrix .hit { color:var(--accent-ink); font-weight:700; }
+  .matrix .dot { color:var(--rule-strong); }
+
+  ul { padding-left:20px; max-width:68ch; }
+  li { margin-bottom:6px; }
+  .gate { border:1px solid var(--rule-strong); border-radius:3px; background:var(--surface); padding:18px 20px; margin-top:16px; }
+  .gate h3 { margin-top:0; }
+  .foot { margin-top:44px; padding-top:18px; border-top:1px solid var(--rule-strong); font-size:13.5px; color:var(--muted); }
+  .foot b { color:var(--ink); }
+
+  @media (max-width:760px) {
+    .wrap { padding-inline:16px; }
+    h1 { font-size:30px; }
+    .tally { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
+</style>
+<style>
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:11.5px;padding:1px 7px;border-radius:3px}
+.chip.kept{background:var(--kept-soft);color:var(--kept)} .chip.new{background:var(--new-soft);color:var(--new)}
+.mat td,.mat th{text-align:center;padding:5px 6px;font-size:12.5px} .mat td:first-child{text-align:left}
+pre.tier{white-space:pre-wrap;background:var(--surface);border:1px solid var(--rule);padding:12px 14px;font-size:14px;font-family:"Source Sans 3",sans-serif}
+</style>
+<div class="wrap">
+<p class="eyebrow">contract-005 &middot; execution contract &middot; before Phase 2&rsquo;s outbound half</p>
+<h1>Shipped Image Under Test</h1>
+<p class="lede">No test has ever sent a token to the program that ships. This contract puts the real image on its own network, with a real identity provider, a TLS front, Redis and recording fakes, and proves the frame there.</p>
+<div class="state"><b>Approved at the gate, 2026-09-26.</b><span>Drawn and challenged 2026-09-25: five reviewers attacked the first draw, a second reader confirmed 34 findings, all folded in. The five choices below were approved as made. Status lives in the contract log; this page is the approved text.</span></div>
+<div class="tally">
+<div><div class="v">13</div><div class="k">use cases</div></div>
+<div><div class="v">17</div><div class="k">guardrails</div></div>
+<div><div class="v">16</div><div class="k">tests</div></div>
+<div><div class="v">4</div><div class="k">new projects</div></div>
+<div class="hot"><div class="v">0</div><div class="k">decisions open</div></div>
+</div>
+
+<h2>Direction</h2>
+<blockquote><p>After this contract, the thing that ships is the thing under test: the server image built from the repository&rsquo;s Dockerfile. It runs on its own network behind a TLS front, against a real identity provider over HTTPS, test issuers, Redis and recording fakes of its upstreams. The tests see it only as a client and an operator would: through its network edges, its logs and its exit codes. contract-003&rsquo;s end-to-end clauses run on it as written, and the five defects this environment found on arrival are fixed, each seen failing first. The bet is that four named extension points let egress, audit, guardrails, hardening and compliance each add their part without rebuilding the core: start a server with a settings delta, the upstream registry, the issuer registry and the network constant.</p></blockquote>
+
+<h2>What the pioneer locked</h2>
+<p>A clause that cannot be traced to one of these is wrong, not merely debatable.</p>
+<ul>
+<li><em>&ldquo;lets go for 1 test container&rdquo;</em>, read as one environment of several containers driven from the tests. I stated that reading and you did not contradict it.</li>
+<li><em>&ldquo;sure lets go for e2e first then egress.&rdquo;</em></li>
+<li>The MCP endpoint moves to <code>/mcp</code>.</li>
+<li>The five defects are fixed in this contract.</li>
+<li>The test-only server image is built now.</li>
+<li>contract-003 stays open, and its T-10 and T-3 run here as written.</li>
+<li><em>&ldquo;run both, but after the contract run adversarial agents and fix bugs and issues and rerun agents until its resolved.&rdquo;</em></li>
+</ul>
+<blockquote><p><b>At the gate:</b> &ldquo;pre mortem and guarantees are the same as before. Contract is approved.&rdquo;</p><p><b>Pre-mortem</b> (carried from contract-003): &ldquo;Pre mortem is if there are holes or security issues as a result of our work here.&rdquo;</p><p><b>Disappointment lines:</b> none given per guarantee; each guarantee is met as it says, and the pre-mortem stands for every guarantee.</p><cite>2026-09-26</cite></blockquote>
+<p>Precedent applied: your earlier redirection toward the robust shape when a narrowed test was offered. It is why no clause of contract-003 was dropped when it proved hard to run on the image.</p>
+
+<h2>What the challenge changed</h2>
+<p>Five reviewers each attacked the first draw from one angle: the fixes, the harness, containment, feasibility and evolution. A second reader tried to refute every finding against the code and the survey. 34 findings stood, and they fall into six groups.</p>
+<div class="table-wrap"><table><tr><th>Found</th><th>Why it did not hold</th><th>Now</th></tr>
+<tr><td>&ldquo;As written&rdquo; was not.</td><td>The draft ran two of contract-003&rsquo;s eight refusals, and the completion case could run nowhere in Production because the test host refused Production.</td><td>T-2 now lists all seven the shipped image can run. Completion runs on the test host in Production, and a table maps every clause to its test.</td></tr>
+<tr><td>The standard-client test could not pass.</td><td>The SDK client only does the authorization-code flow with PKCE. Nothing drawn could issue it a token, and nothing served https.</td><td>The test issuer gains an authorization-code endpoint, and an nginx front terminates TLS the way docs/04 tells operators to.</td></tr>
+<tr><td>Test-image containment could be walked round.</td><td>It refused only the name &ldquo;Production&rdquo;. Naming the environment &ldquo;Staging&rdquo; would have served the test-only tools with the transport guard off.</td><td>Containment now rests on identity: the test host serves only <code>.test</code> identity providers under any environment name. The product has no project references, and no workflow pushes an image.</td></tr>
+<tr><td>The fixes left variants open.</td><td>A wildcard allowed host, a Resource path free to drift, an http Issuer, a ClientIdClaim pointed at an always-present claim, and a log sink at another index.</td><td>Each variant now refuses at startup, and each has a red case in T-11.</td></tr>
+<tr><td>The harness could pass without proving anything.</td><td>A sabotage could go red at the wrong place. A zero-lookup check could run on a warm cache. A token-age refusal could hide the tampering refusals. &ldquo;Runs once&rdquo; had no witness across processes. The per-address limiter could throttle the tests themselves.</td><td>Sabotage must fail the claim&rsquo;s own assertion. Absence is checked on cold, active witnesses, and every refusal is checked for its own reason. The irreversible tool reports each run to the fake. There is one server per class, and the front stands in for many clients.</td></tr>
+<tr><td>Loose ends and one overclaim.</td><td>Tier 1 said &ldquo;every guarantee is proven on the image&rdquo;; moving tests could lose assertions; the docs profile could never accept a token; the budget had no number; the image hash had no defined inputs; the subnet claim predicted egress&rsquo;s decision; the extension points were never named.</td><td>A coverage table replaces the overclaim. Nothing moves from the fast suite. Trust additions are declared. The budget is measured first. <code>.dockerignore</code> defines the hash. The subnet is one constant. Four extension points are named, with a test.</td></tr>
+</table></div>
+<h3>Refused by the second reader (6)</h3>
+<ul><li>Expected sets taken from the image&rsquo;s own startup line are circular. Refused: the fast suite&rsquo;s rule matrices stay as the independent check.</li><li>The test host cannot run the program&rsquo;s own startup functions. Refused: nothing the test host is asked to prove depends on them.</li><li>The product suites would pass if run against the test image. Refused: T-6 would go red there.</li><li>The test host compiles the product separately. Refused: the lock files resolve the same versions, and no byte-identity is claimed.</li><li>docs/04&rsquo;s compose file names an image, not a host. Refused: tagging the run&rsquo;s build with that name keeps it verbatim.</li><li>The startup line as oracle hides removals. Refused: startup already refuses a policy with no tool behind it.</li></ul>
+
+<h2>Choices made at the draw, approved as made</h2>
+<p>None of these stopped the work. Each was made with its reason and put to the pioneer at the gate; the contract was approved with them.</p>
+<div class="table-wrap"><table><tr><th>Choice</th><th>Why</th></tr>
+<tr><td>The completion leg runs on the test host in Production.</td><td>You locked contract-003&rsquo;s tests &ldquo;as written&rdquo;, and the only other route was to record a departure from them. Refusing Production was also the weaker containment, so moving containment to identity closes both problems at once.</td></tr>
+<tr><td>ClientIdClaim is applied, not retired.</td><td>Identity providers name the client claim differently: Keycloak and Entra v2 use azp, Okta uses cid, Entra v1 uses appid. A fixed &ldquo;client_id or azp&rdquo; would refuse the others&rsquo; tokens outright. <i>This rests on my knowledge of those vendors&rsquo; token formats and was not checked this session.</i> The build&rsquo;s first step checks it, and if it is wrong I bring the choice back to you.</td></tr>
+<tr><td>The test issuer runs as its own container.</td><td>The same mechanism works on both platforms, with no SSH sidecar, and the walking skeleton proves it before anything depends on it.</td></tr>
+<tr><td>Nothing moves out of the fast suite.</td><td>Moving a test risks losing assertions, and no guarantee here needs the move. A later contract can retire duplicates, assertion by assertion.</td></tr>
+<tr><td>A real TLS front (nginx), not the test acting as proxy.</td><td>It is the deployment docs/04 describes, and it lets a test prove that forwarded headers from anywhere else are ignored.</td></tr>
+</table></div>
+
+<h2>Tier 1 &mdash; who it is for</h2>
+<pre class="tier">Who: the teams adopting and maintaining the template, an organisation's platform and security
+functions who deploy the image, and the pioneer judging whether the frame holds.
+What they want: to know that the artifact they deploy - not an in-process imitation - holds the
+frame against real clients, real tokens and real upstreams, and keeps holding it as phases add to it.
+Success: the guarantees in the coverage table below are proven on the image, and each one that is
+not is named there with its reason. A standard OAuth client connects to https://host/mcp as the docs
+say. The documented deployment runs as written. A defect in the running program fails a test before
+it ships.
+What it does not promise: that a real person's browser login works (Phase 4); how the egress guard
+will treat the identity provider's own traffic (the egress contract); IPv6 networking; a hardened
+image (Phase 6).
+Cost today: the shipped program has never accepted a token in a test; a standard OAuth client cannot
+connect as documented; five defects were invisible to all 262 tests.</pre>
+
+<h2>Tier 2 &mdash; use cases</h2>
+<div class="table-wrap"><table>
+<tr><td class="mono"><b>UC-1</b> <span class="chip new">challenge</span></td><td>Walking skeleton first. The image builds from the repository&rsquo;s Dockerfile, the environment starts, and one call with a real Keycloak token succeeds through the TLS front. This runs on Windows with Docker Desktop and on GitHub&rsquo;s runner, with a timing recorded for each phase, before any other end-to-end test is written. It also proves the mechanics later tests rely on: the test issuer is reachable by the same name from the server and from the test, the client&rsquo;s whole OAuth flow travels through the test&rsquo;s name map, and the front&rsquo;s forwarded address is honoured. Edge: faults in the environment rather than the product (Docker down, trust missing, clock skew, subnet taken, forwarded headers ignored) are reported naming their cause, never as a product failure.</td></tr>
+<tr><td class="mono"><b>UC-2</b> <span class="chip new">challenge</span></td><td>contract-003&rsquo;s T-10 on the artifact. The shipped image runs in Production with Redis and repeats every refusal from contract-003&rsquo;s T-3 and T-5: a hidden tool, another trust domain&rsquo;s resource, an unscoped prompt, an extra argument, a wrong type, an over-long string, NaN. Each is refused with its own rule, returns no result and reaches no upstream. The unscoped completion needs a provider that offers completion, so it runs on the test host, also in Production (UC-8).</td></tr>
+<tr><td class="mono"><b>UC-3</b> <span class="chip new">challenge</span></td><td>Token refusals on the artifact: no token (a 401 naming the metadata), wrong audience, expired, alg none, HS256, cross-signed, each required claim missing, and a write made with a token issued six minutes ago. An unregistered issuer is refused with zero key lookups at any issuer.</td></tr>
+<tr><td class="mono"><b>UC-4</b> <span class="chip new">challenge</span></td><td>A standard client connects. The SDK&rsquo;s OAuth client is given only <code>https://mcp.e2e.test/mcp</code>. From the 401 it discovers the authorization server, completes the authorization-code flow with PKCE, and calls a tool.</td></tr>
+<tr><td class="mono"><b>UC-5</b> <span class="chip kept">as drawn</span></td><td>Two trust domains. A provider bound to one identity provider is invisible to callers from the other, and each of its tools, resources and prompts refuses them.</td></tr>
+<tr><td class="mono"><b>UC-6</b> <span class="chip new">challenge</span></td><td>Upstreams. Every served tool reaches its fake at the real upstream host name over HTTPS. The fakes record every request. No upstream request carries the caller&rsquo;s token in any header, URL or body, and no request reaches the real internet.</td></tr>
+<tr><td class="mono"><b>UC-7</b> <span class="chip new">challenge</span></td><td>Limits on the artifact. Two server instances sharing Redis count one caller together. Another caller, and the same subject arriving from the other identity provider, are counted separately. The per-address limit throttles one address and not another. With Redis stopped, requests are refused.</td></tr>
+<tr><td class="mono"><b>UC-8</b> <span class="chip new">challenge</span></td><td>The test-only server image. The irreversible confirmation round-trip runs exactly once, and every tampering attempt is refused for its own reason. The frame&rsquo;s own completion refusal (contract-003&rsquo;s T-3) runs in Production with Redis. Whatever its environment name, the test image serves only identity providers under <code>.test</code>, and it never ships.</td></tr>
+<tr><td class="mono"><b>UC-9</b> <span class="chip new">challenge</span></td><td>The documented deployment runs as written. docs/04&rsquo;s production configuration starts, accepts a real token and lists tools. The only changes allowed are declared substitutions of host names and of test trust.</td></tr>
+<tr><td class="mono"><b>UC-10</b> <span class="chip new">challenge</span></td><td>The artifact starts and stops properly. Representative misconfigurations exit with code 78, naming the cause. SIGTERM stops it cleanly. Request kinds nobody governs are refused.</td></tr>
+<tr><td class="mono"><b>UC-11</b> <span class="chip new">challenge</span></td><td>The five defects are fixed, each seen failing on the artifact first, with no variant left open. (1) The endpoint and the resource disagree. (2) Host filtering is off on a wildcard bind or with a wildcard allowed host. (3) ClientIdClaim is never read. (4) The metadata publishes Authority instead of an https issuer. (5) A log sink writes nothing and says nothing.</td></tr>
+<tr><td class="mono"><b>UC-12</b> <span class="chip new">challenge</span></td><td>The fast suite stays fast and whole. End-to-end tests have their own project and CI job, and no fast-suite test is moved or removed.</td></tr>
+<tr><td class="mono"><b>UC-13</b> <span class="chip kept">as drawn</span></td><td>After the build, adversarial agents attack the finished work. Every confirmed bug or issue is fixed with a test, and the agents rerun until a round finds nothing new.</td></tr>
+</table></div>
+
+<h2>Tier 3 &mdash; guardrails</h2>
+<div class="table-wrap"><table>
+<tr><td class="mono"><b>G-1</b> <span class="chip new">challenge</span></td><td>(UC-1, 10, 11) A <code>Dockerfile</code> and a <code>.dockerignore</code> at the repository root; the ignore file excludes <code>**/bin</code>, <code>**/obj</code>, <code>**/logs</code>, <code>.claude/</code>, <code>.git</code> and <code>docs/</code>. The build is multi-stage. The SDK image matches global.json, the runtime is <code>aspnet:10.0-noble-chiseled</code>, and both are pinned by their multi-arch index digest. The container runs non-root (user 1654) with <code>WORKDIR /app</code> and a log directory the app user can write to. There is no test stage and no test material. Further hardening belongs to Phase 6.</td></tr>
+<tr><td class="mono"><b>G-2</b> <span class="chip kept">as drawn</span></td><td>(UC-2&ndash;11) A new project, <code>McpServerTemplate.E2E</code> (xUnit, in the solution, with its own lock file). It has no ProjectReference to the product or the test host, and sees them only through their network edges, logs and exit codes.</td></tr>
+<tr><td class="mono"><b>G-3</b> <span class="chip new">challenge</span></td><td>(UC-3&ndash;6) A new library, <code>McpServerTemplate.Testing</code>, holding the token minting: <code>TestIdentityProvider</code> moves here from the fast suite, and both suites use it. It also holds a test PKI generated when a run starts: one CA plus leaf certificates covering every host name the environment serves. The key material lives in a temporary directory outside the repository, is mounted read-only, and is deleted after the run. Nothing of it is committed.</td></tr>
+<tr><td class="mono"><b>G-4</b> <span class="chip new">challenge</span></td><td>(UC-1&ndash;10) One user-defined Docker network per run, with its IPv4 subnet a slice of <code>198.51.100.0/24</code>, held in one harness constant. The front and the proxies get static addresses. The slice lies outside P2.7&rsquo;s list as the roadmap states it today. Which ranges the egress guard blocks is the egress contract&rsquo;s decision, and no test-only relaxation of address checking is allowed.</td></tr>
+<tr><td class="mono"><b>G-5</b> <span class="chip new">challenge</span></td><td>(UC-1, 2, 5, 6, 7, 9) Keycloak 26.7.4, pinned by digest, run through the generic container builder in start mode. It serves HTTPS with a test-CA leaf, with its hostname pinned to <code>https://keycloak.e2e.test:8443</code>. One realm is imported, with a client-credentials client per test class, an audience mapper equal to <code>Authentication:Resource</code> and an explicit <code>basic</code> scope. It starts once per run and is shared by every test class.</td></tr>
+<tr><td class="mono"><b>G-6</b> <span class="chip new">challenge</span></td><td>(UC-2&ndash;5, 7) A test issuer: a test-only container built from <code>McpServerTemplate.TestIssuer</code> (a small web project over the Testing library). It sits on the network under two issuer names, <code>idp-a.e2e.test</code> and <code>idp-b.e2e.test</code>, and serves each one:<br>&bull; discovery and JWKS, counting every request per name<br>&bull; an authorization-code endpoint: RFC 8414 metadata advertising S256; an auto-approving <code>/authorize</code> that returns code, state and iss; a <code>/token</code> that checks PKCE and mints the audience from the <code>resource</code> parameter<br>&bull; an admin endpoint the test uses to mint tokens Keycloak will not (wrong audience, expired, alg none, HS256, cross-signed, missing claims, stale iat).<br>Its keys are generated when the container starts and never leave it. The test reaches it under the same names the server uses, through a name map in its HTTP client that validates TLS against the test CA. <i>Placement chosen:</i> its own container rather than a host port exposed into the network, so both platforms use the same mechanism and no SSH sidecar is needed.</td></tr>
+<tr><td class="mono"><b>G-7</b> <span class="chip new">challenge</span></td><td>(UC-2, 6, 8) Upstream fakes behind an <b>upstream registry</b>, in which each upstream host name belongs to exactly one container. One WireMock (<code>sheyenrath/wiremock.net-alpine</code>, pinned by digest) serves <code>opendata-download-metfcst.smhi.se</code>, <code>opendata-download-metobs.smhi.se</code> and <code>jsonplaceholder.typicode.com</code> over HTTPS with a test-CA leaf. It also answers on a neutral alias, <code>wiremock.e2e.test</code>. Its journal is read through its admin REST API with a plain HttpClient, with no WireMock client package.</td></tr>
+<tr><td class="mono"><b>G-8</b> <span class="chip new">challenge</span></td><td>(UC-1&ndash;11) The server under test.<br>&bull; <i>Build:</i> built with the Testcontainers Dockerfile builder, tagged by a hash of the whole build context as <code>.dockerignore</code> filters it, and reused only while that hash is unchanged. A revision label is checked against the checkout before any test runs.<br>&bull; <i>Configuration:</i> environment only, through one harness entry point, <b>start a server with a settings delta</b>. An unknown key in a delta fails the server&rsquo;s own startup check.<br>&bull; <i>Trust:</i> <code>SSL_CERT_FILE</code> and <code>SSL_CERT_DIR</code> both point at the test CA only, so a call to a host with no fake fails TLS instead of reaching the internet.<br>&bull; <i>Transport:</i> <code>BindAddress</code> is 0.0.0.0, <code>AllowedHosts</code> is <code>mcp.e2e.test</code> only, and <code>KnownProxies</code> is the front&rsquo;s address only.<br>&bull; <i>Running:</i> stderr is captured, and the server counts as ready when <code>/readyz</code> answers directly, not through the front. There is one server container per test class, so counts never leak between classes; UC-7 starts two.</td></tr>
+<tr><td class="mono"><b>G-9</b> <span class="chip new">challenge</span></td><td>(UC-1, 4, 7, 9, 11) A TLS front: nginx, pinned by digest, at a static address, holding a test-CA leaf for <code>mcp.e2e.test</code>. It terminates TLS, keeps the Host header, sets <code>X-Forwarded-Proto: https</code>, and sets <code>X-Forwarded-For</code> to the client address the test names in a test-only header. That header is a declared harness device standing for many clients behind one proxy, and the product trusts the address only because it arrives from <code>KnownProxies</code>. Every client-facing test dials <code>https://mcp.e2e.test</code> through the front.</td></tr>
+<tr><td class="mono"><b>G-10</b> <span class="chip new">challenge</span></td><td>(UC-8) The test host is a separate project, <code>McpServerTemplate.E2EHost</code>. It composes the public <code>AddHttpServer</code> and <code>UseHttpServer</code> with the built-in providers plus test modules, which are defined only there:<br>&bull; an irreversible tool whose every run sends one request carrying a unique marker to <code>wiremock.e2e.test</code>, a witness outside its own process<br>&bull; a prompt provider that offers completions.<br>It has its own image name (<code>mcp-e2e-testhost</code>) and a test-only label. <i>Containment does not depend on the environment name:</i> the test host refuses to start (exit code 78) unless <code>Authentication:Resource</code> and every identity provider&rsquo;s Authority and Issuer are hosts under <code>.test</code>, checked on the fully built configuration. It runs in Production with Redis, and it never passes <code>configureIdentityForTests</code>. The product project has no ProjectReference at all, and no workflow pushes any image.</td></tr>
+<tr><td class="mono"><b>G-11</b> <span class="chip new">challenge</span></td><td>(UC-2&ndash;11) Harness discipline.<br>&bull; <i>Sabotage:</i> every end-to-end test has a named sabotage that acts only in the E2E fixture (its inputs, container environment or network) and weakens one thing for one test. Its recorded red fails on the assertion that carries the test&rsquo;s claim, and the failure message is recorded with it. A red at a self-check, a positive control or startup does not count. CI fails if <code>MCP_E2E_SABOTAGE</code> is set.<br>&bull; <i>Absence:</i> asserting that nothing happened is legal only on a witness that recorded something earlier in the same test, and whose cache, if it has one, was cold when the absence was checked.<br>&bull; <i>Expected sets:</i> the served tools, resources, prompts and governed request kinds come from the image&rsquo;s own startup line, which gains the request kinds. The fast suite&rsquo;s rule matrices remain the independent check on that line.<br>&bull; <i>Self-checks:</i> the fixture&rsquo;s self-checks name the phase and the cause of an environment fault.</td></tr>
+<tr><td class="mono"><b>G-12</b> <span class="chip new">challenge</span></td><td>(UC-11) The five fixes. Each lands only after its end-to-end test has been seen red on the current code.<br>(1) MCP answers at <code>/mcp</code>. Startup refuses (78, naming <code>Authentication:Resource</code>) when the Resource&rsquo;s path, with a trailing slash trimmed, is not <code>/mcp</code>. The URL named in the challenge and RFC 9728&rsquo;s well-known location for that resource both answer with the same document. Docs and test constants are updated.<br>(2) Startup refuses (78, naming the key) when a non-loopback <code>BindAddress</code> has no <code>AllowedHosts</code>, or when any <code>AllowedHosts</code> entry is <code>*</code>, <code>0.0.0.0</code>, <code>[::]</code> or <code>::</code>. <code>HttpTransport</code> joins the sections the settings allowlist governs.<br>(3) ClientIdClaim is applied, so the claim it names is the one a token must carry. A value that is a registered JWT claim (iss, sub, aud, exp, nbf, iat, jti) or equals the provider&rsquo;s ScopeClaim refuses startup, because such a claim is always present or means something else and would switch the requirement off.<br>(4) <code>authorization_servers</code> lists each identity provider&rsquo;s Issuer. An Issuer must be an absolute https URI, the same rule as Authority, since clients are sent to it.<br>(5) Startup checks every File entry under <code>Serilog:WriteTo</code>, resolving its path the way the sink does, against the working directory, and refuses naming the resolved path if it cannot write there. Serilog&rsquo;s self-log goes to stderr, so a sink that fails later says so.</td></tr>
+<tr><td class="mono"><b>G-13</b> <span class="chip new">challenge</span></td><td>(UC-9) Docs profile: docs/04&rsquo;s production configuration and compose file run verbatim through a declared substitution table. The table has two kinds of row: host names and addresses (identity provider, resource, proxy), and test-trust additions (<code>SSL_CERT_*</code> and the read-only CA mount), each with its reason. For that run the image is tagged with the name the compose file uses.</td></tr>
+<tr><td class="mono"><b>G-14</b> <span class="chip new">challenge</span></td><td>(UC-1, 12) CI.<br>&bull; <i>Jobs:</i> a separate end-to-end job on ubuntu-latest, running in parallel with the fast job on every push. The fast job runs <code>McpServerTemplate.Tests</code> by project path.<br>&bull; <i>Budget:</i> the wall-clock budget is the walking skeleton&rsquo;s measured job time plus a stated margin, and counts the confirmation-expiry wait. It is recorded on the contract before T-2 onward are written. Exceeding it fails the job and puts reshaping to the pioneer.<br>&bull; <i>Failures:</i> a diagnostics bundle (container logs, journals, timings) is uploaded, and a hang timeout applies.</td></tr>
+<tr><td class="mono"><b>G-15</b> <span class="chip new">challenge</span></td><td>(UC-2, 8) Closing contract-003. Each clause of its T-3, T-5 and T-10 maps to the test that closes it (table below). T-10&rsquo;s first sentence (test server and program install the same frame) stays closed by the fast suite&rsquo;s existing comparison, which this contract does not move.</td></tr>
+<tr><td class="mono"><b>G-16</b> <span class="chip new">challenge</span></td><td>(UC-6; the bearing) Four named extension points, each one type in the harness: start a server with a settings delta; the upstream registry; the issuer registry; the network constant. Later contracts add through them. For example, egress puts a fault proxy in front of an upstream by registering it in place of the fake.</td></tr>
+<tr><td class="mono"><b>G-17</b> <span class="chip kept">as drawn</span></td><td>(UC-13) Adversarial rounds after the build, one lens each: the security of the fixes, the honesty of the harness, containment of the test image, flakiness on both platforms, and docs against behaviour. Confirmed findings are fixed with a test each. Rounds repeat until one finds nothing new, and every round&rsquo;s findings are recorded on the contract.</td></tr>
+</table></div>
+<p>Novel to the kit, so observations are due after the build: G-9 (a front that stands in for many clients), G-10 (containment by identity, not environment name), G-11 (sabotage must fail the claim&rsquo;s own assertion), G-16 (extension points named in the contract).</p>
+
+<h2>Tier 4 &mdash; acceptance tests</h2>
+<div class="table-wrap"><table>
+<tr><td class="mono"><b>T-1</b> <span class="chip new">challenge</span></td><td>(G-1, 4&ndash;9, 14 &middot; UC-1) <b>Walking skeleton.</b> The image builds, the environment starts, and one Keycloak-token <code>tools/list</code> through the front succeeds, with per-phase timings logged. It runs locally on Windows and in CI. It also proves the mechanics named in UC-1. <i>Fails if</i> any phase fails without naming its cause, or either platform is not run.</td></tr>
+<tr><td class="mono"><b>T-2</b> <span class="chip new">challenge</span></td><td>(G-8, 11, 15 &middot; UC-2) <b>contract-003&rsquo;s refusals on the shipped image</b>, in Production with Redis. The startup line reads <code>limits=Redis</code>, and each refusal carries its rule:<br>&bull; a hidden tool gives <code>insufficient_scope</code><br>&bull; another trust domain&rsquo;s resource gives <code>not-permitted</code><br>&bull; an unscoped prompt gives <code>not-permitted</code><br>&bull; an extra argument gives <code>extraneous-argument</code><br>&bull; <code>latitude=true</code> gives <code>argument-schema</code><br>&bull; a 513-character string gives <code>argument-length</code><br>&bull; <code>"NaN"</code> gives <code>not-a-number</code>.<br><i>Fails if</i> any refusal returns content, or the fake records a request for any of them after it recorded the permitted call made in the same test.</td></tr>
+<tr><td class="mono"><b>T-3</b> <span class="chip new">challenge</span></td><td>(G-6, 11 &middot; UC-3) <b>Token refusals on the image.</b> No token gives a 401 whose challenge names <code>https://mcp.e2e.test/</code>&hellip; metadata. Wrong audience, expired, alg none, HS256, cross-signed, and each of sub, jti, the client claim and iat missing: each gives a 401, with its reason in the log. A write tool called with a token issued six minutes ago gives <code>token-age</code>. <i>Unregistered issuer:</i> on a freshly started server whose issuers are both test issuers, the stranger&rsquo;s token is the first request. The test checks zero discovery and zero JWKS requests at every issuer name, then sees a registered token raise that issuer&rsquo;s counts from zero in the same test.</td></tr>
+<tr><td class="mono"><b>T-4</b> <span class="chip new">challenge</span></td><td>(G-6, 9, 12 &middot; UC-4) <b>A standard client connects.</b> The SDK client is given only <code>https://mcp.e2e.test/mcp</code>, with no extra headers. It discovers the authorization server, authorizes and calls a tool. <code>/authorize</code> and <code>/token</code> each saw exactly one request, carrying <code>resource=https://mcp.e2e.test/mcp</code> and S256. <i>Seen red</i> on the current code.</td></tr>
+<tr><td class="mono"><b>T-5</b> <span class="chip new">challenge</span></td><td>(G-5, 6 &middot; UC-5) <b>Two trust domains on the image.</b> A caller from the other issuer sees none of the bound provider&rsquo;s tools, resources or prompts in the lists. Calling, reading and getting each one is refused, in the same words as for an item that does not exist.</td></tr>
+<tr><td class="mono"><b>T-6</b> <span class="chip new">challenge</span></td><td>(G-7, 8, 11 &middot; UC-6) <b>Upstreams.</b> Every tool on the startup line is called once and seen at its fake; the forecast is called while its cache is cold, as the first SMHI call on a fresh server. No journal entry anywhere in the run contains the caller&rsquo;s token in any header, URL or body. With one fake&rsquo;s alias removed, that tool&rsquo;s call fails TLS and nothing reaches the internet.</td></tr>
+<tr><td class="mono"><b>T-7</b> <span class="chip new">challenge</span></td><td>(G-8, 9 &middot; UC-7) <b>Limits on the image.</b> Two servers share Redis, with <code>Limits:PerPrincipalPerMinute</code> set below the tool limits and the per-address 60, and the value stated in the test. One caller&rsquo;s count carries across both servers and is refused with <code>caller-rate</code>. Another caller, and the same subject from the other issuer, still pass. One forwarded address gets 429 on its 61st request in a window while another gets 200. With Redis stopped, requests are refused with <code>limits-unavailable</code>.</td></tr>
+<tr><td class="mono"><b>T-8</b> <span class="chip new">challenge</span></td><td>(G-10, 15 &middot; UC-8) <b>The test host</b>, in Production with Redis.<br>&bull; <i>Confirmation:</i> after five tampering attempts (a replay, other arguments, an altered confirmation, an expired one waited out past 120 s, another caller), each refused with its own reason on a token issued under 60 s earlier, the witness shows exactly one run.<br>&bull; <i>Completion:</i> an unscoped completion is refused with <code>not-permitted</code> and no result, and the matching refusal appears on stderr.<br>&bull; <i>Containment:</i> the test host exits 78 when given a non-<code>.test</code> authority, both under Production and under Staging.<br>&bull; <i>Same frame:</i> its whole <code>Frame installed</code> line equals the shipped image&rsquo;s, except that <code>providers=</code> adds only the test modules and the manifest adds only their lines. Both lines read <code>limits=Redis</code>.</td></tr>
+<tr><td class="mono"><b>T-9</b> <span class="chip new">challenge</span></td><td>(G-13 &middot; UC-9) <b>The docs profile</b> starts, accepts a real token and lists tools. <i>Seen red</i> against the documents as they stand when the fixes land; the documents are then corrected until the test passes.</td></tr>
+<tr><td class="mono"><b>T-10</b> <span class="chip new">challenge</span></td><td>(G-1, 8 &middot; UC-10) <b>Startup and shutdown.</b> An unknown setting, Production without Redis, an http Authority and a missing AllowedHosts each exit 78, naming the cause. SIGTERM exits cleanly within Docker&rsquo;s 10-second stop grace, with a shutdown line. <code>resources/subscribe</code>, <code>logging/setLevel</code> and an invented method each give <code>request-kind</code>.</td></tr>
+<tr><td class="mono"><b>T-11</b> <span class="chip new">challenge</span></td><td>(G-12 &middot; UC-11) <b>Each defect, red before its fix and green after, with its variants.</b><br>(1) The SDK client fails today. After the fix, <code>Resource=https://host/</code> exits 78, and both metadata locations answer.<br>(2) <code>Host: attacker.example.com</code> gets 200 today on a 0.0.0.0 bind, and also with <code>AllowedHosts=0.0.0.0</code>. After the fix each of those exits 78, and once a real name is set the attacker gets 400.<br>(3) With <code>ClientIdClaim=client_id</code>, a Keycloak token that carries only azp is accepted today and refused after the fix. <code>ClientIdClaim=sub</code> exits 78.<br>(4) The metadata lists the Authority today and the Issuer after the fix. An http Issuer starts today and exits 78 after.<br>(5) A File sink at an index other than 1, pointed at an unwritable directory, writes nothing and says nothing today. After the fix it exits 78, naming the resolved path.</td></tr>
+<tr><td class="mono"><b>T-12</b> <span class="chip new">challenge</span></td><td>(G-11) <b>Every end-to-end test has a named sabotage</b> and a recorded red that failed on its claim&rsquo;s assertion, with the message kept. CI refuses to run with <code>MCP_E2E_SABOTAGE</code> set.</td></tr>
+<tr><td class="mono"><b>T-13</b> <span class="chip new">challenge</span></td><td>(G-1, 2, 3, 10 &middot; UC-8, 12) <b>Repository invariants.</b><br>&bull; <code>McpServerTemplate.csproj</code> has no ProjectReference, and the E2E project references neither the product nor the test host.<br>&bull; The Dockerfile has no test stage and copies no test material, and every image reference is pinned by digest.<br>&bull; No product or test-host file reads <code>MCP_E2E_*</code>.<br>&bull; Nothing outside the fast suite passes <code>configureIdentityForTests</code>.<br>&bull; No workflow pushes an image.<br>&bull; No key or certificate is tracked by git or left behind after a run.</td></tr>
+<tr><td class="mono"><b>T-14</b> <span class="chip new">challenge</span></td><td>(G-14 &middot; UC-1, 12) <b>CI.</b> The end-to-end job is green on push, within the recorded budget. No fast-suite test has been removed, and the fast job&rsquo;s test step stays within 10 seconds of the 21 s it takes today.</td></tr>
+<tr><td class="mono"><b>T-15</b> <span class="chip new">challenge</span></td><td>(G-16 &middot; the bearing) <b>An extension point works.</b> A stand-in fake registered for one provider host through the upstream registry receives the server&rsquo;s call.</td></tr>
+<tr><td class="mono"><b>T-16</b> <span class="chip kept">as drawn</span></td><td>(G-17 &middot; UC-13) <b>Adversarial rounds</b> are recorded on the contract. The last round finds nothing new, and every confirmed finding has a fix and a test.</td></tr>
+</table></div>
+<pre class="tier">untested: IPv6 networking (the network is IPv4; T-11 refuses the IPv6 wildcard forms at startup);
+Docker Hub pull limits (until they bite; digest pins make a retry safe); a real person&#x27;s browser login
+at Keycloak (Phase 4 - T-4 proves the standard client&#x27;s flow against the test issuer, not a real
+provider&#x27;s login screen); how the egress guard will treat the identity provider&#x27;s own traffic (the
+egress contract); the output cap on the image (the response caps disagree today - the egress contract
+reconciles them and proves the cap on the image); per-address limiting from truly distinct source
+addresses (the front stands in for many clients); contract-003&#x27;s tampering matrix for the frame itself
+(it needs a modified build, so it stays in the fast suite).
+realigned: none - the pioneer gave no disappointment line that reads a guarantee differently.</pre>
+
+<h2>What the image proves, and what stays in the fast suite</h2>
+<div class="table-wrap"><table><tr><th>Guarantee</th><th>Test</th><th>Where</th></tr>
+<tr><td>Who may reach what: scope, trust-domain binding, list filters</td><td>T-2, T-5</td><td>on the image</td></tr>
+<tr><td>Request kinds nobody governs are refused</td><td>T-10</td><td>on the image</td></tr>
+<tr><td>Argument guard: extra, wrong type, over-long, NaN</td><td>T-2</td><td>on the image</td></tr>
+<tr><td>Write freshness (token issued within 5 min)</td><td>T-3</td><td>on the image</td></tr>
+<tr><td>Irreversible gate: 60 s token, single-use confirmation</td><td>T-8</td><td>test host, Production</td></tr>
+<tr><td>Unscoped completion refused by the frame&rsquo;s own rule</td><td>T-8</td><td>test host, Production</td></tr>
+<tr><td>Limits in Redis across instances; fail closed</td><td>T-7</td><td>on the image</td></tr>
+<tr><td>Startup refusals for bad policy and settings</td><td>T-10 (representative)</td><td>full matrix stays in the fast suite</td></tr>
+<tr><td>Same frame in test server and program (T-10, first sentence)</td><td>existing fast-suite comparison</td><td>not moved</td></tr>
+<tr><td>Frame integrity against a tampered build</td><td>&mdash;</td><td>fast suite only: it needs a modified build</td></tr>
+<tr><td>Output cap</td><td>&mdash;</td><td>fast suite only until the egress contract reconciles the caps</td></tr>
+</table></div>
+
+<h2>Closing contract-003</h2>
+<div class="table-wrap"><table><tr><th>Its test</th><th>Clause</th><th>Closed by</th></tr>
+<tr><td>T-3</td><td>Hidden tool called</td><td>T-2</td></tr>
+<tr><td>T-3</td><td>Wrong-idp resource read</td><td>T-2</td></tr>
+<tr><td>T-3</td><td>Unscoped prompt</td><td>T-2</td></tr>
+<tr><td>T-3</td><td>Unscoped completion, refused with its own rule</td><td>T-8 (the SDK answers first where no provider offers completion)</td></tr>
+<tr><td>T-5</td><td>Extra argument, wrong type, over-long string, NaN; zero upstream requests</td><td>T-2</td></tr>
+<tr><td>T-10</td><td>Test server and program install the same frame</td><td>existing fast-suite test, kept</td></tr>
+<tr><td>T-10</td><td>A real Production process with Redis repeats T-3&rsquo;s and T-5&rsquo;s refusals</td><td>T-2 and T-8, both in Production with Redis</td></tr>
+</table></div>
+
+<h2>Every magnitude and where it came from</h2>
+<div class="table-wrap"><table><tr><th>Quantity</th><th>Value</th><th>Source</th></tr>
+<tr><td>Test subnet</td><td>198.51.100.0/24 slices</td><td>RFC 5737 documentation range; spike on this machine (Docker defaults fall in ranges P2.7 blocks)</td></tr>
+<tr><td>Keycloak</td><td>26.7.4</td><td>Survey spike, verified here</td></tr>
+<tr><td>Keycloak start time</td><td>18&ndash;51 s</td><td>Survey measurements (first run 18.5 s; later 42&ndash;50 s)</td></tr>
+<tr><td>Per-address limit</td><td>60 per minute</td><td>HttpServerComposition.cs, existing</td></tr>
+<tr><td>Write / irreversible token age</td><td>5 min / 60 s</td><td>contract-003</td></tr>
+<tr><td>Confirmation lifetime</td><td>120 s</td><td>contract-003 T-7</td></tr>
+<tr><td>Longest string argument</td><td>512 characters</td><td>Policy default, contract-003</td></tr>
+<tr><td>Stop grace</td><td>10 s</td><td>Docker&rsquo;s default for <code>docker stop</code> before it kills</td></tr>
+<tr><td>CI budget</td><td>measured, then recorded</td><td>The walking skeleton&rsquo;s job time plus a stated margin; not estimated</td></tr>
+<tr><td>Fast test step</td><td>21 s &plusmn; 10 s</td><td>CI today; the margin is my choice and you can overturn it</td></tr>
+</table></div>
+
+<h2>Traceability</h2>
+<p>Use cases against the guardrails that hold them. No row and no column is empty.</p>
+<div class="table-wrap"><table class="mat"><tr><th></th><th class="mono">G-1</th><th class="mono">G-2</th><th class="mono">G-3</th><th class="mono">G-4</th><th class="mono">G-5</th><th class="mono">G-6</th><th class="mono">G-7</th><th class="mono">G-8</th><th class="mono">G-9</th><th class="mono">G-10</th><th class="mono">G-11</th><th class="mono">G-12</th><th class="mono">G-13</th><th class="mono">G-14</th><th class="mono">G-15</th><th class="mono">G-16</th><th class="mono">G-17</th></tr>
+<tr><td class="mono">UC-1</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-2</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-3</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-4</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-5</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-6</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-7</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-8</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-9</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-10</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-11</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-12</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td></tr>
+<tr><td class="mono">UC-13</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="dot">&middot;</td><td class="hit">&bull;</td></tr>
+</table></div>
+
+<h2>Boundaries</h2>
+<ul>
+<li>Handed to the egress contract: a POST retried three times on a 500; redirects followed to another host; body reads that outlive their timeouts; the P2.7 range list&rsquo;s gaps (0.0.0.0/8, ::ffff:0:0/96, 100.64/10 and others); response caps that disagree with policy; how the guard treats the identity provider&rsquo;s own traffic; provider concurrency and daily budget. WireMock cannot drive the Content-Length branch of P2.8, so that fake comes in through the upstream registry.</li>
+<li>Audit records (Phase 3), a real browser login and suspension (Phase 4), image hardening, scanning and signing (Phases 5&ndash;6) add through the extension points. None is built here.</li>
+<li>The test images are never pushed anywhere.</li>
+</ul>
+
+<h2>The gate</h2>
+<div class="gate">
+<h3>What the gate asked</h3>
+<p><b>Disappointment:</b> for any guarantee, what result would make you say it was not met? &ldquo;Same as it says&rdquo; is an answer.</p>
+<p><b>Pre-mortem:</b> imagine this contract built and passing, and the frame still failing somewhere later. What went wrong? At the last gate you said: <em>&ldquo;Pre mortem is if there are holes or security issues as a result of our work here.&rdquo;</em> If that stands for this contract too, say so.</p>
+<p><b>Approval</b> authorises building exactly these clauses. A deviation found in flight stops the work and comes to you. After the build, one guarantee is broken on purpose and the test that goes red is recorded before the contract reads implemented; then the adversarial rounds run until one finds nothing new.</p>
+</div>
+
+<h2>Verified this session</h2>
+<p>The survey workflow&rsquo;s spike ran on this machine: Keycloak 26.7.4 tokens accepted over HTTPS by the unmodified server in the aspnet image, the subnet, and the five defects reproduced. For this redraw I re-read the client-claim check (IdentityRegistration.cs), the identity binder&rsquo;s Authority, Issuer and ClientIdClaim rules, host filtering, the per-address limiter and endpoint mapping (HttpServerComposition.cs), the rule names in RequestGate and ArgumentGuard, contract-003&rsquo;s Tier 3 and Tier 4, the transport settings the code reads, and xUnit 2.9.3. <b>No code has changed.</b> Drawing cost so far: challenge workflow 10 agents, 1,866,590 subagent tokens, 24.8 minutes; the survey workflow&rsquo;s cost is recorded from its run log at approval.</p>
+</div>

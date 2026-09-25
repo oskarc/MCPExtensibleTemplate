@@ -1065,6 +1065,35 @@ corrections:
     clerk_note: null
 
 
+  - corr_id: C-033
+    date: 2026-09-25
+    contract_id: null
+    moment: M-05
+    grade: option-override
+    intervention: redirected
+    agent_offered: |
+      Keep it open, run both as written (Recommended): This contract runs T-10 exactly as you
+      approved it, on the real program with real tokens, and T-3 with the frame's own check reached
+      through a test provider that offers completions. Then the frame contract is verified and
+      closed as promised.
+    pioneer_said: |
+      run both, but after the contract run adversarial agents and fix bugs and issues and rerun
+      agents until its resolved.
+    reason_given: |
+      none given
+    noticed: |
+      asked 2026-09-25, awaiting answer
+    would_have_been_right: |
+      asked 2026-09-25, awaiting answer
+    seen_before: |
+      asked 2026-09-25, awaiting answer
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+
+
 trajectory:
   updated: 2026-09-25
   by_contract:
