@@ -835,6 +835,31 @@ precedents:
     overruled_by: null
     check: "not checkable — judging whether a batch item's presentation carries commentary beyond the statement and question is content judgement, not a fixed shape a script could verify"
 
+  - prec_id: P-032
+    date: 2026-09-25
+    from: [C-032, contract-003]
+    moments: [M-06]
+    tier: project
+    facts: |
+      At contract-003's approval gate (M-06), the agent put two narrowed test changes for
+      approval: T-10, changed from a real Production-configuration process repeating T-3's and
+      T-5's refusals to instead comparing the logged frame manifest against the tested server's
+      and running the real program over stdio with Redis; T-3, changed from the frame's own
+      completion rule refusing an unscoped completion to "refused, nothing returned", with the
+      rule untested by a request until a provider offers completion.
+    question: |
+      Whether to approve the narrowed test changes as offered, or redirect the testing approach.
+    holding: |
+      Approved the contract, but redirected testing toward a more robust shape: think about
+      end-to-end testing, using test containers, or think further here — testing is central.
+    reasons: |
+      testing is central
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — the holding asks for a robustness direction (end-to-end testing, test containers, or further thought) rather than naming a fixed shape, log line, file, or pattern a script could verify"
+
 scenarios:
   - card_id: S-001
     date: 2026-09-17
@@ -1143,6 +1168,36 @@ scenarios:
     pioneer_ranking: declined
     rationale: |
       The order is not important as long as only the candidates and cards with HIGH certainty are the only ones showed.
+    dissent: ""
+
+  - card_id: S-014
+    date: 2026-09-25
+    from: [C-032]
+    moment: M-06
+    situation: |
+      At contract-003's approval gate (M-06), the agent put two test changes for approval: T-10
+      promised that a real server process in Production configuration repeats T-3's and T-5's
+      refusals; offered instead, the real Production process's logged frame manifest must equal
+      the tested server's, and the real program over stdio with Redis repeats the refusals. T-3
+      promised the frame's own completion rule refuses an unscoped completion; offered instead,
+      "refused, nothing returned", with the frame's rule untested by a request until a provider
+      offers completion.
+    options:
+      - key: A
+        text: |
+          Two test changes, put for approval: T-10 promised that a real server process in
+          Production configuration repeats T-3's and T-5's refusals; offered instead, the real
+          Production process's logged frame manifest must equal the tested server's, and the
+          real program over stdio with Redis repeats the refusals. T-3 promised the frame's own
+          completion rule refuses an unscoped completion; offered instead, "refused, nothing
+          returned", with the frame's rule untested by a request until a provider offers
+          completion.
+      - key: B
+        text: |
+          Its approved, regarding testing i want us to thing about E2E testing, we can use test
+          containers or think further here, testing is central.
+    pioneer_ranking: pending
+    rationale: ""
     dissent: ""
 
 reconstruction_tests: []

@@ -1050,20 +1050,23 @@ corrections:
     reason_given: |
       testing is central
     noticed: |
-      asked 2026-09-24, awaiting answer
+      i felt we didnt go for a robust enough direction, too narrow in the shape.
     would_have_been_right: |
-      asked 2026-09-24, awaiting answer
+      Look at how good development is done, what parts belong at what time to have a consistent
+      evolution. Compleixty always increase as a project moves forward and its important to see
+      when new supportive additions are healthy.
     seen_before: |
-      asked 2026-09-24, awaiting answer
+      This is standard, when the developer is junior or feel preassure to reach the end fast they
+      get sloppy and forget why they are even doing it, they just want to finish.
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-032"
     clerk_note: null
 
 
 trajectory:
-  updated: 2026-09-22
+  updated: 2026-09-25
   by_contract:
     - contract_id: null
       corrections: 13
@@ -1077,4 +1080,8 @@ trajectory:
       corrections: 14
       bearing_reevaluations: 0
       interventions: {did-it: 0, redirected: 14, hinted: 0, reviewed-after: 0}
-  moments: {M-27: 3, M-07: 1, M-15: 1, M-14: 1, M-04: 3, M-12: 6, M-03: 4, M-06: 1, M-25: 1, M-24: 1, M-28: 1, M-16: 6, M-01: 1, M-09: 1}
+    - contract_id: contract-003
+      corrections: 1
+      bearing_reevaluations: 0
+      interventions: {did-it: 0, redirected: 0, hinted: 1, reviewed-after: 0}
+  moments: {M-27: 3, M-07: 1, M-15: 1, M-14: 1, M-04: 3, M-12: 6, M-03: 4, M-06: 2, M-25: 1, M-24: 1, M-28: 1, M-16: 6, M-01: 1, M-09: 1}

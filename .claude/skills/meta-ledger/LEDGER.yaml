@@ -1951,6 +1951,23 @@ observations:
     consolidated: false
     stewarded: n/a
 
+  - obs_id: O-073
+    date: 2026-09-25
+    source: pioneer
+    contract_id: contract-003
+    refs: [C-032]
+    statement: |
+      M-06
+
+      Its approved, regarding testing i want us to thing about E2E testing, we can use test
+      containers or think further here, testing is central.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    stewarded: n/a
+
 
 candidates:
   - cand_id: K-001
