@@ -1196,8 +1196,10 @@ scenarios:
         text: |
           Its approved, regarding testing i want us to thing about E2E testing, we can use test
           containers or think further here, testing is central.
-    pioneer_ranking: pending
-    rationale: ""
+    pioneer_ranking: [B]
+    rationale: |
+      B, what you asked for approval on told me we needed to raise the bar. You were narrowing,
+      i went with broadening and closing a gap we hadnt closed.
     dissent: ""
 
 reconstruction_tests: []

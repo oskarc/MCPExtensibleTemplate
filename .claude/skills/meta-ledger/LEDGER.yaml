@@ -4075,6 +4075,13 @@ batches:
     decided: true
     revealed: true
     represented: []
+  - batch_id: B-003
+    date: 2026-09-26
+    file: meta-ledger/batches/B-003.md
+    items: 1
+    decided: true
+    revealed: true
+    represented: []
 
 map_proposals: []
 
