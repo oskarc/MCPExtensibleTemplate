@@ -65,11 +65,13 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
 
-    # BUDGET PLACEHOLDER — contract-005 · G-14: the wall-clock budget is the walking skeleton's
-    # measured job time plus a stated margin, and it counts the confirmation-expiry wait. It is
-    # recorded on the contract before T-2 onward are written; until a run on this runner has been
-    # measured, this number is a placeholder, not a budget. Exceeding it fails the job.
-    timeout-minutes: 30
+    # contract-005 · G-14 — the wall-clock budget. The walking skeleton's job, measured on this runner
+    # (run 36256722454, 2026-09-26, cold: image builds, pulls and Keycloak), took 1 min 47 s. Add the
+    # confirmation-expiry wait T-8 must sit out (121 s), and a stated margin of three times the measured
+    # job (5 min 21 s) for the test classes still to come, each with its own server: 9 min 09 s, set at
+    # 10. Exceeding it fails the job, and reshaping the suite is put to the pioneer rather than the
+    # number raised quietly.
+    timeout-minutes: 10
 
     steps:
       - name: Check out
@@ -86,8 +88,9 @@ jobs:
       - name: Build (warnings are errors)
         run: dotnet build McpServerTemplate.sln --no-restore --configuration Release -warnaserror
 
-      # The first test starts the shared environment, cold: image builds, pulls and Keycloak. The hang
-      # timeout is per test, so it must cover that start; a test that exceeds it is named and killed
+      # The first test starts the shared environment, cold: image builds, pulls and Keycloak (about a
+      # minute here). The hang timeout is per test, so it must cover that start and sit well inside the
+      # job's budget; a test that exceeds it is named and killed
       # rather than holding the job until the budget runs out. No dump is taken (contract-005 · T-13,
       # nothing left behind): a dump of the test process would hold the run's Keycloak client secrets
       # and minted tokens, and would be uploaded with the bundle below for 14 days.
@@ -96,7 +99,7 @@ jobs:
           dotnet test McpServerTemplate.E2E/McpServerTemplate.E2E.csproj --no-build --configuration Release
           --logger "console;verbosity=detailed" --logger "trx;LogFileName=e2e.trx"
           --results-directory TestResults
-          --blame-hang --blame-hang-timeout 15m --blame-hang-dump-type none
+          --blame-hang --blame-hang-timeout 5m --blame-hang-dump-type none
 
       # The diagnostics bundle: every container's log, the fake's journal, the issuers' counts and the
       # per-phase timings (written by the harness under TestResults/e2e/), with the trx.
