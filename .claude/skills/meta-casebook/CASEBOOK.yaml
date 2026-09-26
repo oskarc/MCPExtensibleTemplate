@@ -860,6 +860,29 @@ precedents:
     overruled_by: null
     check: "not checkable — the holding asks for a robustness direction (end-to-end testing, test containers, or further thought) rather than naming a fixed shape, log line, file, or pattern a script could verify"
 
+  - prec_id: P-033
+    date: 2026-09-25
+    from: [C-033]
+    moments: [M-05]
+    tier: project
+    facts: |
+      At contract-005's spec lock (M-05), with contract-003's T-10 and T-3 already set to run as
+      approved on the real program, the agent offered to keep the work open only long enough to
+      run both tests as written, then close the contract as verified once they passed.
+    question: |
+      Whether the contract closes as verified once the two named tests run as approved, or the
+      work continues further before it is considered resolved.
+    holding: |
+      Run both as written, but after the contract, run adversarial agents and fix bugs and
+      issues, and rerun agents until it's resolved.
+    reasons: |
+      none given
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — the holding asks for adversarial rounds to continue until resolved, a judgement about when a round has found nothing new and issues are fixed, not a fixed shape, log line or file a script can verify"
+
 scenarios:
   - card_id: S-001
     date: 2026-09-17
@@ -1200,6 +1223,29 @@ scenarios:
     rationale: |
       B, what you asked for approval on told me we needed to raise the bar. You were narrowing,
       i went with broadening and closing a gap we hadnt closed.
+    dissent: ""
+
+  - card_id: S-015
+    date: 2026-09-25
+    from: [C-033]
+    moment: M-05
+    situation: |
+      At contract-005's spec lock (M-05), with contract-003's T-10 and T-3 already set to run as
+      approved on the real program, the agent set out whether the contract closes as verified
+      once those two tests pass, or the work continues further first.
+    options:
+      - key: A
+        text: |
+          Keep it open, run both as written (Recommended): This contract runs T-10 exactly as
+          you approved it, on the real program with real tokens, and T-3 with the frame's own
+          check reached through a test provider that offers completions. Then the frame contract
+          is verified and closed as promised.
+      - key: B
+        text: |
+          run both, but after the contract run adversarial agents and fix bugs and issues and
+          rerun agents until its resolved.
+    pioneer_ranking: pending
+    rationale: ""
     dissent: ""
 
 reconstruction_tests: []

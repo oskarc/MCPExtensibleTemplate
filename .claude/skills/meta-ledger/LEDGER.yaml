@@ -1968,6 +1968,24 @@ observations:
     consolidated: false
     stewarded: n/a
 
+  - obs_id: O-074
+    date: 2026-09-26
+    source: pioneer
+    contract_id: null
+    refs: [C-033]
+    statement: |
+      M-05
+
+      run both, but after the contract run adversarial agents and fix bugs and issues and
+      rerun agents until its resolved.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
 
 candidates:
   - cand_id: K-001
