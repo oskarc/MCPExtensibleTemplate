@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- contract-005 · G-3 — what both test suites share: token minting and the test PKI. It has no
+       ProjectReference to the product, so nothing that uses it can reach the product through it. The
+       token library is the version the product resolves (McpServerTemplate/packages.lock.json), so
+       the fast suite sees one copy of it. -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.2" />
+  </ItemGroup>
+
+</Project>

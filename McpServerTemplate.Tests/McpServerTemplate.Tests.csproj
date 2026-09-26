@@ -14,10 +14,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\McpServerTemplate\McpServerTemplate.csproj" />
+    <!-- contract-005 · G-3 — token minting lives in the library both suites share. -->
+    <ProjectReference Include="..\McpServerTemplate.Testing\McpServerTemplate.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="McpServerTemplate.Testing" />
   </ItemGroup>
 
 </Project>

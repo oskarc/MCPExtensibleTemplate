@@ -730,6 +730,12 @@
           "Serilog.Sinks.File": "[6.0.0, )",
           "StackExchange.Redis": "[3.3.1, )"
         }
+      },
+      "mcpservertemplate.testing": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.IdentityModel.JsonWebTokens": "[8.19.2, )"
+        }
       }
     }
   }

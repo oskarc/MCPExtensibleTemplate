@@ -39,8 +39,10 @@ jobs:
       - name: Build (warnings are errors)
         run: dotnet build McpServerTemplate.sln --no-restore --configuration Release -warnaserror
 
+      # contract-005 · G-14 — the fast suite by project path, so the end-to-end suite (its own job
+      # below) never runs here and this step stays as fast as it was.
       - name: Test
-        run: dotnet test McpServerTemplate.sln --no-build --configuration Release --verbosity normal
+        run: dotnet test McpServerTemplate.Tests/McpServerTemplate.Tests.csproj --no-build --configuration Release --verbosity normal
 
       # Direct and transitive. NuGetAudit already fails the build through warnings-as-errors;
       # this step states the finding plainly rather than leaving it in build output.
@@ -55,3 +57,51 @@ jobs:
 
       - name: Secret scan
         run: bash scripts/secret-scan.sh
+
+  # contract-005 · G-14 — the end-to-end suite: the server image built from the repository's
+  # Dockerfile, on its own network with Keycloak, the test issuer, the upstream fake, Redis and the
+  # TLS front (McpServerTemplate.E2E). A separate job on every push, running beside the fast one
+  # rather than after it, so neither waits for the other. No step pushes any image.
+  e2e:
+    runs-on: ubuntu-latest
+
+    # BUDGET PLACEHOLDER — contract-005 · G-14: the wall-clock budget is the walking skeleton's
+    # measured job time plus a stated margin, and it counts the confirmation-expiry wait. It is
+    # recorded on the contract before T-2 onward are written; until a run on this runner has been
+    # measured, this number is a placeholder, not a budget. Exceeding it fails the job.
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore (locked)
+        run: dotnet restore McpServerTemplate.sln --locked-mode
+
+      - name: Build (warnings are errors)
+        run: dotnet build McpServerTemplate.sln --no-restore --configuration Release -warnaserror
+
+      # The first test starts the shared environment, cold: image builds, pulls and Keycloak. The hang
+      # timeout is per test, so it must cover that start; a test that exceeds it is dumped and killed
+      # rather than holding the job until the budget runs out.
+      - name: End-to-end tests
+        run: >-
+          dotnet test McpServerTemplate.E2E/McpServerTemplate.E2E.csproj --no-build --configuration Release
+          --logger "console;verbosity=detailed" --logger "trx;LogFileName=e2e.trx"
+          --results-directory TestResults
+          --blame-hang --blame-hang-timeout 15m
+
+      # The diagnostics bundle: every container's log, the fake's journal, the issuers' counts and the
+      # per-phase timings (written by the harness under TestResults/e2e/), with the trx and any hang dump.
+      - name: Upload diagnostics bundle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: TestResults/
+          retention-days: 14

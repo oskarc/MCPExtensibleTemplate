@@ -4,7 +4,7 @@ using System.Text.Json;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
-namespace McpServerTemplate.Tests.Identity;
+namespace McpServerTemplate.Testing;
 
 /// <summary>
 /// An identity provider that exists only inside the test process.
@@ -17,6 +17,10 @@ namespace McpServerTemplate.Tests.Identity;
 /// It counts the requests made to it, which is what makes one of Phase 1's exit criteria
 /// checkable at all: an unregistered issuer must be refused *before* any key lookup, and the
 /// only way to see a lookup that did not happen is to be the thing that would have served it.
+///
+/// contract-005 · G-3 — moved here unchanged from the fast suite, so both suites mint with the
+/// same code: the fast suite in-process, the end-to-end suite through the test issuer's container,
+/// which is built over this library.
 /// </summary>
 public sealed class TestIdentityProvider : IDisposable
 {

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- contract-005 · G-2 — the end-to-end suite. It has no ProjectReference to the product or to any
+       test host: it sees the server only as a client and an operator would, through the image's
+       network edges, its logs and its exit codes. The Testing library it references holds the test
+       PKI and token minting and itself references nothing of the product. xUnit 2.9.3, as the fast
+       suite, and its own CI job (G-14), so the fast suite stays fast. -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
+    <PackageReference Include="Testcontainers" Version="4.15.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\McpServerTemplate.Testing\McpServerTemplate.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

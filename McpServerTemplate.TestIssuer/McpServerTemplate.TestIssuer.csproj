@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- contract-005 · G-6 — the test issuer. Test-only: it is built into its own image by the
+       end-to-end harness (Dockerfile beside this file), is never pushed, and nothing in the product
+       references it. It mints through the Testing library, so its tokens are the fast suite's tokens. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\McpServerTemplate.Testing\McpServerTemplate.Testing.csproj" />
+  </ItemGroup>
+
+</Project>

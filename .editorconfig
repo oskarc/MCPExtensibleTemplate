@@ -22,3 +22,7 @@ dotnet_diagnostic.CA1848.severity = suggestion
 # no such surface, and renaming forty tests to PascalCase would cost the only thing the names are for.
 [McpServerTemplate.Tests/**.cs]
 dotnet_diagnostic.CA1707.severity = none
+
+# The end-to-end suite names its tests the same way, for the same reason (contract-005 · G-2).
+[McpServerTemplate.E2E/**.cs]
+dotnet_diagnostic.CA1707.severity = none

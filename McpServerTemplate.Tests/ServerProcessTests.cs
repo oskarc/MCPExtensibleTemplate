@@ -808,7 +808,7 @@ public class ServerProcessTests
         var shippedManifest = FrameManifestIn(shipped.StderrSnapshot());
 
         // The in-process server the gate tests use, with the providers Production enables.
-        using var corp = new Identity.TestIdentityProvider("corp", "https://login.example.com/");
+        using var corp = new TestIdentityProvider("corp", "https://login.example.com/");
         await using var tested = await Identity.InProcessServer.StartAsync(
             [corp], modules: [new McpServerTemplate.Providers.Smhi.SmhiModule(), new McpServerTemplate.Providers.SmhiObs.SmhiObsModule()]);
         var testedManifest = McpServerTemplate.Infrastructure.Frame.FrameManifest.Describe(

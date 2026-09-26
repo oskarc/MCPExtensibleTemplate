@@ -1,0 +1,19 @@
+# contract-005 · G-1 — what never enters an image build context.
+#
+# The end-to-end harness tags the server image with a hash of the context exactly as this file
+# filters it (contract-005 · G-8), so a file listed here can change without rebuilding the image,
+# and a file not listed here cannot change without it.
+#
+# Build output and logs: rebuilt inside the image, never copied from a developer's machine.
+**/bin
+**/obj
+**/logs
+# Test results, including the end-to-end timings and diagnostics a run writes.
+**/TestResults
+# The kit, the repository's history and the documentation are not inputs to any image.
+.claude/
+.git
+docs/
+# Editor state.
+.vs/
+.vscode/
