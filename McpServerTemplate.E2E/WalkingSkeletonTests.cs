@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using ModelContextProtocol.Authentication;
 using ModelContextProtocol.Client;
 using Xunit.Abstractions;
+using Xunit.Sdk;
 
 namespace McpServerTemplate.E2E;
 
@@ -18,7 +19,9 @@ namespace McpServerTemplate.E2E;
 /// is written, and it proves the mechanics the later tests stand on: the test issuer is the same
 /// issuer by the same name from the server and from the test; the client's HTTP traffic, OAuth
 /// discovery included, goes through the test's name map and nowhere else; and the front's forwarded
-/// scheme and client address are honoured by the server.
+/// client address is honoured by the server (the forwarded scheme is the fixture's own self-check,
+/// which runs before any test). Its negative control shows the same forwarded headers sent from
+/// anywhere but the front change nothing (G-9).
 ///
 /// A fault in the environment rather than the product fails with an <see cref="EnvironmentFaultException"/>
 /// naming its phase and cause, never as one of these assertions.
@@ -40,11 +43,24 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
             var token = await timings.MeasureAsync("t1: keycloak client-credentials token", () => fixture.KeycloakTokenAsync());
 
             var log = new NameMapLog();
-            var tools = await timings.MeasureAsync("t1: tools/list through the front", async () =>
+            IList<McpClientTool> tools;
+            try
             {
-                using var http = fixture.CreateClient(log);
-                return await ListToolsAsync(http, token);
-            });
+                tools = await timings.MeasureAsync("t1: tools/list through the front", async () =>
+                {
+                    using var http = fixture.CreateClient(log);
+                    return await ListToolsAsync(http, token);
+                });
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // contract-005 · G-11 — a red here carries its reason, not only the status: the server
+                // logs why it refused a token (authn_login_fail), and that line goes into the failure.
+                var refusal = await fixture.Server.LatestStderrLineAsync("authn_login_fail");
+                throw new XunitException(
+                    $"tools/list with a Keycloak token failed: {ex.GetType().Name}: {ex.Message} "
+                    + $"The server's latest authn_login_fail line: {refusal ?? "(none on its stderr)"}");
+            }
 
             // The token came from the real identity provider, for this server's resource.
             var claims = new JsonWebToken(token);
@@ -144,28 +160,28 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
             && r.Uri.AbsolutePath.StartsWith("/.well-known/oauth-protected-resource", StringComparison.Ordinal)
             && r.Status == (int)HttpStatusCode.OK);
 
-        // Nothing it asked for lay outside the map.
+        // Nothing it asked for lay outside the map, and it connected to exactly the names its flow
+        // calls for. Today the SDK stops at the resource mismatch (G-12's first defect), so the front
+        // is the only name it reaches; when that fix lands it goes on to the authorization server the
+        // metadata names, and that name joins this set.
         Assert.Empty(log.Refused);
-        Assert.All(log.Connections, c => Assert.Contains(c.Split(':')[0], fixture.Server.Names.Entries.Keys.Select(k => k.Host)));
+        Assert.Equal(
+            new[] { $"{TlsFront.Host}:{TlsFront.Port}" },
+            log.Connections.Select(c => c.Split(" -> ")[0]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// contract-005 · UC-1 — the front's forwarded address is honoured. The forwarded scheme is not
+    /// asserted here: the fixture's forwarded-headers self-check proves it before any test runs, so an
+    /// assertion here could never be the one that goes red.
+    /// </summary>
     [Fact]
-    public async Task T1_the_fronts_forwarded_scheme_and_address_are_honoured()
+    public async Task T1_the_fronts_forwarded_address_is_honoured()
     {
-        // Scheme: the server builds its challenge's metadata URL from the request's scheme and Host;
-        // it is https only because the front's X-Forwarded-Proto was trusted.
-        using (var http = fixture.CreateClient())
-        using (var response = await http.SendAsync(Initialize()))
-        {
-            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-            var challenge = string.Join(" ", response.Headers.WwwAuthenticate.Select(h => h.ToString()));
-            Assert.Contains($"resource_metadata=\"https://{TlsFront.Host}/", challenge, StringComparison.Ordinal);
-        }
-
-        // Address: the server's per-address limit (60 a minute) counts by the address the front
-        // forwards. One forwarded address is refused on its 61st request while another, arriving
-        // through the same front at the same moment, is not. Were the forwarded address ignored,
-        // both would be the front's own address and share one count.
+        // The server's per-address limit (60 a minute) counts by the address the front forwards. One
+        // forwarded address is refused on its 61st request while another, arriving through the same
+        // front at the same moment, is not. Were the forwarded address ignored, both would be the
+        // front's own address and share one count.
         var first = ClientAddresses.Next();
         var second = ClientAddresses.Next();
         using var asFirst = fixture.CreateClient(clientAddress: first);
@@ -181,9 +197,78 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
 
         using var other = await asSecond.GetAsync(healthz);
 
-        Assert.All(statuses.Take(60), s => Assert.Equal(HttpStatusCode.OK, s));
+        // contract-005 · UC-1 edge — forwarded address not honoured is a fault of the environment (the
+        // front, or KnownProxies) that looks like a product 429: with X-Forwarded-For lost, every
+        // request through the front counts as the front's own address, so a fresh address is refused
+        // for what others spent. The messages name that cause. Note for T-7: its per-address
+        // assertions meet the same fault as a 429, and need the same message.
+        var early = statuses.Take(60).Select((status, i) => (Status: status, Number: i + 1)).Where(s => s.Status != HttpStatusCode.OK).ToList();
+        Assert.True(
+            early.Count == 0,
+            $"forwarded address not honoured: {early.Count} of the first 60 requests forwarded as the fresh address {first} were refused "
+            + $"(first request {early.FirstOrDefault().Number}, with {(int)early.FirstOrDefault().Status}). A fresh address has a count "
+            + "of its own only if the server honours the X-Forwarded-For the front sets; without it, every request through the front "
+            + "shares the front's own count.");
         Assert.Equal(HttpStatusCode.TooManyRequests, statuses[60]);
-        Assert.Equal(HttpStatusCode.OK, other.StatusCode);
+        Assert.True(
+            other.StatusCode == HttpStatusCode.OK,
+            $"forwarded address not honoured: {second} got {(int)other.StatusCode} just after {first} spent its 60, so the server "
+            + "counted both as one address — the front's own, not the ones it forwarded.");
+    }
+
+    /// <summary>
+    /// contract-005 · G-9 — the negative control. The server trusts a forwarded scheme and address
+    /// only because they arrive from KnownProxies. The same forged headers sent straight to its
+    /// published port, from outside KnownProxies, change nothing: the challenge's metadata URL stays
+    /// http, and requests each forging a different X-Forwarded-For share the one count of the address
+    /// they really came from.
+    ///
+    /// Sabotage: the class's delta adds the run network's gateway (<see cref="E2ENetwork.Gateway"/>,
+    /// 198.51.100.1), the address a request to a published port arrives from, to KnownProxies as
+    /// HttpTransport:KnownProxies:1 — added beside the front, so the fixture's self-checks still pass
+    /// and the red is this test's. Recorded red (2026-09-26, Windows, the other four T-1 tests green),
+    /// on the claim's first assertion: "a forged X-Forwarded-Proto from outside KnownProxies was
+    /// trusted: the challenge to a request sent straight to the server is 'Bearer
+    /// resource_metadata="https://mcp.e2e.test/.well-known/oauth-protected-resource/"', not an http URL
+    /// on mcp.e2e.test."
+    /// </summary>
+    [Fact]
+    public async Task T1_forwarded_headers_sent_straight_to_the_server_are_ignored()
+    {
+        using var direct = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(10) };
+
+        using (var response = await direct.SendAsync(Forged(fixture.Server.DirectEndpoint, "192.0.2.1")))
+        {
+            // Positive control: past host filtering and the limiter, to authentication.
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+            var challenge = string.Join(" ", response.Headers.WwwAuthenticate.Select(h => h.ToString()));
+            Assert.True(
+                challenge.Contains($"resource_metadata=\"http://{TlsFront.Host}/", StringComparison.Ordinal),
+                $"a forged X-Forwarded-Proto from outside KnownProxies was trusted: the challenge to a request sent straight to the "
+                + $"server is '{challenge}', not an http URL on {TlsFront.Host}.");
+        }
+
+        // Honoured, each forged address would have a fresh count of 60 and none would be refused.
+        // Ignored, they all spend the count of the one address they came from, and it runs out. Up to
+        // 121 requests, so a window that turns over during the burst still runs out once.
+        int? refusedAt = null;
+        var sent = 0;
+        while (refusedAt is null && sent < 121)
+        {
+            sent++;
+            using var response = await direct.SendAsync(Forged(fixture.Server.DirectEndpoint, $"192.0.2.{sent + 1}"));
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                refusedAt = sent;
+            }
+        }
+
+        Assert.True(
+            refusedAt is not null,
+            $"a forged X-Forwarded-For from outside KnownProxies was trusted: {sent} requests sent straight to the server, each "
+            + "forging a different address, were never refused; the server counted each under the address it forged.");
+        output.WriteLine($"Straight to the server, forging a different X-Forwarded-For each time, request {refusedAt} was refused (429).");
     }
 
     /// <summary>tools/list through the SDK client, with a bearer token and nothing else.</summary>
@@ -220,16 +305,23 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
         return new AuthorizationResult { Code = query["code"], State = query["state"], Iss = query["iss"] };
     }
 
-    private static HttpRequestMessage Initialize()
+    /// <summary>
+    /// An unauthenticated initialize sent to <paramref name="endpoint"/> under the one Host the server
+    /// allows, forging what a proxy would forward: https, and <paramref name="forwardedFor"/>.
+    /// </summary>
+    private static HttpRequestMessage Forged(Uri endpoint, string forwardedFor)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, ServerUnderTest.Endpoint)
+        var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = new StringContent(
                 """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"e2e","version":"1"}}}""",
                 Encoding.UTF8,
                 "application/json"),
         };
+        request.Headers.Host = TlsFront.Host;
         request.Headers.Accept.ParseAdd("application/json, text/event-stream");
+        request.Headers.Add("X-Forwarded-Proto", "https");
+        request.Headers.Add("X-Forwarded-For", forwardedFor);
         return request;
     }
 

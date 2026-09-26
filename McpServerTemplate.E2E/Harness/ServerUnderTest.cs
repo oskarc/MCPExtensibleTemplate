@@ -1,8 +1,12 @@
+using System.Formats.Tar;
 using System.Globalization;
 using System.Net;
+using Docker.DotNet;
+using Docker.DotNet.Models;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
+using McpServerTemplate.Testing;
 
 namespace McpServerTemplate.E2E.Harness;
 
@@ -27,6 +31,12 @@ public sealed class ServerUnderTest : IAsyncDisposable
 
     /// <summary>Authentication:Resource. Every issuer mints its audience from this.</summary>
     public const string Resource = "https://mcp.e2e.test/mcp";
+
+    /// <summary>Where the run's CA is mounted in the server container, alone (G-3).</summary>
+    public const string TrustMount = "/e2e/trust";
+
+    /// <summary>The image's app user (G-1): whatever the server must read, this user must be able to.</summary>
+    public const int AppUser = 1654;
 
     /// <summary>
     /// Where MCP answers today: the server root. The resource names /mcp and the endpoint is /; that
@@ -65,6 +75,12 @@ public sealed class ServerUnderTest : IAsyncDisposable
     public NameMap Names { get; }
 
     /// <summary>
+    /// The server itself, on its published port, not through the front: plain http, from the test
+    /// process. A request sent here comes from outside KnownProxies, so what it forwards is not trusted.
+    /// </summary>
+    public Uri DirectEndpoint => new($"http://{Container.Hostname}:{Container.GetMappedPublicPort(Port)}/");
+
+    /// <summary>
     /// The configuration every server in the environment starts from. The front's address is part of
     /// it because KnownProxies must name the front before the server exists.
     /// </summary>
@@ -79,8 +95,8 @@ public sealed class ServerUnderTest : IAsyncDisposable
             ["ASPNETCORE_ENVIRONMENT"] = "Production",
 
             // contract-005 · G-8 — trust the run's test CA and nothing else.
-            ["SSL_CERT_FILE"] = "/e2e/trust/ca.pem",
-            ["SSL_CERT_DIR"] = "/e2e/trust",
+            ["SSL_CERT_FILE"] = $"{TrustMount}/{TestPki.CaFile}",
+            ["SSL_CERT_DIR"] = TrustMount,
 
             ["Transport"] = "http",
             ["HttpTransport:BindAddress"] = "0.0.0.0",
@@ -118,8 +134,9 @@ public sealed class ServerUnderTest : IAsyncDisposable
             .WithNetworkAliases(alias)
             .WithLabel(E2ENetwork.RunLabel, environment.RunId)
             .WithPortBinding(Port, true)
+            .WithLoopbackPortsOnly()
             // contract-005 · G-3 — the CA certificate alone, by read-only bind mount.
-            .WithBindMount(environment.Pki.CaPath, "/e2e/trust/ca.pem", AccessMode.ReadOnly)
+            .WithBindMount(environment.Pki.CaPath, $"{TrustMount}/{TestPki.CaFile}", AccessMode.ReadOnly)
             .WithEnvironment(settings)
             .Build();
 
@@ -132,14 +149,17 @@ public sealed class ServerUnderTest : IAsyncDisposable
                 await WaitUntilReadyAsync(environment.Docker, container, cancellationToken);
             });
 
-            await E2EEnvironment.Timings.MeasureAsync($"{name}: trust self-check", () =>
-                CheckTrustAsync(environment, container, settings, cancellationToken));
+            // contract-005 · UC-1 edge — the server's own start is left as it is: it can fail for the
+            // product's reasons. What follows is the environment around it, and a failure there names
+            // its phase however it surfaced.
+            await E2EEnvironment.Timings.MeasureEnvironmentAsync($"{name}: trust self-check", () =>
+                CheckTrustAsync(environment, container, cancellationToken));
 
-            front = await E2EEnvironment.Timings.MeasureAsync($"{name}: front", () =>
+            front = await E2EEnvironment.Timings.MeasureEnvironmentAsync($"{name}: front", () =>
                 TlsFront.StartAsync(environment.Network, environment.Pki, frontAddress, alias, Port, environment.RunId, cancellationToken));
 
             var server = new ServerUnderTest(environment, name, container, front, settings);
-            await E2EEnvironment.Timings.MeasureAsync($"{name}: forwarded-headers self-check", () =>
+            await E2EEnvironment.Timings.MeasureEnvironmentAsync($"{name}: forwarded-headers self-check", () =>
                 server.CheckForwardedHeadersAsync(cancellationToken));
 
             return server;
@@ -170,6 +190,27 @@ public sealed class ServerUnderTest : IAsyncDisposable
         var stderr = await StderrAsync();
         return stderr.Split('\n').FirstOrDefault(l => l.Contains("Frame installed:", StringComparison.Ordinal))?.Trim()
             ?? throw new InvalidOperationException("The server logged no 'Frame installed:' line on stderr.");
+    }
+
+    /// <summary>
+    /// The latest line on the server's standard error that contains <paramref name="marker"/>, or null
+    /// when none has appeared within two seconds (Docker's log follows the server a moment later).
+    /// </summary>
+    public async Task<string?> LatestStderrLineAsync(string marker)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(marker);
+
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (true)
+        {
+            var line = (await StderrAsync()).Split('\n').LastOrDefault(l => l.Contains(marker, StringComparison.Ordinal))?.Trim();
+            if (line is not null || DateTime.UtcNow >= deadline)
+            {
+                return line;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
     }
 
     /// <summary>An HTTP client through this server's name map, forwarding <paramref name="clientAddress"/>.</summary>
@@ -226,36 +267,114 @@ public sealed class ServerUnderTest : IAsyncDisposable
     }
 
     /// <summary>
-    /// contract-005 · G-11 — CA trust missing. The test CA must be inside the container, byte for
-    /// byte, where SSL_CERT_FILE points. A bind mount Docker Desktop cannot share arrives as an empty
-    /// path, and the server then fails every token with a key-lookup error that reads like a product
-    /// fault. Checked without asking any issuer for anything, so no count moves.
+    /// contract-005 · G-8, G-11, UC-1 edge — trust is the run's test CA and nothing else. Checked on the
+    /// trust the container actually started with, as Docker records its environment, and never
+    /// skipped. SSL_CERT_FILE and SSL_CERT_DIR must both be set: with neither, the server trusts the
+    /// image's own store and not the run's CA, and every token fails with a key-lookup error that reads
+    /// like a product fault; with one alone, the runtime falls back to the image's own location for the
+    /// other, and a call to a host with no fake could pass TLS. Each must hold the run's CA, byte for
+    /// byte, and nothing else, where the image's app user (1654) can read it: a bind mount Docker
+    /// Desktop cannot share arrives as an empty path, and a CA only root can read is no trust at all to
+    /// a server that is not root. Checked without asking any issuer for anything, so no count moves.
+    ///
+    /// contract-005 · G-2 — the test sees the server only through its network edges, its logs and its
+    /// exit codes. A self-check may read back its own mounted inputs, as this one reads back the CA the
+    /// harness mounted; it never reads the product's state.
     /// </summary>
-    private static async Task CheckTrustAsync(
-        E2EEnvironment environment, IContainer container, IReadOnlyDictionary<string, string> settings, CancellationToken cancellationToken)
+    private static async Task CheckTrustAsync(E2EEnvironment environment, IContainer container, CancellationToken cancellationToken)
     {
-        if (!settings.TryGetValue("SSL_CERT_FILE", out var trustFile) || trustFile != "/e2e/trust/ca.pem")
-        {
-            return; // a delta that changes trust on purpose is checked by its own test
-        }
+        var started = await environment.Docker.Containers.InspectContainerAsync(container.Id, cancellationToken);
+        var variables = (started.Config?.Env ?? [])
+            .Select(v => v.Split('=', 2))
+            .Where(v => v.Length == 2 && v[1].Length > 0)
+            .ToDictionary(v => v[0], v => v[1], StringComparer.Ordinal);
+        variables.TryGetValue("SSL_CERT_FILE", out var file);
+        variables.TryGetValue("SSL_CERT_DIR", out var directory);
 
-        byte[] inside;
-        try
-        {
-            inside = await container.ReadFileAsync(trustFile, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            throw new EnvironmentFaultException("server trust", $"CA trust missing: {trustFile} could not be read from the server container ({ex.Message}).", ex);
-        }
-
-        var expected = await File.ReadAllBytesAsync(environment.Pki.CaPath, cancellationToken);
-        if (!inside.AsSpan().SequenceEqual(expected))
+        if (file is null && directory is null)
         {
             throw new EnvironmentFaultException(
                 "server trust",
-                $"CA trust missing: {trustFile} in the server container is not the run's test CA ({inside.Length} bytes, "
-                + $"expected {expected.Length}). Is {Path.GetDirectoryName(environment.Pki.CaPath)} shared with Docker?");
+                "CA trust missing: the server container was started with neither SSL_CERT_FILE nor SSL_CERT_DIR, so it "
+                + "trusts the image's own certificate store and not the run's test CA. Every token would fail its key "
+                + "lookup at the identity provider, and read as a product failure.");
+        }
+
+        if (file is null || directory is null)
+        {
+            var (unset, set, setTo) = file is null ? ("SSL_CERT_FILE", "SSL_CERT_DIR", directory) : ("SSL_CERT_DIR", "SSL_CERT_FILE", file);
+            throw new EnvironmentFaultException(
+                "server trust",
+                $"CA trust widened: the server container was started with {set}={setTo} but without {unset}, so for {unset} "
+                + "the runtime falls back to the image's own location, and the server trusts more than the run's test CA. "
+                + "A call to a host with no fake could pass TLS. Both must name the run's test CA and nothing else.");
+        }
+
+        var expected = await File.ReadAllBytesAsync(environment.Pki.CaPath, cancellationToken);
+        await CheckTrustPathAsync(environment, container, "SSL_CERT_FILE", file, expected, cancellationToken);
+        await CheckTrustPathAsync(environment, container, "SSL_CERT_DIR", directory, expected, cancellationToken);
+    }
+
+    /// <summary>
+    /// Every file at <paramref name="path"/> in the container — the file, or each file in the
+    /// directory — is the run's CA and readable by the app user; and there is at least one.
+    /// </summary>
+    private static async Task CheckTrustPathAsync(
+        E2EEnvironment environment, IContainer container, string variable, string path, byte[] expected, CancellationToken cancellationToken)
+    {
+        var files = new List<(string Name, UnixFileMode Mode, int Uid, byte[] Content)>();
+        try
+        {
+            // The archive, not the file alone: its entries carry the mode and owner the container sees.
+            var archive = await environment.Docker.Containers.GetArchiveFromContainerAsync(
+                container.Id, new ContainerPathStatParameters { Path = path }, statOnly: false, cancellationToken);
+            using var stream = archive.Stream ?? throw new IOException("the engine returned no archive");
+            using var reader = new TarReader(stream);
+            while (await reader.GetNextEntryAsync(copyData: true, cancellationToken) is { } entry)
+            {
+                if (entry.EntryType is TarEntryType.RegularFile or TarEntryType.V7RegularFile)
+                {
+                    using var content = new MemoryStream();
+                    if (entry.DataStream is not null)
+                    {
+                        await entry.DataStream.CopyToAsync(content, cancellationToken);
+                    }
+
+                    files.Add((entry.Name, entry.Mode, entry.Uid, content.ToArray()));
+                }
+            }
+        }
+        catch (Exception ex) when (ex is DockerApiException or IOException or InvalidDataException)
+        {
+            throw new EnvironmentFaultException("server trust", $"CA trust missing: {variable}={path} could not be read from the server container ({ex.Message}).", ex);
+        }
+
+        if (files.Count == 0)
+        {
+            throw new EnvironmentFaultException("server trust", $"CA trust missing: {variable}={path} holds no file in the server container.");
+        }
+
+        foreach (var (name, mode, uid, content) in files)
+        {
+            if (!content.AsSpan().SequenceEqual(expected))
+            {
+                throw new EnvironmentFaultException(
+                    "server trust",
+                    $"CA trust missing: {variable}={path}: {name} in the server container is not the run's test CA ({content.Length} bytes, "
+                    + $"expected {expected.Length}). "
+                    + (path.StartsWith(TrustMount, StringComparison.Ordinal)
+                        ? $"Is {Path.GetDirectoryName(environment.Pki.CaPath)} shared with Docker?"
+                        : $"The harness mounts the CA at {TrustMount}/{TestPki.CaFile}; {variable} names something else."));
+            }
+
+            // contract-005 · G-1 — the server runs as 1654: the CA is trust only if that user can read it.
+            if (!mode.HasFlag(UnixFileMode.OtherRead) && !(uid == AppUser && mode.HasFlag(UnixFileMode.UserRead)))
+            {
+                throw new EnvironmentFaultException(
+                    "server trust",
+                    $"CA trust missing: {variable}={path}: {name} is the run's test CA, but user {AppUser}, which the server runs as, "
+                    + $"cannot read it (mode {Convert.ToString((int)mode, 8)}, owner {uid}).");
+            }
         }
     }
 
@@ -264,6 +383,8 @@ public sealed class ServerUnderTest : IAsyncDisposable
     /// is challenged with a metadata URL the server builds from the request's scheme and Host; it is
     /// https only if the server honoured the front's X-Forwarded-Proto, which it does only when the
     /// front's address is the one KnownProxies names. No token is sent, so no issuer is consulted.
+    /// When it is not https, the front's access-log line for the request says which side dropped the
+    /// header: the front, which then did not send it, or the server, which did not trust it.
     /// </summary>
     private async Task CheckForwardedHeadersAsync(CancellationToken cancellationToken)
     {
@@ -300,11 +421,28 @@ public sealed class ServerUnderTest : IAsyncDisposable
 
             if (!challenge.Contains($"resource_metadata=\"https://{TlsFront.Host}/", StringComparison.Ordinal))
             {
+                // Which side dropped it, from the front's own record of what it sent upstream.
+                var line = await Front.AccessLogLineAsync(ClientAddresses.SelfCheck, cancellationToken);
+                string which;
+                if (line is null)
+                {
+                    which = $"The front did not send it: its access log has no line forwarded for {ClientAddresses.SelfCheck}, so the request never passed through it.";
+                }
+                else if (!line.Contains(" forwarded-proto=https ", StringComparison.Ordinal) || line.Contains(" upstream=- ", StringComparison.Ordinal))
+                {
+                    which = $"The front did not send it: its access log line is '{line}'.";
+                }
+                else
+                {
+                    var knownProxies = Settings.Where(s => s.Key.StartsWith("HttpTransport__KnownProxies__", StringComparison.OrdinalIgnoreCase)).Select(s => s.Value);
+                    which = $"The front sent it (its access log line is '{line}'), so the server did not trust it: the front's address on the "
+                        + $"run's network is {Front.Container.IpAddress} (allocated {Front.Address}), and the server's KnownProxies are [{string.Join(", ", knownProxies)}].";
+                }
+
                 throw new EnvironmentFaultException(
                     "front",
                     $"forwarded headers ignored: the server's challenge is '{challenge}', not an https URL on {TlsFront.Host}. "
-                    + $"It did not trust X-Forwarded-Proto from the front at {Front.Address}; its KnownProxies are "
-                    + $"[{string.Join(", ", Settings.Where(s => s.Key.StartsWith("HttpTransport__KnownProxies__", StringComparison.OrdinalIgnoreCase)).Select(s => s.Value))}].");
+                    + $"The front did not send X-Forwarded-Proto, or the server did not trust it. {which}");
             }
         }
     }

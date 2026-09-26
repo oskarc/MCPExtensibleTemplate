@@ -55,6 +55,42 @@ public sealed class Timings
         });
     }
 
+    /// <summary>
+    /// Measures a phase of the environment, and names the phase in its failure.
+    ///
+    /// contract-005 · UC-1 edge, T-1 — a phase that fails is reported naming its cause. A failure
+    /// that is not already an <see cref="EnvironmentFaultException"/> — an image pull, a container
+    /// start or a wait surfacing as the library's own exception — becomes one, with the phase's name
+    /// and the original as its inner exception, instead of reaching the test as a bare library
+    /// error. Not for a test's own phases, where a failure is the product's: it must never read as
+    /// the environment's. <paramref name="isProductFailure"/> lets a phase that can fail either way
+    /// (the server image's build) pass the product's failures through in their own words. A timeout
+    /// is named like any other failure: nothing cancels an environment phase but its own deadline.
+    /// </summary>
+    public async Task<T> MeasureEnvironmentAsync<T>(string phase, Func<Task<T>> body, Func<Exception, bool>? isProductFailure = null)
+    {
+        try
+        {
+            return await MeasureAsync(phase, body);
+        }
+        catch (Exception ex) when (ex is not EnvironmentFaultException && isProductFailure?.Invoke(ex) != true)
+        {
+            throw new EnvironmentFaultException(phase, $"{ex.GetType().Name}: {ex.Message}", ex);
+        }
+    }
+
+    /// <inheritdoc cref="MeasureEnvironmentAsync{T}"/>
+    public async Task MeasureEnvironmentAsync(string phase, Func<Task> body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+
+        await MeasureEnvironmentAsync(phase, async () =>
+        {
+            await body();
+            return true;
+        });
+    }
+
     /// <summary>The phases as a table, for a test's output.</summary>
     public string Describe()
     {

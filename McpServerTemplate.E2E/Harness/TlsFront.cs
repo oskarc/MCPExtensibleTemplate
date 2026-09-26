@@ -35,6 +35,9 @@ public sealed class TlsFront : IAsyncDisposable
     /// <summary>The test-only header naming the client address the front forwards.</summary>
     public const string ClientAddressHeader = "X-E2E-Client-Address";
 
+    /// <summary>How long nginx may take to start its worker; it takes about a second.</summary>
+    private static readonly TimeSpan ReadyWithin = TimeSpan.FromMinutes(1);
+
     private readonly IContainer _container;
 
     private TlsFront(IContainer container, IPAddress address)
@@ -67,6 +70,7 @@ public sealed class TlsFront : IAsyncDisposable
             .WithNetwork(network)
             .WithLabel(E2ENetwork.RunLabel, runId)
             .WithPortBinding(Port, true)
+            .WithLoopbackPortsOnly()
             .WithBindMount(configuration, "/etc/nginx/nginx.conf", AccessMode.ReadOnly)
             .WithBindMount(Path.Combine(tls, TestPki.CertificateFile), "/e2e/tls/tls.crt", AccessMode.ReadOnly)
             .WithBindMount(Path.Combine(tls, TestPki.KeyFile), "/e2e/tls/tls.key", AccessMode.ReadOnly)
@@ -75,7 +79,8 @@ public sealed class TlsFront : IAsyncDisposable
             .WithCreateParameterModifier(parameters =>
                 parameters.NetworkingConfig!.EndpointsConfig![network.Name].IPAMConfig =
                     new EndpointIPAMConfig { IPv4Address = address.ToString() })
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("start worker process"))
+            // contract-005 · UC-1 edge — a deadline of its own, like every other wait of the environment.
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("start worker process", wait => wait.WithTimeout(ReadyWithin)))
             .Build();
 
         try
@@ -83,11 +88,53 @@ public sealed class TlsFront : IAsyncDisposable
             await container.StartAsync(cancellationToken);
             return new TlsFront(container, address);
         }
-        catch
+        catch (Exception ex)
         {
-            var (stdout, stderr) = await container.GetLogsAsync(ct: CancellationToken.None);
+            // contract-005 · UC-1 edge — the fault names its cause and keeps the original. Its log is
+            // read if it can be: a log that cannot be read must not replace the fault it would explain.
+            if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+            {
+                await container.DisposeAsync();
+                throw;
+            }
+
+            string log;
+            try
+            {
+                var (stdout, stderr) = await container.GetLogsAsync(ct: CancellationToken.None);
+                log = stdout + stderr;
+            }
+            catch (Exception logFault) when (logFault is not OperationCanceledException)
+            {
+                log = $"(not readable: {logFault.GetType().Name}: {logFault.Message})";
+            }
+
             await container.DisposeAsync();
-            throw new InvalidOperationException($"The TLS front did not start: {stdout}{stderr}");
+            throw new EnvironmentFaultException("front", $"the TLS front did not start ({ex.GetType().Name}: {ex.Message}). Its log: {log}", ex);
+        }
+    }
+
+    /// <summary>
+    /// The front's access-log line for the request it forwarded as <paramref name="forwardedFor"/>, or
+    /// null when it has logged none within two seconds (nginx logs a request as it completes, and
+    /// Docker's log follows a moment later). The line records what the front sent upstream: the
+    /// X-Forwarded-For and X-Forwarded-Proto values, and the server address it proxied to.
+    /// </summary>
+    public async Task<string?> AccessLogLineAsync(string forwardedFor, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(forwardedFor);
+
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (true)
+        {
+            var (stdout, _) = await _container.GetLogsAsync(ct: cancellationToken);
+            var line = stdout.Split('\n').LastOrDefault(l => l.Contains($" forwarded-for={forwardedFor} ", StringComparison.Ordinal));
+            if (line is not null || DateTime.UtcNow >= deadline)
+            {
+                return line?.Trim();
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
         }
     }
 
@@ -110,7 +157,14 @@ public sealed class TlsFront : IAsyncDisposable
                 default $http_x_e2e_client_address;
             }
 
-            log_format e2e '$remote_addr forwarded-for=$e2e_client_address "$request" $status host=$http_host';
+            # What the front puts in X-Forwarded-Proto, held in one variable so the access log records
+            # the value the front sent: the forwarded-headers self-check reads it to tell a front that
+            # did not send the header from a server that did not trust it.
+            map $scheme $e2e_forwarded_proto {
+                default https;
+            }
+
+            log_format e2e '$remote_addr forwarded-for=$e2e_client_address forwarded-proto=$e2e_forwarded_proto upstream=$upstream_addr "$request" $status host=$http_host';
             access_log /dev/stdout e2e;
 
             server {
@@ -127,7 +181,7 @@ public sealed class TlsFront : IAsyncDisposable
 
                     # The Host header as the client sent it: the server builds its challenge from it.
                     proxy_set_header Host $http_host;
-                    proxy_set_header X-Forwarded-Proto https;
+                    proxy_set_header X-Forwarded-Proto $e2e_forwarded_proto;
                     # Set, not appended: one hop, one address.
                     proxy_set_header X-Forwarded-For $e2e_client_address;
                     # The harness device ends here; the server never sees it.

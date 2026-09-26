@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Docker.DotNet;
+using Docker.DotNet.Models;
 using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Images;
 using DotNet.Testcontainers.Networks;
@@ -20,7 +21,8 @@ namespace McpServerTemplate.E2E.Harness;
 /// the same task, and a start that fails fails every class with the same named fault instead of
 /// retrying. It is torn down when the assembly finishes (<see cref="E2ETestFramework"/>), which writes
 /// the diagnostics bundle, removes the containers and the network, and deletes the run directory with
-/// every key in it.
+/// every key in it. A run killed before that teardown is removed by the next run's start
+/// (<see cref="SweepDeadRunsAsync"/>).
 ///
 /// contract-005 · G-16 — the four extension points the harness is built in, and later contracts add
 /// through: <see cref="StartServerAsync"/> with a <see cref="SettingsDelta"/>, the
@@ -51,7 +53,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
         string issuerImage,
         KeycloakService keycloak,
         TestIssuerService testIssuer,
-        WireMockService wireMock,
+        IReadOnlyDictionary<UpstreamOwner, IUpstreamService> upstreams,
         RedisService redis)
     {
         RunId = runId;
@@ -63,10 +65,11 @@ public sealed class E2EEnvironment : IAsyncDisposable
         IssuerImage = issuerImage;
         Keycloak = keycloak;
         TestIssuer = testIssuer;
-        WireMock = wireMock;
+        UpstreamServices = upstreams;
+        WireMock = (WireMockService)upstreams[WireMockService.Owner];
         Redis = redis;
-        Names = keycloak.Names.Including(testIssuer.Names).Including(wireMock.Names);
-        _services = [keycloak, testIssuer, wireMock, redis];
+        Names = upstreams.Values.Aggregate(keycloak.Names.Including(testIssuer.Names), (names, upstream) => names.Including(upstream.Names));
+        _services = [keycloak, testIssuer, .. upstreams.Values, redis];
     }
 
     /// <summary>Every phase of the run, measured: the environment's, each server's and each test's.</summary>
@@ -78,12 +81,15 @@ public sealed class E2EEnvironment : IAsyncDisposable
         .Register(new(IdpA, new Uri("https://idp-a.e2e.test"), "https://idp-a.e2e.test", IssuerRegistry.Owner.TestIssuer, "client_id", KeycloakService.Scopes))
         .Register(new(IdpB, new Uri("https://idp-b.e2e.test"), "https://idp-b.e2e.test", IssuerRegistry.Owner.TestIssuer, "client_id", KeycloakService.Scopes));
 
-    /// <summary>The upstream host names and the container that answers each.</summary>
+    /// <summary>
+    /// The upstream host names and the owner that answers each, for the whole run: registration is per
+    /// run (see <see cref="UpstreamRegistry"/>). A later contract hands a host to another owner here.
+    /// </summary>
     public static UpstreamRegistry Upstreams { get; } = new UpstreamRegistry()
-        .Register("opendata-download-metfcst.smhi.se", UpstreamRegistry.WireMock)
-        .Register("opendata-download-metobs.smhi.se", UpstreamRegistry.WireMock)
-        .Register("jsonplaceholder.typicode.com", UpstreamRegistry.WireMock)
-        .Register(WireMockService.Alias, UpstreamRegistry.WireMock);
+        .Register("opendata-download-metfcst.smhi.se", WireMockService.Owner)
+        .Register("opendata-download-metobs.smhi.se", WireMockService.Owner)
+        .Register("jsonplaceholder.typicode.com", WireMockService.Owner)
+        .Register(WireMockService.Alias, WireMockService.Owner);
 
     public string RunId { get; }
 
@@ -107,6 +113,10 @@ public sealed class E2EEnvironment : IAsyncDisposable
 
     public TestIssuerService TestIssuer { get; }
 
+    /// <summary>The container each upstream owner started.</summary>
+    public IReadOnlyDictionary<UpstreamOwner, IUpstreamService> UpstreamServices { get; }
+
+    /// <summary>The WireMock fake (G-7): the owner of every provider host unless the registry says otherwise.</summary>
     public WireMockService WireMock { get; }
 
     public RedisService Redis { get; }
@@ -116,6 +126,12 @@ public sealed class E2EEnvironment : IAsyncDisposable
 
     /// <summary>The environment, started by whichever test class asks first.</summary>
     public static Task<E2EEnvironment> GetAsync() => Shared.Value;
+
+    /// <summary>The container answering <paramref name="host"/> in this run, as the upstream registry gives it out.</summary>
+    public IUpstreamService UpstreamFor(string host) =>
+        Upstreams.Owners.TryGetValue(host, out var owner)
+            ? UpstreamServices[owner]
+            : throw new KeyNotFoundException($"No upstream owner is registered for '{host}'.");
 
     /// <summary>
     /// contract-005 · G-8 — the one entry point for a server under test: the environment's base
@@ -171,71 +187,92 @@ public sealed class E2EEnvironment : IAsyncDisposable
     {
         var runId = $"{DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}-{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(3))}";
         var root = FindRepositoryRoot();
-        var created = new List<IAsyncDisposable>();
+        var created = new List<(string Name, IAsyncDisposable Resource)>();
         IDockerClient? docker = null;
         TestPki? pki = null;
 
         try
         {
-            docker = await Timings.MeasureAsync("environment: docker available", () => DockerEngine.ConnectAsync(cancellationToken));
+            // contract-005 · UC-1 edge, T-1 — every phase of the start is measured through
+            // MeasureEnvironmentAsync, so a failure names its phase and its cause however it surfaced.
+            docker = await Timings.MeasureEnvironmentAsync("environment: docker available", () => DockerEngine.ConnectAsync(cancellationToken));
 
-            // Set before the first resource is created, which is when Testcontainers starts it.
-            TestcontainersSettings.ResourceReaperImage = new DockerImage(Images.ResourceReaper);
+            // contract-005 · G-4, G-6 — Testcontainers' resource reaper is off. It published its own
+            // port on every host interface, where anyone on the machine's network could ask it to
+            // remove containers; nothing else of a run is published beyond loopback. Set before the
+            // first resource is created, which is when Testcontainers would start it. What it did —
+            // remove a run its process no longer tends — the sweep below does at the next start.
+            TestcontainersSettings.ResourceReaperEnabled = false;
 
-            pki = await Timings.MeasureAsync("environment: test pki", () => Task.FromResult(CreatePki(root, runId)));
+            await Timings.MeasureEnvironmentAsync("environment: sweep dead runs", () => SweepDeadRunsAsync(docker, root, runId, cancellationToken));
 
-            var contextHash = await Timings.MeasureAsync("environment: build context hash", () => Task.Run(() => Images.ContextHash(root), cancellationToken));
-            var revision = await Timings.MeasureAsync("environment: checkout revision", () => Images.CheckoutRevisionAsync(root, cancellationToken));
+            pki = await Timings.MeasureEnvironmentAsync("environment: test pki", () => Task.FromResult(CreatePki(root, runId)));
 
-            var network = await Timings.MeasureAsync("environment: network", () => E2ENetwork.CreateAsync(runId, docker, cancellationToken));
-            created.Add(network);
+            var contextHash = await Timings.MeasureEnvironmentAsync("environment: build context hash", () => Task.Run(() => Images.ContextHash(root), cancellationToken));
+            var revision = await Timings.MeasureEnvironmentAsync("environment: checkout revision", () => Images.CheckoutRevisionAsync(root, cancellationToken));
+
+            var network = await Timings.MeasureEnvironmentAsync("environment: network", () => E2ENetwork.CreateAsync(runId, docker, cancellationToken));
+            created.Add(("network", network));
 
             var names = new NameMap(pki.Ca);
+            var start = new UpstreamStart(docker, network, pki, names, runId);
 
-            // Independent parts start together; the test issuer waits only for its own image.
-            var serverImage = Timings.MeasureAsync("image: server (Dockerfile)", () =>
-                Images.BuildAsync(Images.ServerRepository, "Dockerfile", root, contextHash, revision, cancellationToken));
-            var issuerImage = Timings.MeasureAsync("image: test issuer", () =>
+            // Independent parts start together; the test issuer waits only for its own image. The
+            // server image's build is the one phase whose failure can be the product's: a Dockerfile
+            // that does not build says so in its own words (Images.BuildAsync), not as the environment.
+            var serverImage = Timings.MeasureEnvironmentAsync(
+                "image: server (Dockerfile)",
+                () => Images.BuildAsync(Images.ServerRepository, "Dockerfile", root, contextHash, revision, cancellationToken),
+                isProductFailure: ex => ex is InvalidOperationException { InnerException: ImageBuildFailedException });
+            var issuerImage = Timings.MeasureEnvironmentAsync("image: test issuer", () =>
                 Images.BuildAsync(Images.IssuerRepository, "McpServerTemplate.TestIssuer/Dockerfile", root, contextHash, revision, cancellationToken));
-            var redis = Timings.MeasureAsync("container: redis", () => RedisService.StartAsync(network, runId, cancellationToken));
-            var keycloak = Timings.MeasureAsync("container: keycloak", () =>
+            var redis = Timings.MeasureEnvironmentAsync("container: redis", () => RedisService.StartAsync(network, runId, cancellationToken));
+            var keycloak = Timings.MeasureEnvironmentAsync("container: keycloak", () =>
                 KeycloakService.StartAsync(docker, network, pki, names, ServerUnderTest.Resource, ServerFixture.AllClientIds(), runId, cancellationToken));
-            var wireMock = Timings.MeasureAsync("container: wiremock", () =>
-                WireMockService.StartAsync(docker, network, pki, names, Upstreams.HostsOf(UpstreamRegistry.WireMock), runId, cancellationToken));
-            var testIssuer = Timings.MeasureAsync("container: test issuer", async () =>
+            var testIssuer = Timings.MeasureEnvironmentAsync("container: test issuer", async () =>
                 await TestIssuerService.StartAsync(docker, await issuerImage, network, pki, names, Issuers.HostsServedBy(IssuerRegistry.Owner.TestIssuer), runId, cancellationToken));
+
+            // contract-005 · G-16 — every owner the upstream registry names is started, each with the
+            // host names the registry gives it.
+            var upstreams = Upstreams.DistinctOwners.ToDictionary(
+                owner => owner,
+                owner => Timings.MeasureEnvironmentAsync($"container: {owner.Name}", () =>
+                    owner.StartAsync(start, Upstreams.HostsOf(owner), cancellationToken)));
 
             try
             {
-                await Task.WhenAll(serverImage, issuerImage, redis, keycloak, wireMock, testIssuer);
+                await Task.WhenAll([serverImage, issuerImage, redis, keycloak, testIssuer, .. upstreams.Values]);
             }
             finally
             {
                 // Whatever did start is removed if anything else failed.
                 if (redis.IsCompletedSuccessfully)
                 {
-                    created.Add(redis.Result);
+                    created.Add(("redis", redis.Result));
                 }
 
                 if (keycloak.IsCompletedSuccessfully)
                 {
-                    created.Add(keycloak.Result);
+                    created.Add(("keycloak", keycloak.Result));
                 }
 
-                if (wireMock.IsCompletedSuccessfully)
+                foreach (var (owner, upstream) in upstreams.Where(u => u.Value.IsCompletedSuccessfully))
                 {
-                    created.Add(wireMock.Result);
+                    created.Add((owner.Name, upstream.Result));
                 }
 
                 if (testIssuer.IsCompletedSuccessfully)
                 {
-                    created.Add(testIssuer.Result);
+                    created.Add(("test-issuer", testIssuer.Result));
                 }
             }
 
+            var started = upstreams.ToDictionary(u => u.Key, u => u.Value.Result);
+            await Timings.MeasureEnvironmentAsync("environment: upstreams", () => CheckUpstreamsAsync(docker, network, pki, started, cancellationToken));
+
             // contract-005 · G-8 — before any test runs: both images carry this checkout's revision
             // and its build context's hash.
-            await Timings.MeasureAsync("environment: revision labels", async () =>
+            await Timings.MeasureEnvironmentAsync("environment: revision labels", async () =>
             {
                 await Images.VerifyRevisionAsync(docker, serverImage.Result, contextHash, revision, cancellationToken);
                 await Images.VerifyRevisionAsync(docker, issuerImage.Result, contextHash, revision, cancellationToken);
@@ -243,9 +280,9 @@ public sealed class E2EEnvironment : IAsyncDisposable
 
             var environment = new E2EEnvironment(
                 runId, root, docker, pki, network, serverImage.Result, issuerImage.Result,
-                keycloak.Result, testIssuer.Result, wireMock.Result, redis.Result);
+                keycloak.Result, testIssuer.Result, started, redis.Result);
 
-            await Timings.MeasureAsync("environment: clock self-check", () => environment.CheckClockAsync(cancellationToken));
+            await Timings.MeasureEnvironmentAsync("environment: clock self-check", () => environment.CheckClockAsync(cancellationToken));
             return environment;
         }
         catch (Exception ex)
@@ -253,7 +290,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
             await WriteStartFailureAsync(root, runId, created, ex);
 
             created.Reverse();
-            foreach (var resource in created)
+            foreach (var (_, resource) in created)
             {
                 await resource.DisposeAsync();
             }
@@ -269,7 +306,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// log of every container that had started. A service that failed its own start put its log in
     /// the fault's message before removing its container.
     /// </summary>
-    private static async Task WriteStartFailureAsync(string root, string runId, IEnumerable<IAsyncDisposable> created, Exception fault)
+    private static async Task WriteStartFailureAsync(string root, string runId, IEnumerable<(string Name, IAsyncDisposable Resource)> created, Exception fault)
     {
         var bundle = Path.Combine(root, "TestResults", "e2e", runId);
         try
@@ -278,10 +315,13 @@ public sealed class E2EEnvironment : IAsyncDisposable
             await File.WriteAllTextAsync(Path.Combine(bundle, "start-failure.txt"), fault.ToString());
             Timings.WriteTo(Path.Combine(bundle, "timings.json"));
 
-            foreach (var (name, container) in created.Select(Describe).OfType<(string, DotNet.Testcontainers.Containers.IContainer)>())
+            foreach (var (name, resource) in created)
             {
-                var (stdout, stderr) = await container.GetLogsAsync();
-                await File.WriteAllTextAsync(Path.Combine(bundle, $"{name}.log"), stdout + stderr);
+                if (ContainerOf(resource) is { } container)
+                {
+                    var (stdout, stderr) = await container.GetLogsAsync();
+                    await File.WriteAllTextAsync(Path.Combine(bundle, $"{name}.log"), stdout + stderr);
+                }
             }
         }
         catch (Exception ex) when (ex is IOException or DockerApiException or InvalidOperationException)
@@ -289,12 +329,12 @@ public sealed class E2EEnvironment : IAsyncDisposable
             // The fault itself is what matters, and it is on its way to the test's output.
         }
 
-        static (string, DotNet.Testcontainers.Containers.IContainer)? Describe(IAsyncDisposable resource) => resource switch
+        static DotNet.Testcontainers.Containers.IContainer? ContainerOf(IAsyncDisposable resource) => resource switch
         {
-            KeycloakService keycloak => ("keycloak", keycloak.Container),
-            TestIssuerService issuer => ("test-issuer", issuer.Container),
-            WireMockService wireMock => ("wiremock", wireMock.Container),
-            RedisService redis => ("redis", redis.Container),
+            KeycloakService keycloak => keycloak.Container,
+            TestIssuerService issuer => issuer.Container,
+            IUpstreamService upstream => upstream.Container,
+            RedisService redis => redis.Container,
             _ => null,
         };
     }
@@ -315,16 +355,154 @@ public sealed class E2EEnvironment : IAsyncDisposable
             throw new EnvironmentFaultException("pki", $"the temporary directory {full} lies inside the repository; key material must not.");
         }
 
-        var pki = TestPki.Create(directory, new Dictionary<string, string[]>
+        var leaves = new Dictionary<string, string[]>
         {
             ["front"] = [TlsFront.Host],
             ["keycloak"] = [KeycloakService.Host],
             ["issuer"] = [.. Issuers.HostsServedBy(IssuerRegistry.Owner.TestIssuer)],
-            ["wiremock"] = [.. Upstreams.HostsOf(UpstreamRegistry.WireMock)],
-        });
+        };
+
+        // contract-005 · G-16 — each upstream owner's leaf covers the names the owner says it needs.
+        foreach (var owner in Upstreams.DistinctOwners)
+        {
+            leaves.Add(owner.Name, [.. owner.CertificateNames(Upstreams.HostsOf(owner))]);
+        }
+
+        var pki = TestPki.Create(directory, leaves);
 
         RunDirectories.MarkOwned(directory);
         return pki;
+    }
+
+    /// <summary>
+    /// contract-005 · G-3, T-13 — nothing a run creates outlives it by more than one run. With the
+    /// resource reaper off, a run killed before its teardown leaves its containers and its network
+    /// behind, and its network holds the subnet the next run needs. So before it creates anything, a
+    /// run removes every container and network labelled with another run whose owning process is gone
+    /// (<see cref="RunDirectories.IsLive"/>). A run whose process is alive — another run on this
+    /// machine — is left alone: its network then holds the subnet, and this run stops with a fault
+    /// naming it rather than pulling a live run's environment out from under it. What was removed is
+    /// listed in this run's bundle as swept.txt.
+    /// </summary>
+    private static async Task<bool> SweepDeadRunsAsync(IDockerClient docker, string repositoryRoot, string runId, CancellationToken cancellationToken)
+    {
+        var labelled = new Dictionary<string, IDictionary<string, bool>>
+        {
+            ["label"] = new Dictionary<string, bool> { [E2ENetwork.RunLabel] = true },
+        };
+
+        bool Dead(IDictionary<string, string>? labels, out string run) =>
+            (run = labels is not null && labels.TryGetValue(E2ENetwork.RunLabel, out var r) ? r : string.Empty) is { Length: > 0 }
+            && run != runId
+            && !RunDirectories.IsLive(run);
+
+        var swept = new List<string>();
+        foreach (var container in await docker.Containers.ListContainersAsync(new ContainersListParameters { All = true, Filters = labelled }, cancellationToken))
+        {
+            if (Dead(container.Labels, out var run))
+            {
+                await IgnoringGoneAsync(docker.Containers.RemoveContainerAsync(container.ID, new ContainerRemoveParameters { Force = true, RemoveVolumes = true }, cancellationToken));
+                swept.Add($"container {container.Names?.FirstOrDefault()?.TrimStart('/') ?? container.ID} ({container.Image}) of run {run}");
+            }
+        }
+
+        // Networks after containers: a network is removed only once nothing is attached to it.
+        foreach (var network in await docker.Networks.ListNetworksAsync(new NetworksListParameters { Filters = labelled }, cancellationToken))
+        {
+            if (Dead(network.Labels, out var run))
+            {
+                await IgnoringGoneAsync(docker.Networks.DeleteNetworkAsync(network.ID, cancellationToken));
+                swept.Add($"network {network.Name} of run {run}");
+            }
+        }
+
+        if (swept.Count > 0)
+        {
+            var bundle = Path.Combine(repositoryRoot, "TestResults", "e2e", runId);
+            Directory.CreateDirectory(bundle);
+            await File.WriteAllLinesAsync(Path.Combine(bundle, "swept.txt"), swept, cancellationToken);
+        }
+
+        return true;
+
+        // Removed meanwhile by its own run's teardown: gone either way.
+        static async Task IgnoringGoneAsync(Task removal)
+        {
+            try
+            {
+                await removal;
+            }
+            catch (DockerApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+            }
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-7, G-16 — every host the upstream registry gives out is answered on the run's
+    /// network by the container its owner started, and by no other, with a certificate of the run's
+    /// PKI that names it. Read from the engine's own view of the network, not from what the owners
+    /// were asked to do: a host whose owner then answers nothing under it — an owner nothing started
+    /// for that name — would otherwise reach no fake and meet no refusal, and each call to it would
+    /// fail as if the product had.
+    /// </summary>
+    private static async Task CheckUpstreamsAsync(
+        IDockerClient docker, INetwork network, TestPki pki, Dictionary<UpstreamOwner, IUpstreamService> started, CancellationToken cancellationToken)
+    {
+        // Every alias on the run's network, with the containers (by name) that answer under it.
+        var holders = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var attached = await docker.Networks.InspectNetworkAsync(network.Name, cancellationToken);
+        foreach (var id in attached.Containers.Keys)
+        {
+            var container = await docker.Containers.InspectContainerAsync(id, cancellationToken);
+            if (container.NetworkSettings?.Networks is not { } networks || !networks.TryGetValue(network.Name, out var endpoint))
+            {
+                continue;
+            }
+
+            foreach (var alias in endpoint.Aliases ?? [])
+            {
+                if (!holders.TryGetValue(alias, out var names))
+                {
+                    holders[alias] = names = [];
+                }
+
+                names.Add(container.Name.TrimStart('/'));
+            }
+        }
+
+        var problems = new List<string>();
+        if (!started.ContainsKey(WireMockService.Owner))
+        {
+            problems.Add($"no host is registered to {WireMockService.Owner.Name}, whose journal every test reads (G-7)");
+        }
+
+        foreach (var (host, owner) in Upstreams.Owners.OrderBy(o => o.Key, StringComparer.Ordinal))
+        {
+            var expected = started[owner].Container.Name.TrimStart('/');
+            var answering = holders.GetValueOrDefault(host) ?? [];
+            if (answering.Count == 0)
+            {
+                problems.Add($"'{host}' is registered to {owner.Name}, but no container on the run's network answers under it: nothing started it there");
+            }
+            else if (answering.Count > 1 || answering[0] != expected)
+            {
+                problems.Add($"'{host}' is registered to {owner.Name} ({expected}), but is answered by {string.Join(" and ", answering)}");
+            }
+
+            if (!pki.Leaves.TryGetValue(owner.Name, out var certified) || !certified.Contains(host, StringComparer.OrdinalIgnoreCase))
+            {
+                problems.Add($"'{host}' is registered to {owner.Name}, but no certificate of the run's PKI for {owner.Name} names it");
+            }
+        }
+
+        if (problems.Count > 0)
+        {
+            throw new EnvironmentFaultException(
+                "upstreams",
+                $"the upstream registry and the running environment disagree: {string.Join("; ", problems)}. "
+                + "A call to such a host would reach no fake, and would fail as if the product had.");
+        }
     }
 
     /// <summary>
@@ -359,11 +537,8 @@ public sealed class E2EEnvironment : IAsyncDisposable
         try
         {
             Directory.CreateDirectory(ResultsDirectory);
-            foreach (var (name, container) in new[]
-            {
-                ("keycloak", Keycloak.Container), ("test-issuer", TestIssuer.Container),
-                ("wiremock", WireMock.Container), ("redis", Redis.Container),
-            })
+            foreach (var (name, container) in new[] { ("keycloak", Keycloak.Container), ("test-issuer", TestIssuer.Container), ("redis", Redis.Container) }
+                .Concat(UpstreamServices.Select(u => (u.Key.Name, u.Value.Container))))
             {
                 var (stdout, stderr) = await container.GetLogsAsync();
                 await File.WriteAllTextAsync(Path.Combine(ResultsDirectory, $"{name}.log"), stdout + stderr);
@@ -406,6 +581,17 @@ public sealed class E2EEnvironment : IAsyncDisposable
         private const string OwnerFile = "owner.pid";
 
         public static string For(string runId) => Path.Combine(Path.GetTempPath(), Prefix + runId);
+
+        /// <summary>
+        /// Whether the run <paramref name="runId"/> is still tended: its directory is here and the
+        /// process that owns it is alive. A run whose directory is gone has been torn down, or was
+        /// removed as stale, and a run whose owner has exited will never tear itself down.
+        /// </summary>
+        public static bool IsLive(string runId)
+        {
+            var directory = For(runId);
+            return Directory.Exists(directory) && OwnerIsAlive(directory);
+        }
 
         public static void MarkOwned(string directory) =>
             File.WriteAllText(Path.Combine(directory, OwnerFile), Environment.ProcessId.ToString(CultureInfo.InvariantCulture));

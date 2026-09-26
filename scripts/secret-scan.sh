@@ -32,6 +32,9 @@ mapfile -t tracked < <(git ls-files)
 # Each entry is "description|extended regex".
 patterns=(
   'private key block|-----BEGIN [A-Z ]*PRIVATE KEY-----'
+  # contract-005 · T-13 — no certificate is tracked either. The end-to-end PKI is generated for each
+  # run and deleted after it; a certificate in the repository is a trust anchor in everyone's clone.
+  'certificate block|-----BEGIN CERTIFICATE-----'
   'AWS access key id|AKIA[0-9A-Z]{16}'
   'GitHub token|gh[pousr]_[A-Za-z0-9]{36,}'
   'Slack token|xox[baprs]-[A-Za-z0-9-]{10,}'
@@ -53,7 +56,18 @@ for entry in "${patterns[@]}"; do
       scripts/secret-scan.sh:*) continue ;;
     esac
     report "$description -> $hit"
-  done < <(grep -nIE "$regex" -- "${tracked[@]}" 2>/dev/null | cut -c1-200)
+  # -e: the key and certificate patterns begin with dashes, and a pattern given bare is read as an
+  # option — grep refused it, the refusal went to /dev/null, and the pattern never matched anything.
+  done < <(grep -nIE -e "$regex" -- "${tracked[@]}" 2>/dev/null | cut -c1-200)
+done
+
+# ── Pass 1b: certificate and key files ─────────────────────────────────────────
+# contract-005 · T-13 — by name as well as by content: a DER certificate or a PKCS#12 bundle is binary,
+# and the patterns above never read it.
+for f in "${tracked[@]}"; do
+  case "${f,,}" in
+    *.pem|*.crt|*.cer|*.key|*.pfx|*.p12) report "certificate or key file -> $f" ;;
+  esac
 done
 
 # ── Pass 2: credential keys holding a value in configuration ───────────────────

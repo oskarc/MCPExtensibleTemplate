@@ -58,6 +58,7 @@ public sealed class TestIssuerService : IAsyncDisposable
             .WithNetworkAliases([.. hosts])
             .WithLabel(E2ENetwork.RunLabel, runId)
             .WithPortBinding(Port, true)
+            .WithLoopbackPortsOnly()
             .WithBindMount(Path.Combine(tls, TestPki.CertificateFile), "/e2e/tls/tls.crt", AccessMode.ReadOnly)
             .WithBindMount(Path.Combine(tls, TestPki.KeyFile), "/e2e/tls/tls.key", AccessMode.ReadOnly)
             .WithEnvironment("TestIssuer__Certificate", "/e2e/tls/tls.crt")

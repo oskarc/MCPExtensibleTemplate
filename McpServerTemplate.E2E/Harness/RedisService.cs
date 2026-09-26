@@ -20,6 +20,9 @@ public sealed class RedisService : IAsyncDisposable
     public const string Alias = "redis.e2e.test";
     public const int Port = 6379;
 
+    /// <summary>How long Redis may take to say it is ready; it takes about three seconds.</summary>
+    private static readonly TimeSpan ReadyWithin = TimeSpan.FromMinutes(1);
+
     private readonly IContainer _container;
 
     private RedisService(IContainer container) => _container = container;
@@ -35,13 +38,21 @@ public sealed class RedisService : IAsyncDisposable
             .WithNetwork(network)
             .WithNetworkAliases(Alias)
             .WithLabel(E2ENetwork.RunLabel, runId)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Ready to accept connections"))
+            // contract-005 · UC-1 edge — the wait has a deadline of its own, so a Redis that never
+            // becomes ready is a named fault rather than a run held until CI's hang timeout.
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Ready to accept connections", wait => wait.WithTimeout(ReadyWithin)))
             .Build();
 
         try
         {
             await container.StartAsync(cancellationToken);
             return new RedisService(container);
+        }
+        catch (TimeoutException ex)
+        {
+            var log = await LogOrReasonAsync(container);
+            await container.DisposeAsync();
+            throw new EnvironmentFaultException("redis", $"Redis did not log 'Ready to accept connections' within {ReadyWithin.TotalSeconds:F0} s. Its log: {log}", ex);
         }
         catch
         {
@@ -51,4 +62,18 @@ public sealed class RedisService : IAsyncDisposable
     }
 
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();
+
+    /// <summary>The container's log for a fault's message, or why it could not be read: the fault must survive either way.</summary>
+    private static async Task<string> LogOrReasonAsync(IContainer container)
+    {
+        try
+        {
+            var (stdout, stderr) = await container.GetLogsAsync(ct: CancellationToken.None);
+            return stdout + stderr;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return $"(not readable: {ex.GetType().Name}: {ex.Message})";
+        }
+    }
 }

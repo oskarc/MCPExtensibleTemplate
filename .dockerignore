@@ -17,3 +17,7 @@ docs/
 # Editor state.
 .vs/
 .vscode/
+# Test material in the product folder: a hand-written MCP initialize request from the repository's first
+# commit, read by nothing, which the Web SDK would publish into /app with every other **/*.json. The
+# image carries no test material (contract-005 · G-1).
+McpServerTemplate/init.json

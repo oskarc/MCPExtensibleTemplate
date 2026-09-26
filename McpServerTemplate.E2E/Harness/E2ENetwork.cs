@@ -61,8 +61,9 @@ public static class E2ENetwork
 
     /// <summary>
     /// Creates the run's network. A subnet another network already holds is an environment fault,
-    /// named with the network that holds it — usually a previous run's, left behind by a killed
-    /// process before the resource reaper removed it.
+    /// named with the network that holds it. A killed run's network is removed before this, by the
+    /// start's sweep of dead runs, so the holder is a run still alive on this machine or a network that
+    /// is not a run's at all.
     /// </summary>
     internal static async Task<INetwork> CreateAsync(string runId, IDockerClient docker, CancellationToken cancellationToken)
     {
@@ -97,20 +98,23 @@ public static class E2ENetwork
             var holder = await HolderOfSubnetAsync(docker, cancellationToken);
             throw new EnvironmentFaultException(
                 "network",
-                holder is not null
-                    ? $"subnet taken: {Subnet} overlaps network '{holder}'. Remove it (docker network rm {holder}) if it is a previous run's."
-                    : $"the run's network on {Subnet} could not be created: {ex.Message}",
+                holder switch
+                {
+                    null => $"the run's network on {Subnet} could not be created: {ex.Message}",
+                    { Labels: { } labels } when labels.TryGetValue(RunLabel, out var run) =>
+                        $"subnet taken: {Subnet} is held by network '{holder.Name}' of run {run}, which is still alive on this "
+                        + "machine (a dead run's would have been swept). Wait for it to finish; two runs cannot share the subnet.",
+                    _ => $"subnet taken: {Subnet} overlaps network '{holder.Name}', which is not a run's. Remove it or move it "
+                        + "off the subnet (docker network rm " + holder.Name + ").",
+                },
                 ex);
         }
     }
 
-    private static async Task<string?> HolderOfSubnetAsync(IDockerClient docker, CancellationToken cancellationToken)
+    private static async Task<NetworkResponse?> HolderOfSubnetAsync(IDockerClient docker, CancellationToken cancellationToken)
     {
         var networks = await docker.Networks.ListNetworksAsync(new NetworksListParameters(), cancellationToken);
-        return networks
-            .Where(n => n.IPAM?.Config?.Any(c => Overlaps(c.Subnet)) == true)
-            .Select(n => n.Name)
-            .FirstOrDefault();
+        return networks.FirstOrDefault(n => n.IPAM?.Config?.Any(c => Overlaps(c.Subnet)) == true);
     }
 
     private static bool Overlaps(string? cidr)

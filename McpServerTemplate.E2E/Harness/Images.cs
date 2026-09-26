@@ -35,13 +35,6 @@ internal static class Images
     /// <summary>The label that carries the hash of the build context an image was built from.</summary>
     public const string ContextLabel = "org.mcp-server-template.e2e.context";
 
-    /// <summary>
-    /// testcontainers/ryuk:0.14.0, by the digest of its multi-arch index (resolved 2026-09-26): the
-    /// resource reaper Testcontainers starts beside every run, which removes a run's containers and
-    /// network if the test process dies before its own teardown. Pinned like every other image.
-    /// </summary>
-    public const string ResourceReaper = "testcontainers/ryuk:0.14.0@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0";
-
     // What the Testcontainers builder puts before and after the .dockerignore lines when it packs a
     // context (its DockerIgnoreFile), reproduced so the hash covers exactly what is sent.
     private static readonly string[] AlwaysIgnored = ["**/.idea", "**/.vs"];

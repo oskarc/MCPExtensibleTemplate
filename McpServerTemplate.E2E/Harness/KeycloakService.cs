@@ -91,6 +91,7 @@ public sealed class KeycloakService : IAsyncDisposable
             .WithLabel(E2ENetwork.RunLabel, runId)
             .WithPortBinding(Port, true)
             .WithPortBinding(ManagementPort, true)
+            .WithLoopbackPortsOnly()
             // contract-005 · G-3 — key material by read-only bind mount, never copied into the container.
             .WithBindMount(Path.Combine(tls, TestPki.CertificateFile), "/e2e/tls/tls.crt", AccessMode.ReadOnly)
             .WithBindMount(Path.Combine(tls, TestPki.KeyFile), "/e2e/tls/tls.key", AccessMode.ReadOnly)

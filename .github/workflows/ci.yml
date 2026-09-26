@@ -87,17 +87,19 @@ jobs:
         run: dotnet build McpServerTemplate.sln --no-restore --configuration Release -warnaserror
 
       # The first test starts the shared environment, cold: image builds, pulls and Keycloak. The hang
-      # timeout is per test, so it must cover that start; a test that exceeds it is dumped and killed
-      # rather than holding the job until the budget runs out.
+      # timeout is per test, so it must cover that start; a test that exceeds it is named and killed
+      # rather than holding the job until the budget runs out. No dump is taken (contract-005 · T-13,
+      # nothing left behind): a dump of the test process would hold the run's Keycloak client secrets
+      # and minted tokens, and would be uploaded with the bundle below for 14 days.
       - name: End-to-end tests
         run: >-
           dotnet test McpServerTemplate.E2E/McpServerTemplate.E2E.csproj --no-build --configuration Release
           --logger "console;verbosity=detailed" --logger "trx;LogFileName=e2e.trx"
           --results-directory TestResults
-          --blame-hang --blame-hang-timeout 15m
+          --blame-hang --blame-hang-timeout 15m --blame-hang-dump-type none
 
       # The diagnostics bundle: every container's log, the fake's journal, the issuers' counts and the
-      # per-phase timings (written by the harness under TestResults/e2e/), with the trx and any hang dump.
+      # per-phase timings (written by the harness under TestResults/e2e/), with the trx.
       - name: Upload diagnostics bundle
         if: failure()
         uses: actions/upload-artifact@v4

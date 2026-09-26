@@ -22,7 +22,7 @@ namespace McpServerTemplate.E2E.Harness;
 /// Its request journal is read through WireMock's admin REST API with a plain HttpClient from the name
 /// map — no WireMock client package, so nothing about the fake is taken on trust from a library.
 /// </summary>
-public sealed class WireMockService : IAsyncDisposable
+public sealed class WireMockService : IUpstreamService
 {
     /// <summary>sheyenrath/wiremock.net-alpine:2.14.0, by the digest of its multi-arch index (resolved 2026-09-26).</summary>
     public const string Image = "sheyenrath/wiremock.net-alpine:2.14.0@sha256:b0e6698daff17215232317ed6cf4a007ae72808dcc35f191eb4efffeb6622737";
@@ -31,6 +31,9 @@ public sealed class WireMockService : IAsyncDisposable
     public const string Alias = "wiremock.e2e.test";
 
     public const int Port = 443;
+
+    /// <summary>contract-005 · G-16 — WireMock as an upstream owner: the one the registry gives every provider host today.</summary>
+    public static UpstreamOwner Owner { get; } = new WireMockOwner();
 
     private readonly IDockerClient _docker;
     private readonly IContainer _container;
@@ -55,12 +58,13 @@ public sealed class WireMockService : IAsyncDisposable
         string runId,
         CancellationToken cancellationToken)
     {
-        var tls = pki.LeafDirectory("wiremock");
+        var tls = pki.LeafDirectory(Owner.Name);
         var container = new ContainerBuilder(Image)
             .WithNetwork(network)
             .WithNetworkAliases([.. hosts])
             .WithLabel(E2ENetwork.RunLabel, runId)
             .WithPortBinding(Port, true)
+            .WithLoopbackPortsOnly()
             // One PEM holding the certificate and its key, so no password has to be passed around.
             .WithBindMount(Path.Combine(tls, TestPki.BundleFile), "/e2e/tls/tls.pem", AccessMode.ReadOnly)
             // The image's entrypoint listens on http://*:80; the later --Urls replaces it, so the fake
@@ -95,6 +99,12 @@ public sealed class WireMockService : IAsyncDisposable
     }
 
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();
+
+    private sealed class WireMockOwner() : UpstreamOwner("wiremock")
+    {
+        internal override async Task<IUpstreamService> StartAsync(UpstreamStart start, IReadOnlyList<string> hosts, CancellationToken cancellationToken) =>
+            await WireMockService.StartAsync(start.Docker, start.Network, start.Pki, start.Names, hosts, start.RunId, cancellationToken);
+    }
 
     private async Task WaitUntilReadyAsync(CancellationToken cancellationToken)
     {

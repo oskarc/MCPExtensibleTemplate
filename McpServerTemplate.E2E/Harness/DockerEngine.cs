@@ -1,11 +1,13 @@
 using Docker.DotNet;
+using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
 
 namespace McpServerTemplate.E2E.Harness;
 
 /// <summary>
 /// The Docker engine Testcontainers talks to, reached directly for the few things Testcontainers does
-/// not expose: a ping, an image's labels, and which network holds a subnet.
+/// not expose: a ping, an image's labels, which network holds a subnet, and the host address a port
+/// is published on.
 ///
 /// contract-005 · G-11 — "Docker unavailable" is the first self-check, so a run with no engine fails
 /// in one line naming it, not with a stack trace from whichever container happened to start first.
@@ -24,6 +26,28 @@ internal static class DockerEngine
         return inspected.State is { Running: false, Restarting: false } state && state.Status is "exited" or "dead"
             ? state.ExitCode
             : null;
+    }
+
+    /// <summary>
+    /// Publishes every port the container is built with on 127.0.0.1 only.
+    ///
+    /// contract-005 · G-6, G-7 — the environment's own doors are unauthenticated by design: the test
+    /// issuer's /admin/mint, its auto-approving /authorize and /token, WireMock's writable /__admin.
+    /// Testcontainers publishes on every host interface, which put those doors, Keycloak and the server
+    /// on the machine's LAN address for as long as a run lasted. The test process reaches them over
+    /// loopback, so loopback is where they are published, and nowhere else.
+    /// </summary>
+    public static ContainerBuilder WithLoopbackPortsOnly(this ContainerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithCreateParameterModifier(parameters =>
+        {
+            foreach (var binding in parameters.HostConfig?.PortBindings?.Values.SelectMany(b => b) ?? [])
+            {
+                binding.HostIP = "127.0.0.1";
+            }
+        });
     }
 
     /// <summary>A client for the endpoint Testcontainers resolved, or an environment fault naming why there is none.</summary>
