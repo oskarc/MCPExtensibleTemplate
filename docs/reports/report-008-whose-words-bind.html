@@ -1,0 +1,461 @@
+<title>Whose Words Bind</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --paper:#f7f5f1; --ink:#1c2230; --ink-soft:#4a5468; --ink-faint:#7b8496;
+  --rule:#ddd8cf; --rule-soft:#e9e5dd; --panel:#fffdfa; --panel-2:#f1eee8;
+  --verified:#2d6a4a; --corrected:#a32d28; --open:#9a6510; --human:#6b3fa0;
+  --verified-bg:#e6f0e8; --corrected-bg:#f7e6e4; --open-bg:#f8eeda; --human-bg:#efe7f7;
+  --accent:#27496d; --code-bg:#f0ede6; --break:#a32d28;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b; --human:#b794dd;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113; --human-bg:#241b30;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c;
+}}
+:root[data-theme="dark"]{
+  --paper:#14171e; --ink:#e4e6ea; --ink-soft:#a8b0bf; --ink-faint:#767f91;
+  --rule:#2a2f3a; --rule-soft:#22262f; --panel:#191d25; --panel-2:#1f242d;
+  --verified:#6fbf8c; --corrected:#e3837c; --open:#dfa94b; --human:#b794dd;
+  --verified-bg:#18281f; --corrected-bg:#2c1a19; --open-bg:#2b2113; --human-bg:#241b30;
+  --accent:#7fa8cd; --code-bg:#1b1f27; --break:#e3837c;
+}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.6;margin:0}
+.wrap{max-width:52rem;margin:0 auto;padding-block:3rem 5rem;padding-left:16px;padding-right:16px}
+h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif;text-wrap:balance;line-height:1.2}
+h1{font-size:clamp(2rem,6vw,2.9rem);margin:0 0 .6rem;letter-spacing:-.015em}
+h2{font-size:1.45rem;margin:3.4rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--rule)}
+h3{font-size:1.08rem;margin:0 0 .5rem}
+p{margin:0 0 1rem}
+code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+code{background:var(--code-bg);padding:.1em .35em;border-radius:3px;font-size:.87em}
+pre{background:var(--code-bg);border:1px solid var(--rule-soft);border-radius:5px;padding:.9rem 1rem;overflow-x:auto;font-size:.82rem;line-height:1.55;margin:0 0 1rem}
+a{color:var(--accent)}
+blockquote{margin:0 0 1rem;padding:0 0 0 1.1rem;border-left:3px solid var(--human);font-family:"IBM Plex Serif",Georgia,serif;font-size:1.03rem;color:var(--ink-soft)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 .9rem}
+.standfirst{font-family:"IBM Plex Serif",Georgia,serif;font-size:1.16rem;color:var(--ink-soft);margin:0 0 1.6rem;max-width:42rem}
+.meta{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--ink-faint);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:.7rem 0;display:flex;flex-wrap:wrap;gap:.4rem 1.6rem}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin:2rem 0 2.5rem}
+.strip div{background:var(--panel);padding:1rem .9rem}
+.strip .n{font-family:"IBM Plex Mono",monospace;font-size:1.85rem;font-weight:600;line-height:1;display:block;margin-bottom:.35rem;font-variant-numeric:tabular-nums}
+.strip .l{font-size:.78rem;color:var(--ink-soft);line-height:1.35;display:block}
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;padding:.2rem .5rem;border-radius:3px;vertical-align:.12em}
+.c-open{background:var(--open-bg);color:var(--open)}
+.c-corr{background:var(--corrected-bg);color:var(--corrected)}
+.c-ver{background:var(--verified-bg);color:var(--verified)}
+.c-hum{background:var(--human-bg);color:var(--human)}
+.finding{border:1px solid var(--rule);border-left-width:4px;background:var(--panel);padding:1.3rem 1.4rem;margin:0 0 1.4rem}
+.finding.open{border-left-color:var(--open)}
+.finding.corr{border-left-color:var(--corrected)}
+.finding.ver{border-left-color:var(--verified)}
+.finding.hum{border-left-color:var(--human)}
+.fhead{display:flex;flex-wrap:wrap;gap:.6rem;align-items:baseline;margin-bottom:.7rem}
+.fid{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--ink-faint);font-weight:600}
+.finding p:last-child,.finding pre:last-child,.finding blockquote:last-child{margin-bottom:0}
+table{border-collapse:collapse;width:100%;font-size:.86rem;margin:0 0 1.2rem}
+th,td{text-align:left;padding:.55rem .6rem;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+th{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--rule)}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tw{overflow-x:auto}
+.judgement{border:1px solid var(--accent);background:var(--panel);padding:1.4rem 1.5rem;margin:1.2rem 0 0}
+.judgement h3{color:var(--accent)}
+ol.rec{margin:0;padding-left:1.3rem}
+ol.rec li{margin-bottom:.9rem}
+ol.rec li:last-child{margin-bottom:0}
+.note{font-size:.88rem;color:var(--ink-soft);border-left:2px solid var(--rule);padding-left:1rem;margin:0 0 1rem}
+</style>
+
+<div class="wrap">
+
+<p class="eyebrow">report-008 &nbsp;·&nbsp; analysis &nbsp;·&nbsp; eighth in the series</p>
+<h1>Whose Words Bind</h1>
+<p class="standfirst">The pioneer asked how the standard had changed in a week. A traced and
+second-read answer showed four things. The pioneer&rsquo;s own decisions wrote two lines. The rulings
+drawn from their corrections bind largely in the agent&rsquo;s words. A check that enforces one of
+those rulings passes by never matching a line. And the instrument that should show the
+pioneer&rsquo;s role changing shows it has not begun to.</p>
+
+<div class="meta">
+  <span>base-building-kit 0.31 (<span class="mono">e29cac2</span>)</span>
+  <span>Records from 2026-09-19 to 2026-09-26 · 3 review batches · 4 upgrades · 33 corrections</span>
+  <span>2026-09-26</span>
+</div>
+
+<div class="strip">
+  <div><span class="n">2</span><span class="l">lines of skill text written by the pioneer&rsquo;s own review decisions</span></div>
+  <div><span class="n">11</span><span class="l">active precedents whose holding is wholly or largely agent-authored text</span></div>
+  <div><span class="n">1</span><span class="l">precedent check that exits 0 on this checkout whatever the log says</span></div>
+  <div><span class="n">0</span><span class="l">of 11 drift entries ever moved from <code>open</code></span></div>
+  <div><span class="n">32/33</span><span class="l">corrections graded <code>redirected</code>; none <code>reviewed-after</code> or <code>did-it</code></span></div>
+</div>
+
+<p><strong>The machinery works; the material it is fed is the problem.</strong> Precedents bind,
+the sealed key and reveal held across three batches, and the blocked state carried five
+corrections through a closed ledger and cleared them the same evening. Where a precedent&rsquo;s
+holding is the pioneer&rsquo;s own sentence, it steered the next contract correctly. Everything below
+is about what the standard is made of. In several places the record carries the agent&rsquo;s reading
+where it claims to carry the pioneer&rsquo;s, and nothing in the kit tells the two apart.</p>
+
+<h2>How the question was answered</h2>
+
+<p>The pioneer asked: <em>&ldquo;can you tell me about how we have changed the standard the last
+days&rdquo;</em>. The agent sent five readers through the project&rsquo;s records, one per kind: candidates
+and batches; the casebook; the correction log; the map, mechanisms and upgrades; and the reports and
+drift log. A second reader checked each claim against the files. The agent then re-ran the central
+findings itself (see Provenance).</p>
+
+<div class="finding corr">
+  <div class="fhead"><span class="fid">F-0</span><span class="chip c-corr">Corrected</span>
+    <h3>37 of 149 claims were wrong on first reading, and many errors came from the agent&rsquo;s own summaries</h3></div>
+  <p>The second readers also added 26 items the first readers had missed. Many of the corrected claims
+  were not misreadings of the records. They were faithful readings of summaries the agent had earlier
+  written into durable places: commit messages, drift entries and reports. So the durable record had
+  inherited the error. Examples:</p>
+  <ul>
+    <li><strong>&ldquo;The first audit this project has completed&rdquo;</strong> is in a commit message
+    and in a drift entry. The ledger holds a complete audit two days earlier.</li>
+    <li><strong>The same presentation failure is counted two incompatible ways.</strong> The correction
+    log and casebook call three of its recurrences the fourth, fifth and sixth. Report-007 calls the same
+    three &ldquo;the sixth, seventh and eighth occurrences of the same failure in six days&rdquo;.</li>
+    <li><strong>&ldquo;Four held on the certainty ruling&rdquo;</strong> in a commit message was three. The
+    fourth hold was the pioneer&rsquo;s own separate choice on that item.</li>
+    <li><strong>Two records drafted from one correction disagree on its facts.</strong> One says seven
+    guardrails and ten tests were left undone; the other says six of twelve guardrails were done and two
+    of thirteen tests written.</li>
+  </ul>
+  <p class="note">The kit already asks that every contract be verified from outside. Nothing asks the
+  same of the prose the agent writes into records: a count or a &ldquo;first&rdquo; in a commit
+  message becomes a fact the next reader relies on.</p>
+</div>
+
+<h2>The rulings speak in the agent&rsquo;s voice</h2>
+
+<div class="finding corr">
+  <div class="fhead"><span class="fid">F-1</span><span class="chip c-corr">Defect</span>
+    <h3>Eleven active precedents take their holding from a field the agent filled in</h3></div>
+  <p>A correction entry carries three incident fields: <code>noticed</code>,
+  <code>would_have_been_right</code> and <code>seen_before</code>. They exist to hold the pioneer&rsquo;s
+  own answers, verbatim, or <code>not asked</code>. In practice the agent recorded each correction in
+  the same turn and often filled <code>would_have_been_right</code> with its own reading of the lesson,
+  in the third person. The case clerk then took that field as the holding. The only authorship record
+  is <code>recorded_by: main-agent</code>, which names who wrote the entry, not who authored each
+  answer.</p>
+  <div class="tw"><table>
+    <tr><th>What the pioneer said</th><th>What the precedent now holds (from the agent-filled field)</th><th>Match</th></tr>
+    <tr><td><em>&ldquo;none of that means anything&rdquo;</em></td><td>Say what each thing is in plain words &mdash; six observations not yet merged into candidates, a contract never independently verified&hellip;</td><td class="num">identical</td></tr>
+    <tr><td><em>&ldquo;stay true to the skill&rdquo;</em></td><td>Run the batch exactly as meta-skill-builder prescribes &mdash; the file&rsquo;s order, statement before disposition&hellip; and do not reorder&hellip;</td><td class="num">identical</td></tr>
+    <tr><td><em>&ldquo;i have no idea what that means&rdquo;</em></td><td>Say what the housekeeping job is, why it cannot happen now, how long it waits&hellip; with no kit t[erms]&hellip;</td><td class="num">identical</td></tr>
+    <tr><td><em>&ldquo;you have lost direction here, that is why you ask me&rdquo;</em> (<code>noticed: not asked</code>)</td><td>Read the bearing against the founding statement, which already decides it&hellip;</td><td class="num">0.89</td></tr>
+  </table></div>
+  <p>By the same comparison, nine active precedents are identical to that field. Two more are 0.89 and
+  0.76 similar. One further precedent is identical but already overruled. By contrast, two precedents
+  whose field holds the pioneer&rsquo;s own sentence show the field working as designed. One reads
+  <em>&ldquo;You should have proposed solutions and waited for my input&rdquo;</em>. The other is the
+  most recent, where the pioneer answered all three questions themselves.</p>
+  <p><strong>The case where it binds the wrong way.</strong> The last row above became a precedent
+  holding that the founding statement already decides such questions. When the pioneer later ranked
+  the card for that same moment, their reason was:</p>
+  <blockquote>B, you were lost in the woods and were asking what tree was the way out, but none were.
+  The solution was to leave that context behind and think broader, read the roadmap and the code and
+  look with new eyes.</blockquote>
+  <p>The binding precedent and the pioneer&rsquo;s own reason point in opposite directions. The precedent
+  is the agent&rsquo;s inference, recorded where an answer was never asked for. No conflict is marked,
+  because the kit compares precedents with precedents, not with card rationales.</p>
+  <p class="note">This is the most consequential finding here. Since 0.25, precedents bind, and
+  only the pioneer can overrule one. A binding rule that is the agent&rsquo;s own words, and that no
+  one presents to the pioneer, is exactly the loophole this project&rsquo;s founding statement exists
+  to exclude, one layer up.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-2</span><span class="chip c-open">Defect</span>
+    <h3>A binding ruling did not stop the same failure a day later; an outside reading did</h3></div>
+  <p>The newest precedent is the pioneer&rsquo;s own. At an approval gate the agent offered narrower
+  tests, and the pioneer answered <em>&ldquo;testing is central&rdquo;</em> and broadened instead. The
+  next contract cited that precedent in its ground and promised to run the earlier contract&rsquo;s
+  end-to-end tests <em>&ldquo;exactly as written&rdquo;</em>. Its first draw ran two of the eight
+  refusals those tests name. The agent was not the one who caught it. Five independent challengers
+  attacked the draft, four of them found it, and a second reader confirmed it. The contract was
+  redrawn before the gate.</p>
+  <p>The pioneer asked for that challenge on the previous contract (<em>&ldquo;I want you to challenge
+  the contract, what does not hold its claim?&rdquo;</em>). At the spec lock of this one they asked for
+  the same after the build: <em>&ldquo;after the contract run adversarial agents and fix bugs and issues
+  and rerun agents until its resolved.&rdquo;</em> The kit has no such step. The contract procedure ends
+  at the agent&rsquo;s own draw and the pioneer&rsquo;s gate.</p>
+</div>
+
+<h2>Checks and precedents that do not hold themselves</h2>
+
+<div class="finding corr">
+  <div class="fhead"><span class="fid">F-3</span><span class="chip c-corr">Defect</span>
+    <h3>The only precedent check passes by never matching a line</h3></div>
+  <p><code>checks/P-010.sh</code> enforces &ldquo;finish the approved contract before proposing work
+  beyond it&rdquo;. It reads <code>CONTRACT-LOG.yaml</code> line by line and matches
+  <code>"    status: approved"</code> exactly. On this Windows checkout the log has CRLF endings (3,255
+  carriage returns), so every line ends <code>\r</code>, no line ever matches, and the script exits 0.
+  Today three contracts are open at once and it still exits 0. The casebook records the check as
+  <code>passes</code>.</p>
+  <p>The CRLF did not come from git: the file carries <code>eol=lf</code>. It came from the agent&rsquo;s
+  own edits. Scripts writing in text mode on Windows convert line endings silently. Any kit check that
+  compares whole lines is exposed the same way on any Windows project whose records the agent edits
+  with ordinary tools.</p>
+  <pre>$ bash .claude/skills/meta-mechanisms/checks/P-010.sh; echo "exit=$?"
+exit=0          # three contracts are status approved / implemented</pre>
+  <p><strong>Afterwards.</strong> While logging this report, the agent wrote the contract log back with
+  LF endings. The same check now exits 1: <code>P-010 broken: more than one contract left open at once
+  &mdash; contract-005 contract-004 contract-003</code>. So the check was sound all along. Whether it
+  can see anything depended on how the last tool to touch the file wrote its line endings, and no hook
+  runs it on its own.</p>
+  <p class="note">The kit&rsquo;s own principle is that a test is seen to fail before it is trusted. The
+  red run was done when the check was written, on a file that then had LF endings. Nothing re-proves a
+  check on the machine it runs on, so &ldquo;passes&rdquo; and &ldquo;cannot fail here&rdquo; look the
+  same.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-4</span><span class="chip c-open">Gap</span>
+    <h3>An authorised departure from a precedent leaves no trace</h3></div>
+  <p>The three open contracts are not drift. The pioneer chose it: <em>&ldquo;run both&rdquo;</em>, keeping
+  one contract open while the next was drawn and approved. But the precedent&rsquo;s
+  <code>distinguished_by</code> is empty, and nothing prompts it. The approval moment runs no precedent
+  check, so a departure the pioneer authorised looks the same as one nobody noticed. With the check
+  silent (F-3), there is no signal at all.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-5</span><span class="chip c-open">Gap</span>
+    <h3>A ranked card can contradict an active precedent, unmarked</h3></div>
+  <p>In the second batch the pioneer ranked a card <strong>[B, A]</strong>. B was their own earlier
+  instruction, <em>&ldquo;The agent should present candidates that scores high on reliability, those
+  it feels are strong or likely to be adopted.&rdquo;</em> That instruction had become a precedent, and
+  their <em>&ldquo;stay true to the skill&rdquo;</em> overruled it minutes later. The overruling precedent
+  (follow the file&rsquo;s order) is still active. So the casebook now holds a ranked card and an active
+  precedent that lean opposite ways on the same moment, and no <code>conflict:</code> marker exists.
+  The reason given with the ranking says the fix belongs upstream: <em>&ldquo;Not sure this should be
+  declined, but it should be fixed in the meta kit repo&rdquo;</em>.</p>
+</div>
+
+<h2>The pioneer&rsquo;s instructions about the practice have no home</h2>
+
+<div class="finding hum">
+  <div class="fhead"><span class="fid">F-6</span><span class="chip c-hum">Pioneer</span>
+    <h3>A ruling on what reviews show was given, and not applied to the very next batch</h3></div>
+  <p>In the first batch the pioneer ruled:</p>
+  <blockquote>Id like to only rule on items that has cetainty high or higher / i rule held on everyone
+  that isnt high or higher</blockquote>
+  <p>The second batch, assembled the same day, put a candidate rated <code>moderate</code> to them, and
+  they decided it. In that batch they restated the rule more sharply:</p>
+  <blockquote>The order is not important as long as only the candidates and cards with HIGH certainty
+  are the only ones showed.</blockquote>
+  <p>The rule lives nowhere the assembler reads. It lives only in batch reasons, in the agent&rsquo;s
+  private memory and in a held note. The kit has no record kind for a pioneer&rsquo;s standing
+  instruction <em>about the practice itself</em>, as distinct from a correction of the work. Two further
+  instructions of that kind are in the same state:</p>
+  <ul>
+    <li><strong>The presentation forms.</strong> <em>&ldquo;Draw a form for candidates and one for cards
+    that you will use and enforce from now on.&rdquo;</em> This was never entered as a correction. The
+    forms lived only in conversation, were lost at the first compaction, were rebuilt wrongly from the
+    batch file&rsquo;s layout for the next batch, and survive now only in the agent&rsquo;s memory
+    file.</li>
+    <li><strong>&ldquo;Yes, but upstream.&rdquo;</strong> <em>&ldquo;oh, that will be handled by the next
+    version of the meta kit&rdquo;</em> was recorded as <code>decline</code>, because the vocabulary has
+    no exit for &ldquo;accepted, to be fixed in the kit&rdquo;.</li>
+  </ul>
+  <p>And the rule cannot be applied as given: <strong>cards carry no certainty</strong> (report-007 F-3,
+  again). This week&rsquo;s only card reached the pioneer with a note saying so.</p>
+</div>
+
+<div class="finding hum">
+  <div class="fhead"><span class="fid">F-7</span><span class="chip c-hum">Pioneer</span>
+    <h3>&ldquo;Would it be enforced or remembered?&rdquo;</h3></div>
+  <p>The one line the pioneer&rsquo;s review wrote into <code>INTENT.md</code> reads: <em>what is waiting
+  on the pioneer is put to them as a decision when it accumulates, never left as a count in a status
+  line for them to ask about</em>. Before deciding, they asked whether it would be enforced or
+  remembered. Checked against 0.31:</p>
+  <ul>
+    <li><strong>Enforced:</strong> the session-start hook tells the agent to run
+    <code>waiting-on-you.sh</code> and put the list first.</li>
+    <li><strong>Remembered:</strong> whether the agent does, and whether what it writes is readable.</li>
+    <li><strong>The gap:</strong> the hook fires at session start only. The backlog that prompted the
+    correction grew across one long session, to fifty-one candidates.</li>
+  </ul>
+  <p>The pioneer&rsquo;s framing is the feedback. A line in the always-loaded file is remembered, and a
+  hook is enforced. The kit should say which each line is, because a line that reads as a rule and is
+  carried only by memory fails exactly when the session is long enough to matter. Every instruction in
+  F-6 is currently <em>remembered</em>, and one of them has already been lost.</p>
+</div>
+
+<h2>Records that stopped moving</h2>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-8</span><span class="chip c-open">Gap</span>
+    <h3>Repeated corrections are filed as new candidates, so recurrence is invisible to the ledger</h3></div>
+  <p>The pioneer corrected one failure six times in three days: the agent presenting in the kit&rsquo;s
+  own vocabulary. They said <em>&ldquo;none of that means anything&rdquo;</em>, <em>&ldquo;Again, i dont
+  know that t-2, t12,G12 or any of the other ids mean&rdquo;</em>, <em>&ldquo;you need to work harder to
+  present it to me in a clear structured and accessible way&rdquo;</em>, <em>&ldquo;i have no idea what
+  that means&rdquo;</em>, <em>&ldquo;It was very hard to understand&rdquo;</em> and <em>&ldquo;you
+  regressed in how you presented now&rdquo;</em>. The consolidator filed six separate candidates. Each
+  has <code>restatements: 1</code> and certainty <code>high</code>, and none is due. To the certainty
+  machinery, the pioneer&rsquo;s most repeated correction looks like six single sightings.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-9</span><span class="chip c-open">Gap</span>
+    <h3>The drift log has not changed since the 20th</h3></div>
+  <p>Eleven entries, all <code>open</code>, none ever moved to <code>watching</code> or
+  <code>resolved</code>. That includes entries whose fix landed by contract, such as a declared proxy
+  the server did not trust and a certificate setting nothing read. The presentation failure above
+  recurred three more times after the entry that tracks it was last updated. Its
+  <code>recurrence_count</code> still reads 2. Nothing prompts the agent to move, link or bump an
+  entry, and it did none of these.</p>
+</div>
+
+<div class="finding open">
+  <div class="fhead"><span class="fid">F-10</span><span class="chip c-open">Gap</span>
+    <h3>Bookkeeping the adoption and upgrade paths leave undone</h3></div>
+  <ul>
+    <li><strong>The first adoption changed no manifest entry.</strong> The sentence went into
+    <code>INTENT.md</code>. The M-22 route says the manifest is updated in the same act, and the node
+    still reads <code>thin</code> with no record of it.</li>
+    <li><strong>Base node lines were never refreshed across four upgrades.</strong> The manifest still
+    describes base-antidrift as post-output drift scoring, which 0.29 replaced with the closing four.</li>
+    <li><strong>0.27 reworded six map rows that stay marked <code>ratified</code></strong>, including
+    one that dropped &ldquo;or debugging&rdquo; from a trigger. No re-ratification of the new wording is
+    recorded.</li>
+    <li><strong>Every report in the contract log reads <code>led_to: null</code></strong>, including
+    reports whose asks later upgrades plainly took up.</li>
+    <li><strong>One rehearsal finding went nowhere.</strong> The 0.31 rehearsal found the written
+    upgrade list omits registering a new base node (only the migration check surfaced it). That finding
+    is in no report.</li>
+  </ul>
+</div>
+
+<div class="finding ver">
+  <div class="fhead"><span class="fid">F-11</span><span class="chip c-ver">Measured</span>
+    <h3>The fading curve has not begun, and part of that is the instrument</h3></div>
+  <p>Of 33 corrections, 32 are graded <code>redirected</code> and one <code>hinted</code>. None is
+  <code>reviewed-after</code> or <code>did-it</code>, and there are zero bearing re-evaluations. On its
+  face, the pioneer&rsquo;s judgement is not yet carried by the standard. Two things in the instrument
+  make that reading unsafe:</p>
+  <ul>
+    <li><strong>An override is not an error, and the log cannot tell them apart</strong> (report-007
+    recommendation 6). Twice this week the pioneer ranked the agent&rsquo;s original response
+    <em>above</em> their own correction: <em>&ldquo;THe reason is i understand when i want you to push
+    ahead, but you dont. Its my point to hold.&rdquo;</em></li>
+    <li><strong>Corrections given while a contract is being drawn carry no contract.</strong> The
+    newest correction was given at a spec lock, before the contract it shaped had an approved entry,
+    so its <code>contract_id</code> is null. The curve counts it under &ldquo;no contract&rdquo;. Every
+    spec-lock correction will be miscounted the same way.</li>
+  </ul>
+  <p>No mechanism shows the curve to the pioneer. The agent reported it for the first time this week,
+  because they asked a question that happened to need it.</p>
+</div>
+
+<h2>Smaller things</h2>
+<div class="tw"><table>
+  <tr><th style="width:15rem">What</th><th>Detail</th></tr>
+  <tr><td>Incident answers written in after the fact, undated</td><td>The three answers on one
+  correction replaced &ldquo;asked, awaiting answer&rdquo; inside the clerk&rsquo;s commit. The log says
+  entries are never edited except in clerk-owned fields, and nothing records when or where the pioneer
+  gave the answers.</td></tr>
+  <tr><td>No upgrade report after 0.25</td><td>Only rehearsal logs for 0.27, 0.29 and 0.31. The
+  question added at 0.27 at this project&rsquo;s request, &ldquo;what can this project do now that it
+  could not do before?&rdquo;, is answered only in commit messages.</td></tr>
+  <tr><td>The casebook&rsquo;s reconstruction folder is unused</td><td><code>reconstruction_tests</code>
+  is still empty. No blind test has checked whether the casebook carries the pioneer&rsquo;s judgement,
+  which F-1 suggests it may not.</td></tr>
+</table></div>
+
+<div class="judgement">
+  <h3>Recommendation &mdash; judgement, not finding</h3>
+  <ol class="rec">
+    <li><strong>Record who authored each answer in a correction, and do not let agent-authored text
+      bind unmarked</strong> (F-1). Give the three incident fields an author: <code>pioneer</code>,
+      <code>agent</code> or <code>not asked</code>. When the clerk takes a holding from agent-authored
+      text, it should mark <code>holding_source: agent-inferred</code>. Such a precedent should not bind
+      until the pioneer has kept it at a batch; the precedent kind already offers
+      <code>keep</code>/<code>overrule</code>. The cheapest version is a check that fails when a
+      holding equals an incident field whose author is not the pioneer.</li>
+    <li><strong>Make every check prove it can fail where it runs</strong> (F-3). Strip <code>\r</code>
+      in every line-matching check, or parse the YAML. Ship each check with a red fixture, run the walk
+      with a CRLF variant, and treat a check that has never failed on this machine as
+      <em>unknown</em>, not <em>passes</em>.</li>
+    <li><strong>Run precedent checks at approval</strong> (F-4). A failing check at M-06 requires either
+      a <code>distinguished_by</code> line in the pioneer&rsquo;s words or a pioneer overrule before the
+      approval is recorded.</li>
+    <li><strong>Mark conflicts at reveal</strong> (F-5, F-1). When a ranked card&rsquo;s winning option,
+      or its rationale, contradicts an active precedent from the same moment, write
+      <code>conflict:</code> and put it to the pioneer at the next batch.</li>
+    <li><strong>Give the pioneer&rsquo;s instructions about the practice a record every session
+      reads</strong> (F-6, F-7). This covers review scope (minimum certainty), the item forms, and an
+      exit for &ldquo;accepted, fix upstream&rdquo;. For every line in the always-loaded file, say
+      whether it is enforced or remembered. The assembler should read the review policy, and cards need
+      a certainty or an explicit exemption.</li>
+    <li><strong>Add an independent challenge of the draft before the gate</strong> (F-2). This pioneer
+      has asked for it at every contract since they saw it work. The binding precedent did not prevent
+      the narrowing it was about; the second reading did.</li>
+    <li><strong>Count restatements across candidates</strong> (F-8), by moment family and target, so
+      that a correction repeated six times reads as one claim seen six times.</li>
+    <li><strong>Keep drift moving</strong> (F-9). The clerk bumps <code>recurrence_count</code> when a
+      correction repeats an open entry&rsquo;s pattern, and verification offers the link when a
+      contract&rsquo;s clause fixes an entry.</li>
+    <li><strong>Put the undone bookkeeping on the upgrade sheet</strong> (F-10). Refresh base manifest
+      lines. Mark reworded ratified rows for re-ratification. Ask which reports the release answers and
+      back-fill <code>led_to</code>.</li>
+    <li><strong>Let a spec-lock correction carry the contract being drawn</strong> (F-11), and show the
+      curve at review batches.</li>
+    <li><strong>Hold the agent&rsquo;s durable prose to the evidence standard</strong> (F-0). A count
+      or a &ldquo;first&rdquo; written into a commit message, drift entry or report should quote its
+      record, or be checked by a second reading, as the verifier checks a contract.</li>
+  </ol>
+  <p class="note" style="margin-top:1rem"><strong>What should not change.</strong> Precedents should
+  keep binding. The defect is in what some of them are made of, not in the binding. Also keep
+  statement-first review, the sealed key and the blocked state, all of which worked this week under a
+  pioneer who reads every word. And where a precedent is the pioneer&rsquo;s own sentence, it did its
+  job: it put &ldquo;testing is central&rdquo; into the ground of the next contract.</p>
+</div>
+
+<h2>What this report does not establish</h2>
+<div class="tw"><table>
+  <tr><th style="width:15rem">Question</th><th>Why it stayed open</th></tr>
+  <tr><td>Would the pioneer keep the agent-worded precedents?</td><td>Not yet asked. The agent has
+  offered to put them to the pioneer, each beside its source, to keep or overrule. Several may well be
+  kept. The defect is that they bind without having been put.</td></tr>
+  <tr><td>Do other kit scripts misread CRLF?</td><td>Not checked. Only the precedent check was run
+  against this checkout. The hooks also parse records line by line and deserve the same test.</td></tr>
+  <tr><td>Is F-1 a pattern of this project or of the kit?</td><td>One project, one agent recording in
+  the same turn as the correction. The schema permits it, and nothing in the clerk&rsquo;s procedure
+  prevents it, which suggests it would recur elsewhere.</td></tr>
+  <tr><td>Is the flat curve the agent or the instrument?</td><td>Both contribute, and this record cannot
+  separate them. F-11 names two instrument faults; what remains after fixing them is the real
+  reading.</td></tr>
+  <tr><td>Is the list complete?</td><td>The trace covered one week and the records named. The second
+  readers found 26 items the first had missed, so a third reading would likely find more.</td></tr>
+</table></div>
+
+<h2>Provenance</h2>
+<p style="font-size:.88rem;color:var(--ink-soft)">Written by the agent that ran the project through this
+week. The trace was done by five readers and five second readers over the project&rsquo;s git history and
+its records: the ledger and batch files, the casebook, the correction log, the drift log, the map, the
+manifest, the reports and the rehearsal logs, from 2026-09-19 to 2026-09-26. Their result is kept in the
+session scratchpad. The central findings were then re-run by the agent on this checkout:</p>
+<ul style="font-size:.88rem;color:var(--ink-soft)">
+  <li><strong>F-3:</strong> <code>P-010.sh</code> exits 0 with three contracts open, and
+  <code>CONTRACT-LOG.yaml</code> holds 3,255 carriage returns under an <code>eol=lf</code>
+  attribute.</li>
+  <li><strong>F-1:</strong> each precedent&rsquo;s holding was compared with its source
+  correction&rsquo;s <code>would_have_been_right</code>. The ratio is 1.0 for P-017, P-020, P-021, P-022,
+  P-025, P-028, P-029, P-030 and P-031; 0.89 for P-016; 0.76 for P-026; and 1.0 for the overruled P-027.
+  The field was read to confirm it is in the agent&rsquo;s voice in each case.</li>
+  <li><strong>F-8 and F-6:</strong> the candidate records K-044, K-047, K-048, K-056, K-057 and K-058, and
+  the moderate item K-054 in B-002, were read directly.</li>
+</ul>
+<p style="font-size:.88rem;color:var(--ink-soft)">Every pioneer quotation is verbatim, from
+<code>pioneer_said</code>, a batch file&rsquo;s <code>Reason:</code> or the casebook&rsquo;s
+<code>rationale</code>. The held note <code>NOTE-for-next-kit-report.md</code> is folded into F-6 and F-7. Eighth in a series with
+<span class="mono">report-001</span> through <span class="mono">report-007</span>.</p>
+
+</div>

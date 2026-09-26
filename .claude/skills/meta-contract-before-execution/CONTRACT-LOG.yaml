@@ -684,6 +684,25 @@ contracts:
       result: 253 passed, 0 failed
     cost: null
     work_id: null
+  - contract_id: report-008
+    feature: whose-words-bind
+    type: analysis-report
+    date_proposed: 2026-09-26
+    bearing: |
+      A verified trace of how this project's standard changed from 19 to 26 September, asked for by
+      the pioneer and drawn for the kit's maintainer. The founding statement asks for a frame that
+      holds integrity with no loopholes; the trace found the same shape one layer up - rulings that
+      bind in the agent's words where the record claims the pioneer's, and a check that passes by
+      never matching a line - so this is the evidence of where the standard's own frame leaks.
+    status: published
+    file: docs/reports/report-008-whose-words-bind.html
+    artifact: https://claude.ai/artifact/KX9ry1Rt89nvrQhPhUbwLR
+    audience: the agent maintaining base-building-kit
+    findings_against: base-building-kit 0.31 (e29cac2), records 2026-09-19 to 2026-09-26, three review batches, four upgrades
+    corrections: []
+    supporting_files: [docs/reports/NOTE-for-next-kit-report.md, .claude/skills/meta-mechanisms/checks/P-010.sh]
+    follows: report-007
+    led_to: null
   - contract_id: report-007
     feature: the-first-review
     type: analysis-report
@@ -701,6 +720,7 @@ contracts:
     findings_against: base-building-kit 0.31 (e29cac2), one batch of twenty items, one sitting
     corrections: [C-027, C-028, C-029, C-030, C-031]
     supporting_files: [.claude/skills/meta-ledger/batches/B-001.md, docs/reports/rehearsal-0.31-2026-09-21.md]
+    followed_by: report-008
     follows: report-006
     led_to: null
   - contract_id: report-006

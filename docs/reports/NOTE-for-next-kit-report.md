@@ -1,5 +1,7 @@
 # Held for the next report to the kit's maintainer
 
+*Carried into report-008 (F-6, F-7) on 2026-09-26. Kept as the record of what was held.*
+
 Raised by the pioneer during review batch B-001, 2026-09-22, while deciding the candidate that
 adds a line to INTENT.md about surfacing an accumulating backlog.
 
