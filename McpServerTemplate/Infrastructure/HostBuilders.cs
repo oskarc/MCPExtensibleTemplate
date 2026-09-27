@@ -27,8 +27,9 @@ public static class HostBuilders
     /// (HostingHostBuilderExtensions.ApplyDefaultAppConfiguration), switched off. Not relied on —
     /// <see cref="ReadOnce"/> is the guarantee — but a host told so starts no file watcher it would then
     /// leave with nothing to do. First, where no switch can take it as its value. A launch that asks for
-    /// reloading instead — on the command line, or as DOTNET_ or ASPNETCORE_ in the environment — is a
-    /// request the server would ignore, and SettingsReadOnce refuses it at startup, naming where it came from.
+    /// reloading instead — on the command line or as DOTNET_ in the environment, and for the web host as
+    /// ASPNETCORE_ too (the generic host does not read those) — is a request the server would ignore, and
+    /// SettingsReadOnce refuses it at startup, naming where it came from.
     /// </summary>
     private const string StartNoWatcher = "--hostBuilder:reloadConfigOnChange=false";
 

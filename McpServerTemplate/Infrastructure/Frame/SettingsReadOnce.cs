@@ -17,6 +17,12 @@ namespace McpServerTemplate.Infrastructure.Frame;
 /// settings in memory, from the environment or from the command line, a file that is not watched, or a
 /// chained configuration made only of those. And no source may ask for reading again: the server would
 /// ignore the request, and a setting it would ignore is one it refuses.
+///
+/// Review round 4 — going by kind refuses some sources that would in fact read once: a key-per-file
+/// source (AddKeyPerFile, the usual route for mounted Docker or Kubernetes secrets) stops the server even
+/// with reloadOnChange off. That is deliberate for now: such secrets come in as environment variables, or
+/// read at startup into an in-memory source (docs/04). Teaching this check a new kind is a change here,
+/// with a test proving that kind cannot read its settings again.
 /// </summary>
 public static class SettingsReadOnce
 {

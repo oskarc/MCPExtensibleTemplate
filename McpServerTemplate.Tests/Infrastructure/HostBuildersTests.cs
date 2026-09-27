@@ -1,4 +1,5 @@
 using System.Net;
+using System.Reflection;
 using McpServerTemplate.Infrastructure;
 using McpServerTemplate.Infrastructure.Frame;
 using McpServerTemplate.Providers;
@@ -6,9 +7,15 @@ using McpServerTemplate.Tests.Frame;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.UserSecrets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting.Internal;
 using Microsoft.Extensions.Logging;
+
+// contract-005 review round 4 — the user secrets a Development host reads are the ones its application's
+// assembly names, and a test that builds one as the server read the developer's own. This assembly names
+// a store nobody keeps, so a host that names it reads no one's secrets (HostBuildersTests).
+[assembly: UserSecretsId(McpServerTemplate.Tests.Infrastructure.HostBuildersTests.TestSecretsId)]
 
 namespace McpServerTemplate.Tests.Infrastructure;
 
@@ -23,21 +30,26 @@ namespace McpServerTemplate.Tests.Infrastructure;
 /// </summary>
 public class HostBuildersTests
 {
+    /// <summary>The user secrets id this test assembly carries: a store nobody keeps, so it is always empty.</summary>
+    public const string TestSecretsId = "mcp-server-template-tests-no-secrets";
+
     /// <summary>
-    /// The server's own application name, as its process has it: the user secrets a Development host reads
-    /// are the ones its assembly names (UserSecretsId), and a test process is another application.
+    /// The application these hosts are built as: this test assembly. A Development host reads the user
+    /// secrets its application's assembly names (UserSecretsId), so named as the server it read the
+    /// developer's own; named as this assembly it reads <see cref="TestSecretsId"/>'s store, which nobody
+    /// keeps. Review round 4 — the rows used to name the server.
     /// </summary>
-    private static readonly string[] AsTheServer = ["--applicationName=McpServerTemplate"];
+    private static readonly string[] AsTheTests = ["--applicationName=McpServerTemplate.Tests"];
 
     [Theory]
     [InlineData("Production")]
     [InlineData("Development")]
     public void The_http_host_watches_no_settings_file(string environment)
     {
-        var builder = HostBuilders.ForHttp([.. AsTheServer, $"--environment={environment}"]);
+        var builder = HostBuilders.ForHttp([.. AsTheTests, $"--environment={environment}"]);
         using var configuration = builder.Configuration;
 
-        AssertReadOnce(configuration, environment);
+        AssertReadOnce(configuration, environment, builder.Environment.ApplicationName);
     }
 
     [Theory]
@@ -45,10 +57,10 @@ public class HostBuildersTests
     [InlineData("Development")]
     public void The_stdio_host_watches_no_settings_file(string environment)
     {
-        var builder = HostBuilders.ForStdio(AsTheServer, environment);
+        var builder = HostBuilders.ForStdio(AsTheTests, environment);
         using var configuration = builder.Configuration;
 
-        AssertReadOnce(configuration, environment);
+        AssertReadOnce(configuration, environment, builder.Environment.ApplicationName);
     }
 
     /// <summary>
@@ -70,20 +82,20 @@ public class HostBuildersTests
     [MemberData(nameof(Launches))]
     public void The_http_host_watches_no_settings_file_however_it_is_launched(string environment, string launch)
     {
-        var builder = HostBuilders.ForHttp([.. AsTheServer, $"--environment={environment}", .. launch.Split(' ')]);
+        var builder = HostBuilders.ForHttp([.. AsTheTests, $"--environment={environment}", .. launch.Split(' ')]);
         using var configuration = builder.Configuration;
 
-        AssertReadOnce(configuration, environment);
+        AssertReadOnce(configuration, environment, builder.Environment.ApplicationName);
     }
 
     [Theory]
     [MemberData(nameof(Launches))]
     public void The_stdio_host_watches_no_settings_file_however_it_is_launched(string environment, string launch)
     {
-        var builder = HostBuilders.ForStdio([.. AsTheServer, .. launch.Split(' ')], environment);
+        var builder = HostBuilders.ForStdio([.. AsTheTests, .. launch.Split(' ')], environment);
         using var configuration = builder.Configuration;
 
-        AssertReadOnce(configuration, environment);
+        AssertReadOnce(configuration, environment, builder.Environment.ApplicationName);
     }
 
     /// <summary>
@@ -96,30 +108,54 @@ public class HostBuildersTests
     [InlineData("Development")]
     public void The_settings_read_once_are_the_settings_the_host_reads(string environment)
     {
-        string[] launch = [.. AsTheServer, $"--environment={environment}", "--MyFlag"];
+        string[] launch = [.. AsTheTests, $"--environment={environment}", "--MyFlag"];
 
         var http = HostBuilders.ForHttp(launch);
         var plainHttp = WebApplication.CreateBuilder(["--hostBuilder:reloadConfigOnChange=false", .. launch]);
         using (http.Configuration)
         using (plainHttp.Configuration)
         {
-            Assert.Equal(Values(plainHttp.Configuration), Values(http.Configuration));
+            AssertSameSettings(plainHttp.Configuration, http.Configuration);
         }
 
-        var stdio = HostBuilders.ForStdio(AsTheServer, environment);
+        var stdio = HostBuilders.ForStdio(AsTheTests, environment);
         var plainStdio = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder(new Microsoft.Extensions.Hosting.HostApplicationBuilderSettings
         {
-            Args = ["--hostBuilder:reloadConfigOnChange=false", .. AsTheServer],
+            Args = ["--hostBuilder:reloadConfigOnChange=false", .. AsTheTests],
             EnvironmentName = environment,
         });
         using (stdio.Configuration)
         using (plainStdio.Configuration)
         {
-            Assert.Equal(Values(plainStdio.Configuration), Values(stdio.Configuration));
+            AssertSameSettings(plainStdio.Configuration, stdio.Configuration);
         }
+    }
 
-        static string[] Values(IConfiguration configuration) =>
-            [.. configuration.AsEnumerable().Select(kv => $"{kv.Key}={kv.Value}").Order(StringComparer.Ordinal)];
+    /// <summary>
+    /// The same keys, with the same values. Review round 4 — these are a host's real settings, so a failure
+    /// names keys, and for a value that differs a hash of each side; never a value itself.
+    /// </summary>
+    private static void AssertSameSettings(IConfiguration expected, IConfiguration actual)
+    {
+        var want = expected.AsEnumerable().ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+        var got = actual.AsEnumerable().ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+
+        var missing = want.Keys.Where(k => !got.ContainsKey(k)).Order(StringComparer.Ordinal).ToArray();
+        var added = got.Keys.Where(k => !want.ContainsKey(k)).Order(StringComparer.Ordinal).ToArray();
+        var changed = want
+            .Where(kv => got.TryGetValue(kv.Key, out var value) && !string.Equals(value, kv.Value, StringComparison.Ordinal))
+            .Select(kv => $"{kv.Key} (sha256 {Hash(kv.Value)} became {Hash(got[kv.Key])})")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            missing.Length == 0 && added.Length == 0 && changed.Length == 0,
+            $"the settings read once are not the settings the host reads. Missing: [{string.Join(", ", missing)}]. "
+            + $"Added: [{string.Join(", ", added)}]. Changed: [{string.Join(", ", changed)}].");
+
+        static string Hash(string? value) => value is null
+            ? "(none)"
+            : Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)))[..12];
     }
 
     /// <summary>
@@ -277,13 +313,16 @@ public class HostBuildersTests
             [module]);
     }
 
+    /// <summary>The server's own user secrets id: the developer's store, which no test may read.</summary>
+    private static string? ServerSecretsId => typeof(HostBuilders).Assembly.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId;
+
     /// <summary>A settings source of a kind the server has no reason to believe reads once.</summary>
     private sealed class Refreshing : ConfigurationProvider, IConfigurationSource
     {
         public IConfigurationProvider Build(IConfigurationBuilder builder) => this;
     }
 
-    private static void AssertReadOnce(ConfigurationManager configuration, string environment)
+    private static void AssertReadOnce(ConfigurationManager configuration, string environment, string applicationName)
     {
         var files = configuration.Sources.OfType<FileConfigurationSource>().ToArray();
 
@@ -293,6 +332,15 @@ public class HostBuildersTests
         if (environment == "Development")
         {
             Assert.Contains(files, f => f.Path == "secrets.json");
+
+            // Review round 4 — whose: the store the host resolves is the one its application's assembly names,
+            // so the id is where it reads from. Never the server's own id, which is the developer's store.
+            var secrets = Assembly.Load(new AssemblyName(applicationName)).GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId;
+            Assert.True(
+                secrets == TestSecretsId,
+                $"a Development host named '{applicationName}' reads the user secrets of UserSecretsId '{secrets}'"
+                + (secrets == ServerSecretsId ? ", the server's own: the developer's store" : string.Empty)
+                + $", not the test-only '{TestSecretsId}'.");
         }
 
         Assert.All(files, f => Assert.False(f.ReloadOnChange, $"{f.Path} is read again whenever it changes, and no check reads it then."));
