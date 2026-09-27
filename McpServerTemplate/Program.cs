@@ -120,11 +120,8 @@ static async Task<int> RunStdioAsync(string[] args, string environmentName)
     // The generic host reads DOTNET_ENVIRONMENT only; the guard above also accepts
     // ASPNETCORE_ENVIRONMENT. Without this the guard could pass as Development while the host ran
     // as Production, loading Production settings — and, since contract-003, Production's rules.
-    var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
-    {
-        Args = args,
-        EnvironmentName = environmentName,
-    });
+    // contract-005 review round 2 — and it reads its settings once: no settings file is watched.
+    var builder = HostBuilders.ForStdio(args, environmentName);
     var modules = BuiltInProviders.Create();
 
     // contract-002 · G-6 — stdio has no token to verify, so the principal it runs as is declared
@@ -157,7 +154,9 @@ static async Task<int> RunStdioAsync(string[] args, string environmentName)
 // ── HTTP transport ──
 static async Task<int> RunHttpAsync(string[] args)
 {
-    var builder = WebApplication.CreateBuilder(args);
+    // contract-005 review round 2 — settings read once, at startup, where they are checked: a settings
+    // file changed while the server runs changes nothing until it restarts (HostBuilders).
+    var builder = HostBuilders.ForHttp(args);
     var configuration = builder.Configuration;
 
     ConfigureLogging(builder.Services, configuration);

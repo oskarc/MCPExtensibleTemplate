@@ -13,11 +13,14 @@ One rule shapes everything below: **in the sections the frame governs — `Authe
 1. **Command-line arguments** (highest priority), for example `--Transport http`
 2. **Environment Variables**
 3. **User secrets** (Development only — `dotnet user-secrets`)
-4. **appsettings.{Environment}.json** (Development, Production, Staging, etc.)
-5. **appsettings.json** (base/default)
-6. **Defaults in code** (lowest priority)
+4. **McpServerTemplate.settings.{Environment}.json** and **McpServerTemplate.settings.json** — read beside `appsettings` by the .NET 10 host; the template ships neither
+5. **appsettings.{Environment}.json** (Development, Production, Staging, etc.)
+6. **appsettings.json** (base/default)
+7. **Defaults in code** (lowest priority)
 
 **Example**: If a setting exists in all of them, the command-line argument wins.
+
+**Settings are read once, at startup, where they are checked.** No settings file is watched: editing one while the server runs changes nothing until the server restarts, and the restart checks the change like any other setting — a key it does not read stops it from starting. A running server's behaviour cannot be changed by a file it was not started with.
 
 ```
 Command line: --MyValue cli
@@ -318,7 +321,7 @@ With no identity providers configured, a stdio run synthesizes one per name the 
 
 #### `Serilog:WriteTo`
 - **Type**: `array`
-- **Description**: Where logs are written. The console sink writes to **stderr**, so stdout stays clean for the MCP protocol. Every `File` sink, at any index (and in a sub-logger), is checked at startup where it will write: its path with any `%VARIABLE%` expanded, as Serilog's reader expands it, and resolved against the working directory, as the sink resolves it. A path that contains `..` once expanded, a directory the process cannot write, or an existing file at that path it cannot append to stops the server, naming the resolved path; the check leaves nothing behind. A sink that fails later (a full disk, a removed directory, a rolling sink's dated file it cannot open, a sink name Serilog does not know) is reported by Serilog's self-log, which also goes to stderr.
+- **Description**: Where logs are written. The console sink writes to **stderr**, so stdout stays clean for the MCP protocol. Every `File` sink, at any index (and in a sub-logger), is checked at startup where it will write: its path with any `%VARIABLE%` expanded, as Serilog's reader expands it, and resolved against the working directory, as the sink resolves it. A path that contains `..` once expanded, a directory the process cannot write, or an existing file it cannot append to — the file the sink opens first: for a rolling sink the current period's file, named as Serilog names it (`logs/mcp-server-20260927.log`, or its highest `_NNN`) — stops the server, naming that file; the check leaves nothing behind. A sink that fails later (a full disk, a removed directory, a file it rolls to later, a sink name Serilog does not know) is reported by Serilog's self-log, which also goes to stderr.
 
 ---
 

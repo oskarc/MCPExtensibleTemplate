@@ -210,14 +210,19 @@ public class TransportAndPrincipalTests
     }
 
     /// <summary>
-    /// contract-005 · G-12 (2) — belt and braces: the host filter's own matcher is asked, over the final
-    /// list, whether it admits a random name under .invalid, bare and with a trailing dot. The entry
-    /// rules refuse every spelling that would, so this is reached only through the list itself.
+    /// contract-005 · G-12 (2) — belt and braces: the host filter itself is asked, over the final list,
+    /// whether it lets through a request for a random name under .invalid, bare and with a trailing dot.
+    /// The entry rules refuse every spelling that would, so this is reached only through the list
+    /// itself. Review round 2 — 0.0.0.0, [::] and a full-width asterisk passed it: the matcher alone
+    /// does not read them as "any host", while the middleware that uses it does.
     /// </summary>
     [Theory]
     [InlineData("*")]
     [InlineData("*.invalid")]
     [InlineData("*.")]
+    [InlineData("0.0.0.0")]
+    [InlineData("[::]")]
+    [InlineData("\uFF0A")]
     public void G12_2_a_list_the_filter_would_widen_is_refused_by_the_filters_own_matcher(string pattern)
     {
         var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.RefuseHostsNobodyNamed(["mcp.example.com", pattern]));

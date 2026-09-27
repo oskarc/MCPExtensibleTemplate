@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+using Serilog;
+
 namespace McpServerTemplate.Infrastructure;
 
 /// <summary>
@@ -8,9 +12,10 @@ namespace McpServerTemplate.Infrastructure;
 /// its self-log and carries on: the sink writes nothing and says nothing, and the operator believes
 /// there is a log. The startup check used to read one entry, Serilog:WriteTo:1, and only for path
 /// traversal; a sink at any other index, or in a sub-logger, was never looked at. Now every File
-/// entry under Serilog:WriteTo is checked, at the path the sink will resolve, before anything is
-/// served. A sink that fails later — a disk that fills, a directory removed — is Serilog's self-log's
-/// to report, and that goes to stderr (Program.cs).
+/// entry under Serilog:WriteTo is checked, at the path the sink will resolve — and, for a sink that
+/// rolls, at the file it rolls to now — before anything is served. A sink that fails later — a disk
+/// that fills, a directory removed — is Serilog's self-log's to report, and that goes to stderr
+/// (Program.cs).
 /// </summary>
 public static class LogSinkGuard
 {
@@ -56,26 +61,94 @@ public static class LogSinkGuard
             // against the working directory, and create the directory it names.
             var resolved = Path.GetFullPath(path, workingDirectory);
             var directory = Path.GetDirectoryName(resolved) ?? workingDirectory;
+            var opens = FileTheSinkOpens(sink.GetSection("Args"), resolved);
+            var whence = opens == resolved
+                ? $"'{configured}'{expands}, resolved against the working directory {workingDirectory}"
+                : $"the file it rolls to now, from '{configured}'{expands}, resolved against the working directory {workingDirectory}";
             try
             {
-                ProbeWritable(directory, resolved);
+                ProbeWritable(directory, opens);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
             {
                 throw new ConfigurationException(
-                    $"{sink.Path} is a File log sink writing to {resolved} ('{configured}'{expands}, resolved against the "
-                    + $"working directory {workingDirectory}), and this process cannot write there: {ex.Message} A sink "
-                    + "that cannot write writes nothing, and the log it stands for would be missing without a word.");
+                    $"{sink.Path} is a File log sink writing to {opens} ({whence}), and this process cannot write there: "
+                    + $"{ex.Message} A sink that cannot write writes nothing, and the log it stands for would be missing "
+                    + "without a word.");
             }
         }
     }
 
     /// <summary>
+    /// The file a File sink opens when it first writes. contract-005 · G-12 (5), review round 2 — a sink
+    /// that rolls, on a rollingInterval other than Infinite or on size (rollOnFileSizeLimit), never opens
+    /// the file its path names, which is all the check used to try: the shipped sink, logs/mcp-server-.log
+    /// rolling daily, writes logs/mcp-server-{yyyyMMdd}.log. Worked out as Serilog.Sinks.File 6.0.0 works
+    /// it out (RollingFileSink.OpenFile, PathRoller): the name, then the current period on the local clock
+    /// in the interval's format (none when only size rolls it), then _NNN when a file of that period
+    /// already carries a sequence — the highest there is — then the extension. The arguments are read as
+    /// Serilog's configuration reader reads them: expanded, and the interval without regard to case.
+    /// </summary>
+    /// <param name="args">The sink's Args section.</param>
+    /// <param name="resolved">The sink's path, expanded and resolved against the working directory.</param>
+    private static string FileTheSinkOpens(IConfigurationSection args, string resolved)
+    {
+        var interval = Enum.TryParse<RollingInterval>(
+            Environment.ExpandEnvironmentVariables(args["rollingInterval"] ?? nameof(RollingInterval.Infinite)), ignoreCase: true, out var parsed)
+            ? parsed
+            : RollingInterval.Infinite;
+        var onSize = bool.TryParse(Environment.ExpandEnvironmentVariables(args["rollOnFileSizeLimit"] ?? bool.FalseString), out var rolls) && rolls;
+        if (interval == RollingInterval.Infinite && !onSize)
+        {
+            return resolved;
+        }
+
+        var now = DateTime.Now;
+        var (format, period) = interval switch
+        {
+            RollingInterval.Year => ("yyyy", new DateTime(now.Year, 1, 1, 0, 0, 0, now.Kind)),
+            RollingInterval.Month => ("yyyyMM", new DateTime(now.Year, now.Month, 1, 0, 0, 0, now.Kind)),
+            RollingInterval.Day => ("yyyyMMdd", new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, now.Kind)),
+            RollingInterval.Hour => ("yyyyMMddHH", new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0, now.Kind)),
+            RollingInterval.Minute => ("yyyyMMddHHmm", new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, now.Kind)),
+            _ => (string.Empty, (DateTime?)null),
+        };
+
+        var directory = Path.GetDirectoryName(resolved)!;
+        var name = Path.GetFileNameWithoutExtension(resolved);
+        var extension = Path.GetExtension(resolved);
+        var rolled = new Regex(
+            "^" + Regex.Escape(name) + "(?<period>\\d{" + format.Length.ToString(CultureInfo.InvariantCulture) + "})"
+            + "(?<sequence>_[0-9]{3,}){0,1}" + Regex.Escape(extension) + "$");
+
+        var sequence = (Directory.Exists(directory) ? Directory.GetFiles(directory, name + "*" + extension) : [])
+            .Select(file => rolled.Match(Path.GetFileName(file)))
+            .Where(match => match.Success && PeriodOf(match, format) == period)
+            .Select(match => match.Groups["sequence"].Success
+                ? int.Parse(match.Groups["sequence"].Value[1..], CultureInfo.InvariantCulture)
+                : (int?)null)
+            .Max();
+
+        return Path.Combine(
+            directory,
+            name
+            + (period?.ToString(format, CultureInfo.InvariantCulture) ?? string.Empty)
+            + (sequence is { } n ? "_" + n.ToString("000", CultureInfo.InvariantCulture) : string.Empty)
+            + extension);
+
+        static DateTime? PeriodOf(Match match, string format) =>
+            DateTime.TryParseExact(match.Groups["period"].Value, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out var at)
+                ? at
+                : null;
+    }
+
+    /// <summary>
     /// Proves this process can write where the sink will: a probe file in <paramref name="directory"/>,
     /// making the directories the sink would make to get there, and — contract-005 · G-12 (5) — when
-    /// something already stands at <paramref name="file"/>, opening it for append as the sink will, since
-    /// a writable directory can hold a file that is not. The probe is removed, and so is every directory
-    /// it made: the sink makes them again when it first writes, and the check leaves nothing behind.
+    /// something already stands at <paramref name="file"/>, the file the sink opens first
+    /// (<see cref="FileTheSinkOpens"/>), opening it for append as the sink will, since a writable directory
+    /// can hold a file that is not. The probe is removed, and so is every directory it made: the sink
+    /// makes them again when it first writes, and the check leaves nothing behind.
     /// </summary>
     private static void ProbeWritable(string directory, string file)
     {

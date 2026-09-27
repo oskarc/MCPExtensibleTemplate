@@ -161,6 +161,88 @@ public sealed class LogSinkGuardTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// contract-005 · G-12 (5), review round 2 — a rolling sink never opens the file its path names. The
+    /// shipped sink, logs/mcp-server-.log rolling daily, opens the current period's file,
+    /// mcp-server-{yyyyMMdd}.log, or the highest _NNN of it; a sink rolling on size alone opens
+    /// mcp-server-.log or its highest _NNN. The check tried the path as written, which does not exist, so
+    /// a current file the process could not append to passed. Each row stands a read-only file where it
+    /// names ({today} and {yesterday} are the local dates, as the sink reads the clock), with writable
+    /// files beside it, and says whether the sink would open it now. The last two are controls: a file of
+    /// another period, and a lower sequence, are never opened, and pass.
+    /// </summary>
+    public static TheoryData<string, string, string[], bool> RollingFiles()
+    {
+        var data = new TheoryData<string, string, string[], bool>();
+        if (!OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess)
+        {
+            return data; // root on Unix may append to a read-only file, and so may its sink
+        }
+
+        data.Add("Day", "mcp-server-{today}.log", [], true);
+        data.Add("Day", "mcp-server-{today}_002.log", ["mcp-server-{today}.log", "mcp-server-{today}_001.log"], true);
+        data.Add("size", "mcp-server-_001.log", ["mcp-server-.log"], true);
+        data.Add("Day", "mcp-server-{yesterday}.log", [], false);
+        data.Add("Day", "mcp-server-{today}_001.log", ["mcp-server-{today}_002.log"], false);
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(RollingFiles))]
+    public void A_rolling_file_sink_is_checked_at_the_file_it_opens_now(string rolls, string readOnly, string[] writable, bool refused)
+    {
+        var logs = Directory.CreateDirectory(Path.Combine(_workingDirectory, "logs")).FullName;
+        var now = DateTime.Now;
+        string Named(string file) => file
+            .Replace("{today}", now.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("{yesterday}", now.AddDays(-1).ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+
+        foreach (var file in writable)
+        {
+            File.WriteAllText(Path.Combine(logs, Named(file)), "earlier\n");
+        }
+
+        var unappendable = Path.Combine(logs, Named(readOnly));
+        File.WriteAllText(unappendable, "earlier\n");
+        SetReadOnly(unappendable, readOnly: true);
+
+        try
+        {
+            var settings = Shipped();
+            settings[rolls == "size" ? "Serilog:WriteTo:1:Args:rollOnFileSizeLimit" : "Serilog:WriteTo:1:Args:rollingInterval"] =
+                rolls == "size" ? "true" : rolls;
+
+            if (refused)
+            {
+                var ex = Assert.Throws<ConfigurationException>(() => LogSinkGuard.Validate(Config(settings), _workingDirectory));
+                Assert.StartsWith($"Serilog:WriteTo:1 is a File log sink writing to {unappendable}", ex.Message, StringComparison.Ordinal);
+            }
+            else
+            {
+                LogSinkGuard.Validate(Config(settings), _workingDirectory);
+            }
+        }
+        finally
+        {
+            SetReadOnly(unappendable, readOnly: false);
+        }
+    }
+
+    [Fact]
+    public void A_rolling_file_sink_whose_current_file_stands_as_a_directory_is_refused()
+    {
+        // The row above for root on Unix, and for every platform: nothing can append to a directory.
+        var logs = Directory.CreateDirectory(Path.Combine(_workingDirectory, "logs")).FullName;
+        var today = Path.Combine(logs, $"mcp-server-{DateTime.Now.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture)}.log");
+        Directory.CreateDirectory(today);
+
+        var settings = Shipped();
+        settings["Serilog:WriteTo:1:Args:rollingInterval"] = "Day";
+
+        var ex = Assert.Throws<ConfigurationException>(() => LogSinkGuard.Validate(Config(settings), _workingDirectory));
+        Assert.StartsWith($"Serilog:WriteTo:1 is a File log sink writing to {today}", ex.Message, StringComparison.Ordinal);
+    }
+
     private static void SetReadOnly(string file, bool readOnly)
     {
         if (OperatingSystem.IsWindows())

@@ -88,12 +88,18 @@ public class ServerProcessTests
         }
     }
 
-    private static Spawned Start(IDictionary<string, string> environment, bool redirectStdin = false)
+    /// <param name="environment">The process's environment, on top of this one's.</param>
+    /// <param name="redirectStdin">Whether the test writes to the server's stdin.</param>
+    /// <param name="workingDirectory">
+    /// The working directory, which is the server's content root: where it reads appsettings*.json and
+    /// resolves log paths. The executable's own directory unless a test needs settings files of its own.
+    /// </param>
+    private static Spawned Start(IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null)
     {
         var exe = ServerExecutable();
         var info = new ProcessStartInfo(exe)
         {
-            WorkingDirectory = Path.GetDirectoryName(exe)!,
+            WorkingDirectory = workingDirectory ?? Path.GetDirectoryName(exe)!,
             RedirectStandardInput = redirectStdin,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -113,9 +119,9 @@ public class ServerProcessTests
     }
 
     private static async Task<(int ExitCode, string Stderr)> RunToCompletionAsync(
-        IDictionary<string, string> environment)
+        IDictionary<string, string> environment, string? workingDirectory = null)
     {
-        var spawned = Start(environment);
+        var spawned = Start(environment, workingDirectory: workingDirectory);
         using var process = spawned.Process;
 
         var exited = await Task.Run(() => process.WaitForExit(60_000));
@@ -361,6 +367,113 @@ public class ServerProcessTests
             {
                 process.Kill(entireProcessTree: true);
             }
+        }
+    }
+
+    /// <summary>
+    /// contract-003 · G-11, contract-005 review round 2 — settings are read once, at startup, where they
+    /// are checked. The host watched its settings files and applied what they gained while it ran: a
+    /// Kestrel endpoint written into appsettings.json after startup — a key the settings allowlist
+    /// refuses at startup — opened a listener no check had seen. The server's content root here is a
+    /// directory of its own holding copies of the shipped settings files, so the file changed is the one
+    /// it reads; this process watches the same file, so the window below starts once the change has been
+    /// delivered. A restart reads the change, and refuses it.
+    /// </summary>
+    [Fact]
+    public async Task T3_a_settings_file_changed_while_the_server_runs_changes_nothing_until_it_restarts()
+    {
+        var root = Directory.CreateTempSubdirectory("mcp-settings-read-once-").FullName;
+        try
+        {
+            var bin = Path.GetDirectoryName(ServerExecutable())!;
+            foreach (var file in new[] { "appsettings.json", "appsettings.Production.json" })
+            {
+                File.Copy(Path.Combine(bin, file), Path.Combine(root, file));
+            }
+
+            var port = FreePort();
+            var late = FreePort();
+            var environment = IdentityEnvironment();
+            environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+            environment["Transport"] = "http";
+            environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            environment["HttpTransport__BindAddress"] = "127.0.0.1";
+            environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            var spawned = Start(environment, workingDirectory: root);
+            using (var process = spawned.Process)
+            {
+                try
+                {
+                    Assert.True(await AnswerWithinAsync(http, port, TimeSpan.FromSeconds(60)) == HttpStatusCode.OK, $"the server did not come up: {spawned.Stderr}");
+
+                    using var files = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(root);
+                    var delivered = new TaskCompletionSource();
+                    using var watch = files.Watch("appsettings.json").RegisterChangeCallback(_ => delivered.TrySetResult(), null);
+
+                    var settings = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "appsettings.json")))!.AsObject();
+                    settings["Kestrel"] = new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["Endpoints"] = new System.Text.Json.Nodes.JsonObject
+                        {
+                            ["Late"] = new System.Text.Json.Nodes.JsonObject { ["Url"] = $"http://127.0.0.1:{late}" },
+                        },
+                    };
+                    await File.WriteAllTextAsync(Path.Combine(root, "appsettings.json"), settings.ToJsonString());
+                    await delivered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+                    // A watched JSON file reloads 250 ms after it changes, and Kestrel binds a new endpoint at
+                    // once: three seconds is well past both.
+                    var opened = await AnswerWithinAsync(http, late, TimeSpan.FromSeconds(3));
+                    Assert.True(
+                        opened is null,
+                        $"a Kestrel endpoint written into appsettings.json after startup opened http://127.0.0.1:{late}: /healthz "
+                        + $"answered {(int?)opened} there. The running server applied a setting no startup check had read.");
+
+                    // Unchanged until it restarts: it answers where it did.
+                    Assert.Equal(HttpStatusCode.OK, await AnswerWithinAsync(http, port, TimeSpan.FromSeconds(5)));
+                }
+                finally
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+
+            // The restart reads the file as it now is, and refuses what it gained.
+            var (exitCode, stderr) = await RunToCompletionAsync(environment, workingDirectory: root);
+            Assert.Equal(78, exitCode);
+            Assert.Contains("'Kestrel:Endpoints:Late:Url' is not a setting this server honours", stderr, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>What /healthz on 127.0.0.1:<paramref name="port"/> answered within <paramref name="window"/>, or null when nothing did.</summary>
+    private static async Task<HttpStatusCode?> AnswerWithinAsync(HttpClient http, int port, TimeSpan window)
+    {
+        var deadline = DateTime.UtcNow + window;
+        while (true)
+        {
+            try
+            {
+                using var response = await http.GetAsync(new Uri($"http://127.0.0.1:{port}/healthz"));
+                return response.StatusCode;
+            }
+            catch (HttpRequestException)
+            {
+                // Nothing listening there.
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                return null;
+            }
+
+            await Task.Delay(200);
         }
     }
 

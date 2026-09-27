@@ -3,8 +3,10 @@ using System.Threading.RateLimiting;
 using McpServerTemplate.Infrastructure.Frame;
 using McpServerTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.Extensions.Primitives;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 
 namespace McpServerTemplate.Infrastructure;
@@ -129,12 +131,7 @@ public static class HttpServerComposition
         // stops DNS rebinding from turning a browser on the operator's machine into a client.
         var allowedHosts = AllowedHosts(configuration);
 
-        builder.Services.AddHostFiltering(options =>
-        {
-            options.AllowedHosts = allowedHosts;
-            options.AllowEmptyHosts = false;
-            options.IncludeFailureMessage = false;
-        });
+        builder.Services.AddHostFiltering(options => ConfigureHostFilter(options, allowedHosts));
 
         // ── Per-client (IP) rate limiting ──
         builder.Services.AddRateLimiter(options =>
@@ -184,8 +181,8 @@ public static class HttpServerComposition
     /// compares names exactly, so mcp.example.com. is another name than mcp.example.com. So an entry
     /// must name one host exactly as the filter will match it: ASCII (an internationalised name in its
     /// punycode form), no * anywhere, no trailing dot, and unchanged by the filter's own conversion.
-    /// Then the filter's own matcher is asked, over the final list, whether it admits a name nobody
-    /// could have configured, in case a spelling gets past all of that.
+    /// Then the filter itself is built over the final list and asked whether it lets through a request
+    /// for a name nobody could have configured, in case a spelling gets past all of that.
     /// </summary>
     /// <exception cref="ConfigurationException">A non-loopback bind names no host, or an entry does not name exactly one host.</exception>
     public static string[] AllowedHosts(IConfiguration configuration)
@@ -229,10 +226,13 @@ public static class HttpServerComposition
 
     /// <summary>
     /// contract-005 · G-12 (2) — the last check on the host allowlist, belt and braces: ASP.NET Core's
-    /// host filter matches with <see cref="HostString.MatchesAny"/>, and it is asked whether it would
-    /// admit a random name under .invalid, with and without a trailing dot, which nobody could have
-    /// meant to allow. The entry rules in <see cref="AllowedHosts"/> refuse every spelling known to
-    /// widen the filter; this refuses one they do not know.
+    /// host-filtering middleware itself is built over the final list, with the options the server runs it
+    /// with, and handed a request for a random name under .invalid, with and without a trailing dot, which
+    /// nobody could have meant to allow; it must refuse each with 400. The entry rules in
+    /// <see cref="AllowedHosts"/> refuse every spelling known to widen the filter; this refuses one they
+    /// do not know. Review round 2 — it used to ask <see cref="HostString.MatchesAny"/> alone, which the
+    /// middleware calls only after reading 0.0.0.0, [::] and, through its punycode conversion, a
+    /// full-width asterisk as "any host": asked directly, it let those three through.
     /// </summary>
     /// <param name="allowedHosts">The list the host filter is given.</param>
     /// <exception cref="ConfigurationException">The filter would admit a host nobody named.</exception>
@@ -240,18 +240,53 @@ public static class HttpServerComposition
     {
         ArgumentNullException.ThrowIfNull(allowedHosts);
 
-        var patterns = allowedHosts.Select(h => new StringSegment(h)).ToList();
+        var admitted = false;
+        var options = new HostFilteringOptions();
+        ConfigureHostFilter(options, [.. allowedHosts]);
+        var filter = new HostFilteringMiddleware(
+            _ =>
+            {
+                admitted = true;
+                return Task.CompletedTask;
+            },
+            NullLogger<HostFilteringMiddleware>.Instance,
+            new FixedOptions<HostFilteringOptions>(options));
+
         var nobody = $"{Guid.NewGuid():N}.invalid";
         foreach (var probe in new[] { nobody, nobody + "." })
         {
-            if (HostString.MatchesAny(new StringSegment(probe), patterns))
+            var context = new DefaultHttpContext();
+            context.Request.Host = new HostString(probe);
+
+            // A refusal completes at once: 400, and no body (IncludeFailureMessage is off).
+            filter.Invoke(context).GetAwaiter().GetResult();
+            if (admitted || context.Response.StatusCode != StatusCodes.Status400BadRequest)
             {
                 throw new ConfigurationException(
                     $"HttpTransport:AllowedHosts ({string.Join(", ", allowedHosts)}) admits '{probe}', a name nobody "
-                    + "configured: ASP.NET Core's host filter would answer it, and any other host it admits the same way. "
-                    + "Name the host names clients reach this server by, each exactly, for example mcp.example.com.");
+                    + "configured: ASP.NET Core's host filter let a request for it through, and would let through any "
+                    + "other host the same way. Name the host names clients reach this server by, each exactly, for "
+                    + "example mcp.example.com.");
             }
         }
+    }
+
+    /// <summary>The host filter's options, as the server runs it and as <see cref="RefuseHostsNobodyNamed"/> tries it.</summary>
+    private static void ConfigureHostFilter(HostFilteringOptions options, IList<string> allowedHosts)
+    {
+        options.AllowedHosts = allowedHosts;
+        options.AllowEmptyHosts = false;
+        options.IncludeFailureMessage = false;
+    }
+
+    /// <summary>Options that are what they are: the host filter asks for a monitor, and nothing here changes.</summary>
+    private sealed class FixedOptions<T>(T value) : IOptionsMonitor<T>
+    {
+        public T CurrentValue => value;
+
+        public T Get(string? name) => value;
+
+        public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
 
     /// <summary>

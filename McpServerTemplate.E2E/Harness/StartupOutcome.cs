@@ -54,16 +54,18 @@ public sealed partial class StartupOutcome : IAsyncDisposable
     /// Docker's log puts its own timestamp before every line the server wrote, so the indent is read
     /// after it.
     /// </summary>
-    public string? Refusal
+    public string? Refusal => RefusalIn(Stderr);
+
+    /// <summary>The refusal in a server's stderr as Docker captured it (<see cref="Refusal"/>), or null when there is none.</summary>
+    public static string? RefusalIn(string stderr)
     {
-        get
-        {
-            var lines = Stderr.Split('\n').Select(l => DockerTimestamp().Replace(l, string.Empty)).ToArray();
-            var first = Array.FindIndex(lines, l => l.Contains("MCP Server cannot start", StringComparison.Ordinal));
-            return first < 0
-                ? null
-                : string.Join(" ", lines.Skip(first).Take(1).Concat(lines.Skip(first + 1).TakeWhile(l => l.StartsWith(' '))).Select(l => l.Trim()));
-        }
+        ArgumentNullException.ThrowIfNull(stderr);
+
+        var lines = stderr.Split('\n').Select(l => DockerTimestamp().Replace(l, string.Empty)).ToArray();
+        var first = Array.FindIndex(lines, l => l.Contains("MCP Server cannot start", StringComparison.Ordinal));
+        return first < 0
+            ? null
+            : string.Join(" ", lines.Skip(first).Take(1).Concat(lines.Skip(first + 1).TakeWhile(l => l.StartsWith(' '))).Select(l => l.Trim()));
     }
 
     [GeneratedRegex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z ")]
