@@ -399,6 +399,24 @@ contracts:
       confirmation-expiry wait (121 s) plus a stated margin of three times the measured job (5 min 21 s)
       = 9 min 09 s; timeout-minutes: 10. Per-test hang timeout 5 min. Fast job's test step 20 s
       (was 21 s).
+    revisions:
+      - date: 2026-09-27
+        approved_by_pioneer: "the 5 you asked about is approved"
+        offered: |
+          Pull the data-protection change forward from the hardening phase into this contract: the
+          server holds security keys it never uses (data protection, registered as a side effect of
+          AddAuthentication); in a container it writes them to disk unencrypted, and on Windows it
+          loads the user's own key ring. Keep them in memory only, or have none.
+        adds: |
+          G-18 (UC-11) Data protection is configured explicitly: the server keeps no key material on
+          disk and loads no key ring from the user's profile (an in-memory, ephemeral provider, since
+          nothing in the server protects data with it); the framework's key-repository and
+          unencrypted-key warnings no longer appear.
+          T-17 (G-18) Seen red first: the shipped image writes a key under /home/app/.aspnet today
+          (docker diff) and logs a key repository; after, it writes nothing there, logs no key
+          repository, and serves as before; a spawned server on Windows no longer loads the user's key
+          ring (no key-repository line).
+        tests_changed: T-17 added
     red_test: null
     approval: approved-at-gate
     status: approved
