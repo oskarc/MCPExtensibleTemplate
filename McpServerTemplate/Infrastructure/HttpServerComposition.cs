@@ -308,6 +308,14 @@ public static class HttpServerComposition
     /// and an IPv4-mapped address, bracketed or not, which Kestrel binds on an IPv6-only socket
     /// (SocketTransportOptions.CreateDefaultBoundListenSocket) that cannot take one. Anything else is refused by
     /// <see cref="NotAnAcceptedForm"/>, saying what Kestrel would do with it.
+    ///
+    /// Review round 8 — an IPv4 address is accepted in its standard form only, as IPAddress writes it: four decimal
+    /// parts without leading zeros. The parser reads the others as some address, not always the one meant (010.0.0.1 is
+    /// octal, 8.0.0.1), and the refusal shows how it would be read. And a link-local address needs its interface's zone:
+    /// the parser drops one it cannot resolve without a word (%0, an unknown name, a percent-encoded one, and on Windows
+    /// any name at all), leaving an address Linux cannot bind (invalid argument) and Windows places on whichever
+    /// interface holds it. A failure to bind an accepted address is refused too, once Kestrel meets it
+    /// (<see cref="BindFailure"/>).
     /// </summary>
     private static string? BindAddressRefusal(string bindAddress)
     {
@@ -330,6 +338,15 @@ public static class HttpServerComposition
 
         if (System.Net.IPAddress.TryParse(bindAddress, out var parsed))
         {
+            if (parsed.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && bindAddress != parsed.ToString())
+            {
+                var read = parsed.ToString();
+                var meant = DecimalReading(bindAddress);
+                return $"HttpTransport:BindAddress is '{bindAddress}', which would be read as {read}; write {read}"
+                    + (meant is not null && meant != read ? $", or {meant} if that is what you meant" : string.Empty)
+                    + ". An IPv4 address is written in its standard form: four decimal parts, without leading zeros.";
+            }
+
             if (parsed.IsIPv4MappedToIPv6)
             {
                 return $"HttpTransport:BindAddress is '{bindAddress}', an IPv4-mapped IPv6 address, which Kestrel cannot listen "
@@ -337,12 +354,28 @@ public static class HttpServerComposition
                     + $"IPv4 address itself, {parsed.MapToIPv4()}.";
             }
 
+            if (parsed.IsIPv6LinkLocal && parsed.ScopeId == 0)
+            {
+                var alone = parsed.ToString();
+                var percent = bindAddress.IndexOf('%', StringComparison.Ordinal);
+                var zone = percent < 0
+                    ? " with no zone"
+                    : $", whose zone {bindAddress[percent..].TrimEnd(']')} the address parser dropped, unable to resolve it";
+                return $"HttpTransport:BindAddress is '{bindAddress}', a link-local address{zone}. A link-local address needs "
+                    + $"its interface's zone, as {alone}%eth0 or {alone}%2, to say which interface's address it is. Write it "
+                    + "with the zone of the interface that holds it.";
+            }
+
             if (parsed.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && parsed.ScopeId != 0 && !parsed.IsIPv6LinkLocal)
             {
+                // Review round 8 — Kestrel dual-binds :: itself alone, so ::%1 is bound for IPv6 alone.
                 var alone = new System.Net.IPAddress(parsed.GetAddressBytes());
+                var onLinux = alone.Equals(System.Net.IPAddress.IPv6Any)
+                    ? "on Linux it binds :: for IPv6 alone and ignores the zone, where :: without one listens on IPv4 as well"
+                    : $"on Linux it binds {alone} and ignores the zone";
                 return $"HttpTransport:BindAddress is '{bindAddress}', an address with a zone, which is not what Kestrel binds "
-                    + $"it by: on Linux it binds {alone} and ignores the zone, and on Windows it cannot bind it at all. A zone "
-                    + $"belongs on a link-local address alone. Write the address without it, {alone}.";
+                    + $"it by: {onLinux}, and on Windows it cannot bind it at all. A zone belongs on a link-local address "
+                    + $"alone. Write the address without it, {alone}.";
             }
 
             return null;
@@ -377,6 +410,83 @@ public static class HttpServerComposition
 
         return colon > 0 && bindAddress.AsSpan(colon + 1).IndexOfAnyExceptInRange('0', '9') < 0 ? bindAddress[..colon] : null;
     }
+
+    /// <summary>
+    /// The address <paramref name="text"/> would be as four decimal parts, leading zeros read as nothing, or null when
+    /// it is not four parts of decimal digits each of at most 255.
+    /// </summary>
+    private static string? DecimalReading(string text)
+    {
+        var parts = text.Split('.');
+        if (parts.Length != 4 || parts.Any(part => part.Length is 0 or > 3 || !part.All(char.IsAsciiDigit)))
+        {
+            return null;
+        }
+
+        var values = parts.Select(part => int.Parse(part, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        return values.All(value => value <= 255) ? string.Join('.', values) : null;
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 8 — a failure to bind the configured address, as a refusal to start, or null
+    /// when <paramref name="exception"/> is not one. Kestrel's socket transport raises what the operating system said as
+    /// it binds: the address and port in use (which Kestrel wraps: "Failed to bind to address ...: address already in
+    /// use"), an address not available on this machine, an invalid argument (Linux, for a link-local address with no
+    /// interface), or permission denied. The server used to exit 70 on each, "MCP Server terminated unexpectedly", with
+    /// a stack trace. Only a socket error raised inside Kestrel's socket transport counts; anything else stays
+    /// unexpected, exit 70.
+    /// </summary>
+    public static ConfigurationException? BindFailure(Exception exception, string bindAddress, int port)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        for (var e = exception; e is not null; e = e.InnerException)
+        {
+            if (e is Microsoft.AspNetCore.Connections.AddressInUseException)
+            {
+                return new ConfigurationException(InUse(bindAddress, port));
+            }
+
+            if (e is System.Net.Sockets.SocketException socket && RaisedByKestrelsTransport(socket))
+            {
+                const string Instead = "Write an address this machine holds: 127.0.0.1, or [::1], for this machine alone, or "
+                    + "0.0.0.0 for every interface, behind a proxy, with HttpTransport:AllowedHosts set.";
+                return new ConfigurationException(socket.SocketErrorCode switch
+                {
+                    System.Net.Sockets.SocketError.AddressAlreadyInUse => InUse(bindAddress, port),
+                    System.Net.Sockets.SocketError.AddressNotAvailable =>
+                        $"HttpTransport:BindAddress is '{bindAddress}', and the server cannot listen there: the address is not "
+                        + $"available on this machine, which holds no interface with it. {Instead}",
+                    System.Net.Sockets.SocketError.InvalidArgument =>
+                        $"HttpTransport:BindAddress is '{bindAddress}', and the server cannot listen there: the operating system "
+                        + $"refused the address as an invalid argument. {Instead}",
+                    System.Net.Sockets.SocketError.AccessDenied =>
+                        $"HttpTransport:Port is {port}, and the server may not listen on it at HttpTransport:BindAddress "
+                        + $"'{bindAddress}': permission denied. A port below 1024 needs privileges this process does not have, "
+                        + "and the operating system can reserve others. Set HttpTransport:Port to a free port of 1024 or above, "
+                        + "such as 3001.",
+                    _ => $"HttpTransport:BindAddress is '{bindAddress}' and HttpTransport:Port is {port}, and the server cannot "
+                        + $"listen there: the operating system refused it ({socket.SocketErrorCode}).",
+                });
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether <paramref name="exception"/> is a failure to bind that <see cref="BindFailure"/> refuses.</summary>
+    public static bool IsBindFailure(Exception exception) => BindFailure(exception, string.Empty, 0) is not null;
+
+    private static string InUse(string bindAddress, int port) =>
+        $"HttpTransport:Port is {port}, and the server cannot listen on it at HttpTransport:BindAddress '{bindAddress}': "
+        + "the address and port are already in use, by another process or another server. Stop that one, or set "
+        + "HttpTransport:Port to a free port.";
+
+    /// <summary>Whether <paramref name="socket"/> was raised inside Kestrel's socket transport, binding.</summary>
+    private static bool RaisedByKestrelsTransport(System.Net.Sockets.SocketException socket) =>
+        new System.Diagnostics.StackTrace(socket, fNeedFileInfo: false).GetFrames()
+            .Any(frame => frame.GetMethod()?.DeclaringType?.Assembly
+                == typeof(Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportOptions).Assembly);
 
     /// <summary>
     /// contract-005 · G-12 (2), review round 7 — the refusal of text that is none of the accepted forms, saying what

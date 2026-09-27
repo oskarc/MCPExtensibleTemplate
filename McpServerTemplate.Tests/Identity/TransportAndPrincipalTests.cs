@@ -473,37 +473,124 @@ public class TransportAndPrincipalTests
     /// address is written. Kestrel binds [::1] for 0::1, 0:0:0:0:0:0:0:1 and [::1], 127.0.0.1 for 127.1, and both for
     /// LOCALHOST; the default used to be the bind address as written unless it was spelled localhost, 127.0.0.1 or
     /// ::1, and 0::1, unbracketed, matches no request, so such a server started and answered every request 400.
+    /// Review round 8 — an IPv4 address is written in its standard form only, so 127.1 is refused now, saying how it
+    /// would be read and what to write; the IPv6 spellings stand.
     /// </summary>
     [Theory]
-    [InlineData("0::1")]
-    [InlineData("0:0:0:0:0:0:0:1")]
-    [InlineData("[::1]")]
-    [InlineData("127.1")]
-    [InlineData("LOCALHOST")]
-    public void G12_2_a_loopback_bind_however_written_defaults_to_the_loopback_names(string bindAddress)
+    [InlineData("0::1", null)]
+    [InlineData("0:0:0:0:0:0:0:1", null)]
+    [InlineData("[::1]", null)]
+    [InlineData("127.1", "which would be read as 127.0.0.1; write 127.0.0.1")]
+    [InlineData("LOCALHOST", null)]
+    public void G12_2_a_loopback_bind_however_written_defaults_to_the_loopback_names(string bindAddress, string? refusedSaying)
     {
-        Assert.Equal(
-            ["localhost", "127.0.0.1", "[::1]"],
-            HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = bindAddress })));
+        var settings = Config(new() { ["HttpTransport:BindAddress"] = bindAddress });
+        if (refusedSaying is null)
+        {
+            Assert.Equal(["localhost", "127.0.0.1", "[::1]"], HttpServerComposition.AllowedHosts(settings));
+        }
+        else
+        {
+            var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(settings));
+            Assert.Contains(refusedSaying, ex.Message, StringComparison.Ordinal);
+        }
     }
 
     /// <summary>
     /// contract-005 · G-12 (2), review round 5 addendum 2 — any other loopback address gives that address alone, in
     /// its standard form. Kestrel binds 127.0.0.2 alone for each of these spellings, and a request reaching it carries
     /// 127.0.0.2 as its Host; the loopback names reach none of it, and the spelling as written is not what a request
-    /// carries.
+    /// carries. Review round 8 — which supersedes the other spellings: an IPv4 address is written in its standard form
+    /// only, so they are refused now, saying how they would be read and to write 127.0.0.2.
     /// </summary>
     [Theory]
-    [InlineData("127.0.0.2")]
-    [InlineData("127.2")]
-    [InlineData("127.0.2")]
-    [InlineData("0x7f.0.0.2")]
-    [InlineData("2130706434")]
-    public void G12_2_another_loopback_address_defaults_to_itself_alone_in_its_standard_form(string bindAddress)
+    [InlineData("127.0.0.2", true)]
+    [InlineData("127.2", false)]
+    [InlineData("127.0.2", false)]
+    [InlineData("0x7f.0.0.2", false)]
+    [InlineData("2130706434", false)]
+    public void G12_2_another_loopback_address_defaults_to_itself_alone_in_its_standard_form(string bindAddress, bool standard)
     {
-        Assert.Equal(
-            ["127.0.0.2"],
-            HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = bindAddress })));
+        var settings = Config(new() { ["HttpTransport:BindAddress"] = bindAddress });
+        if (standard)
+        {
+            Assert.Equal(["127.0.0.2"], HttpServerComposition.AllowedHosts(settings));
+        }
+        else
+        {
+            var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(settings));
+            Assert.Contains("which would be read as 127.0.0.2; write 127.0.0.2", ex.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 8 — an IPv4 bind address is accepted in its standard form only: four
+    /// decimal parts, without leading zeros, as IPAddress writes it. The parser reads the others as some address, not
+    /// always the one meant (010.0.0.1 is octal, 8.0.0.1), and the server then failed to bind it with a stack trace, or
+    /// bound what nobody wrote. The refusal shows how it would be read, and what to write.
+    /// </summary>
+    [Theory]
+    [InlineData("010.0.0.1", "8.0.0.1", "10.0.0.1")]
+    [InlineData("127.2", "127.0.0.2", null)]
+    [InlineData("127.000.000.001", "127.0.0.1", null)]
+    [InlineData("0x7f.0.0.2", "127.0.0.2", null)]
+    [InlineData("2130706434", "127.0.0.2", null)]
+    [InlineData("1", "0.0.0.1", null)]
+    [InlineData("10.01.2.3", "10.1.2.3", null)]
+    public void G12_2_an_ipv4_bind_address_not_in_its_standard_form_is_refused_showing_how_it_would_be_read(string bindAddress, string read, string? meant)
+    {
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(Config(new()
+        {
+            ["HttpTransport:BindAddress"] = bindAddress,
+            ["HttpTransport:AllowedHosts:0"] = "mcp.example.com",
+        })));
+
+        Assert.StartsWith($"HttpTransport:BindAddress is '{bindAddress}', which would be read as {read}; write {read}", ex.Message, StringComparison.Ordinal);
+        if (meant is null)
+        {
+            Assert.DoesNotContain("if that is what you meant", ex.Message, StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.Contains($", or {meant} if that is what you meant", ex.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 8 — a link-local bind address without its interface's zone is refused
+    /// before binding, allowed hosts or none. The address parser drops a zone it cannot resolve without a word — %0, an
+    /// unknown name, a percent-encoded one, and on Windows any name at all — and the server then failed to bind it,
+    /// with a stack trace; the refusal says the zone was dropped where the text had one.
+    /// </summary>
+    [Theory]
+    [InlineData("fe80::1", false)]
+    [InlineData("fe80::1%0", true)]
+    [InlineData("fe80::1%nosuchnic", true)]
+    [InlineData("fe80::1%25eth0", true)]
+    public void G12_2_a_link_local_bind_address_without_its_zone_is_refused(string bindAddress, bool hadOne)
+    {
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(Config(new()
+        {
+            ["HttpTransport:BindAddress"] = bindAddress,
+            ["HttpTransport:AllowedHosts:0"] = "mcp.example.com",
+        })));
+
+        Assert.StartsWith($"HttpTransport:BindAddress is '{bindAddress}', a link-local address", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("needs its interface's zone, as fe80::1%eth0 or fe80::1%2", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(hadOne, ex.Message.Contains("dropped", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 8 — a zone on the any-address: Kestrel binds :: with both IPv4 and IPv6
+    /// only for :: itself, so ::%1 binds :: for IPv6 alone on Linux, the zone ignored; the refusal says so.
+    /// </summary>
+    [Fact]
+    public void G12_2_a_zone_on_the_any_address_is_refused_saying_it_would_bind_ipv6_alone()
+    {
+        var ex = Assert.Throws<ConfigurationException>(() =>
+            HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = "::%1" })));
+
+        Assert.Contains("on Linux it binds :: for IPv6 alone and ignores the zone", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

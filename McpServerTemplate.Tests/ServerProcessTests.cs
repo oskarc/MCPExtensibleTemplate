@@ -218,6 +218,62 @@ public sealed class ServerProcessTests : IDisposable
     }
 
     /// <summary>
+    /// contract-005 review round 8 — a server whose test disposed its handle while it still ran is still ended when the
+    /// test ends. RunToCompletionAsync did exactly that when a server it expected to refuse started instead, and the
+    /// cleanup took a disposed handle for an exited server: the server ran on, holding the rolling log file the next
+    /// servers from the same directory write to, which then refused to start for that.
+    /// </summary>
+    [Fact]
+    public void T3_a_spawned_server_whose_handle_its_test_disposed_is_still_ended_when_the_test_ends()
+    {
+        var test = new ServerProcessTests();
+        var spawned = test.Start(
+            new Dictionary<string, string> { ["ASPNETCORE_ENVIRONMENT"] = "Development", ["Transport"] = "stdio" },
+            redirectStdin: true);
+        var id = spawned.Process.Id;
+        var started = spawned.Process.StartTime;
+        spawned.Process.Dispose();
+
+        test.Dispose();
+
+        using var survivor = RunningProcess(id, started);
+        try
+        {
+            Assert.True(survivor is null, $"the server (process {id}) is still running after its test ended.");
+        }
+        finally
+        {
+            survivor?.Kill(entireProcessTree: true);
+            survivor?.WaitForExit();
+        }
+    }
+
+    /// <summary>The process with <paramref name="id"/> that started at <paramref name="started"/>, if it still runs.</summary>
+    private static Process? RunningProcess(int id, DateTime started)
+    {
+        try
+        {
+            var process = Process.GetProcessById(id);
+            if (!process.HasExited && process.StartTime == started)
+            {
+                return process;
+            }
+
+            process.Dispose();
+        }
+        catch (ArgumentException)
+        {
+            // No process has that id.
+        }
+        catch (InvalidOperationException)
+        {
+            // It exited while it was looked at.
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// contract-005 review round 5 — nothing a spawned server is given is left behind: its location of its own
     /// (SpawnedServer) is removed, with whatever the server wrote there, when the test that started it ends, passed or
     /// failed, once the server has exited. On Linux a server writes its data-protection key there; on Windows nothing
@@ -268,7 +324,15 @@ public sealed class ServerProcessTests : IDisposable
         using var process = spawned.Process;
 
         var exited = await Task.Run(() => process.WaitForExit(60_000));
-        Assert.True(exited, "the server did not exit; it was expected to refuse to start");
+        if (!exited)
+        {
+            // Review round 8 — ended here, before the assertion disposes the handle, so a server that started instead
+            // of refusing is not left running.
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit();
+        }
+
+        Assert.True(exited, $"the server did not exit; it was expected to refuse to start: {spawned.Stderr}");
 
         // WaitForExit(int) does not wait for the redirected readers to finish; this overload does,
         // so the buffer is complete before it is read.
@@ -975,21 +1039,29 @@ public sealed class ServerProcessTests : IDisposable
     }
 
     /// <summary>
-    /// contract-005 · T-11 (2) (G-12 (2)), review round 5 addendum 2 — another loopback address, written in a form
-    /// Kestrel accepts, answers under its standard form. Kestrel binds 127.0.0.2 alone for 127.2, and a request
-    /// reaching it carries Host 127.0.0.2; the allowlist used to default to the spelling, 127.2, which that request
-    /// does not match.
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 5 addendum 2, then round 8 — another loopback address answers
+    /// under its standard form, which is now the only way to write it. Kestrel binds 127.0.0.2 alone, and a request
+    /// reaching it carries Host 127.0.0.2. Round 5 turned 127.2 into that; round 8 refuses 127.2, saying how it would
+    /// be read and what to write, and 127.0.0.2 answers as before.
     /// </summary>
     [Fact]
-    public async Task T11_2_another_loopback_address_however_written_answers_under_its_standard_form()
+    public async Task T11_2_another_loopback_address_answers_in_its_standard_form_and_no_other()
     {
-        var port = FreePort();
         var environment = IdentityEnvironment();
         environment["ASPNETCORE_ENVIRONMENT"] = "Production";
         environment["Transport"] = "http";
-        environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__Port"] = FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture);
         environment["HttpTransport__BindAddress"] = "127.2";
         environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        var (exitCode, stderr) = await RunToCompletionAsync(environment);
+        Assert.True(
+            exitCode == 78 && stderr.Contains("HttpTransport:BindAddress is '127.2', which would be read as 127.0.0.2; write 127.0.0.2", StringComparison.Ordinal),
+            $"a server with HttpTransport:BindAddress 127.2 exited {exitCode}: {stderr}");
+
+        var port = FreePort();
+        environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "127.0.0.2";
 
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
         var spawned = Start(environment);
@@ -999,14 +1071,68 @@ public sealed class ServerProcessTests : IDisposable
             var answer = await AnswerWithinAsync(http, port, TimeSpan.FromSeconds(60), "127.0.0.2");
             Assert.True(
                 answer == HttpStatusCode.OK,
-                $"a server bound to 127.2, which Kestrel binds as 127.0.0.2, with no AllowedHosts, answered GET /healthz at "
-                + $"http://127.0.0.2:{port} with {(int?)answer}. {spawned.Stderr}");
+                $"a server bound to 127.0.0.2, with no AllowedHosts, answered GET /healthz at http://127.0.0.2:{port} with "
+                + $"{(int?)answer}. {spawned.Stderr}");
         }
         finally
         {
             process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync();
         }
+    }
+
+    /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 8 — an accepted address this machine does not hold refuses to
+    /// start, naming the bind address and the socket error in plain words: Kestrel cannot bind it, and the server used
+    /// to exit 70, "MCP Server terminated unexpectedly", with a stack trace. 192.0.2.1 is a documentation address
+    /// (RFC 5737), held by no machine.
+    /// </summary>
+    [Fact]
+    public async Task T11_2_a_bind_address_this_machine_does_not_hold_refuses_to_start()
+    {
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "192.0.2.1";
+        environment["HttpTransport__AllowedHosts__0"] = "mcp.example.com";
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        var (exitCode, stderr) = await RunToCompletionAsync(environment);
+
+        Assert.True(
+            exitCode == 78
+                && stderr.Contains("HttpTransport:BindAddress is '192.0.2.1', and the server cannot listen there: the address is not available on this machine", StringComparison.Ordinal)
+                && !stderr.Contains("   at ", StringComparison.Ordinal),
+            $"a server bound to 192.0.2.1 exited {exitCode}: {stderr}");
+    }
+
+    /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 8 — a port already in use refuses to start, naming
+    /// HttpTransport:Port, the cause: the server used to exit 70 with Kestrel's "address already in use" and a stack trace.
+    /// </summary>
+    [Fact]
+    public async Task T11_2_a_port_in_use_refuses_to_start_naming_the_port()
+    {
+        using var holder = new TcpListener(IPAddress.Loopback, 0);
+        holder.Start();
+        var port = ((IPEndPoint)holder.LocalEndpoint).Port;
+
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "127.0.0.1";
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        var (exitCode, stderr) = await RunToCompletionAsync(environment);
+
+        Assert.True(
+            exitCode == 78
+                && stderr.Contains($"HttpTransport:Port is {port}, and the server cannot listen on it", StringComparison.Ordinal)
+                && stderr.Contains("already in use", StringComparison.Ordinal)
+                && !stderr.Contains("   at ", StringComparison.Ordinal),
+            $"a server on a port already in use ({port}) exited {exitCode}: {stderr}");
     }
 
     [Fact]

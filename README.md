@@ -206,7 +206,7 @@ All settings live in `appsettings.json` and can be overridden via environment va
 |---------|---------|-------------|
 | `Transport` | `stdio` | `stdio` or `http` |
 | `HttpTransport:Port` | `3001` | HTTP listen port |
-| `HttpTransport:BindAddress` | `localhost` | An IP address, `localhost`, or an all-interfaces spelling (`0.0.0.0`, `::`, `[::]`, `*`, `+`), written alone: the port is `HttpTransport:Port`. Anything else stops the server. Any bind that is not loopback needs `HttpTransport:AllowedHosts` |
+| `HttpTransport:BindAddress` | `localhost` | An IP address (IPv4 in standard dotted-decimal form; a link-local IPv6 address with its interface's zone), `localhost`, or an all-interfaces spelling (`0.0.0.0`, `::`, `[::]`, `*`, `+`), written alone: the port is `HttpTransport:Port`. Anything else stops the server. Any bind that is not loopback needs `HttpTransport:AllowedHosts` |
 | `HttpTransport:AllowedHosts` | loopback names | The host names clients use (`mcp.example.com`), each written exactly as a request's `Host` carries it, without the port: ASCII (punycode for an internationalised name), no `*`, no trailing dot, no whitespace, an IPv6 address in brackets (`[::1]`). Required off loopback; `0.0.0.0`, `[::]`, `::` and an empty entry are refused |
 | `HttpTransport:AllowedOrigins` | `[]` | CORS allowed origins (empty = deny all) |
 | `Authentication:IdentityProviders:{name}:*` | — | Authority, issuer, algorithms, scope catalog and client claim per identity provider (HTTP). The client claim (`ClientIdClaim`) is exactly one of `azp` (Keycloak, Entra ID v2), `cid` (Okta), `appid` (Entra ID v1) or `client_id` (the default) |

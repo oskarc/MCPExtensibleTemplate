@@ -44,21 +44,35 @@ internal static class SpawnedServer
     internal sealed class Cleanup : IDisposable
     {
         private readonly List<string> _locations = [];
-        private readonly List<Process> _servers = [];
+        private readonly List<(Process Process, int Id, DateTime? Started)> _servers = [];
 
         /// <summary>Isolates <paramref name="info"/> (<see cref="IsolateFromTheDeveloper(ProcessStartInfo)"/>), and removes its location when the test ends.</summary>
         public void Isolate(ProcessStartInfo info) => _locations.Add(IsolateFromTheDeveloper(info));
 
-        /// <summary>A server the test started, returned as it is; ended, if it still runs, when the test ends.</summary>
+        /// <summary>
+        /// A server the test started, returned as it is; ended, if it still runs, when the test ends. Its id and start
+        /// time are kept with it, so it is found again even when the test has disposed its handle.
+        /// </summary>
         public Process Started(Process process)
         {
-            _servers.Add(process);
+            ArgumentNullException.ThrowIfNull(process);
+            DateTime? started;
+            try
+            {
+                started = process.StartTime;
+            }
+            catch (InvalidOperationException)
+            {
+                started = null; // It has exited already.
+            }
+
+            _servers.Add((process, process.Id, started));
             return process;
         }
 
         public void Dispose()
         {
-            foreach (var server in _servers)
+            foreach (var (server, id, started) in _servers)
             {
                 try
                 {
@@ -71,7 +85,10 @@ internal static class SpawnedServer
                 }
                 catch (InvalidOperationException)
                 {
-                    // The test disposed it, which every test here does only once the server has exited.
+                    // Review round 8 — the test disposed its handle, which says nothing of whether the server has exited:
+                    // a helper that gave up waiting for an exit disposed it too, and the server ran on. It is found again
+                    // by its id and start time, so no process that has taken the id since is touched.
+                    EndIfStillRunning(id, started);
                 }
             }
 
@@ -81,6 +98,29 @@ internal static class SpawnedServer
                 {
                     Directory.Delete(location, recursive: true);
                 }
+            }
+        }
+
+        private static void EndIfStillRunning(int id, DateTime? started)
+        {
+            if (started is null)
+            {
+                return;
+            }
+
+            try
+            {
+                using var again = Process.GetProcessById(id);
+                if (again.StartTime == started)
+                {
+                    again.Kill(entireProcessTree: true);
+                    again.WaitForExit();
+                }
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                // No process has that id any more, it exited while it was looked at, or the id now belongs to a process
+                // this one may not inspect: not the server.
             }
         }
     }

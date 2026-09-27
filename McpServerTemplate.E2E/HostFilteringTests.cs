@@ -90,6 +90,28 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
     }
 
     /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 8 — accepted-looking addresses the image cannot bind, with the
+    /// environment's allowed host set: a link-local address without its zone (none, or one the parser drops), an
+    /// address the container does not hold, and an IPv4 address in octal (read as 8.0.0.1). Each used to exit 70,
+    /// "MCP Server terminated unexpectedly", with a stack trace; each refuses, naming the bind address.
+    /// </summary>
+    [Theory]
+    [InlineData("bind-link-local", "fe80::1")]
+    [InlineData("bind-link-local-unknown-zone", "fe80::1%nosuchnic")]
+    [InlineData("bind-not-held", "10.1.2.3")]
+    [InlineData("bind-octal", "010.0.0.1")]
+    public async Task T11_2_a_bind_address_the_image_cannot_bind_refuses_to_start(string variant, string bindAddress)
+    {
+        const string key = "HttpTransport:BindAddress";
+        await using var outcome = await fixture.Environment.StartupAsync(variant, SettingsDelta.None.Set(key, bindAddress));
+        output.WriteLine(outcome.Describe());
+
+        Assert.True(
+            outcome.ExitCode == 78 && outcome.RefusalLine?.Contains($"{key} is '{bindAddress}'", StringComparison.Ordinal) == true,
+            $"{key}={bindAddress}: {outcome.Describe()}");
+    }
+
+    /// <summary>
     /// contract-005 · T-11 (2) (G-12 (2)), review round 7 — a bind address with a path, with the environment's allowed
     /// host set: the image used to pass its checks and stop in Kestrel, "A path base can only be configured using
     /// IApplicationBuilder.UsePathBase()", exit 70. It is not an accepted form, and the refusal says what Kestrel would

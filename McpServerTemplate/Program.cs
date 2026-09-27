@@ -176,9 +176,19 @@ static async Task<int> RunHttpAsync(string[] args)
     Log.Information("Starting MCP server with HTTP transport on {BindAddress}:{Port}", bindAddress, port);
     builder.WebHost.UseUrls($"http://{bindAddress}:{port}");
 
-    var app = builder.Build().UseHttpServer();
+    await using var app = builder.Build().UseHttpServer();
+    try
+    {
+        await app.StartAsync();
+    }
+    catch (Exception ex) when (HttpServerComposition.BindFailure(ex, bindAddress, port) is { } refusal)
+    {
+        // contract-005 · G-12 (2), review round 8 — a failure to bind the configured address is the operator's to
+        // fix, said in plain words (exit 78), not a stack trace; anything else at startup stays unexpected (exit 70).
+        throw refusal;
+    }
 
-    await app.RunAsync();
+    await app.WaitForShutdownAsync();
     return ExitCode.Ok;
 }
 
@@ -193,5 +203,11 @@ static void ConfigureLogging(IServiceCollection services, IConfiguration configu
 
     services.AddSerilog(config => config
         .ReadFrom.Configuration(configuration)
-        .Enrich.FromLogContext());
+        .Enrich.FromLogContext()
+        // contract-005 · G-12 (2), review round 8 — a failure to bind is refused in plain words, exit 78
+        // (HttpServerComposition.BindFailure); the host's own "Hosting failed to start", with its stack trace, is
+        // left out for that, and for nothing else.
+        .Filter.ByExcluding(logEvent => logEvent.Exception is { } exception
+            && logEvent.MessageTemplate.Text == "Hosting failed to start"
+            && HttpServerComposition.IsBindFailure(exception)));
 }
