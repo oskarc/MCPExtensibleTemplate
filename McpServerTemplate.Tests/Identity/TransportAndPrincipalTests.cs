@@ -142,21 +142,101 @@ public class TransportAndPrincipalTests
     // ── contract-005 · G-12 (2): host filtering cannot be switched off ─────────
 
     [Theory]
-    [InlineData("0.0.0.0")]
-    [InlineData("::")]
-    [InlineData("*")]
-    [InlineData("10.1.2.3")]
-    [InlineData("mcp.internal")]
-    public void G12_2_a_non_loopback_bind_with_no_allowed_host_is_refused(string bindAddress)
+    // Review round 7 — each row with what its refusal must say: an accepted form that is not loopback asks for allowed
+    // hosts; a host name is not an accepted form, and its refusal says what Kestrel would do with it.
+    [InlineData("0.0.0.0", "HttpTransport:AllowedHosts must name")]
+    [InlineData("::", "HttpTransport:AllowedHosts must name")]
+    [InlineData("*", "HttpTransport:AllowedHosts must name")]
+    [InlineData("10.1.2.3", "HttpTransport:AllowedHosts must name")]
+    [InlineData("mcp.internal", "Kestrel does not read 'mcp.internal' as an address")]
+    public void G12_2_a_non_loopback_bind_with_no_allowed_host_is_refused(string bindAddress, string says)
     {
         // The bind address used to become the allowlist, and 0.0.0.0 there means any host.
         var ex = Assert.Throws<ConfigurationException>(() =>
             HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = bindAddress })));
 
-        // Review round 6 — for text Kestrel does not read as an address (*, mcp.internal) the refusal first says what
-        // Kestrel would do with it; the advice about allowed hosts follows.
-        Assert.Contains("HttpTransport:AllowedHosts must name", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(says, ex.Message, StringComparison.Ordinal);
         Assert.Contains($"'{bindAddress}'", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 7 — a bind address is accepted only in a declared form: an IP address
+    /// Kestrel reads as one, localhost, or an explicit all-interfaces spelling. Anything else refuses to start, allowed
+    /// hosts or none, saying what Kestrel would do with it: a path, a scheme, a socket or a pipe stopped Kestrel ("A
+    /// path base can only be configured...", exit 70) once the checks had passed; text it does not read as an address
+    /// listened on every interface without a word; a name under .localhost was called not loopback though Kestrel
+    /// binds loopback for it; and a zone on ::1 is ignored on Linux and cannot be bound on Windows.
+    /// </summary>
+    [Theory]
+    [InlineData("127.0.0.1/x", true, "as a path")]
+    [InlineData("127.0.0.1/x", false, "as a path")]
+    [InlineData("localhost/", true, "as a path")]
+    [InlineData("http://127.0.0.1", true, "as a path")]
+    [InlineData("unix:/tmp/mcp.sock", true, "Unix socket")]
+    [InlineData("pipe:/mcp", true, "named pipe")]
+    [InlineData("[127.0.0.1]", true, "would listen on every interface")]
+    [InlineData("localhost.", true, "would listen on every interface")]
+    [InlineData(" 127.0.0.1", true, "would listen on every interface")]
+    [InlineData("myhost.example", true, "look a host name up")]
+    [InlineData("foo.localhost", true, "reads it as localhost")]
+    [InlineData("foo.localhost", false, "reads it as localhost")]
+    [InlineData("::1%1", true, "zone")]
+    [InlineData("::1%1", false, "zone")]
+    public void G12_2_a_bind_address_outside_the_accepted_forms_is_refused_saying_what_kestrel_would_do(string bindAddress, bool allowedHosts, string says)
+    {
+        var settings = new Dictionary<string, string?> { ["HttpTransport:BindAddress"] = bindAddress };
+        if (allowedHosts)
+        {
+            settings["HttpTransport:AllowedHosts:0"] = "mcp.example.com";
+        }
+
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(Config(settings)));
+
+        Assert.StartsWith($"HttpTransport:BindAddress is '{bindAddress}'", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(says, ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("not a loopback address", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 7 — the explicit all-interfaces spellings are accepted forms: with allowed
+    /// hosts the server binds, and without them the refusal says the address listens on every interface.
+    /// </summary>
+    [Theory]
+    [InlineData("0.0.0.0")]
+    [InlineData("::")]
+    [InlineData("[::]")]
+    [InlineData("*")]
+    [InlineData("+")]
+    public void G12_2_an_all_interfaces_bind_address_is_accepted_and_asks_for_allowed_hosts(string bindAddress)
+    {
+        Assert.Equal(["mcp.example.com"], HttpServerComposition.AllowedHosts(Config(new()
+        {
+            ["HttpTransport:BindAddress"] = bindAddress,
+            ["HttpTransport:AllowedHosts:0"] = "mcp.example.com",
+        })));
+
+        var ex = Assert.Throws<ConfigurationException>(() =>
+            HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = bindAddress })));
+        Assert.StartsWith("HttpTransport:AllowedHosts must name", ex.Message, StringComparison.Ordinal);
+        Assert.Contains($"HttpTransport:BindAddress is '{bindAddress}', which listens on every interface.", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 7 — the control for zones: on a link-local address a zone is what Kestrel
+    /// binds by (that interface's address; a wrong zone fails to bind), so it is an accepted form, not loopback.
+    /// </summary>
+    [Fact]
+    public void G12_2_a_link_local_address_with_its_zone_is_an_accepted_form()
+    {
+        Assert.Equal(["mcp.example.com"], HttpServerComposition.AllowedHosts(Config(new()
+        {
+            ["HttpTransport:BindAddress"] = "fe80::1%1",
+            ["HttpTransport:AllowedHosts:0"] = "mcp.example.com",
+        })));
+
+        var ex = Assert.Throws<ConfigurationException>(() =>
+            HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = "fe80::1%1" })));
+        Assert.Contains("HttpTransport:BindAddress is 'fe80::1%1', which is not a loopback address.", ex.Message, StringComparison.Ordinal);
     }
 
     [Theory]

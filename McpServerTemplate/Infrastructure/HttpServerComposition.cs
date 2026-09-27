@@ -224,10 +224,11 @@ public static class HttpServerComposition
     /// loopback (<see cref="IsLoopback"/>).
     ///
     /// Review round 6 — the bind address is refused first, whatever the allowed hosts, where the server would not
-    /// act on it as written (<see cref="BindAddressRefusal"/>); and where Kestrel would listen on every interface for
-    /// it, the refusal says so before any advice about allowed hosts.
+    /// act on it as written. Review round 7 — which is to say unless it is one of the forms declared for it
+    /// (<see cref="BindAddressRefusal"/>): an IP address Kestrel reads as one, localhost, or an explicit all-interfaces
+    /// spelling; the refusal of anything else says what Kestrel would do with it.
     /// </summary>
-    /// <exception cref="ConfigurationException">The bind address carries a port or is IPv4-mapped, a non-loopback bind names no host, or an entry does not name exactly one host a request can match.</exception>
+    /// <exception cref="ConfigurationException">The bind address is not one of its accepted forms, a non-loopback bind names no host, or an entry does not name exactly one host a request can match.</exception>
     public static string[] AllowedHosts(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -255,20 +256,17 @@ public static class HttpServerComposition
                 $"HttpTransport:BindAddress is '{bindAddress}', a loopback address, so the host filter allows '{host}' by default",
                 "Set HttpTransport:AllowedHosts to the host names clients reach this server by"))];
         }
-        else if (KestrelListensEverywhere(bindAddress))
-        {
-            throw new ConfigurationException(
-                $"HttpTransport:BindAddress is '{bindAddress}'. Kestrel does not read '{bindAddress}' as an address and "
-                + "would listen on every interface. For loopback, write 127.0.0.1, or [::1]. Otherwise "
-                + "HttpTransport:AllowedHosts must name the host names clients reach this server by: with none, every "
-                + "Host header would be answered, and DNS rebinding could turn a browser into a client of this server. "
-                + "For example HttpTransport:AllowedHosts:0=mcp.example.com.");
-        }
         else
         {
+            // Only an accepted form gets here: an IP address that is not loopback, or an all-interfaces spelling.
+            var which = bindAddress is "*" or "+"
+                || (System.Net.IPAddress.TryParse(bindAddress, out var any)
+                    && (any.Equals(System.Net.IPAddress.Any) || any.Equals(System.Net.IPAddress.IPv6Any)))
+                ? "which listens on every interface"
+                : "which is not a loopback address";
             throw new ConfigurationException(
                 $"HttpTransport:AllowedHosts must name the host names clients reach this server by, because "
-                + $"HttpTransport:BindAddress is '{bindAddress}', which is not a loopback address. With none, every "
+                + $"HttpTransport:BindAddress is '{bindAddress}', {which}. With none, every "
                 + "Host header would be answered, and DNS rebinding could turn a browser into a client of this "
                 + "server. For example HttpTransport:AllowedHosts:0=mcp.example.com.");
         }
@@ -296,12 +294,20 @@ public static class HttpServerComposition
     }
 
     /// <summary>
-    /// contract-005 · G-12 (2), review round 6 — why the server refuses <paramref name="bindAddress"/> whatever the
-    /// allowed hosts, or null. One that carries a port: the server listens on the port HttpTransport:Port sets, and
-    /// IPAddress reads [::1]:9999 as ::1, dropping 9999 without a word, while Kestrel reads 127.0.0.1:9999 or
-    /// localhost:9999 as no address at all. And an IPv4-mapped address, bracketed or not: Kestrel binds any IPv6
-    /// address but [::] on an IPv6-only socket (SocketTransportOptions.CreateDefaultBoundListenSocket), which cannot
-    /// take one, so the bind failed with exit 70, on Windows and in the image alike.
+    /// contract-005 · G-12 (2), review round 7 — why the server refuses <paramref name="bindAddress"/>, whatever the
+    /// allowed hosts, or null when it accepts it. A positive allowlist, declared rather than inferred: exactly
+    ///   (a) an IP address Kestrel reads as one — IPAddress.TryParse, which its address binder applies to the same
+    ///       text: IPv4, dotted or in a short form it reads as the same address (127.1), and IPv6, bare or bracketed;
+    ///       with a zone only on a link-local address, where Kestrel binds that interface's address (a wrong zone fails
+    ///       to bind). On any other address a zone is not what Kestrel binds by: on Linux ::1%1 binds ::1 and the zone
+    ///       is ignored, and on Windows it cannot be bound at all (10049);
+    ///   (b) localhost, in any case;
+    ///   (c) an explicit all-interfaces spelling: 0.0.0.0, ::, [::], * or +.
+    /// Within them, as round 6 and its addendum left it: an empty value; one that carries a port, since the server
+    /// listens on the port HttpTransport:Port sets, and IPAddress reads [::1]:9999 as ::1, dropping 9999 without a word;
+    /// and an IPv4-mapped address, bracketed or not, which Kestrel binds on an IPv6-only socket
+    /// (SocketTransportOptions.CreateDefaultBoundListenSocket) that cannot take one. Anything else is refused by
+    /// <see cref="NotAnAcceptedForm"/>, saying what Kestrel would do with it.
     /// </summary>
     private static string? BindAddressRefusal(string bindAddress)
     {
@@ -322,14 +328,29 @@ public static class HttpServerComposition
                 + "port in HttpTransport:Port.";
         }
 
-        if (System.Net.IPAddress.TryParse(bindAddress, out var parsed) && parsed.IsIPv4MappedToIPv6)
+        if (System.Net.IPAddress.TryParse(bindAddress, out var parsed))
         {
-            return $"HttpTransport:BindAddress is '{bindAddress}', an IPv4-mapped IPv6 address, which Kestrel cannot listen "
-                + "on: it binds any IPv6 address but [::] on an IPv6-only socket, which cannot take an IPv4 one. Write the "
-                + $"IPv4 address itself, {parsed.MapToIPv4()}.";
+            if (parsed.IsIPv4MappedToIPv6)
+            {
+                return $"HttpTransport:BindAddress is '{bindAddress}', an IPv4-mapped IPv6 address, which Kestrel cannot listen "
+                    + "on: it binds any IPv6 address but [::] on an IPv6-only socket, which cannot take an IPv4 one. Write the "
+                    + $"IPv4 address itself, {parsed.MapToIPv4()}.";
+            }
+
+            if (parsed.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && parsed.ScopeId != 0 && !parsed.IsIPv6LinkLocal)
+            {
+                var alone = new System.Net.IPAddress(parsed.GetAddressBytes());
+                return $"HttpTransport:BindAddress is '{bindAddress}', an address with a zone, which is not what Kestrel binds "
+                    + $"it by: on Linux it binds {alone} and ignores the zone, and on Windows it cannot bind it at all. A zone "
+                    + $"belongs on a link-local address alone. Write the address without it, {alone}.";
+            }
+
+            return null;
         }
 
-        return null;
+        return bindAddress.Equals("localhost", StringComparison.OrdinalIgnoreCase) || bindAddress is "*" or "+"
+            ? null
+            : NotAnAcceptedForm(bindAddress);
     }
 
     /// <summary>
@@ -358,29 +379,54 @@ public static class HttpServerComposition
     }
 
     /// <summary>
-    /// contract-005 · G-12 (2), review round 6 — whether Kestrel would listen on every interface for
-    /// <paramref name="bindAddress"/>: its address binder (AddressBinder.ParseAddress) reads the host of
-    /// http://{bindAddress}:{port} with BindingAddress.Parse, binds loopback for localhost or a name under .localhost,
-    /// the address itself for text IPAddress reads, and every interface for anything else. Text it cannot parse at
-    /// all, or one with a path, stops it instead.
+    /// contract-005 · G-12 (2), review round 7 — the refusal of text that is none of the accepted forms, saying what
+    /// Kestrel would do with it, as its address binder reads http://{bindAddress}:{port} (AddressBinder.ParseAddress,
+    /// BindingAddress.Parse): a Unix socket or a named pipe for unix:/ or pipe:/, and a path for whatever follows a /,
+    /// none of which it starts on; loopback for a name under .localhost; and every interface for anything else, a host
+    /// name included, which it does not look up.
     /// </summary>
-    private static bool KestrelListensEverywhere(string bindAddress)
+    private static string NotAnAcceptedForm(string bindAddress)
     {
-        BindingAddress parsed;
+        const string Instead = "For this machine alone, write 127.0.0.1, or [::1]; for every interface, write 0.0.0.0, behind a "
+            + "proxy, with HttpTransport:AllowedHosts naming the hosts clients use; and put the port in HttpTransport:Port.";
+        var what = $"HttpTransport:BindAddress is '{bindAddress}'";
+
+        if (bindAddress.StartsWith("unix:/", StringComparison.Ordinal))
+        {
+            return $"{what}. Kestrel would read it as the path of a Unix socket, not an address, and would not start. {Instead}";
+        }
+
+        if (bindAddress.StartsWith("pipe:/", StringComparison.Ordinal))
+        {
+            return $"{what}. Kestrel would read it as the name of a named pipe, not an address, and would not start. {Instead}";
+        }
+
+        BindingAddress kestrel;
         try
         {
-            parsed = BindingAddress.Parse($"http://{bindAddress}:1");
+            kestrel = BindingAddress.Parse($"http://{bindAddress}:1");
         }
         catch (FormatException)
         {
-            return false;
+            return $"{what}. Kestrel cannot read it as an address, and would not start. {Instead}";
         }
 
-        var host = parsed.Host;
-        return !parsed.IsUnixPipe && !parsed.IsNamedPipe && string.IsNullOrEmpty(parsed.PathBase)
-            && !host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-            && !(host.Length > ".localhost".Length && host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase))
-            && !System.Net.IPAddress.TryParse(host, out _);
+        if (!string.IsNullOrEmpty(kestrel.PathBase))
+        {
+            return $"{what}. Kestrel would read what follows its / as a path, and would not start: a bind address has no path, "
+                + $"and no scheme. {Instead}";
+        }
+
+        if (kestrel.Host.Length > ".localhost".Length && kestrel.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{what}, a name under .localhost. Kestrel reads it as localhost and listens on loopback, not on the name. "
+                + "Write localhost, or 127.0.0.1, or [::1].";
+        }
+
+        var name = Uri.CheckHostName(bindAddress) == UriHostNameType.Dns
+            ? " It does not look a host name up, so it would not listen on that name's address."
+            : string.Empty;
+        return $"{what}. Kestrel does not read '{bindAddress}' as an address and would listen on every interface.{name} {Instead}";
     }
 
     /// <summary>

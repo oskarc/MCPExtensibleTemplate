@@ -90,6 +90,24 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
     }
 
     /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 7 — a bind address with a path, with the environment's allowed
+    /// host set: the image used to pass its checks and stop in Kestrel, "A path base can only be configured using
+    /// IApplicationBuilder.UsePathBase()", exit 70. It is not an accepted form, and the refusal says what Kestrel would
+    /// do with it.
+    /// </summary>
+    [Fact]
+    public async Task T11_2_a_bind_address_with_a_path_refuses_to_start()
+    {
+        const string key = "HttpTransport:BindAddress";
+        await using var outcome = await fixture.Environment.StartupAsync("bind-path", SettingsDelta.None.Set(key, "127.0.0.1/x"));
+        output.WriteLine(outcome.Describe());
+
+        Assert.True(
+            outcome.ExitCode == 78 && outcome.RefusalLine?.Contains($"{key} is '127.0.0.1/x'", StringComparison.Ordinal) == true,
+            $"{key}=127.0.0.1/x: {outcome.Describe()}");
+    }
+
+    /// <summary>
     /// contract-005 · T-11 (2) (G-12 (2)), review round 6 addendum — HttpTransport__BindAddress=${MCP_BIND} in a compose
     /// file, with MCP_BIND unset: an empty bind address, with the environment's allowed host set. The image used to
     /// pass its checks and stop in Kestrel, "Invalid url", exit 70; it refuses, naming the key.
