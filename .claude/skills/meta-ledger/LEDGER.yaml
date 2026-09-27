@@ -3910,6 +3910,7 @@ candidates:
         you can make the addition / the wording is correct, type category.
       date: 2026-09-22
     applied_as: add — the claim written beside the quoted sentence in meta-foundation/INTENT.md, the sentence left standing
+    represented_in: B-004
   - cand_id: K-053
     created: 2026-09-20
     statement: |
@@ -4099,6 +4100,13 @@ batches:
     items: 1
     decided: true
     revealed: true
+    represented: []
+  - batch_id: B-004
+    date: 2026-09-27
+    file: meta-ledger/batches/B-004.md
+    items: 2
+    decided: false
+    revealed: false
     represented: []
 
 map_proposals: []
