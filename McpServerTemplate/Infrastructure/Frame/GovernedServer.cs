@@ -32,6 +32,10 @@ public static class GovernedServer
         ArgumentNullException.ThrowIfNull(modules);
 
         SettingsAllowlist.Validate(configuration, modules);
+
+        // contract-005 review round 3 — and read once: the check above holds only if nothing reads the
+        // settings again once it has run.
+        SettingsReadOnce.Validate(configuration);
         var enabled = SelectEnabled(configuration, environment, modules);
 
         foreach (var module in enabled)

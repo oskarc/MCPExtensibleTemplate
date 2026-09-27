@@ -20,7 +20,7 @@ One rule shapes everything below: **in the sections the frame governs — `Authe
 
 **Example**: If a setting exists in all of them, the command-line argument wins.
 
-**Settings are read once, at startup, where they are checked.** No settings file is watched: editing one while the server runs changes nothing until the server restarts, and the restart checks the change like any other setting — a key it does not read stops it from starting. A running server's behaviour cannot be changed by a file it was not started with.
+**Settings are read once, at startup, where they are checked.** No settings file is watched: editing one while the server runs changes nothing until the server restarts, and the restart checks the change like any other setting — a key it does not read stops it from starting. A running server's behaviour cannot be changed by a file it was not started with. No launch can switch this back on: every settings file is read once whatever the command line or the environment says, a request to read them again — `hostBuilder:reloadConfigOnChange=true` on the command line, or as `DOTNET_hostBuilder__reloadConfigOnChange` or `ASPNETCORE_hostBuilder__reloadConfigOnChange` in the environment — stops the server at startup, naming where it came from, since the server would otherwise ignore it, and so does a settings source that could read again.
 
 ```
 Command line: --MyValue cli

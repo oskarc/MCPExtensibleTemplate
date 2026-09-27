@@ -94,7 +94,9 @@ public class ServerProcessTests
     /// The working directory, which is the server's content root: where it reads appsettings*.json and
     /// resolves log paths. The executable's own directory unless a test needs settings files of its own.
     /// </param>
-    private static Spawned Start(IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null)
+    /// <param name="arguments">The server's command line.</param>
+    private static Spawned Start(
+        IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null, IReadOnlyList<string>? arguments = null)
     {
         var exe = ServerExecutable();
         var info = new ProcessStartInfo(exe)
@@ -105,6 +107,10 @@ public class ServerProcessTests
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+        foreach (var argument in arguments ?? [])
+        {
+            info.ArgumentList.Add(argument);
+        }
 
         // Clear inherited environment so a developer's own ASPNETCORE_ENVIRONMENT cannot
         // change what these tests assert.
@@ -449,6 +455,75 @@ public class ServerProcessTests
         finally
         {
             Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// contract-005 review round 3 — an explicit request to read settings again, by any route the host reads
+    /// it from, is a setting the server would ignore: it reads its settings once whatever the request says
+    /// (HostBuilders). The frame refuses such a setting everywhere else, so this one stops the server too,
+    /// naming it and where it came from. The server's own "false", first on its command line, never does.
+    /// </summary>
+    [Theory]
+    [InlineData("http", "the command line")]
+    [InlineData("http", "DOTNET_")]
+    [InlineData("http", "ASPNETCORE_")]
+    [InlineData("stdio", "the command line")]
+    public async Task T3_a_request_to_read_settings_again_exits_78_naming_where_it_came_from(string transport, string route)
+    {
+        const string setting = "hostBuilder:reloadConfigOnChange";
+        Dictionary<string, string> environment;
+        if (transport == "http")
+        {
+            environment = IdentityEnvironment();
+            environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+            environment["Transport"] = "http";
+            environment["HttpTransport__Port"] = FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            environment["HttpTransport__BindAddress"] = "127.0.0.1";
+            environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+        }
+        else
+        {
+            environment = new() { ["ASPNETCORE_ENVIRONMENT"] = "Development", ["Transport"] = "stdio" };
+        }
+
+        string[] arguments = [];
+        if (route == "the command line")
+        {
+            arguments = [$"--{setting}=true"];
+        }
+        else
+        {
+            environment[$"{route}{setting.Replace(":", "__", StringComparison.Ordinal)}"] = "true";
+        }
+
+        var spawned = Start(environment, redirectStdin: transport == "stdio", arguments: arguments);
+        using var process = spawned.Process;
+        try
+        {
+            // Started means the frame installed itself; refused means it exited first.
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            while (!process.HasExited && !spawned.Stderr.Contains("Frame installed:", StringComparison.Ordinal) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(100);
+            }
+
+            Assert.True(
+                process.HasExited,
+                $"asked to read its settings again ({setting}=true, from {route}), the {transport} server started and installed its "
+                + "frame: a request it ignores, as it reads its settings once.");
+
+            await process.WaitForExitAsync();
+            Assert.Equal(78, process.ExitCode);
+            var from = route == "the command line" ? route : $"the environment, as {route}{setting.Replace(":", "__", StringComparison.Ordinal)}";
+            Assert.Contains($"{setting} is 'true' from {from}", spawned.Stderr, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
         }
     }
 
