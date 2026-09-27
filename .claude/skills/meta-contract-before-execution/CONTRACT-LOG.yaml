@@ -417,6 +417,22 @@ contracts:
           repository, and serves as before; a spawned server on Windows no longer loads the user's key
           ring (no key-repository line).
         tests_changed: T-17 added
+    progress: |
+      Paused 2026-09-27 at the pioneer's instruction, to preserve capacity. Status stays approved.
+      Built: phase 1 (G-1..G-9, G-11 self-checks, G-16 shapes, G-14 with the budget, T-1) and phase 2
+      (G-12 fixes 1-5, T-4, T-11), both independently reviewed; phase 2's review loop ran rounds 1-8,
+      every finding fixed and shown red first; G-18/T-17 (approved revision) built. Last commit of the
+      build before the pause is the round-8 fix. Fast suite 504, E2E 49, CI green on the pushed tree.
+      Next on resume: phase-2 review round 9 (confirming round over the round-8 fixes); then phase 3 -
+      G-10 test host and T-8; T-2 (closes contract-003 T-10 with T-8); T-3 (needs a logged reason for
+      missing-claim refusals, which the product lacks); T-5; T-6 (waits on the network-egress
+      decision); T-7; T-9; T-10; T-12; T-13; T-14; T-15; then G-17/T-16 adversarial rounds over the
+      whole contract; then red_test, observations, status implemented.
+      Waiting on the pioneer: review B-004 (open; item 1 of 2, a card, presented); whether "the 5 you
+      asked about is approved" covered items 2-4 (moving the full sign-in check to T-4; cutting the
+      test network off the internet; settings read once at startup) or only item 5 (recorded above).
+      Working evidence (session scratchpad): phase2-reds.md (every red and green), phase1-findings.md,
+      phase2-findings.md, c005-observations.md (fifteen held observations for M-11).
     red_test: null
     approval: approved-at-gate
     status: approved
