@@ -32,7 +32,29 @@ public static partial class SettingsAllowlist
         "Development:DevPrincipal:Subject",
         "Development:DevPrincipal:ClientId",
         "Development:DevPrincipal:Scopes:{n}",
+
+        // contract-005 · G-12 (2) — the transport's settings, each where the server reads it:
+        // Program.cs (Port, BindAddress), HttpServerComposition.cs (BindAddress, AllowedHosts,
+        // AllowedOrigins, KnownProxies, KnownNetworks), OriginGuardMiddleware.cs (AllowedOrigins) and
+        // TransportSecurityGuard.cs (KnownProxies, KnownNetworks). A misspelt host allowlist used to
+        // leave the server answering any Host header, saying nothing.
+        "HttpTransport:Port",
+        "HttpTransport:BindAddress",
+        "HttpTransport:AllowedHosts:{n}",
+        "HttpTransport:AllowedOrigins:{n}",
+        "HttpTransport:KnownProxies:{n}",
+        "HttpTransport:KnownNetworks:{n}",
     ];
+
+    // contract-005 · G-12 (2) — the certificate settings are retired rather than known. Once they were
+    // taken as evidence that the server terminates TLS, which it never did; since 2026-09-20 the
+    // transport guard names them only when it refuses Production for having no proxy, and everywhere
+    // else they were accepted and did nothing. Retired, they are refused wherever they appear, with the
+    // reason — which is the guard's own, so an operator hears the same thing from both.
+    private const string NoTlsTermination =
+        "this server does not terminate TLS itself, so a certificate setting would claim a protection it does not "
+        + "provide. Terminate TLS at a proxy and name it in HttpTransport:KnownProxies or :KnownNetworks; the Kestrel "
+        + "HTTPS listener belongs to a later phase.";
 
     private static readonly Dictionary<string, string> Retired = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -41,11 +63,13 @@ public static partial class SettingsAllowlist
             + "Limits:PerPrincipalPerMinute, and each tool's own limit in its provider's policy.",
         ["Authentication:ApiKey"] =
             "API keys were removed in Phase 1; callers present a bearer token from a configured identity provider.",
+        ["HttpTransport:Certificate:Path"] = NoTlsTermination,
+        ["HttpTransport:Certificate:Subject"] = NoTlsTermination,
     };
 
     /// <summary>The sections this check governs. Anything else in configuration is left alone.</summary>
     public static readonly IReadOnlyList<string> GovernedSections =
-        ["Authentication", "Providers", "Limits", "Confirmation", "Development", "RateLimit"];
+        ["Authentication", "Providers", "Limits", "Confirmation", "Development", "RateLimit", "HttpTransport"];
 
     /// <summary>
     /// Whether <paramref name="key"/> is a setting the server reads in a governed section. The same
@@ -92,6 +116,15 @@ public static partial class SettingsAllowlist
                 if (value is null)
                 {
                     continue; // an intermediate section, not a setting
+                }
+
+                // An empty list — "AllowedOrigins": [] in a JSON file — arrives as its section's key with
+                // an empty value. It sets nothing, and a list of nothing is what it means. A section key
+                // holding anything else (HttpTransport:AllowedHosts=mcp.example.com, with no index) is a
+                // value where a list is read, which binding ignores, so it is refused below.
+                if (value.Length == 0 && IsKnownSection(key, modules))
+                {
+                    continue;
                 }
 
                 if (Retired.TryGetValue(key, out var why))

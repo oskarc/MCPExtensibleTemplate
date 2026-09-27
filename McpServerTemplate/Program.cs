@@ -35,6 +35,12 @@ using Serilog.Events;
 //   0  normal shutdown · 70 unhandled failure · 78 configuration the server will not honour
 // ============================================================================
 
+// ── Serilog's own failures, on stderr ──
+// contract-005 · G-12 (5) — a sink that fails (a log directory it cannot write, a disk that fills, a
+// sink name Serilog does not know) reports to Serilog's self-log, which is off unless enabled. Off,
+// the sink wrote nothing and said nothing. On stderr, beside the logs, so stdout stays the protocol's.
+Serilog.Debugging.SelfLog.Enable(Console.Error);
+
 // ── Serilog bootstrap logger ──
 // This catches any errors during host startup, before full DI is available.
 // Writes to stderr so stdout stays clean for MCP protocol messages.
@@ -181,14 +187,10 @@ static async Task<int> RunHttpAsync(string[] args)
 
 static void ConfigureLogging(IServiceCollection services, IConfiguration configuration)
 {
-    // A log path that can climb out of its directory is a write primitive, so it is refused
-    // rather than normalised.
-    var logPath = configuration["Serilog:WriteTo:1:Args:path"];
-    if (logPath?.Contains("..", StringComparison.Ordinal) == true)
-    {
-        throw new ConfigurationException(
-            $"Log file path '{logPath}' contains path traversal characters (..). Use an absolute path.");
-    }
+    // contract-005 · G-12 (5) — every File sink, at every index, where it will write: a path that
+    // climbs out of its directory, or one this process cannot write, stops the server here. The
+    // check used to read Serilog:WriteTo:1 alone, for traversal only.
+    LogSinkGuard.Validate(configuration, Directory.GetCurrentDirectory());
 
     services.AddSerilog(config => config
         .ReadFrom.Configuration(configuration)

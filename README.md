@@ -102,7 +102,7 @@ HTTP mode needs an identity provider that issues the bearer tokens callers prese
 cd McpServerTemplate
 export ASPNETCORE_ENVIRONMENT=Development
 export Transport=http
-export Authentication__Resource=https://localhost:3001/
+export Authentication__Resource=https://localhost:3001/mcp
 export Authentication__IdentityProviders__corp__Authority=https://your-idp/realms/corp
 export Authentication__IdentityProviders__corp__Issuer=https://your-idp/realms/corp
 export Authentication__IdentityProviders__corp__Algorithms__0=RS256
@@ -113,11 +113,11 @@ export Authentication__IdentityProviders__corp__ScopeCatalog__3=demo:write
 dotnet run
 ```
 
-The MCP endpoint is the server root, `http://localhost:3001/`. Every request carries a token; without one the server answers `401`, naming its resource metadata so a client knows where to sign in:
+The MCP endpoint is `http://localhost:3001/mcp`, the path `Authentication:Resource` names (startup refuses a resource at any other path). Every request carries a token; without one the server answers `401`, naming its resource metadata so a client knows where to sign in:
 
 ```bash
 curl http://localhost:3001/healthz
-curl -X POST http://localhost:3001/ -H "Authorization: Bearer $TOKEN" \
+curl -X POST http://localhost:3001/mcp -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
@@ -156,7 +156,7 @@ Or connect to a running HTTP instance — clients that support MCP authorization
 {
   "mcpServers": {
     "weather": {
-      "url": "http://localhost:3001/",
+      "url": "http://localhost:3001/mcp",
       "headers": {
         "Authorization": "Bearer <token>"
       }
@@ -205,7 +205,8 @@ All settings live in `appsettings.json` and can be overridden via environment va
 |---------|---------|-------------|
 | `Transport` | `stdio` | `stdio` or `http` |
 | `HttpTransport:Port` | `3001` | HTTP listen port |
-| `HttpTransport:BindAddress` | `localhost` | Bind address (`localhost`, `0.0.0.0`, etc.) |
+| `HttpTransport:BindAddress` | `localhost` | Bind address (`localhost`, `0.0.0.0`, etc.). Any bind that is not loopback needs `HttpTransport:AllowedHosts` |
+| `HttpTransport:AllowedHosts` | loopback names | The host names clients use (`mcp.example.com`). Required off loopback; `*`, `0.0.0.0`, `[::]` and `::` are refused |
 | `HttpTransport:AllowedOrigins` | `[]` | CORS allowed origins (empty = deny all) |
 | `Authentication:IdentityProviders:{name}:*` | — | Authority, issuer, algorithms and scope catalog per identity provider (HTTP) |
 | `Providers:Enabled` | — | The providers this deployment serves. Required outside Development |
@@ -222,7 +223,7 @@ All settings live in `appsettings.json` and can be overridden via environment va
 - **Development** (`ASPNETCORE_ENVIRONMENT=Development`) — Debug logging, all three providers, in-memory limits allowed, `-dev` user agent
 - **Production** (`ASPNETCORE_ENVIRONMENT=Production`) — Warning level, the SMHI providers only (the demo provider is not enabled), Redis required, 30-day log retention
 
-A misspelled or retired key in the `Authentication`, `Providers`, `Limits`, `Confirmation` or `Development` sections stops the server from starting and names the nearest real key: a setting the server would silently ignore is refused rather than trusted.
+A misspelled or retired key in the `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development` or `HttpTransport` sections stops the server from starting and names the nearest real key: a setting the server would silently ignore is refused rather than trusted.
 
 ## Documentation
 

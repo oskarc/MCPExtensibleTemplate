@@ -137,16 +137,20 @@ public static class IdentityRegistration
                         // because a caller who cannot see which claim is missing cannot fix it:
                         //   sub        — no subject, so nothing to attribute the call to
                         //   jti        — cannot be revoked individually or de-duplicated
-                        //   client_id  — no client, so a compromised one cannot be scoped out
+                        //   the client — no client, so a compromised one cannot be scoped out
                         //   iat        — no issue time, so age cannot be reasoned about
-                        static string? Claim(TokenValidatedContext c, params string[] names) =>
-                            names.Select(n => c.Principal?.FindFirst(n)?.Value)
-                                 .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+                        //
+                        // contract-005 · G-12 (3) — the client claim is the one this identity
+                        // provider's ClientIdClaim names (azp, cid, appid, client_id). It used to be
+                        // client_id or azp whatever ClientIdClaim said: the setting was read, never
+                        // applied, and a token from the wrong kind of provider passed on the other name.
+                        static string? Claim(TokenValidatedContext c, string name) =>
+                            c.Principal?.FindFirst(name)?.Value is { } value && !string.IsNullOrWhiteSpace(value) ? value : null;
 
                         var missing = new List<string>();
                         if (Claim(context, JwtRegisteredClaimNames.Sub) is null) missing.Add("sub");
                         if (Claim(context, JwtRegisteredClaimNames.Jti) is null) missing.Add("jti");
-                        if (Claim(context, "client_id", "azp") is null) missing.Add("client_id (or azp)");
+                        if (Claim(context, provider.ClientIdClaim) is null) missing.Add($"{provider.ClientIdClaim} (the client claim)");
                         if (Claim(context, JwtRegisteredClaimNames.Iat) is null) missing.Add("iat");
 
                         if (missing.Count > 0)
@@ -209,9 +213,13 @@ public static class IdentityRegistration
                 ScopesSupported = { },
             };
 
+            // contract-005 · G-12 (4) — each identity provider's Issuer, not its Authority. A client is
+            // sent to this URL and holds the authorization server's own metadata to it exactly (RFC
+            // 8414 §3.3); the Authority is where this server fetches keys, and differs from the issuer
+            // for some providers (a trailing slash, another host), which made them unreachable.
             foreach (var provider in config.IdentityProviders.Values)
             {
-                options.ResourceMetadata.AuthorizationServers.Add(provider.Authority);
+                options.ResourceMetadata.AuthorizationServers.Add(provider.Issuer);
             }
 
             // The union across identity providers. A scope means something only inside the

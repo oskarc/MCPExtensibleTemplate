@@ -39,10 +39,10 @@ public sealed class ServerUnderTest : IAsyncDisposable
     public const int AppUser = 1654;
 
     /// <summary>
-    /// Where MCP answers today: the server root. The resource names /mcp and the endpoint is /; that
-    /// disagreement is contract-005's first defect (G-12), fixed in a later phase, not here.
+    /// Where MCP answers: the resource's own URL, through the front. contract-005 · G-12 (1) — until the
+    /// fix it answered at the root while the resource named /mcp.
     /// </summary>
-    public static readonly Uri Endpoint = new($"https://{TlsFront.Host}/");
+    public static readonly Uri Endpoint = new(Resource);
 
     private readonly E2EEnvironment _environment;
 
@@ -78,7 +78,7 @@ public sealed class ServerUnderTest : IAsyncDisposable
     /// The server itself, on its published port, not through the front: plain http, from the test
     /// process. A request sent here comes from outside KnownProxies, so what it forwards is not trusted.
     /// </summary>
-    public Uri DirectEndpoint => new($"http://{Container.Hostname}:{Container.GetMappedPublicPort(Port)}/");
+    public Uri DirectEndpoint => new($"http://{Container.Hostname}:{Container.GetMappedPublicPort(Port)}{Endpoint.AbsolutePath}");
 
     /// <summary>
     /// The configuration every server in the environment starts from. The front's address is part of
@@ -223,7 +223,65 @@ public sealed class ServerUnderTest : IAsyncDisposable
         await Container.DisposeAsync();
     }
 
+    /// <summary>
+    /// contract-005 · G-8, T-11 — a server started only to see whether it starts. The same image, the
+    /// same base settings and the same delta as <see cref="StartAsync"/>, and no front and no
+    /// self-checks: the outcome is the server's own, either an exit (its code and its stderr) or an
+    /// answer on /readyz. A refusal at startup is the outcome a test asserts, so it is returned here
+    /// rather than thrown.
+    /// </summary>
+    internal static async Task<StartupOutcome> StartupAsync(
+        E2EEnvironment environment, string name, SettingsDelta delta, CancellationToken cancellationToken)
+    {
+        var settings = delta.ApplyTo(BaseSettings(E2EEnvironment.Issuers, E2ENetwork.AllocateStatic()));
+        var container = new ContainerBuilder(environment.ServerImage)
+            .WithNetwork(environment.Network)
+            .WithNetworkAliases($"server-{name}")
+            .WithLabel(E2ENetwork.RunLabel, environment.RunId)
+            .WithPortBinding(Port, true)
+            .WithLoopbackPortsOnly()
+            .WithBindMount(environment.Pki.CaPath, $"{TrustMount}/{TestPki.CaFile}", AccessMode.ReadOnly)
+            .WithEnvironment(settings)
+            .Build();
+
+        try
+        {
+            // A 400 is an answer too: a server whose host filter refuses the name the harness probes
+            // under has come up, and is refusing that name — which is an outcome, not a server that
+            // never started.
+            var (exitCode, answered) = await E2EEnvironment.Timings.MeasureAsync($"{name}: startup outcome", async () =>
+            {
+                await container.StartAsync(cancellationToken);
+                return await WaitForStartupAsync(environment.Docker, container, [HttpStatusCode.OK, HttpStatusCode.BadRequest], cancellationToken);
+            });
+
+            var (_, stderr) = await container.GetLogsAsync(ct: cancellationToken);
+            return new StartupOutcome(environment, name, container, exitCode, answered, stderr);
+        }
+        catch
+        {
+            await WriteLogsAsync(environment, name, container, null);
+            await container.DisposeAsync();
+            throw;
+        }
+    }
+
     private static async Task WaitUntilReadyAsync(Docker.DotNet.IDockerClient docker, IContainer container, CancellationToken cancellationToken)
+    {
+        if ((await WaitForStartupAsync(docker, container, [HttpStatusCode.OK], cancellationToken)).ExitCode is { } exitCode)
+        {
+            var (_, stderr) = await container.GetLogsAsync(ct: cancellationToken);
+            throw new InvalidOperationException(
+                $"The server exited with code {exitCode} during startup. Its stderr:{Environment.NewLine}{stderr}");
+        }
+    }
+
+    /// <summary>
+    /// The status /readyz answered on the server's published port, once it is one of
+    /// <paramref name="answers"/>, or the server's exit code if it stopped first.
+    /// </summary>
+    private static async Task<(long? ExitCode, HttpStatusCode? Answered)> WaitForStartupAsync(
+        Docker.DotNet.IDockerClient docker, IContainer container, HttpStatusCode[] answers, CancellationToken cancellationToken)
     {
         // Directly on the published port, with the one Host the server allows: host filtering runs
         // before the health endpoints.
@@ -235,9 +293,7 @@ public sealed class ServerUnderTest : IAsyncDisposable
         {
             if (await DockerEngine.ExitCodeIfStoppedAsync(docker, container.Id, cancellationToken) is { } exitCode)
             {
-                var (_, stderr) = await container.GetLogsAsync(ct: cancellationToken);
-                throw new InvalidOperationException(
-                    $"The server exited with code {exitCode} during startup. Its stderr:{Environment.NewLine}{stderr}");
+                return (exitCode, null);
             }
 
             try
@@ -245,9 +301,9 @@ public sealed class ServerUnderTest : IAsyncDisposable
                 using var request = new HttpRequestMessage(HttpMethod.Get, readyz);
                 request.Headers.Host = TlsFront.Host;
                 using var response = await http.SendAsync(request, cancellationToken);
-                if (response.StatusCode == HttpStatusCode.OK)
+                if (answers.Contains(response.StatusCode))
                 {
-                    return;
+                    return (null, response.StatusCode);
                 }
             }
             catch (HttpRequestException)
@@ -447,7 +503,7 @@ public sealed class ServerUnderTest : IAsyncDisposable
         }
     }
 
-    private static async Task WriteLogsAsync(E2EEnvironment environment, string name, IContainer container, TlsFront? front)
+    internal static async Task WriteLogsAsync(E2EEnvironment environment, string name, IContainer container, TlsFront? front)
     {
         try
         {

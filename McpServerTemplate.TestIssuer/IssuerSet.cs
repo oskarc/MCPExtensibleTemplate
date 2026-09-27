@@ -27,13 +27,17 @@ public sealed class IssuerSet : IDisposable
 
     private readonly Dictionary<string, Issuer> _issuers;
 
-    public IssuerSet(IEnumerable<string> hostNames)
+    /// <param name="identifiers">
+    /// The issuer identifiers to answer as, each https://{host} or https://{host}/ (Program.cs checks
+    /// them). A request is for the issuer whose host it was sent to.
+    /// </param>
+    public IssuerSet(IEnumerable<string> identifiers)
     {
-        ArgumentNullException.ThrowIfNull(hostNames);
+        ArgumentNullException.ThrowIfNull(identifiers);
 
-        _issuers = hostNames.ToDictionary(
-            host => host.ToLowerInvariant(),
-            host => new Issuer(host.ToLowerInvariant()),
+        _issuers = identifiers.ToDictionary(
+            identifier => new Uri(identifier).Host.ToLowerInvariant(),
+            identifier => new Issuer(new Uri(identifier).Host.ToLowerInvariant(), identifier),
             StringComparer.Ordinal);
     }
 
@@ -84,6 +88,7 @@ public sealed class IssuerSet : IDisposable
                 : Get(context).Mint(request, this);
         });
         app.MapGet("/admin/counts", () => Results.Json(_issuers.ToDictionary(i => i.Key, i => i.Value.Counts())));
+        app.MapGet("/admin/authorizations", () => Results.Json(_issuers.ToDictionary(i => i.Key, i => i.Value.Authorizations())));
         app.MapGet("/admin/clock", () => Results.Json(new Dictionary<string, object> { ["utc"] = DateTimeOffset.UtcNow }));
     }
 
@@ -124,17 +129,32 @@ public sealed class IssuerSet : IDisposable
         int? IssuedSecondsAgo = null,
         string? SignedBy = null);
 
-    private sealed record PendingCode(string ClientId, string RedirectUri, string Challenge, string? Resource, string? Scope);
+    private sealed record PendingCode(string ClientId, string RedirectUri, string Challenge, string ChallengeMethod, string? Resource, string? Scope);
+
+    /// <summary>
+    /// contract-005 · T-4 — what one /authorize or /token request carried, as this issuer saw it: the
+    /// witness that a standard client's flow reached it, once, with the resource and PKCE method named.
+    /// </summary>
+    /// <param name="Path">/authorize or /token.</param>
+    /// <param name="ClientId">The client the request was for.</param>
+    /// <param name="Resource">The resource parameter, or null when there was none.</param>
+    /// <param name="ChallengeMethod">
+    /// /authorize: the code_challenge_method sent. /token: the method of the challenge its verifier was
+    /// checked against, or null when no code matched.
+    /// </param>
+    /// <param name="Outcome">approved, issued, or the OAuth error code it was refused with.</param>
+    public sealed record AuthorizationRecord(string Path, string? ClientId, string? Resource, string? ChallengeMethod, string Outcome);
 
     private sealed class Issuer : IDisposable
     {
         private readonly ConcurrentDictionary<string, int> _counts = new(StringComparer.Ordinal);
         private readonly ConcurrentDictionary<string, PendingCode> _codes = new(StringComparer.Ordinal);
+        private readonly ConcurrentQueue<AuthorizationRecord> _authorizations = new();
 
-        public Issuer(string host)
+        public Issuer(string host, string identifier)
         {
             Host = host;
-            Provider = new TestIdentityProvider(host, $"https://{host}");
+            Provider = new TestIdentityProvider(host, identifier);
         }
 
         public string Host { get; }
@@ -145,6 +165,8 @@ public sealed class IssuerSet : IDisposable
         public void Count(string path) => _counts.AddOrUpdate(path, 1, (_, n) => n + 1);
 
         public SortedDictionary<string, int> Counts() => new(_counts, StringComparer.Ordinal);
+
+        public AuthorizationRecord[] Authorizations() => [.. _authorizations];
 
         /// <summary>Discovery and JWKS, served by the same handler the fast suite reads in-process.</summary>
         public async Task<IResult> DocumentAsync(string path, CancellationToken cancellationToken)
@@ -181,24 +203,32 @@ public sealed class IssuerSet : IDisposable
             var clientId = One("client_id");
             var redirectUri = One("redirect_uri");
             var challenge = One("code_challenge");
+            var method = One("code_challenge_method");
+
+            IResult Refused(string error, string description)
+            {
+                _authorizations.Enqueue(new AuthorizationRecord("/authorize", clientId, One("resource"), method, error));
+                return Error(error, description);
+            }
 
             if (One("response_type") != "code")
             {
-                return Error("unsupported_response_type", "response_type must be code.");
+                return Refused("unsupported_response_type", "response_type must be code.");
             }
 
             if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(redirectUri) || !Uri.IsWellFormedUriString(redirectUri, UriKind.Absolute))
             {
-                return Error("invalid_request", "client_id and an absolute redirect_uri are required.");
+                return Refused("invalid_request", "client_id and an absolute redirect_uri are required.");
             }
 
-            if (One("code_challenge_method") != "S256" || string.IsNullOrEmpty(challenge))
+            if (method != "S256" || string.IsNullOrEmpty(challenge))
             {
-                return Error("invalid_request", "PKCE with code_challenge_method=S256 is required.");
+                return Refused("invalid_request", "PKCE with code_challenge_method=S256 is required.");
             }
 
             var code = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
-            _codes[code] = new PendingCode(clientId, redirectUri, challenge, One("resource"), One("scope"));
+            _codes[code] = new PendingCode(clientId, redirectUri, challenge, method, One("resource"), One("scope"));
+            _authorizations.Enqueue(new AuthorizationRecord("/authorize", clientId, One("resource"), method, "approved"));
 
             var location = new QueryBuilder
             {
@@ -219,33 +249,44 @@ public sealed class IssuerSet : IDisposable
         {
             string? One(string key) => form.TryGetValue(key, out StringValues v) && v.Count == 1 ? v[0] : null;
 
-            if (One("grant_type") != "authorization_code")
+            PendingCode? pending = null;
+            IResult Refused(string error, string description)
             {
-                return Error("unsupported_grant_type", "Only authorization_code is issued here.");
+                _authorizations.Enqueue(new AuthorizationRecord("/token", pending?.ClientId ?? One("client_id"), One("resource"), pending?.ChallengeMethod, error));
+                return Error(error, description);
             }
 
-            if (One("code") is not { } code || !_codes.TryRemove(code, out var pending))
+            if (One("grant_type") != "authorization_code")
             {
-                return Error("invalid_grant", "The code is unknown or was already used.");
+                return Refused("unsupported_grant_type", "Only authorization_code is issued here.");
+            }
+
+            if (One("code") is not { } code || !_codes.TryRemove(code, out pending))
+            {
+                return Refused("invalid_grant", "The code is unknown or was already used.");
             }
 
             if (One("redirect_uri") != pending.RedirectUri || One("client_id") is { } id && id != pending.ClientId)
             {
-                return Error("invalid_grant", "redirect_uri and client_id must match the authorization request.");
+                return Refused("invalid_grant", "redirect_uri and client_id must match the authorization request.");
             }
 
+            // The challenge was accepted only as S256 (Authorize), so a verifier that hashes to it under
+            // SHA-256 is the S256 proof the code was issued against.
             var verifier = One("code_verifier");
             if (string.IsNullOrEmpty(verifier) ||
                 !string.Equals(Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier))), pending.Challenge, StringComparison.Ordinal))
             {
-                return Error("invalid_grant", "code_verifier does not match the code_challenge.");
+                return Refused("invalid_grant", "code_verifier does not match the code_challenge.");
             }
 
             var resource = One("resource");
             if (string.IsNullOrEmpty(resource) || pending.Resource is { } asked && asked != resource)
             {
-                return Error("invalid_target", "resource is required, and must be the one the authorization request named.");
+                return Refused("invalid_target", "resource is required, and must be the one the authorization request named.");
             }
+
+            _authorizations.Enqueue(new AuthorizationRecord("/token", pending.ClientId, resource, pending.ChallengeMethod, "issued"));
 
             var scopes = (One("scope") ?? pending.Scope ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
             var token = Provider.MintToken(

@@ -98,6 +98,19 @@ public sealed class WireMockService : IUpstreamService
         return await http.GetFromJsonAsync<JsonElement>(new Uri($"https://{Alias}/__admin/requests"), cancellationToken);
     }
 
+    /// <summary>
+    /// How many recorded requests mention <paramref name="fragment"/> anywhere in their record — a
+    /// path, a host, a header. A count, so a test compares it before and after its own call.
+    /// </summary>
+    public static async Task<int> CountAsync(HttpClient http, string fragment, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(fragment);
+        var journal = await JournalAsync(http, cancellationToken);
+        return journal.ValueKind == JsonValueKind.Array
+            ? journal.EnumerateArray().Count(entry => entry.GetRawText().Contains(fragment, StringComparison.Ordinal))
+            : 0;
+    }
+
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();
 
     private sealed class WireMockOwner() : UpstreamOwner("wiremock")

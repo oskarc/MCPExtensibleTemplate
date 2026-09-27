@@ -18,7 +18,7 @@ public class ScopeAndBindingEnforcementTests
 
     private static async Task<string[]> ListToolsAsync(InProcessServer server, string token)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/")
+        using var request = new HttpRequestMessage(HttpMethod.Post, InProcessServer.McpPath)
         {
             Content = new StringContent(
                 """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""",
@@ -102,7 +102,7 @@ public class ScopeAndBindingEnforcementTests
 
         var weatherOnly = corp.MintToken(Resource, scopes: ["weather:read"]);
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/")
+        using var request = new HttpRequestMessage(HttpMethod.Post, InProcessServer.McpPath)
         {
             Content = new StringContent(
                 """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_blog_post","arguments":{"postId":1}}}""",
@@ -136,7 +136,7 @@ public class ScopeAndBindingEnforcementTests
         var listed = await ListToolsAsync(server, partnerToken);
         Assert.DoesNotContain("get_blog_post", listed);
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/")
+        using var request = new HttpRequestMessage(HttpMethod.Post, InProcessServer.McpPath)
         {
             Content = new StringContent(
                 """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_blog_post","arguments":{"postId":1}}}""",

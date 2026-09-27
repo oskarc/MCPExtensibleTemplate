@@ -42,16 +42,21 @@ public sealed class TestIssuerService : IAsyncDisposable
 
     public IContainer Container => _container;
 
+    /// <param name="issuers">
+    /// The issuer identifiers it answers as (https://{host}, or with a trailing slash); it answers under
+    /// each one's host.
+    /// </param>
     internal static async Task<TestIssuerService> StartAsync(
         IDockerClient docker,
         string image,
         INetwork network,
         TestPki pki,
         NameMap names,
-        IReadOnlyList<string> hosts,
+        IReadOnlyList<string> issuers,
         string runId,
         CancellationToken cancellationToken)
     {
+        IReadOnlyList<string> hosts = [.. issuers.Select(i => new Uri(i).Host)];
         var tls = pki.LeafDirectory("issuer");
         var builder = new ContainerBuilder(image)
             .WithNetwork(network)
@@ -65,9 +70,9 @@ public sealed class TestIssuerService : IAsyncDisposable
             .WithEnvironment("TestIssuer__Key", "/e2e/tls/tls.key")
             .WithEnvironment("TestIssuer__Port", Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
-        for (var i = 0; i < hosts.Count; i++)
+        for (var i = 0; i < issuers.Count; i++)
         {
-            builder = builder.WithEnvironment($"TestIssuer__Names__{i}", hosts[i]);
+            builder = builder.WithEnvironment($"TestIssuer__Issuers__{i}", issuers[i]);
         }
 
         var container = builder.Build();
@@ -131,6 +136,25 @@ public sealed class TestIssuerService : IAsyncDisposable
 
         return body.GetProperty("token").GetString()!;
     }
+
+    /// <summary>
+    /// contract-005 · T-4 — what each /authorize and /token request carried, per issuer name, as the
+    /// issuer saw it: path, client, resource, PKCE method and outcome.
+    /// </summary>
+    public static async Task<IReadOnlyDictionary<string, IReadOnlyList<AuthorizationRecord>>> AuthorizationsAsync(
+        HttpClient http, string anyHost, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(http);
+
+        var records = await http.GetFromJsonAsync<Dictionary<string, AuthorizationRecord[]>>(new Uri($"https://{anyHost}/admin/authorizations"), cancellationToken);
+        return records!.ToDictionary(
+            r => r.Key,
+            r => (IReadOnlyList<AuthorizationRecord>)r.Value,
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>One /authorize or /token request as the test issuer recorded it.</summary>
+    public sealed record AuthorizationRecord(string Path, string? ClientId, string? Resource, string? ChallengeMethod, string Outcome);
 
     /// <summary>Requests counted per issuer name and path — discovery and JWKS among them.</summary>
     public static async Task<IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>>> CountsAsync(

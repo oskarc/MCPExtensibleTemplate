@@ -20,6 +20,9 @@ public static class IdentityConfigurationBinder
     /// </summary>
     private static readonly string[] PermittedAlgorithms = ["RS256", "PS256", "ES256"];
 
+    /// <summary>The registered JWT claims (RFC 7519 §4.1), none of which names the calling client.</summary>
+    private static readonly string[] RegisteredClaims = ["iss", "sub", "aud", "exp", "nbf", "iat", "jti"];
+
     public static AuthenticationConfig Bind(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -55,6 +58,18 @@ public static class IdentityConfigurationBinder
                 + "Every identity provider must issue tokens whose audience is exactly this value.");
         }
 
+        // contract-005 · G-12 (1) — the resource is the URL a client connects to, and a standard client
+        // refuses metadata whose resource is not that URL. MCP answers at /mcp, so the resource's path
+        // must be /mcp too; any other path names a URL where nothing answers.
+        if (!string.Equals(resource.AbsolutePath.TrimEnd('/'), HttpServerComposition.McpPath, StringComparison.Ordinal))
+        {
+            throw new ConfigurationException(
+                $"Authentication:Resource must name this server's MCP endpoint, https://{{host}}{HttpServerComposition.McpPath}; "
+                + $"it is '{config.Resource}', whose path is '{resource.AbsolutePath}'. MCP answers at "
+                + $"{HttpServerComposition.McpPath}, and a client that connects to a resource URL where nothing answers "
+                + "cannot connect.");
+        }
+
         foreach (var (name, provider) in config.IdentityProviders)
         {
             var key = $"Authentication:IdentityProviders:{name}";
@@ -73,6 +88,17 @@ public static class IdentityConfigurationBinder
                 throw new ConfigurationException(
                     $"{key}:Issuer is required. It is the exact iss value tokens must carry, and it "
                     + "is pinned rather than read from the token.");
+            }
+
+            // contract-005 · G-12 (4) — the same rule as Authority: the metadata's authorization_servers
+            // lists the Issuer, and clients are sent to it for its metadata and to sign in.
+            if (!Uri.TryCreate(provider.Issuer, UriKind.Absolute, out var issuer) ||
+                issuer.Scheme != Uri.UriSchemeHttps)
+            {
+                throw new ConfigurationException(
+                    $"{key}:Issuer must be an absolute https URI; it is '{provider.Issuer}'. It is published as "
+                    + "an authorization server, and clients are sent to it to find its metadata and to sign in, "
+                    + "so plaintext would hand their credentials to anyone on the path.");
             }
 
             if (provider.Algorithms.Length == 0)
@@ -115,8 +141,29 @@ public static class IdentityConfigurationBinder
             {
                 throw new ConfigurationException(
                     $"{key}:ScopeClaim and {key}:ClientIdClaim are required. They differ by identity "
-                    + "provider — scope or scp, client_id or azp — and a wrong one reads every token "
-                    + "as carrying no scopes.");
+                    + "provider — scope or scp; azp, cid, appid or client_id — and a wrong one reads every "
+                    + "token as carrying no scopes, or refuses every token for want of a client.");
+            }
+
+            // contract-005 · G-12 (3) — the client claim is required of every token, so it must name a
+            // claim that says which client called. A registered claim is present on every token this
+            // server accepts or means something else, and the scope claim means the scopes: either
+            // would switch the requirement off. Compared without case, because that is how a claim is
+            // found on the principal (ClaimsIdentity.FindFirst): ClientIdClaim=SUB finds sub.
+            var clientClaim = provider.ClientIdClaim.Trim();
+            var notAClient =
+                RegisteredClaims.Contains(clientClaim, StringComparer.OrdinalIgnoreCase)
+                    ? "it is a registered JWT claim, present on every token or meaning something else"
+                : string.Equals(clientClaim, provider.ScopeClaim.Trim(), StringComparison.OrdinalIgnoreCase)
+                    ? "it is this identity provider's ScopeClaim"
+                : null;
+
+            if (notAClient is not null)
+            {
+                throw new ConfigurationException(
+                    $"{key}:ClientIdClaim is '{provider.ClientIdClaim}', which does not name the calling client: "
+                    + $"{notAClient}, so requiring it would require nothing. Name the claim this identity provider "
+                    + "puts the client in: azp (Keycloak, Entra ID v2), cid (Okta), appid (Entra ID v1) or client_id.");
             }
         }
 

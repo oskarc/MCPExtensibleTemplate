@@ -30,11 +30,13 @@ public class MetadataAndStatelessTests
         Assert.Equal(Resource, root.GetProperty("resource").GetString());
 
         // One resource, several authorization servers: every configured identity provider is
-        // listed, because a client may hold a token from any of them.
+        // listed, because a client may hold a token from any of them. contract-005 · G-12 (4) — by
+        // its Issuer, where a client is sent; these providers' authorities differ from their issuers
+        // by the trailing slash, and the Authority was listed until then.
         var servers = root.GetProperty("authorization_servers")
             .EnumerateArray().Select(e => e.GetString()).ToArray();
-        Assert.Contains(corp.Authority, servers);
-        Assert.Contains(partner.Authority, servers);
+        Assert.Equal([corp.Issuer, partner.Issuer], servers.Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(corp.Authority, servers);
 
         var scopes = root.GetProperty("scopes_supported")
             .EnumerateArray().Select(e => e.GetString()).ToArray();
@@ -75,7 +77,7 @@ public class MetadataAndStatelessTests
 
         // A second client entirely, sharing nothing with the first.
         using var separate = new HttpClient { BaseAddress = server.Client.BaseAddress };
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/")
+        using var request = new HttpRequestMessage(HttpMethod.Post, InProcessServer.McpPath)
         {
             Content = new StringContent(
                 """{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"second","version":"1"}}}""",

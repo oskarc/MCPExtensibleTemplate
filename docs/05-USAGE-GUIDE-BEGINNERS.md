@@ -314,7 +314,8 @@ Want to test from another computer? Switch to HTTP mode. HTTP mode needs one mor
 export ASPNETCORE_ENVIRONMENT=Development
 export Transport=http
 export HttpTransport__BindAddress=0.0.0.0
-export Authentication__Resource=https://<your-computer-name>:3001/
+export HttpTransport__AllowedHosts__0=<your-computer-name>   # required once the server listens beyond this machine
+export Authentication__Resource=https://<your-computer-name>:3001/mcp
 export Authentication__IdentityProviders__corp__Authority=https://<your-identity-provider>
 export Authentication__IdentityProviders__corp__Issuer=https://<your-identity-provider>
 export Authentication__IdentityProviders__corp__Algorithms__0=RS256
@@ -331,8 +332,8 @@ dotnet run
 
 ```bash
 # From another computer on the same network
-curl http://<your-computer-ip>:3001/healthz          # "alive" — no token needed
-curl -X POST http://<your-computer-ip>:3001/ \
+curl http://<your-computer-name>:3001/healthz        # "alive" — no token needed
+curl -X POST http://<your-computer-name>:3001/mcp \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
@@ -447,8 +448,8 @@ Use curl to test:
 # Test that the server is running (HTTP mode)
 curl http://localhost:3001/healthz
 
-# Call the MCP endpoint — the server root — with a token
-curl -X POST http://localhost:3001/ -H "Authorization: Bearer <token>" \
+# Call the MCP endpoint, /mcp, with a token
+curl -X POST http://localhost:3001/mcp -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```

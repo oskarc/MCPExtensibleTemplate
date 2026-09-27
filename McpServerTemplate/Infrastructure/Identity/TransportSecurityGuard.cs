@@ -55,6 +55,8 @@ public static class TransportSecurityGuard
         // A certificate setting is named here only to refuse it. An operator who sets one and gets
         // a generic message will reasonably conclude the check is broken; they need to be told that
         // this server does not yet serve HTTPS, so the setting they reached for does nothing.
+        // contract-005 · G-12 (2) — the settings allowlist now retires both keys with the same reason,
+        // so the shipped server refuses them in every environment, before this guard runs.
         var reachedForACertificate =
             !string.IsNullOrWhiteSpace(configuration["HttpTransport:Certificate:Path"]) ||
             !string.IsNullOrWhiteSpace(configuration["HttpTransport:Certificate:Subject"]);

@@ -79,6 +79,10 @@ public sealed class IssuerRegistry
     public IReadOnlyList<string> HostsServedBy(Owner owner) =>
         [.. _entries.Where(e => e.ServedBy == owner).Select(e => e.Host).Distinct(StringComparer.OrdinalIgnoreCase)];
 
+    /// <summary>The issuer identifiers a container answers as, one per host, in registration order.</summary>
+    public IReadOnlyList<string> IssuersServedBy(Owner owner) =>
+        [.. _entries.Where(e => e.ServedBy == owner).DistinctBy(e => e.Host, StringComparer.OrdinalIgnoreCase).Select(e => e.Issuer)];
+
     /// <summary>The server's Authentication:IdentityProviders settings for every registered provider.</summary>
     public IEnumerable<KeyValuePair<string, string>> ToSettings()
     {

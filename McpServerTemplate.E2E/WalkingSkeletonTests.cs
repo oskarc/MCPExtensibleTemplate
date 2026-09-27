@@ -1,9 +1,9 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using McpServerTemplate.E2E.Harness;
 using Microsoft.IdentityModel.JsonWebTokens;
-using ModelContextProtocol.Authentication;
 using ModelContextProtocol.Client;
 using Xunit.Abstractions;
 using Xunit.Sdk;
@@ -121,21 +121,7 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
 
         // The SDK client on its own: no token, only OAuth options, so it must discover where to get
         // one. Whether the flow completes is T-4's claim; this test's claim is where the traffic went.
-        var transport = new HttpClientTransport(
-            new HttpClientTransportOptions
-            {
-                Endpoint = ServerUnderTest.Endpoint,
-                TransportMode = HttpTransportMode.StreamableHttp,
-                OAuth = new ClientOAuthOptions
-                {
-                    ClientId = "e2e-standard-client",
-                    RedirectUri = new Uri("http://localhost/callback"),
-                    AuthorizationCallbackHandler = (context, cancellationToken) => AuthorizeAsync(http, context.AuthorizationUri, cancellationToken),
-                },
-            },
-            http,
-            loggerFactory: null,
-            ownsHttpClient: false);
+        var transport = StandardClient.Transport(http, ServerUnderTest.Endpoint, "e2e-standard-client");
 
         try
         {
@@ -160,13 +146,27 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
             && r.Uri.AbsolutePath.StartsWith("/.well-known/oauth-protected-resource", StringComparison.Ordinal)
             && r.Status == (int)HttpStatusCode.OK);
 
+        // contract-005 · G-12 (1) — with the endpoint at the resource's URL, the flow goes on: to the
+        // authorization server the metadata names first (read here through a client of its own, so
+        // this read is not in the log), for its RFC 8414 metadata, /authorize and /token, and back to
+        // the front with the token. The whole OAuth flow went through the map.
+        string authorizationServer;
+        using (var reader = fixture.CreateClient())
+        {
+            var metadata = await reader.GetFromJsonAsync<JsonElement>(new Uri($"https://{TlsFront.Host}/.well-known/oauth-protected-resource/mcp"));
+            authorizationServer = new Uri(metadata.GetProperty("authorization_servers")[0].GetString()!).Host;
+        }
+
+        Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/.well-known/oauth-authorization-server" && r.Status == (int)HttpStatusCode.OK);
+        Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/authorize" && r.Status == (int)HttpStatusCode.Redirect);
+        Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/token" && r.Status == (int)HttpStatusCode.OK);
+        Assert.Contains(log.Requests, r => r.Method == HttpMethod.Post && r.Uri.Host == TlsFront.Host && r.Status == (int)HttpStatusCode.OK);
+
         // Nothing it asked for lay outside the map, and it connected to exactly the names its flow
-        // calls for. Today the SDK stops at the resource mismatch (G-12's first defect), so the front
-        // is the only name it reaches; when that fix lands it goes on to the authorization server the
-        // metadata names, and that name joins this set.
+        // calls for: the front, and the authorization server.
         Assert.Empty(log.Refused);
         Assert.Equal(
-            new[] { $"{TlsFront.Host}:{TlsFront.Port}" },
+            new[] { $"{authorizationServer}:443", $"{TlsFront.Host}:{TlsFront.Port}" }.Order(StringComparer.Ordinal),
             log.Connections.Select(c => c.Split(" -> ")[0]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
     }
 
@@ -287,22 +287,6 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
 
         await using var client = await McpClient.CreateAsync(transport);
         return await client.ListToolsAsync();
-    }
-
-    /// <summary>
-    /// What a person's browser would do at the authorization endpoint: follow the URL, and hand the
-    /// redirect's code, state and iss back to the client. Through the name map like everything else.
-    /// </summary>
-    private static async Task<AuthorizationResult?> AuthorizeAsync(HttpClient http, Uri authorizationUri, CancellationToken cancellationToken)
-    {
-        using var response = await http.GetAsync(authorizationUri, cancellationToken);
-        if (response.StatusCode != HttpStatusCode.Redirect || response.Headers.Location is not { } location)
-        {
-            return null;
-        }
-
-        var query = System.Web.HttpUtility.ParseQueryString(location.Query);
-        return new AuthorizationResult { Code = query["code"], State = query["state"], Iss = query["iss"] };
     }
 
     /// <summary>

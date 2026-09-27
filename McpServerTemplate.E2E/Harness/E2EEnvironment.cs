@@ -75,11 +75,18 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// <summary>Every phase of the run, measured: the environment's, each server's and each test's.</summary>
     public static Timings Timings { get; } = new();
 
-    /// <summary>The identity providers every server is configured with.</summary>
+    /// <summary>
+    /// The identity providers every server is configured with.
+    ///
+    /// contract-005 · G-12 (4) — idp-b's issuer is not its authority: it carries a trailing slash, as
+    /// Auth0's and Entra v1's issuers do, while discovery and keys are fetched from the authority
+    /// without one. A client is sent to the issuer (RFC 8414 §3.3 holds it to that exact string), so
+    /// this is the provider on which the protected-resource metadata shows which of the two it lists.
+    /// </summary>
     public static IssuerRegistry Issuers { get; } = new IssuerRegistry()
         .Register(new(KeycloakIssuer, new Uri(KeycloakService.Issuer), KeycloakService.Issuer, IssuerRegistry.Owner.Keycloak, "azp", KeycloakService.Scopes))
         .Register(new(IdpA, new Uri("https://idp-a.e2e.test"), "https://idp-a.e2e.test", IssuerRegistry.Owner.TestIssuer, "client_id", KeycloakService.Scopes))
-        .Register(new(IdpB, new Uri("https://idp-b.e2e.test"), "https://idp-b.e2e.test", IssuerRegistry.Owner.TestIssuer, "client_id", KeycloakService.Scopes));
+        .Register(new(IdpB, new Uri("https://idp-b.e2e.test"), "https://idp-b.e2e.test/", IssuerRegistry.Owner.TestIssuer, "client_id", KeycloakService.Scopes));
 
     /// <summary>
     /// The upstream host names and the owner that answers each, for the whole run: registration is per
@@ -142,6 +149,19 @@ public sealed class E2EEnvironment : IAsyncDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(delta);
         return ServerUnderTest.StartAsync(this, name, delta, cancellationToken);
+    }
+
+    /// <summary>
+    /// contract-005 · G-8, T-11 — the same entry point for a server a test expects to refuse: the base
+    /// settings with <paramref name="delta"/> on top, started only to see whether it exits (and how) or
+    /// comes up. <paramref name="name"/> must be unique in the run; it names the server's alias and
+    /// its diagnostics.
+    /// </summary>
+    public Task<StartupOutcome> StartupAsync(string name, SettingsDelta delta, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(delta);
+        return ServerUnderTest.StartupAsync(this, name, delta, cancellationToken);
     }
 
     /// <summary>Called once, when the test assembly finishes.</summary>
@@ -230,7 +250,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
             var keycloak = Timings.MeasureEnvironmentAsync("container: keycloak", () =>
                 KeycloakService.StartAsync(docker, network, pki, names, ServerUnderTest.Resource, ServerFixture.AllClientIds(), runId, cancellationToken));
             var testIssuer = Timings.MeasureEnvironmentAsync("container: test issuer", async () =>
-                await TestIssuerService.StartAsync(docker, await issuerImage, network, pki, names, Issuers.HostsServedBy(IssuerRegistry.Owner.TestIssuer), runId, cancellationToken));
+                await TestIssuerService.StartAsync(docker, await issuerImage, network, pki, names, Issuers.IssuersServedBy(IssuerRegistry.Owner.TestIssuer), runId, cancellationToken));
 
             // contract-005 · G-16 — every owner the upstream registry names is started, each with the
             // host names the registry gives it.

@@ -140,7 +140,7 @@ public class ResourceMetadataTests
             // What a client actually does. A GET here is 405 before authorization is ever
             // consulted, because the endpoint is POST-only and routing rejects the method
             // first — so a GET would have tested method matching, not the challenge.
-            using var request = new HttpRequestMessage(HttpMethod.Post, "/")
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
             {
                 Content = new StringContent(
                     """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"acceptance-test","version":"1"}}}""",

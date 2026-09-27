@@ -4,7 +4,7 @@
 
 The MCP Server Template uses a hierarchical configuration system where settings can come from multiple sources, with clear precedence rules. This guide explains every setting the server reads and how to set them.
 
-One rule shapes everything below: **in the sections the frame governs — `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development` — a key the server does not read stops it from starting.** A misspelled key is otherwise ignored silently, and an operator believes it is in force. The startup message names the key and the nearest real one.
+One rule shapes everything below: **in the sections the frame governs — `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development`, `HttpTransport` — a key the server does not read stops it from starting.** A misspelled key is otherwise ignored silently, and an operator believes it is in force. The startup message names the key and the nearest real one.
 
 ---
 
@@ -122,7 +122,7 @@ Used for **hosted deployments**: minimal logging, and only the SMHI providers. T
 - **Default**: `"stdio"`
 - **Description**: How the server communicates with clients
   - `stdio`: stdin/stdout for a local IDE. **Development only** — anywhere else the server refuses to start. Runs as the Development principal (below), through the same checks as HTTP.
-  - `http`: A hosted server using stateless streamable HTTP. The MCP endpoint is the server root, `/`.
+  - `http`: A hosted server using stateless streamable HTTP. The MCP endpoint is `/mcp`, the path `Authentication:Resource` must name.
 
 ---
 
@@ -148,12 +148,12 @@ export HttpTransport__Port=8080
 - **Default**: `"localhost"`
 - **Description**: The address to bind to
   - `"localhost"` or `"127.0.0.1"`: Only accessible from this machine
-  - `"0.0.0.0"`: Accessible from any address — only behind a proxy and firewall
+  - `"0.0.0.0"`: Accessible from any address — only behind a proxy and firewall, and only with `HttpTransport:AllowedHosts` set: on any bind that is not loopback the server refuses to start without it
 
 #### `HttpTransport:AllowedHosts`
 - **Type**: `string[]`
-- **Default**: `localhost`, `127.0.0.1`, `[::1]` when bound to loopback; otherwise the bind address
-- **Description**: The `Host` header values this server answers for. Stops DNS rebinding. Set it to your public host name.
+- **Default**: `localhost`, `127.0.0.1`, `[::1]` when bound to loopback; **required** on any other bind address
+- **Description**: The `Host` header values this server answers for. Stops DNS rebinding. Set it to the host names clients use, for example `mcp.example.com`. The server refuses to start if an entry is `*`, `0.0.0.0`, `[::]` or `::`: the first three switch host filtering off entirely, and the last is the IPv6 any-address.
 
 #### `HttpTransport:AllowedOrigins`
 - **Type**: `string[]`
@@ -172,8 +172,8 @@ export HttpTransport__Port=8080
 Required for `Transport=http`. Callers present a bearer token issued by one of these identity providers.
 
 #### `Authentication:Resource`
-- **Type**: `string` — an absolute `https` URI
-- **Description**: This server's identity as an OAuth resource. Every identity provider must issue tokens whose audience is exactly this value. Published in the protected-resource metadata at `/.well-known/oauth-protected-resource`.
+- **Type**: `string` — an absolute `https` URI whose path is `/mcp`, for example `https://mcp.example.com/mcp`
+- **Description**: This server's identity as an OAuth resource, and the URL a client connects to: MCP answers at `/mcp`, and the server refuses to start when the resource's path (a trailing slash aside) is anything else. Every identity provider must issue tokens whose audience is exactly this value. Published in the protected-resource metadata at `/.well-known/oauth-protected-resource/mcp` — RFC 9728's location for the resource, and the URL the `401` challenge names.
 
 #### `Authentication:IdentityProviders:{name}:*`
 
@@ -182,13 +182,13 @@ One section per identity provider, under a name of your choosing (the examples u
 | Key | Required | Description |
 |-----|----------|-------------|
 | `Authentication:IdentityProviders:{name}:Authority` | Yes | Absolute `https` URI; discovery and signing keys are fetched from it |
-| `Authentication:IdentityProviders:{name}:Issuer` | Yes | The exact `iss` value tokens must carry |
+| `Authentication:IdentityProviders:{name}:Issuer` | Yes | Absolute `https` URI; the exact `iss` value tokens must carry, and the authorization server the protected-resource metadata sends clients to (which may differ from the authority, for example by a trailing slash) |
 | `Authentication:IdentityProviders:{name}:Algorithms` | Yes | One or more of `RS256`, `PS256`, `ES256` |
 | `Authentication:IdentityProviders:{name}:ScopeCatalog` | Yes | Every scope this identity provider may assert; no wildcards |
 | `Authentication:IdentityProviders:{name}:ScopeClaim` | No | The claim carrying scopes: `scope` (default; Keycloak, Auth0) or `scp` (Entra ID) |
-| `Authentication:IdentityProviders:{name}:ClientIdClaim` | No | `client_id` (default) or `azp` |
+| `Authentication:IdentityProviders:{name}:ClientIdClaim` | No | The claim naming the calling client, which every token must carry: `client_id` (default), `azp` (Keycloak, Entra ID v2), `cid` (Okta) or `appid` (Entra ID v1). A registered claim (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`) or the provider's `ScopeClaim` is refused at startup |
 
-Tokens must also carry `sub`, `jti`, `client_id` (or `azp`) and `iat`, and are refused over 8 KB.
+Tokens must also carry `sub`, `jti`, the claim `ClientIdClaim` names, and `iat`, and are refused over 8 KB.
 
 #### `Authentication:AdminIdentityProvider`
 - **Type**: `string`
@@ -197,7 +197,7 @@ Tokens must also carry `sub`, `jti`, `client_id` (or `azp`) and `iat`, and are r
 
 ```bash
 # An identity provider named corp, from environment variables
-export Authentication__Resource=https://mcp.example.com/
+export Authentication__Resource=https://mcp.example.com/mcp
 export Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
 export Authentication__IdentityProviders__corp__Issuer=https://login.example.com/realms/corp
 export Authentication__IdentityProviders__corp__Algorithms__0=RS256
@@ -313,7 +313,7 @@ With no identity providers configured, a stdio run synthesizes one per name the 
 
 #### `Serilog:WriteTo`
 - **Type**: `array`
-- **Description**: Where logs are written. The console sink writes to **stderr**, so stdout stays clean for the MCP protocol. A file path containing `..` is refused at startup.
+- **Description**: Where logs are written. The console sink writes to **stderr**, so stdout stays clean for the MCP protocol. Every `File` sink, at any index (and in a sub-logger), is checked at startup: a path containing `..`, or one the process cannot write — resolved against the working directory, as the sink resolves it — stops the server, naming the resolved path. A sink that fails later (a full disk, a removed directory, a sink name Serilog does not know) is reported by Serilog's self-log, which also goes to stderr.
 
 ---
 
@@ -326,6 +326,7 @@ These are refused at startup, with the reason:
 |---------|---------|---------|
 | `Authentication:ApiKey` | Phase 1 | Callers present a bearer token from a configured identity provider |
 | `RateLimit:MaxCallsPerToolPerMinute` | Phase 2 | `Limits:PerPrincipalPerMinute`, and each tool's own limit in its provider's policy |
+| `HttpTransport:Certificate:Path`, `HttpTransport:Certificate:Subject` | Phase 2 | The server does not terminate TLS itself: terminate it at a proxy named in `HttpTransport:KnownProxies` or `:KnownNetworks` |
 <!-- /retired -->
 
 ---
@@ -383,9 +384,10 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - Transport=http
       - HttpTransport__BindAddress=0.0.0.0
+      - HttpTransport__AllowedHosts__0=mcp.example.com
       - HttpTransport__KnownNetworks__0=172.16.0.0/12
       - Limits__Redis=redis:6379
-      - Authentication__Resource=https://mcp.example.com/
+      - Authentication__Resource=https://mcp.example.com/mcp
       - Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
       - Authentication__IdentityProviders__corp__Issuer=https://login.example.com/realms/corp
       - Authentication__IdentityProviders__corp__Algorithms__0=RS256
@@ -456,7 +458,7 @@ dotnet run
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
 export Transport=http
-export Authentication__Resource=https://localhost:3001/
+export Authentication__Resource=https://localhost:3001/mcp
 export Authentication__IdentityProviders__corp__Authority=https://your-idp/realms/corp
 export Authentication__IdentityProviders__corp__Issuer=https://your-idp/realms/corp
 export Authentication__IdentityProviders__corp__Algorithms__0=RS256
@@ -471,7 +473,7 @@ dotnet run
 **Then test**:
 ```bash
 curl http://localhost:3001/healthz                     # alive, no credential needed
-curl -X POST http://localhost:3001/ \
+curl -X POST http://localhost:3001/mcp \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
@@ -493,7 +495,7 @@ export HttpTransport__BindAddress=0.0.0.0
 export HttpTransport__AllowedHosts__0=mcp.example.com
 export HttpTransport__KnownNetworks__0=10.0.0.0/8      # the proxy that terminates TLS
 export Limits__Redis=redis.internal:6379
-export Authentication__Resource=https://mcp.example.com/
+export Authentication__Resource=https://mcp.example.com/mcp
 export Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
 export Authentication__IdentityProviders__corp__Issuer=https://login.example.com/realms/corp
 export Authentication__IdentityProviders__corp__Algorithms__0=RS256
@@ -548,7 +550,11 @@ Every one of these stops the server at startup, with a message saying what to fi
 |-------|-----|
 | A governed key the server does not read, or a retired one | A setting that is ignored answers a question falsely |
 | `Transport=stdio` outside Development | stdio authenticates nobody |
-| HTTP with no identity provider, or with a non-`https` authority or resource | The server could verify no token, or would fetch keys over plaintext |
+| HTTP with no identity provider, or with a non-`https` authority, issuer or resource | The server could verify no token, would fetch keys over plaintext, or would send clients to a plaintext issuer |
+| A resource whose path is not `/mcp` | MCP answers at `/mcp`; a client connecting to the resource URL would find nothing |
+| A `ClientIdClaim` that is a registered JWT claim or the provider's `ScopeClaim` | Every token carries it, or it means something else: the client requirement would be off |
+| A `File` log sink whose path contains `..`, or that cannot write where it resolves | A sink that cannot write writes nothing and says nothing |
+| A bind address that is not loopback with no `HttpTransport:AllowedHosts`, or an allowed host of `*`, `0.0.0.0`, `[::]` or `::` | Host filtering would be off, and DNS rebinding could make a browser a client |
 | Production without a declared proxy | Bearer tokens over plaintext can be read and replayed |
 | `Providers:Enabled` missing outside Development, or naming an unknown provider | A deployment says which providers it serves |
 | A provider with no `IdentityProvider`, or one not configured | A provider with no trust domain would be reachable from all of them |
@@ -563,7 +569,7 @@ Every one of these stops the server at startup, with a message saying what to fi
 
 ### "'…' is not a setting this server reads. Did you mean '…'?"
 
-**Cause**: A key in `Authentication`, `Providers`, `Limits`, `Confirmation` or `Development` is misspelled, or belongs to a provider this server does not have.
+**Cause**: A key in `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development` or `HttpTransport` is misspelled, or belongs to a provider this server does not have.
 
 **Fix**: Use the key the message suggests, or remove it.
 

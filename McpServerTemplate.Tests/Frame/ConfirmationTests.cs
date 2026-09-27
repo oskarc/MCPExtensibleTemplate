@@ -55,7 +55,7 @@ public class ConfirmationTests
         var transport = new HttpClientTransport(
             new HttpClientTransportOptions
             {
-                Endpoint = server.Address,
+                Endpoint = server.Endpoint,
                 TransportMode = HttpTransportMode.StreamableHttp,
                 AdditionalHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
             },
@@ -85,7 +85,7 @@ public class ConfirmationTests
 
     private static async Task<string> SendAsync(InProcessServer server, string token, JsonObject body)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/") { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
+        using var request = new HttpRequestMessage(HttpMethod.Post, InProcessServer.McpPath) { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
         request.Headers.Accept.ParseAdd("application/json, text/event-stream");
         request.Headers.Add("Authorization", $"Bearer {token}");
         foreach (var (name, value) in _headers)

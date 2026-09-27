@@ -72,6 +72,30 @@ public class TokenRejectionTests
         Assert.False(string.IsNullOrWhiteSpace(elsewhere.Name));
     }
 
+    /// <summary>
+    /// contract-005 · G-12 (3) — the client claim a token must carry is the one its identity
+    /// provider's ClientIdClaim names, and only that one. It used to be client_id or azp whatever the
+    /// setting said, so a token carrying the other name passed.
+    /// </summary>
+    [Theory]
+    [InlineData("client_id", "client_id", true)]
+    [InlineData("client_id", "azp", false)]
+    [InlineData("azp", "azp", true)]
+    [InlineData("azp", "client_id", false)]
+    [InlineData("cid", "cid", true)]
+    [InlineData("cid", "azp", false)]
+    public async Task T2_the_client_claim_is_the_one_client_id_claim_names(string clientIdClaim, string carried, bool accepted)
+    {
+        using var corp = Corp();
+        await using var server = await InProcessServer.StartAsync(
+            [corp], configure: s => s["Authentication:IdentityProviders:corp:ClientIdClaim"] = clientIdClaim);
+
+        var token = corp.MintToken(Resource, clientId: null, extraClaims: new Dictionary<string, object> { [carried] = "client-1" });
+        using var response = await server.PostAsync(token);
+
+        Assert.Equal(accepted, response.StatusCode != HttpStatusCode.Unauthorized);
+    }
+
     /// <summary>A token whose header says alg=none, which is the "no signature at all" case.</summary>
     private static string UnsignedToken(TestIdentityProvider idp)
     {

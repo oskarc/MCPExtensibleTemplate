@@ -19,7 +19,7 @@ public static class GateClient
     {
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
-            Endpoint = server.Address,
+            Endpoint = server.Endpoint,
             TransportMode = HttpTransportMode.StreamableHttp,
             AdditionalHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
         });
@@ -40,7 +40,7 @@ public static class GateClient
     /// <summary>Posts one JSON-RPC request and returns the response's JSON, whatever its shape.</summary>
     public static async Task<JsonElement> RpcAsync(InProcessServer server, string token, string method, object? parameters = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/")
+        using var request = new HttpRequestMessage(HttpMethod.Post, InProcessServer.McpPath)
         {
             Content = new StringContent(
                 JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 1, method, @params = parameters ?? new { } }),

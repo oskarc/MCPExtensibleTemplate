@@ -57,6 +57,9 @@ public class IdentityConfigurationTests
     [InlineData("Authentication:IdentityProviders:corp:Authority", "http://login.example.com", "Authority")]
     [InlineData("Authentication:IdentityProviders:corp:Authority", "not-a-uri", "Authority")]
     [InlineData("Authentication:IdentityProviders:corp:Issuer", "", "Issuer")]
+    // contract-005 · G-12 (4) — an Issuer is published as an authorization server: https, like Authority.
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "http://login.example.com/", "Issuer must be an absolute https URI")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "login.example.com", "Issuer must be an absolute https URI")]
     [InlineData("Authentication:IdentityProviders:corp:ScopeClaim", "", "ScopeClaim")]
     public void T9_a_malformed_setting_is_refused_by_name(string key, string value, string named)
     {
@@ -66,6 +69,78 @@ public class IdentityConfigurationTests
         var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
 
         Assert.Contains(named, ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (1) — MCP answers at /mcp, so a resource at any other path names a URL
+    /// where nothing answers, and a standard client that checks the metadata against the URL it
+    /// connected to cannot connect. The path is compared exactly: routing would answer /MCP too, but
+    /// the resource is also every token's audience, which is compared exactly.
+    /// </summary>
+    [Theory]
+    [InlineData("https://mcp.example.com/")]
+    [InlineData("https://mcp.example.com")]
+    [InlineData("https://mcp.example.com/api/mcp")]
+    [InlineData("https://mcp.example.com/mcp/tools")]
+    [InlineData("https://mcp.example.com/MCP")]
+    public void T9_a_resource_whose_path_is_not_mcp_is_refused(string resource)
+    {
+        var settings = Wellformed();
+        settings["Authentication:Resource"] = resource;
+
+        var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
+
+        Assert.Contains("Authentication:Resource", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("/mcp", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void T9_a_resource_at_mcp_with_a_trailing_slash_binds()
+    {
+        var settings = Wellformed();
+        settings["Authentication:Resource"] = "https://mcp.example.com/mcp/";
+
+        Assert.Equal("https://mcp.example.com/mcp/", IdentityConfigurationBinder.Bind(Config(settings)).Resource);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (3) — ClientIdClaim is required of every token, so a claim every accepted
+    /// token carries, or one that means something else, would require nothing. Without case, because
+    /// that is how the claim is found on the principal.
+    /// </summary>
+    [Theory]
+    [InlineData("iss")]
+    [InlineData("sub")]
+    [InlineData("aud")]
+    [InlineData("exp")]
+    [InlineData("nbf")]
+    [InlineData("iat")]
+    [InlineData("jti")]
+    [InlineData("SUB")]
+    [InlineData(" jti ")]
+    [InlineData("scope")]
+    [InlineData("Scope")]
+    public void T9_a_client_claim_that_names_no_client_is_refused(string claim)
+    {
+        var settings = Wellformed();
+        settings["Authentication:IdentityProviders:corp:ClientIdClaim"] = claim;
+
+        var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
+
+        Assert.StartsWith("Authentication:IdentityProviders:corp:ClientIdClaim is", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("azp")]
+    [InlineData("cid")]
+    [InlineData("appid")]
+    [InlineData("client_id")]
+    public void T9_a_client_claim_an_identity_provider_uses_binds(string claim)
+    {
+        var settings = Wellformed();
+        settings["Authentication:IdentityProviders:corp:ClientIdClaim"] = claim;
+
+        Assert.Equal(claim, IdentityConfigurationBinder.Bind(Config(settings)).IdentityProviders["corp"].ClientIdClaim);
     }
 
     [Theory]

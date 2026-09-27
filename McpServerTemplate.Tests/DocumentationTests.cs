@@ -235,7 +235,8 @@ public partial class DocumentationTests
     [GeneratedRegex(@"<!--\s*retired\s*-->.*?<!--\s*/retired\s*-->", RegexOptions.Singleline)]
     private static partial Regex RetiredBlock();
 
-    [GeneratedRegex(@"\b(Authentication|Providers|Limits|Confirmation|Development|RateLimit)(:|__)[A-Za-z0-9_{}*]+((:|__)[A-Za-z0-9_{}*]+)*")]
+    // The sections SettingsAllowlist.GovernedSections names; HttpTransport since contract-005 · G-12 (2).
+    [GeneratedRegex(@"\b(Authentication|Providers|Limits|Confirmation|Development|RateLimit|HttpTransport)(:|__)[A-Za-z0-9_{}*]+((:|__)[A-Za-z0-9_{}*]+)*")]
     private static partial Regex GovernedKey();
 
     [GeneratedRegex(@"\]\((?<target>[^)\s]+)\)")]

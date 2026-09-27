@@ -14,14 +14,15 @@ namespace McpServerTemplate.E2E.Harness;
 ///
 /// contract-005 · G-8 — "an unknown key in a delta fails the server's own startup check" holds only in
 /// the sections the server's settings allowlist governs (<see cref="GovernedSections"/>). Anywhere else
-/// the server ignores an unknown key silently: Bogus:Key, HttpTransport:AlowedHosts:0 and
-/// Serilog:WriteTo:1:Args:pth each left a server running as if they were not there. So a key outside
+/// the server ignores an unknown key silently: Bogus:Key and Serilog:WriteTo:1:Args:pth each left a
+/// server running as if they were not there (HttpTransport:AlowedHosts:0 did too, until contract-005 ·
+/// G-12 (2) brought HttpTransport under the server's check). So a key outside
 /// those sections is refused here, when the delta is written and before any container starts, unless
 /// it is one the server is declared to read (<see cref="ReadOutsideGovernedSections"/>). A key inside
 /// them passes untouched: refusing it is the server's own check, and a test of that check needs the
 /// key to arrive.
 ///
-/// Keys are configuration keys, colon-separated (HttpTransport:AllowedHosts:0); they become
+/// Keys are configuration keys, colon-separated (Serilog:WriteTo:1:Args:path); they become
 /// environment variables with double underscores. A key given in that form is read back to colons. A
 /// key without a colon, such as ASPNETCORE_ENVIRONMENT, passes as it is.
 /// </summary>
@@ -29,11 +30,12 @@ public sealed partial class SettingsDelta
 {
     /// <summary>
     /// The sections the server's own startup check governs: SettingsAllowlist.GovernedSections in
-    /// McpServerTemplate/Infrastructure/Frame/SettingsAllowlist.cs. When G-12 (2) makes HttpTransport
-    /// one of them, it moves here and its keys leave <see cref="ReadOutsideGovernedSections"/>.
+    /// McpServerTemplate/Infrastructure/Frame/SettingsAllowlist.cs. contract-005 · G-12 (2) made
+    /// HttpTransport one of them, so its keys left <see cref="ReadOutsideGovernedSections"/>: a
+    /// misspelt transport key now reaches the server and stops it.
     /// </summary>
     public static readonly IReadOnlyList<string> GovernedSections =
-        ["Authentication", "Providers", "Limits", "Confirmation", "Development", "RateLimit"];
+        ["Authentication", "Providers", "Limits", "Confirmation", "Development", "RateLimit", "HttpTransport"];
 
     /// <summary>
     /// The keys outside <see cref="GovernedSections"/> the server is declared to read, each with where
@@ -48,29 +50,10 @@ public sealed partial class SettingsDelta
         "ASPNETCORE_ENVIRONMENT",
         "DOTNET_ENVIRONMENT",
 
-        // Program.cs (ConfigurationGuard.IntegerInRange) — the port.
-        "HttpTransport:Port",
-
-        // Program.cs and HttpServerComposition.cs — the bind address, and the host filter's fallback.
-        "HttpTransport:BindAddress",
-
-        // HttpServerComposition.cs — the host filter.
-        "HttpTransport:AllowedHosts:{n}",
-
-        // HttpServerComposition.cs (CORS) and Identity/OriginGuardMiddleware.cs.
-        "HttpTransport:AllowedOrigins:{n}",
-
-        // HttpServerComposition.cs (forwarded headers) and Identity/TransportSecurityGuard.cs.
-        "HttpTransport:KnownProxies:{n}",
-        "HttpTransport:KnownNetworks:{n}",
-
-        // Identity/TransportSecurityGuard.cs — read only to be named in its refusal.
-        "HttpTransport:Certificate:Path",
-        "HttpTransport:Certificate:Subject",
-
-        // Program.cs — ReadFrom.Configuration reads the Serilog section, and the traversal check reads
-        // WriteTo:1:Args:path. Declared in the shape appsettings*.json give it: levels, per-namespace
-        // overrides, sinks with the arguments those files pass them, and enrichers.
+        // Program.cs — ReadFrom.Configuration reads the Serilog section, and LogSinkGuard.cs checks the
+        // path of every File sink (contract-005 · G-12 (5)). Declared in the shape appsettings*.json
+        // give it: levels, per-namespace overrides, sinks with the arguments those files pass them,
+        // and enrichers.
         "Serilog:MinimumLevel:Default",
         "Serilog:MinimumLevel:Override:{*}",
         "Serilog:WriteTo:{n}:Name",
@@ -155,7 +138,7 @@ public sealed partial class SettingsDelta
 
     /// <summary>
     /// The key in its configuration form, or a refusal naming it and the nearest declared key. A
-    /// removal may also name a section that holds declared keys (HttpTransport:KnownProxies).
+    /// removal may also name a section that holds declared keys (Serilog:WriteTo).
     /// </summary>
     private static string Checked(string key, bool removal)
     {

@@ -43,6 +43,12 @@ public sealed class InProcessServer : IAsyncDisposable
     /// <summary>The address the server listens on.</summary>
     public Uri Address => Client.BaseAddress!;
 
+    /// <summary>Where MCP answers: /mcp, the path the resource names (contract-005 · G-12 (1)).</summary>
+    public Uri Endpoint => new(Address, McpPath);
+
+    /// <summary>The MCP endpoint's path, for requests built by hand.</summary>
+    public const string McpPath = "/mcp";
+
     /// <summary>A base64 key for signing confirmations, the same in every test run.</summary>
     public const string ConfirmationKey = "dGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXk=";
 
@@ -150,7 +156,7 @@ public sealed class InProcessServer : IAsyncDisposable
     /// <summary>Posts an initialize request, optionally bearing a token.</summary>
     public async Task<HttpResponseMessage> PostAsync(string? token, string? origin = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/")
+        using var request = new HttpRequestMessage(HttpMethod.Post, McpPath)
         {
             Content = new StringContent(
                 """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}""",

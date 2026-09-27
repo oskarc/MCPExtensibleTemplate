@@ -10,19 +10,20 @@ public sealed class HarnessSelfTests
     /// <summary>
     /// contract-005 · G-8 — a key outside the sections the server's own startup check governs is one
     /// the server would ignore silently, so the delta refuses it before any container starts, naming
-    /// the key and the nearest key the server is declared to read. The three keys are the ones that
-    /// left a server running as if they were not there.
+    /// the key and the nearest key the server is declared to read. Serilog:WriteTo:1:Args:pth is one
+    /// that left a server running as if it were not there; the others are misspellings of the rest of
+    /// what the server reads outside the governed sections.
     /// </summary>
     [Theory]
-    [InlineData("HttpTransport:AlowedHosts:0", "HttpTransport:AllowedHosts:{n}")]
     [InlineData("Serilog:WriteTo:1:Args:pth", "Serilog:WriteTo:{n}:Args:path")]
-    [InlineData("HttpTransport__KnownProxys__0", "HttpTransport:KnownProxies:{n}")]
+    [InlineData("Serilog__MinimumLevel__Defualt", "Serilog:MinimumLevel:Default")]
+    [InlineData("Transprot", "Transport")]
     [InlineData("SSL_CERT_FIEL", "SSL_CERT_FILE")]
     public void A_misspelt_key_outside_the_governed_sections_is_refused_naming_the_nearest_declared_key(string key, string nearest)
     {
         // Positive controls: a declared key and a governed key both pass, so the refusal below is
         // this key's and not a delta that refuses everything.
-        SettingsDelta.None.Set("HttpTransport:AllowedHosts:0", "mcp.e2e.test");
+        SettingsDelta.None.Set("Serilog:WriteTo:1:Args:path", "logs/e2e-.log");
         SettingsDelta.None.Set("Authentication:Resourse", "left for the server's own check");
 
         var set = Assert.Throws<ArgumentException>(() => SettingsDelta.None.Set(key, "x"));
@@ -31,6 +32,20 @@ public sealed class HarnessSelfTests
 
         var removed = Assert.Throws<ArgumentException>(() => SettingsDelta.None.Remove(key));
         Assert.Contains($"'{key}'", removed.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2) — HttpTransport is governed by the server's own check now, so a
+    /// misspelt transport key is passed through untouched: refusing it is the server's job, and a test
+    /// of that refusal needs the key to arrive. These two were refused here before.
+    /// </summary>
+    [Theory]
+    [InlineData("HttpTransport:AlowedHosts:0")]
+    [InlineData("HttpTransport__KnownProxys__0")]
+    public void A_misspelt_transport_key_reaches_the_server(string key)
+    {
+        var delta = SettingsDelta.None.Set(key, "x");
+        Assert.Equal("x", delta.Changes[key.Replace("__", ":", StringComparison.Ordinal)]);
     }
 
     /// <summary>contract-005 · G-8 — a key under no section at all is refused the same way.</summary>

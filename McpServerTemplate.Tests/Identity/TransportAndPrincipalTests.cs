@@ -136,4 +136,69 @@ public class TransportAndPrincipalTests
         // how a Production deployment ends up with the flag set.
         TransportSecurityGuard.Validate(Config([]), isProduction: false);
     }
+
+    // ── contract-005 · G-12 (2): host filtering cannot be switched off ─────────
+
+    [Theory]
+    [InlineData("0.0.0.0")]
+    [InlineData("::")]
+    [InlineData("*")]
+    [InlineData("10.1.2.3")]
+    [InlineData("mcp.internal")]
+    public void G12_2_a_non_loopback_bind_with_no_allowed_host_is_refused(string bindAddress)
+    {
+        // The bind address used to become the allowlist, and 0.0.0.0 there means any host.
+        var ex = Assert.Throws<ConfigurationException>(() =>
+            HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = bindAddress })));
+
+        Assert.StartsWith("HttpTransport:AllowedHosts must name", ex.Message, StringComparison.Ordinal);
+        Assert.Contains($"'{bindAddress}'", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("*")]
+    [InlineData("0.0.0.0")]
+    [InlineData("[::]")]
+    [InlineData("::")]
+    [InlineData(" * ")]
+    public void G12_2_a_wildcard_allowed_host_is_refused_naming_its_key(string entry)
+    {
+        // At any index, and on a loopback bind too: the entry switches the filter off wherever it is.
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(Config(new()
+        {
+            ["HttpTransport:BindAddress"] = "localhost",
+            ["HttpTransport:AllowedHosts:0"] = "mcp.example.com",
+            ["HttpTransport:AllowedHosts:1"] = entry,
+        })));
+
+        Assert.StartsWith("HttpTransport:AllowedHosts:1 is", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void G12_2_a_named_host_on_a_wildcard_bind_is_what_the_filter_allows()
+    {
+        var hosts = HttpServerComposition.AllowedHosts(Config(new()
+        {
+            ["HttpTransport:BindAddress"] = "0.0.0.0",
+            ["HttpTransport:AllowedHosts:0"] = "mcp.example.com",
+        }));
+
+        Assert.Equal(["mcp.example.com"], hosts);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("localhost")]
+    [InlineData("127.0.0.1")]
+    [InlineData("::1")]
+    public void G12_2_a_loopback_bind_still_defaults_to_the_loopback_names(string? bindAddress)
+    {
+        var settings = new Dictionary<string, string?>();
+        if (bindAddress is not null)
+        {
+            settings["HttpTransport:BindAddress"] = bindAddress;
+        }
+
+        Assert.Equal(["localhost", "127.0.0.1", "[::1]"], HttpServerComposition.AllowedHosts(Config(settings)));
+    }
 }

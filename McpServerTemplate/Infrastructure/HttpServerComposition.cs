@@ -22,6 +22,15 @@ namespace McpServerTemplate.Infrastructure;
 public static class HttpServerComposition
 {
     /// <summary>
+    /// Where MCP answers. contract-005 · G-12 (1) — the resource a token is issued for is
+    /// https://{host}/mcp (Authentication:Resource, whose path startup holds to this), and MCP answers
+    /// at that same URL. They used to disagree — MCP at the root, the resource at /mcp — and a standard
+    /// OAuth client, which checks that the metadata's resource is the URL it connected to, could not
+    /// connect at all.
+    /// </summary>
+    public const string McpPath = "/mcp";
+
+    /// <summary>
     /// Registers everything the HTTP server needs and returns the validated identity
     /// configuration.
     /// </summary>
@@ -116,14 +125,7 @@ public static class HttpServerComposition
         // ── Host allowlist ──
         // Rejects requests whose Host header this server does not answer for, which is what
         // stops DNS rebinding from turning a browser on the operator's machine into a client.
-        var bindAddress = configuration.GetValue("HttpTransport:BindAddress", "localhost") ?? "localhost";
-        var allowedHosts = configuration.GetSection("HttpTransport:AllowedHosts").Get<string[]>();
-        if (allowedHosts is not { Length: > 0 })
-        {
-            allowedHosts = bindAddress is "localhost" or "127.0.0.1" or "::1"
-                ? ["localhost", "127.0.0.1", "[::1]"]
-                : [bindAddress];
-        }
+        var allowedHosts = AllowedHosts(configuration);
 
         builder.Services.AddHostFiltering(options =>
         {
@@ -164,6 +166,60 @@ public static class HttpServerComposition
     }
 
     /// <summary>
+    /// The Host header values this server answers for, or a refusal to start.
+    ///
+    /// contract-005 · G-12 (2) — ASP.NET Core's host filter reads *, 0.0.0.0 and [::] as "any host",
+    /// and the server used to fall back to the bind address when no AllowedHosts was set. So a 0.0.0.0
+    /// bind — every container deployment — ran with no host filtering at all, and so did an
+    /// AllowedHosts that named a wildcard. Both now refuse to start, naming the key. :: is refused with
+    /// them: it is the IPv6 any-address written without brackets, and names no host. On a loopback
+    /// bind the loopback names are still the default, since nothing off the machine reaches it.
+    /// </summary>
+    /// <exception cref="ConfigurationException">A non-loopback bind names no host, or an entry is a wildcard.</exception>
+    public static string[] AllowedHosts(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var bindAddress = configuration.GetValue("HttpTransport:BindAddress", "localhost") ?? "localhost";
+        var section = configuration.GetSection("HttpTransport:AllowedHosts");
+
+        foreach (var entry in section.GetChildren())
+        {
+            if (entry.Value?.Trim() is "*" or "0.0.0.0" or "[::]" or "::")
+            {
+                throw new ConfigurationException(
+                    $"{entry.Path} is '{entry.Value}', which is not a host name: *, 0.0.0.0 and [::] switch ASP.NET "
+                    + "Core's host filtering off, and :: is the IPv6 any-address. Name the host names clients reach "
+                    + "this server by, for example mcp.example.com. Without them DNS rebinding can turn a browser "
+                    + "into a client of this server.");
+            }
+        }
+
+        var allowedHosts = section.Get<string[]>();
+        if (allowedHosts is { Length: > 0 })
+        {
+            return allowedHosts;
+        }
+
+        if (!IsLoopback(bindAddress))
+        {
+            throw new ConfigurationException(
+                $"HttpTransport:AllowedHosts must name the host names clients reach this server by, because "
+                + $"HttpTransport:BindAddress is '{bindAddress}', which is not a loopback address. With none, every "
+                + "Host header would be answered, and DNS rebinding could turn a browser into a client of this "
+                + "server. For example HttpTransport:AllowedHosts:0=mcp.example.com.");
+        }
+
+        return bindAddress is "localhost" or "127.0.0.1" or "::1"
+            ? ["localhost", "127.0.0.1", "[::1]"]
+            : [bindAddress];
+    }
+
+    private static bool IsLoopback(string bindAddress) =>
+        bindAddress.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        || (System.Net.IPAddress.TryParse(bindAddress.Trim('[', ']'), out var address) && System.Net.IPAddress.IsLoopback(address));
+
+    /// <summary>
     /// The middleware order (contract-001 · G-3), fixed, each stage depending on the ones before:
     ///   forwarded headers  — establishes the real client address and scheme
     ///   HTTPS redirection  — acts on that scheme (a no-op when no HTTPS port is configured)
@@ -200,7 +256,11 @@ public static class HttpServerComposition
         app.UseMiddleware<OriginGuardMiddleware>();
         app.UseAuthentication();
         app.UseAuthorization();
-        app.MapMcp().RequireAuthorization();
+
+        // contract-005 · G-12 (1) — at the resource's own path. The challenge names the metadata at
+        // /.well-known/oauth-protected-resource/mcp, which is also RFC 9728's location for the
+        // resource, so the two cannot name different documents.
+        app.MapMcp(McpPath).RequireAuthorization();
 
         return app;
     }

@@ -302,6 +302,68 @@ public class ServerProcessTests
         Assert.DoesNotContain("   at ", stderr, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// contract-005 · G-12 (5) — a File sink at an index other than 1 that cannot write: it used to
+    /// write nothing and say nothing. Beneath a file, so no directory can be made there on any
+    /// platform; the message names the path resolved against the process's working directory.
+    /// </summary>
+    [Fact]
+    public async Task T3_a_file_sink_that_cannot_write_exits_78_naming_the_resolved_path()
+    {
+        const string path = "appsettings.json/unwritable-.log";
+        var resolved = Path.GetFullPath(path, Path.GetDirectoryName(ServerExecutable())!);
+
+        var (exitCode, stderr) = await RunToCompletionAsync(new Dictionary<string, string>
+        {
+            ["ASPNETCORE_ENVIRONMENT"] = "Development",
+            ["Transport"] = "stdio",
+            ["Serilog__WriteTo__2__Name"] = "File",
+            ["Serilog__WriteTo__2__Args__path"] = path,
+        });
+
+        Assert.Equal(78, exitCode);
+        Assert.Contains($"Serilog:WriteTo:2 is a File log sink writing to {resolved}", stderr, StringComparison.Ordinal);
+        Assert.DoesNotContain("   at ", stderr, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (5) — Serilog's self-log reaches stderr, so a sink failure the startup
+    /// check cannot see is said aloud. The failure used here is a sink Serilog cannot find by its
+    /// name: it reports that to the self-log alone, which was off.
+    /// </summary>
+    [Fact]
+    public async Task T3_serilogs_self_log_reaches_stderr()
+    {
+        var spawned = Start(
+            new Dictionary<string, string>
+            {
+                ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                ["Transport"] = "stdio",
+                ["Serilog__WriteTo__2__Name"] = "Flie",
+            },
+            redirectStdin: true);
+        using var process = spawned.Process;
+
+        try
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            while (DateTime.UtcNow < deadline && !spawned.Stderr.Contains("Unable to find a method called Flie", StringComparison.Ordinal))
+            {
+                Assert.False(process.HasExited, $"the server exited: {spawned.Stderr}");
+                await Task.Delay(100);
+            }
+
+            Assert.Contains("Unable to find a method called Flie", spawned.Stderr, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
     [Fact]
     public async Task T3_a_configuration_failure_never_exits_zero()
     {
@@ -463,7 +525,7 @@ public class ServerProcessTests
     /// </summary>
     private static async Task<HttpResponseMessage> Post(HttpServer server, string? token)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
         {
             Content = new StringContent(
                 """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"acceptance-test","version":"1"}}}""",
@@ -573,7 +635,7 @@ public class ServerProcessTests
         // already holds, and every downstream control sees a valid principal.
         await using var server = await StartHttpAsync();
 
-        using var foreign = new HttpRequestMessage(HttpMethod.Post, "/");
+        using var foreign = new HttpRequestMessage(HttpMethod.Post, "/mcp");
         foreign.Headers.Add("Origin", "https://evil.example");
         using var refused = await server.Client.SendAsync(foreign);
 

@@ -7,6 +7,9 @@ using McpServerTemplate.TestIssuer;
 // An identity provider the end-to-end environment controls completely. One container answers
 // under several issuer names (idp-a.e2e.test and idp-b.e2e.test), and each name is a separate
 // issuer with its own signing key, generated when the container starts and never sent anywhere.
+// It is told the issuer identifier each name answers as (TestIssuer:Issuers), which is usually
+// https://{name} but may carry a trailing slash, as Auth0's and Entra v1's do: an identity provider
+// whose issuer is not its authority, for contract-005 · G-12 (4).
 //
 // Per name it serves:
 //   /.well-known/openid-configuration and /jwks — what a bearer handler fetches, counted per name,
@@ -14,7 +17,8 @@ using McpServerTemplate.TestIssuer;
 //   /.well-known/oauth-authorization-server — RFC 8414 metadata advertising S256
 //   /authorize — approves at once and redirects with code, state and iss
 //   /token — checks PKCE and mints a token whose audience is the resource parameter
-//   /admin/* — the test's own door: tokens Keycloak will not mint, the counts, and the clock
+//   /admin/* — the test's own door: tokens Keycloak will not mint, the counts, what /authorize and
+//     /token saw, and the clock
 //
 // It is reached under the same names from the server under test and from the test process, so a
 // token minted through /admin carries exactly the issuer the server pins.
@@ -26,25 +30,40 @@ using McpServerTemplate.TestIssuer;
 var builder = WebApplication.CreateBuilder(args);
 var settings = builder.Configuration.GetSection("TestIssuer");
 
-var names = settings.GetSection("Names").Get<string[]>() ?? [];
-if (names.Length == 0)
+var identifiers = settings.GetSection("Issuers").Get<string[]>() ?? [];
+if (identifiers.Length == 0)
 {
-    return Refuse("TestIssuer:Names must name at least one issuer host, for example idp-a.e2e.test.");
+    return Refuse("TestIssuer:Issuers must name at least one issuer identifier, for example https://idp-a.e2e.test.");
 }
 
 // contract-005 · G-6, G-10 — containment by identity, as the test host has it. This issuer mints
 // whatever it is asked to through an unauthenticated door, so the only issuers it may ever claim to
 // be are hosts under .test: names no real client resolves and no real deployment trusts. Any other
-// name stops it here, before it listens: exit 78, naming the name.
-foreach (var name in names)
+// name stops it here, before it listens: exit 78, naming the name. An identifier is https on the
+// default port, at the host's root with or without its trailing slash, because that is where this
+// container serves each issuer's documents.
+foreach (var identifier in identifiers)
 {
-    if (Uri.CheckHostName(name) != UriHostNameType.Dns
-        || !name.EndsWith(".test", StringComparison.OrdinalIgnoreCase)
-        || name.Length <= ".test".Length)
+    if (!Uri.TryCreate(identifier, UriKind.Absolute, out var uri)
+        || uri.Scheme != Uri.UriSchemeHttps
+        || !uri.IsDefaultPort
+        || uri.AbsolutePath != "/"
+        || uri.Query.Length > 0
+        || uri.Fragment.Length > 0
+        || identifier.TrimEnd('/') != $"https://{uri.Host}")
     {
         return Refuse(
-            $"TestIssuer:Names holds '{name}', which is not a host under .test. The test issuer mints any token it is "
-            + "asked for, so it answers only as a .test issuer, for example idp-a.e2e.test.");
+            $"TestIssuer:Issuers holds '{identifier}', which is not https://{{host}} or https://{{host}}/. The test issuer "
+            + "serves each issuer's documents at its host's root.");
+    }
+
+    if (Uri.CheckHostName(uri.Host) != UriHostNameType.Dns
+        || !uri.Host.EndsWith(".test", StringComparison.OrdinalIgnoreCase)
+        || uri.Host.Length <= ".test".Length)
+    {
+        return Refuse(
+            $"TestIssuer:Issuers holds '{identifier}', whose host is not under .test. The test issuer mints any token it "
+            + "is asked for, so it answers only as a .test issuer, for example https://idp-a.e2e.test.");
     }
 }
 
@@ -73,7 +92,7 @@ catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or S
 
 builder.WebHost.ConfigureKestrel(kestrel => kestrel.ListenAnyIP(port, listen => listen.UseHttps(certificate)));
 
-using var issuers = new IssuerSet(names);
+using var issuers = new IssuerSet(identifiers);
 
 var app = builder.Build();
 issuers.Map(app);

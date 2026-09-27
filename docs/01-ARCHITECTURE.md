@@ -32,7 +32,7 @@ The server is organized in **4 key layers**:
 - **Purpose**: How the server communicates with MCP clients, and who they are
 - **Options**:
   - **stdio**: Development only. A plain host with no web server; the caller is the *Development principal* declared under `Development:DevPrincipal`, and it passes through exactly the same checks as an HTTP caller.
-  - **HTTP**: A hosted server. Stateless streamable HTTP at the server root (`/`), so any instance can serve any request.
+  - **HTTP**: A hosted server. Stateless streamable HTTP at `/mcp`, the path of the configured resource, so any instance can serve any request.
 - **Responsibilities (HTTP)**, in this order:
   1. Forwarded headers — only from declared proxies
   2. HSTS and HTTPS redirection
@@ -45,7 +45,7 @@ The server is organized in **4 key layers**:
 
 **Files**: `Program.cs`, `Infrastructure/HttpServerComposition.cs`, `Infrastructure/Identity/`
 
-**Identity, in short**: each configured identity provider gets its own JWT bearer scheme. A routing scheme reads the token's issuer and hands it to that provider's scheme, which validates signature, issuer, audience, lifetime and algorithm. Tokens must carry `sub`, `jti`, `client_id` (or `azp`) and `iat`. The validated principal is normalized to one shape — which identity provider issued it, its scopes, and the `{idp}:{sub}` key limits are kept under. The server publishes its OAuth protected-resource metadata at `/.well-known/oauth-protected-resource`, so a client that is refused learns where to get a token.
+**Identity, in short**: each configured identity provider gets its own JWT bearer scheme. A routing scheme reads the token's issuer and hands it to that provider's scheme, which validates signature, issuer, audience, lifetime and algorithm. Tokens must carry `sub`, `jti`, the client claim their identity provider's `ClientIdClaim` names (`client_id`, `azp`, `cid` or `appid`) and `iat`. The validated principal is normalized to one shape — which identity provider issued it, its scopes, and the `{idp}:{sub}` key limits are kept under. MCP answers at `/mcp`, the path of the configured resource, and the server publishes its OAuth protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`, so a client that is refused learns where to get a token.
 
 ---
 
