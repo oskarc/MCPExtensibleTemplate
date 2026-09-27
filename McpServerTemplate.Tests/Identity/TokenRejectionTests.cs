@@ -1,4 +1,8 @@
 using System.Net;
+using McpServerTemplate.Infrastructure.Identity;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 
 namespace McpServerTemplate.Tests.Identity;
@@ -84,6 +88,8 @@ public class TokenRejectionTests
     [InlineData("azp", "client_id", false)]
     [InlineData("cid", "cid", true)]
     [InlineData("cid", "azp", false)]
+    // The startup check trims the setting; the claim looked up for each token must be the same one.
+    [InlineData(" azp ", "azp", true)]
     public async Task T2_the_client_claim_is_the_one_client_id_claim_names(string clientIdClaim, string carried, bool accepted)
     {
         using var corp = Corp();
@@ -139,6 +145,47 @@ public class TokenRejectionTests
         using var response = await server.PostAsync(token);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>
+    /// contract-002 · G-3 — the issuer is pinned on each identity provider's scheme, not only by the
+    /// router. Left to itself the bearer handler also accepts the issuer its discovery document names;
+    /// here the provider's documents name https://login.corp.test/ and the configured Issuer is another.
+    /// The router matches iss exactly, so the shipped route refuses such a token — but the scheme,
+    /// authenticated any other way, took it.
+    /// </summary>
+    [Fact]
+    public async Task T5_a_scheme_authenticated_directly_holds_the_configured_issuer()
+    {
+        const string pinned = "https://pinned.corp.test/";
+        using var corp = Corp();
+        await using var server = await InProcessServer.StartAsync(
+            [corp], configure: s => s["Authentication:IdentityProviders:corp:Issuer"] = pinned);
+
+        async Task<AuthenticateResult> AuthenticateDirectlyAsync(string token)
+        {
+            using var scope = server.Services.CreateScope();
+            var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+            context.Request.Headers.Authorization = $"Bearer {token}";
+            return await context.AuthenticateAsync(IdentityRegistration.SchemeFor(corp.Name));
+        }
+
+        // Positive control: a token carrying the configured issuer passes the scheme authenticated this
+        // way, so a refusal below is the issuer's.
+        Assert.True((await AuthenticateDirectlyAsync(corp.MintToken(Resource, issuer: pinned))).Succeeded);
+
+        // The shipped route refuses the discovery document's issuer already: the router matches exactly.
+        var discoveryIssued = corp.MintToken(Resource);
+        using (var routed = await server.PostAsync(discoveryIssued))
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, routed.StatusCode);
+        }
+
+        var direct = await AuthenticateDirectlyAsync(discoveryIssued);
+        Assert.False(
+            direct.Succeeded,
+            $"the {IdentityRegistration.SchemeFor(corp.Name)} scheme, authenticated directly, accepted a token issued by "
+            + $"{corp.Issuer}, its discovery document's issuer, while its configured Issuer is {pinned}.");
     }
 
     [Fact]

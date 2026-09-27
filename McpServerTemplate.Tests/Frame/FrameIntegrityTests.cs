@@ -119,6 +119,29 @@ public class FrameIntegrityTests
     }
 
     /// <summary>
+    /// contract-005 · G-12 (2) — ASP.NET Core reads the Kestrel section on its own: its endpoints override
+    /// the address HttpTransport:BindAddress binds, around the host allowlist chosen for that address,
+    /// and its certificates and limits reach the listener past every check here. It is governed with no
+    /// setting known in it, so any key there refuses startup, with the reason rather than a guess.
+    /// </summary>
+    [Theory]
+    [InlineData("Kestrel:Endpoints:Web:Url", "http://0.0.0.0:3001")]
+    [InlineData("Kestrel:Certificates:Default:Path", "/etc/certs/server.pfx")]
+    [InlineData("Kestrel:Limits:MaxRequestBodySize", "1000000000")]
+    public void T12_a_kestrel_setting_refuses_startup_with_the_reason(string key, string value)
+    {
+        var module = new TestModule();
+        var settings = StartupRefusalTests.SettingsWithKey([module]);
+        settings[key] = value;
+
+        var message = FrameHarness.Refusal([module], settings);
+
+        Assert.Contains($"'{key}' is not a setting this server honours", message, StringComparison.Ordinal);
+        Assert.Contains("HttpTransport:BindAddress", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Did you mean", message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// contract-005 · G-12 (2) — the control for the rows above: every transport setting the server
     /// reads passes the allowlist, so a refusal there is the misspelling's, not the section's.
     /// </summary>

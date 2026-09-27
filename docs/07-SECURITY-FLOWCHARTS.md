@@ -210,7 +210,7 @@ flowchart TB
     S5 -->|"no"| R3["401<br/>token claimed A, was signed by B"]
     S5 -->|"yes"| S6{"aud is the resource URI,<br/>exp valid, alg allowed?"}
     S6 -->|"no"| R4["401"]
-    S6 -->|"yes"| S7["Normalise claims with<br/>this provider's mapping<br/>scp or scope, azp or client_id"]
+    S6 -->|"yes"| S7["Normalise claims with<br/>this provider's mapping<br/>scp or scope; its client claim<br/>azp, cid, appid or client_id"]
     S7 --> OUT["Principal<br/>idp, sub, client_id, jti, scopes"]
 
     classDef deny fill:#ffcdd2,stroke:#c62828,color:#000

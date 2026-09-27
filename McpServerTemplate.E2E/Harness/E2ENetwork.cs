@@ -40,6 +40,14 @@ public static class E2ENetwork
     /// <summary>The network's gateway: the subnet's first address.</summary>
     public static IPAddress Gateway => Offset(1);
 
+    /// <summary>
+    /// A spare address below the first static one, never handed out: no container on the network
+    /// holds it. A server started only to see whether it starts has no front, so its KnownProxies
+    /// names this, and it trusts no container as a proxy. contract-005 · T-11 — each such server
+    /// used to take a static address of its own, and the rows T-11 holds outnumber the static half.
+    /// </summary>
+    public static IPAddress NoFront => Offset(9);
+
     /// <summary>The upper half of the subnet, from which Docker assigns addresses on its own.</summary>
     public static string DynamicRange => $"{Offset(Size / 2)}/{PrefixLength + 1}";
 

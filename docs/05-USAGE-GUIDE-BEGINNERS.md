@@ -318,6 +318,7 @@ export HttpTransport__AllowedHosts__0=<your-computer-name>   # required once the
 export Authentication__Resource=https://<your-computer-name>:3001/mcp
 export Authentication__IdentityProviders__corp__Authority=https://<your-identity-provider>
 export Authentication__IdentityProviders__corp__Issuer=https://<your-identity-provider>
+export Authentication__IdentityProviders__corp__ClientIdClaim=azp   # where your provider names the client: azp (Keycloak, Entra ID v2), cid (Okta), appid (Entra ID v1) or client_id
 export Authentication__IdentityProviders__corp__Algorithms__0=RS256
 export Authentication__IdentityProviders__corp__ScopeCatalog__0=demo:read
 ```

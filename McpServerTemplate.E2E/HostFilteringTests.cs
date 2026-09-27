@@ -51,6 +51,65 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
             $"a 0.0.0.0 bind with {(value is null ? "no AllowedHosts" : $"{key}={value}")}: {outcome.Describe()}.{served}");
     }
 
+    /// <summary>
+    /// Allowed-host entries the filter reads as more than one name, or as another name, each with a
+    /// host the filter admits under it, which the failure message shows when the server starts. The
+    /// filter honours *.example.com as every name under example.com, so *.com and *. admit nearly
+    /// anything; it converts an entry to punycode before matching, so a non-ASCII spelling is not the
+    /// name written (where the runtime has ICU, a full-width asterisk, U+FF0A, folds into *; the image
+    /// runs globalization-invariant and fails closed on it instead); and it compares names as written,
+    /// so a trailing dot is another name.
+    /// </summary>
+    public static TheoryData<string, string, string> NotOneNameVariants() => new()
+    {
+        { "subdomain-wildcard-tld", "*.com", "evil.com" },
+        { "wildcard-root-dot", "*.", "attacker.example.com." },
+        { "subdomain-wildcard", "*.example.com", Attacker },
+        { "fullwidth-star", "\uFF0A", Attacker },
+        { "trailing-dot", $"{TlsFront.Host}.", $"{TlsFront.Host}." },
+    };
+
+    [Theory]
+    [MemberData(nameof(NotOneNameVariants))]
+    public async Task T11_2_an_allowed_host_that_is_not_one_name_as_written_refuses_to_start(string variant, string value, string admits)
+    {
+        const string key = "HttpTransport:AllowedHosts:0";
+        await using var outcome = await fixture.Environment.StartupAsync($"hosts-{variant}", SettingsDelta.None.Set(key, value));
+        output.WriteLine(outcome.Describe());
+
+        var served = outcome.Started
+            ? $" A GET /healthz sent to it with Host: {admits} got {(int)await outcome.GetDirectAsync("/healthz", admits)}."
+            : string.Empty;
+        Assert.True(
+            outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(key, StringComparison.Ordinal) == true,
+            $"a 0.0.0.0 bind with {key}={value}: {outcome.Describe()}.{served}");
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2) — ASP.NET Core reads the Kestrel section on its own, and its endpoints
+    /// override the address the server binds: here the server says it binds localhost, with the
+    /// loopback names as its host allowlist, and Kestrel:Endpoints puts it on every interface.
+    /// </summary>
+    [Fact]
+    public async Task T11_2_a_kestrel_setting_refuses_to_start()
+    {
+        const string key = "Kestrel:Endpoints:Web:Url";
+        var delta = SettingsDelta.None
+            .Remove("HttpTransport:BindAddress")
+            .Remove("HttpTransport:AllowedHosts")
+            .Set(key, $"http://0.0.0.0:{ServerUnderTest.Port}");
+
+        await using var outcome = await fixture.Environment.StartupAsync("hosts-kestrel-endpoint", delta);
+        output.WriteLine(outcome.Describe());
+
+        var served = outcome.Started
+            ? $" A GET /healthz sent to it from off the machine with Host: localhost got {(int)await outcome.GetDirectAsync("/healthz", "localhost")}."
+            : string.Empty;
+        Assert.True(
+            outcome.ExitCode == 78 && outcome.Refusal?.Contains($"'{key}'", StringComparison.Ordinal) == true,
+            $"a server whose BindAddress is loopback, with {key}=http://0.0.0.0:{ServerUnderTest.Port}: {outcome.Describe()}.{served}");
+    }
+
     [Fact]
     public async Task T11_2_once_a_real_name_is_set_a_foreign_host_is_refused()
     {

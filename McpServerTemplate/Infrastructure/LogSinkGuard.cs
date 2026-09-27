@@ -29,19 +29,27 @@ public static class LogSinkGuard
         foreach (var sink in FileSinks(configuration.GetSection("Serilog:WriteTo")))
         {
             var key = $"{sink.Path}:Args:path";
-            var path = sink.GetSection("Args")["path"];
-            if (string.IsNullOrWhiteSpace(path))
+            var configured = sink.GetSection("Args")["path"];
+            if (string.IsNullOrWhiteSpace(configured))
             {
                 throw new ConfigurationException(
                     $"{sink.Path} is a File log sink with no {key}, so it has nowhere to write.");
             }
+
+            // contract-005 · G-12 (5) — the path as the sink will get it. Serilog's configuration reader
+            // expands %NAME% in every string argument (Environment.ExpandEnvironmentVariables) before the
+            // sink sees it, so both checks below read it expanded. Read as written,
+            // logs/%MCP_LOGDIR%/x.log with MCP_LOGDIR=../../tmp passed the traversal check and wrote /tmp.
+            var path = Environment.ExpandEnvironmentVariables(configured);
+            var expands = path == configured ? string.Empty : $", which expands to '{path}'";
 
             // A log path that can climb out of its directory is a write primitive, so it is refused
             // rather than normalised.
             if (path.Contains("..", StringComparison.Ordinal))
             {
                 throw new ConfigurationException(
-                    $"Log file path '{path}' ({key}) contains path traversal characters (..). Use an absolute path.");
+                    $"Log file path '{configured}' ({key}){(expands.Length > 0 ? expands + "," : string.Empty)} contains "
+                    + "path traversal characters (..). Use an absolute path.");
             }
 
             // Where the sink will write: the file sink and its rolling form both resolve the path
@@ -50,17 +58,64 @@ public static class LogSinkGuard
             var directory = Path.GetDirectoryName(resolved) ?? workingDirectory;
             try
             {
-                Directory.CreateDirectory(directory);
-                using var probe = new FileStream(
-                    Path.Combine(directory, $".log-write-check-{Guid.NewGuid():N}"),
-                    FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.DeleteOnClose);
+                ProbeWritable(directory, resolved);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
             {
                 throw new ConfigurationException(
-                    $"{sink.Path} is a File log sink writing to {resolved} ('{path}', resolved against the working "
-                    + $"directory {workingDirectory}), and this process cannot write there: {ex.Message} A sink that "
-                    + "cannot write writes nothing, and the log it stands for would be missing without a word.");
+                    $"{sink.Path} is a File log sink writing to {resolved} ('{configured}'{expands}, resolved against the "
+                    + $"working directory {workingDirectory}), and this process cannot write there: {ex.Message} A sink "
+                    + "that cannot write writes nothing, and the log it stands for would be missing without a word.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Proves this process can write where the sink will: a probe file in <paramref name="directory"/>,
+    /// making the directories the sink would make to get there, and — contract-005 · G-12 (5) — when
+    /// something already stands at <paramref name="file"/>, opening it for append as the sink will, since
+    /// a writable directory can hold a file that is not. The probe is removed, and so is every directory
+    /// it made: the sink makes them again when it first writes, and the check leaves nothing behind.
+    /// </summary>
+    private static void ProbeWritable(string directory, string file)
+    {
+        // The directories that are not there yet, deepest first, so they can be removed in that order.
+        var missing = new List<string>();
+        for (string? d = directory; d is not null && !Directory.Exists(d); d = Path.GetDirectoryName(d))
+        {
+            missing.Add(d);
+        }
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+
+            // Made, and deleted as it closes.
+            new FileStream(
+                Path.Combine(directory, $".log-write-check-{Guid.NewGuid():N}"),
+                FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.DeleteOnClose).Dispose();
+
+            // Opened for append, as the sink opens it, and closed unwritten; shared as widely as it can be,
+            // so what is tested is permission, not whether another process holds the file. Only when
+            // something is there: append would otherwise create it.
+            if (File.Exists(file) || Directory.Exists(file))
+            {
+                new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete).Dispose();
+            }
+        }
+        finally
+        {
+            foreach (var made in missing.Where(Directory.Exists))
+            {
+                try
+                {
+                    Directory.Delete(made, recursive: false);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Not empty, or no longer the check's: something else wrote there meanwhile, and it is
+                    // not the check's to remove — nor may it hide the refusal on its way out.
+                }
             }
         }
     }

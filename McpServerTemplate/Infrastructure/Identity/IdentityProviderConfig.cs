@@ -32,7 +32,11 @@ public sealed class IdentityProviderConfig
     /// <summary>Claim carrying scopes: "scope" (Keycloak, Auth0) or "scp" (Entra ID).</summary>
     public string ScopeClaim { get; set; } = "scope";
 
-    /// <summary>Claim carrying the calling application: "client_id" or "azp".</summary>
+    /// <summary>
+    /// The claim carrying the calling application, which every token must carry: exactly one of "azp"
+    /// (Keycloak, Entra ID v2), "cid" (Okta), "appid" (Entra ID v1) or "client_id" (RFC 9068, the
+    /// default). Anything else refuses startup (contract-005 · G-12 (3)).
+    /// </summary>
     public string ClientIdClaim { get; set; } = "client_id";
 
     /// <summary>Every scope this identity provider is permitted to assert.</summary>

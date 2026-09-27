@@ -96,6 +96,11 @@ public static class IdentityRegistration
         {
             var scheme = SchemeFor(name);
 
+            // contract-005 · G-12 (3) — the claim the startup check held to one of the four client claims,
+            // trimmed as it was checked. Looking up the setting as written let " azp " pass the check and
+            // then find no claim on any token.
+            var clientIdClaim = provider.ClientIdClaim.Trim();
+
             builder.AddJwtBearer(scheme, options =>
             {
                 options.Authority = provider.Authority;
@@ -107,6 +112,16 @@ public static class IdentityRegistration
                     // unvalidated iss claim still has to prove it came from this issuer.
                     ValidateIssuer = true,
                     ValidIssuer = provider.Issuer,
+
+                    // contract-002 · G-3 — pinned on the scheme itself, not only by the router. Left to its
+                    // defaults the bearer handler also accepts the issuer its discovery document names, which
+                    // can differ from the configured Issuer; only the router's exact match kept such a token
+                    // off this scheme, and a scheme authenticated any other way took it. The token's own iss
+                    // is not echoed: it is the caller's text, and the reason is logged.
+                    IssuerValidator = (issuer, _, _) => string.Equals(issuer, provider.Issuer, StringComparison.Ordinal)
+                        ? issuer
+                        : throw new SecurityTokenInvalidIssuerException(
+                            $"The token's issuer is not {provider.Issuer}, the issuer pinned for identity provider '{name}'."),
 
                     // One resource, several authorization servers: every identity provider must
                     // issue for this same audience.
@@ -150,7 +165,7 @@ public static class IdentityRegistration
                         var missing = new List<string>();
                         if (Claim(context, JwtRegisteredClaimNames.Sub) is null) missing.Add("sub");
                         if (Claim(context, JwtRegisteredClaimNames.Jti) is null) missing.Add("jti");
-                        if (Claim(context, provider.ClientIdClaim) is null) missing.Add($"{provider.ClientIdClaim} (the client claim)");
+                        if (Claim(context, clientIdClaim) is null) missing.Add($"{clientIdClaim} (the client claim)");
                         if (Claim(context, JwtRegisteredClaimNames.Iat) is null) missing.Add("iat");
 
                         if (missing.Count > 0)

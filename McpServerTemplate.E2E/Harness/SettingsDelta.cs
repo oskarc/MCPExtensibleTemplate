@@ -32,10 +32,11 @@ public sealed partial class SettingsDelta
     /// The sections the server's own startup check governs: SettingsAllowlist.GovernedSections in
     /// McpServerTemplate/Infrastructure/Frame/SettingsAllowlist.cs. contract-005 · G-12 (2) made
     /// HttpTransport one of them, so its keys left <see cref="ReadOutsideGovernedSections"/>: a
-    /// misspelt transport key now reaches the server and stops it.
+    /// misspelt transport key now reaches the server and stops it. Kestrel joined them with no key
+    /// known in it, so any Kestrel key reaches the server and stops it.
     /// </summary>
     public static readonly IReadOnlyList<string> GovernedSections =
-        ["Authentication", "Providers", "Limits", "Confirmation", "Development", "RateLimit", "HttpTransport"];
+        ["Authentication", "Providers", "Limits", "Confirmation", "Development", "RateLimit", "HttpTransport", "Kestrel"];
 
     /// <summary>
     /// The keys outside <see cref="GovernedSections"/> the server is declared to read, each with where
@@ -65,6 +66,11 @@ public sealed partial class SettingsDelta
         "Serilog:WriteTo:{n}:Args:outputTemplate",
         "Serilog:WriteTo:{n}:Args:standardErrorFromLevel",
         "Serilog:Enrich:{n}",
+
+        // Program.cs — Serilog's reader expands %NAME% in a sink's arguments, so a variable a File sink's
+        // path names is read too, and LogSinkGuard.cs expands it the same way (contract-005 · G-12 (5)).
+        // The one T-11 (5) names.
+        "MCP_LOGDIR",
 
         // Not the product's code but the runtime it ships on: .NET on Linux builds its root store from
         // these. The harness's trust is set through them (G-8), and a test that changes trust sets them.

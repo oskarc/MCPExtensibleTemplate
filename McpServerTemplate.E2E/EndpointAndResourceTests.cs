@@ -35,6 +35,24 @@ public sealed class EndpointAndResourceTests(EndpointAndResourceTests.Server fix
             $"Authentication:Resource=https://{TlsFront.Host}/ names a resource MCP does not answer at, and {outcome.Describe()}");
     }
 
+    /// <summary>
+    /// contract-005 · G-12 (1) — the Resource is held as written. Parsed, https://mcp.e2e.test/./mcp is
+    /// the /mcp endpoint; written, it is what the metadata publishes and what every token's audience
+    /// must equal, and no client connects to it.
+    /// </summary>
+    [Fact]
+    public async Task T11_1_a_resource_whose_path_is_mcp_only_once_parsed_refuses_to_start()
+    {
+        var resource = $"https://{TlsFront.Host}/./mcp";
+        await using var outcome = await fixture.Environment.StartupAsync(
+            "resource-dot-segment", SettingsDelta.None.Set("Authentication:Resource", resource));
+        output.WriteLine(outcome.Describe());
+
+        Assert.True(
+            outcome.ExitCode == 78 && outcome.RefusalLine?.Contains("Authentication:Resource", StringComparison.Ordinal) == true,
+            $"Authentication:Resource={resource} is published as written, and {outcome.Describe()}");
+    }
+
     [Fact]
     public async Task T11_1_the_challenge_at_the_resource_url_and_the_rfc9728_location_answer_with_the_same_document()
     {

@@ -55,4 +55,86 @@ public sealed class HarnessSelfTests
         var refusal = Assert.Throws<ArgumentException>(() => SettingsDelta.None.Set("Bogus:Key", "1"));
         Assert.Contains("'Bogus:Key'", refusal.Message, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// contract-005 · G-8 — an image's revision label names the commit it was built from, and an image
+    /// built from a working tree whose build context differs from that commit is not the commit's: its
+    /// label says so with -dirty. A change the context does not carry (docs/, which .dockerignore
+    /// excludes) leaves the label as the commit. Run on a repository made for the test, so the
+    /// checkout the suite builds from is never touched.
+    /// </summary>
+    [Fact]
+    public async Task The_revision_label_marks_a_build_context_that_differs_from_its_commit()
+    {
+        var repository = Directory.CreateTempSubdirectory("e2e-revision-").FullName;
+        try
+        {
+            await GitAsync(repository, "init", "--quiet");
+            await File.WriteAllTextAsync(Path.Combine(repository, ".dockerignore"), "docs/\n");
+            await File.WriteAllTextAsync(Path.Combine(repository, "Program.cs"), "// one\n");
+            Directory.CreateDirectory(Path.Combine(repository, "docs"));
+            await File.WriteAllTextAsync(Path.Combine(repository, "docs", "guide.md"), "one\n");
+            await GitAsync(repository, "add", "--all");
+            await GitAsync(repository, "-c", "user.name=e2e", "-c", "user.email=e2e@example.invalid", "commit", "--quiet", "--message", "base");
+            var commit = (await GitAsync(repository, "rev-parse", "HEAD")).Trim();
+
+            // Positive control: the tree as committed is labelled with the commit alone.
+            Assert.Equal(commit, await Images.CheckoutRevisionAsync(repository, CancellationToken.None));
+
+            // Changes the build context does not carry leave it so.
+            await File.WriteAllTextAsync(Path.Combine(repository, "docs", "guide.md"), "two\n");
+            await File.WriteAllTextAsync(Path.Combine(repository, "docs", "new.md"), "new\n");
+            Assert.Equal(commit, await Images.CheckoutRevisionAsync(repository, CancellationToken.None));
+
+            // A change it carries — an edit, a new file, a deletion — and the image is not the commit's.
+            var changes = new (string What, Func<Task> Make, Func<Task> Undo)[]
+            {
+                ("an edited file", () => File.WriteAllTextAsync(Path.Combine(repository, "Program.cs"), "// two\n"),
+                    () => File.WriteAllTextAsync(Path.Combine(repository, "Program.cs"), "// one\n")),
+                ("an untracked file", () => File.WriteAllTextAsync(Path.Combine(repository, "Added.cs"), "// new\n"),
+                    () => Task.Run(() => File.Delete(Path.Combine(repository, "Added.cs")))),
+                ("a deleted file", () => Task.Run(() => File.Delete(Path.Combine(repository, "Program.cs"))),
+                    () => File.WriteAllTextAsync(Path.Combine(repository, "Program.cs"), "// one\n")),
+            };
+
+            foreach (var (what, make, undo) in changes)
+            {
+                await make();
+                var revision = await Images.CheckoutRevisionAsync(repository, CancellationToken.None);
+                Assert.True(
+                    revision == $"{commit}-dirty",
+                    $"a build context with {what} not in its commit was labelled '{revision}', not '{commit}-dirty'.");
+                await undo();
+                Assert.Equal(commit, await Images.CheckoutRevisionAsync(repository, CancellationToken.None));
+            }
+        }
+        finally
+        {
+            // Git writes its objects read-only, and Windows will not delete them so.
+            foreach (var file in Directory.EnumerateFiles(repository, "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+
+            Directory.Delete(repository, recursive: true);
+        }
+    }
+
+    private static async Task<string> GitAsync(string repository, params string[] arguments)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("git", ["-C", repository, .. arguments])
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        using var git = System.Diagnostics.Process.Start(start) ?? throw new InvalidOperationException("git did not start.");
+        var output = git.StandardOutput.ReadToEndAsync();
+        var errors = git.StandardError.ReadToEndAsync();
+        await git.WaitForExitAsync();
+        return git.ExitCode == 0
+            ? await output
+            : throw new InvalidOperationException($"git {string.Join(" ", arguments)} failed in {repository}: {await errors}");
+    }
 }

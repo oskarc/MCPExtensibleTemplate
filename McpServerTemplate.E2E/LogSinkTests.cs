@@ -41,4 +41,29 @@ public sealed class LogSinkTests(ITestOutputHelper output)
             $"a File sink at Serilog:WriteTo:2 pointed at '{path}' (resolved {resolved}, which user 1654 cannot create): "
             + $"{outcome.Describe()}; {said}.");
     }
+
+    /// <summary>
+    /// contract-005 · G-12 (5) — Serilog's reader expands %NAME% in a sink's arguments before the sink
+    /// resolves its path, so the path is checked as the sink will see it. Written, this one has no ..;
+    /// expanded, it climbs out of the working directory to /tmp.
+    /// </summary>
+    [Fact]
+    public async Task T11_5_a_file_sink_whose_path_climbs_out_through_an_environment_variable_refuses_to_start()
+    {
+        const string key = "Serilog:WriteTo:2:Args:path";
+        const string path = "logs/%MCP_LOGDIR%/e2e-.log";
+
+        var environment = await E2EEnvironment.GetAsync();
+        await using var outcome = await environment.StartupAsync(
+            "log-sink-variable-escape",
+            SettingsDelta.None
+                .Set("Serilog:WriteTo:2:Name", "File")
+                .Set(key, path)
+                .Set("MCP_LOGDIR", "../../tmp"));
+        output.WriteLine(outcome.Describe());
+
+        Assert.True(
+            outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(key, StringComparison.Ordinal) == true,
+            $"a File sink at {key}='{path}' with MCP_LOGDIR=../../tmp, which the sink resolves to /tmp/e2e-.log: {outcome.Describe()}.");
+    }
 }

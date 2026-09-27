@@ -16,13 +16,17 @@ namespace McpServerTemplate.E2E.Harness;
 /// root, and tagged with a hash of the whole build context as .dockerignore filters it. An image is
 /// reused only while that hash is unchanged: edit any file that reaches the context and the next run
 /// builds again; edit a file the context excludes and it does not. Each image also carries two
-/// labels: the checkout's revision (the commit it was built at, which is GITHUB_SHA in CI) and the
-/// context hash. Both are checked against the checkout before any test runs, so a stale or foreign
-/// image under the right tag is rebuilt, never run, and every run's images name the commit they were
-/// tested at. A new commit that changes nothing in the context rebuilds from Docker's layer cache.
+/// labels: the checkout's revision (the commit it was built at, which is GITHUB_SHA in CI, with
+/// <see cref="DirtySuffix"/> when the context held changes that commit does not) and the context hash.
+/// Both are checked against the checkout before any test runs, so a stale or foreign image under the
+/// right tag is rebuilt, never run, and every run's images name the commit they were tested at. A new
+/// commit that changes nothing in the context rebuilds from Docker's layer cache.
 /// </summary>
 internal static class Images
 {
+    /// <summary>What a revision label carries after the commit when the build context differs from it.</summary>
+    public const string DirtySuffix = "-dirty";
+
     /// <summary>The server image's repository name; the tag is the context hash.</summary>
     public const string ServerRepository = "mcp-e2e-server";
 
@@ -48,21 +52,10 @@ internal static class Images
     /// </summary>
     public static string ContextHash(string contextDirectory)
     {
-        var root = Path.GetFullPath(contextDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var ignoreFile = Path.Combine(root, ".dockerignore");
-        if (!File.Exists(ignoreFile))
-        {
-            throw new EnvironmentFaultException("image", $"There is no .dockerignore at {root}; the context would carry bin, obj and .git.");
-        }
+        var root = ContextRoot(contextDirectory);
+        var ignore = ContextRules(root);
 
-        var patterns = AlwaysIgnored
-            .Concat(File.ReadLines(ignoreFile))
-            .Concat(AlwaysKept);
-        var ignore = new IgnoreFile(patterns, NullLogger.Instance);
-
-        var files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
-            .Select(f => Path.GetFullPath(f).Replace('\\', '/'))
-            .Select(f => f[(root.Length + 1)..])
+        var files = FilesBeneath(root, root)
             .Where(ignore.Accepts)
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -80,18 +73,105 @@ internal static class Images
     /// <summary>
     /// The commit the repository at <paramref name="repositoryRoot"/> has checked out, as git names
     /// it. In CI this is GITHUB_SHA: actions/checkout checks out exactly that commit.
+    ///
+    /// contract-005 · G-8 — with <see cref="DirtySuffix"/> when the build context differs from that
+    /// commit: a file the context carries (by the rules <see cref="ContextHash"/> reads) is modified,
+    /// added, deleted, renamed or untracked, or is one git ignores and the context still carries. An
+    /// image built from uncommitted changes used to be labelled with the commit alone, naming content it
+    /// did not hold. A change the context does not carry (docs/, .claude/) leaves the label as the
+    /// commit. Reuse still keys on the context hash: the same dirty tree labels and hashes the same.
     /// </summary>
     public static async Task<string> CheckoutRevisionAsync(string repositoryRoot, CancellationToken cancellationToken)
     {
-        var start = new ProcessStartInfo("git", ["-C", repositoryRoot, "rev-parse", "--verify", "HEAD"])
+        var root = ContextRoot(repositoryRoot);
+
+        var (found, head, error) = await GitAsync(root, ["rev-parse", "--verify", "HEAD"], cancellationToken);
+        var revision = found ? head.Trim() : string.Empty;
+        if (revision.Length is not (40 or 64) || !revision.All(char.IsAsciiHexDigitLower))
+        {
+            throw new EnvironmentFaultException("image", $"the checkout's revision could not be read from {repositoryRoot}: git said '{error.Trim()}'.");
+        }
+
+        // NUL-separated and unquoted (-z); untracked files one by one; and what git ignores, since a file
+        // git ignores can be one the context carries (a *.user file, say).
+        var (compared, status, statusError) = await GitAsync(
+            root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching"], cancellationToken);
+        if (!compared)
+        {
+            throw new EnvironmentFaultException("image", $"the checkout at {repositoryRoot} could not be compared with its commit: git said '{statusError.Trim()}'.");
+        }
+
+        return ContextCarriesAny(root, ChangedPaths(status)) ? revision + DirtySuffix : revision;
+    }
+
+    /// <summary>
+    /// The paths git's porcelain status (v1, -z) names: each entry's path, and a rename's or a copy's
+    /// source, which follows it in a field of its own. A directory git reports whole ends with /.
+    /// </summary>
+    private static IEnumerable<string> ChangedPaths(string status)
+    {
+        using var fields = status.Split('\0', StringSplitOptions.RemoveEmptyEntries).AsEnumerable().GetEnumerator();
+        while (fields.MoveNext())
+        {
+            var entry = fields.Current;
+            if (entry.Length < 4)
+            {
+                continue;
+            }
+
+            yield return entry[3..];
+            if ((entry[0] is 'R' or 'C' || entry[1] is 'R' or 'C') && fields.MoveNext())
+            {
+                yield return fields.Current;
+            }
+        }
+    }
+
+    /// <summary>Whether the build context carries any of <paramref name="paths"/>, or any file beneath a directory among them.</summary>
+    private static bool ContextCarriesAny(string root, IEnumerable<string> paths)
+    {
+        var ignore = ContextRules(root);
+        return paths.Any(path => path.EndsWith('/')
+            ? Directory.Exists(Path.Combine(root, path)) && FilesBeneath(root, Path.Combine(root, path)).Any(ignore.Accepts)
+            : ignore.Accepts(path));
+    }
+
+    /// <summary>The context's root: full, and without a trailing separator, as every relative path is cut from it.</summary>
+    private static string ContextRoot(string contextDirectory) =>
+        Path.GetFullPath(contextDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+    /// <summary>What the build context leaves out: its .dockerignore, read by the Testcontainers builder's own rules.</summary>
+    private static IgnoreFile ContextRules(string root)
+    {
+        var ignoreFile = Path.Combine(root, ".dockerignore");
+        if (!File.Exists(ignoreFile))
+        {
+            throw new EnvironmentFaultException("image", $"There is no .dockerignore at {root}; the context would carry bin, obj and .git.");
+        }
+
+        var patterns = AlwaysIgnored
+            .Concat(File.ReadLines(ignoreFile))
+            .Concat(AlwaysKept);
+        return new IgnoreFile(patterns, NullLogger.Instance);
+    }
+
+    /// <summary>Every file beneath <paramref name="directory"/>, relative to <paramref name="root"/>, with / between names.</summary>
+    private static IEnumerable<string> FilesBeneath(string root, string directory) =>
+        Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+            .Select(f => Path.GetFullPath(f).Replace('\\', '/'))
+            .Select(f => f[(root.Length + 1)..]);
+
+    private static async Task<(bool Succeeded, string Output, string Errors)> GitAsync(
+        string repositoryRoot, string[] arguments, CancellationToken cancellationToken)
+    {
+        var start = new ProcessStartInfo("git", ["-C", repositoryRoot, .. arguments])
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
+            StandardOutputEncoding = Encoding.UTF8,
         };
 
-        string revision;
-        string error;
         try
         {
             using var git = Process.Start(start)
@@ -99,24 +179,12 @@ internal static class Images
             var output = git.StandardOutput.ReadToEndAsync(cancellationToken);
             var errors = git.StandardError.ReadToEndAsync(cancellationToken);
             await git.WaitForExitAsync(cancellationToken);
-            revision = (await output).Trim();
-            error = (await errors).Trim();
-            if (git.ExitCode != 0)
-            {
-                revision = string.Empty;
-            }
+            return (git.ExitCode == 0, await output, await errors);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             throw new EnvironmentFaultException("image", $"the checkout's revision could not be read: git is not available ({ex.Message}).", ex);
         }
-
-        if (revision.Length is not (40 or 64) || !revision.All(char.IsAsciiHexDigitLower))
-        {
-            throw new EnvironmentFaultException("image", $"the checkout's revision could not be read from {repositoryRoot}: git said '{error}'.");
-        }
-
-        return revision;
     }
 
     /// <summary>

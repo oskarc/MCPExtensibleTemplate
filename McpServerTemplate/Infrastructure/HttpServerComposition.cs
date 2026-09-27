@@ -1,8 +1,10 @@
+using System.Text;
 using System.Threading.RateLimiting;
 using McpServerTemplate.Infrastructure.Frame;
 using McpServerTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Primitives;
 using ModelContextProtocol.Server;
 
 namespace McpServerTemplate.Infrastructure;
@@ -174,8 +176,18 @@ public static class HttpServerComposition
     /// AllowedHosts that named a wildcard. Both now refuse to start, naming the key. :: is refused with
     /// them: it is the IPv6 any-address written without brackets, and names no host. On a loopback
     /// bind the loopback names are still the default, since nothing off the machine reaches it.
+    ///
+    /// Refusing those four spellings was not enough, because the filter does not match an entry as
+    /// written. It honours *.example.com as every name under example.com, so *.com and *. admitted
+    /// nearly any host; it converts each entry to punycode first, and where the runtime has ICU that
+    /// folds a full-width asterisk (U+FF0A), or * beside a soft hyphen, into * and switches filtering off; and it
+    /// compares names exactly, so mcp.example.com. is another name than mcp.example.com. So an entry
+    /// must name one host exactly as the filter will match it: ASCII (an internationalised name in its
+    /// punycode form), no * anywhere, no trailing dot, and unchanged by the filter's own conversion.
+    /// Then the filter's own matcher is asked, over the final list, whether it admits a name nobody
+    /// could have configured, in case a spelling gets past all of that.
     /// </summary>
-    /// <exception cref="ConfigurationException">A non-loopback bind names no host, or an entry is a wildcard.</exception>
+    /// <exception cref="ConfigurationException">A non-loopback bind names no host, or an entry does not name exactly one host.</exception>
     public static string[] AllowedHosts(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -185,34 +197,113 @@ public static class HttpServerComposition
 
         foreach (var entry in section.GetChildren())
         {
-            if (entry.Value?.Trim() is "*" or "0.0.0.0" or "[::]" or "::")
+            if (NotOneHostName(entry.Value ?? string.Empty) is { } why)
             {
                 throw new ConfigurationException(
-                    $"{entry.Path} is '{entry.Value}', which is not a host name: *, 0.0.0.0 and [::] switch ASP.NET "
-                    + "Core's host filtering off, and :: is the IPv6 any-address. Name the host names clients reach "
-                    + "this server by, for example mcp.example.com. Without them DNS rebinding can turn a browser "
-                    + "into a client of this server.");
+                    $"{entry.Path} is '{entry.Value}', which {why} Name the host names clients reach this server by, "
+                    + "for example mcp.example.com. Without them DNS rebinding can turn a browser into a client of "
+                    + "this server.");
             }
         }
 
         var allowedHosts = section.Get<string[]>();
-        if (allowedHosts is { Length: > 0 })
+        if (allowedHosts is not { Length: > 0 })
         {
-            return allowedHosts;
+            if (!IsLoopback(bindAddress))
+            {
+                throw new ConfigurationException(
+                    $"HttpTransport:AllowedHosts must name the host names clients reach this server by, because "
+                    + $"HttpTransport:BindAddress is '{bindAddress}', which is not a loopback address. With none, every "
+                    + "Host header would be answered, and DNS rebinding could turn a browser into a client of this "
+                    + "server. For example HttpTransport:AllowedHosts:0=mcp.example.com.");
+            }
+
+            allowedHosts = bindAddress is "localhost" or "127.0.0.1" or "::1"
+                ? ["localhost", "127.0.0.1", "[::1]"]
+                : [bindAddress];
         }
 
-        if (!IsLoopback(bindAddress))
+        RefuseHostsNobodyNamed(allowedHosts);
+        return allowedHosts;
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2) — the last check on the host allowlist, belt and braces: ASP.NET Core's
+    /// host filter matches with <see cref="HostString.MatchesAny"/>, and it is asked whether it would
+    /// admit a random name under .invalid, with and without a trailing dot, which nobody could have
+    /// meant to allow. The entry rules in <see cref="AllowedHosts"/> refuse every spelling known to
+    /// widen the filter; this refuses one they do not know.
+    /// </summary>
+    /// <param name="allowedHosts">The list the host filter is given.</param>
+    /// <exception cref="ConfigurationException">The filter would admit a host nobody named.</exception>
+    public static void RefuseHostsNobodyNamed(IReadOnlyList<string> allowedHosts)
+    {
+        ArgumentNullException.ThrowIfNull(allowedHosts);
+
+        var patterns = allowedHosts.Select(h => new StringSegment(h)).ToList();
+        var nobody = $"{Guid.NewGuid():N}.invalid";
+        foreach (var probe in new[] { nobody, nobody + "." })
         {
-            throw new ConfigurationException(
-                $"HttpTransport:AllowedHosts must name the host names clients reach this server by, because "
-                + $"HttpTransport:BindAddress is '{bindAddress}', which is not a loopback address. With none, every "
-                + "Host header would be answered, and DNS rebinding could turn a browser into a client of this "
-                + "server. For example HttpTransport:AllowedHosts:0=mcp.example.com.");
+            if (HostString.MatchesAny(new StringSegment(probe), patterns))
+            {
+                throw new ConfigurationException(
+                    $"HttpTransport:AllowedHosts ({string.Join(", ", allowedHosts)}) admits '{probe}', a name nobody "
+                    + "configured: ASP.NET Core's host filter would answer it, and any other host it admits the same way. "
+                    + "Name the host names clients reach this server by, each exactly, for example mcp.example.com.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Why <paramref name="entry"/> does not name exactly one host as the host filter will match it,
+    /// completing "…, which", or null when it does.
+    /// </summary>
+    private static string? NotOneHostName(string entry)
+    {
+        const string NotAsMatched = "does not name one host as ASP.NET Core's host filter matches it:";
+
+        if (entry.Trim() is "*" or "0.0.0.0" or "[::]" or "::")
+        {
+            return "is not a host name: *, 0.0.0.0 and [::] switch ASP.NET Core's host filtering off, and :: is the "
+                + "IPv6 any-address.";
         }
 
-        return bindAddress is "localhost" or "127.0.0.1" or "::1"
-            ? ["localhost", "127.0.0.1", "[::1]"]
-            : [bindAddress];
+        if (!Ascii.IsValid(entry))
+        {
+            // Named by code point: these characters are chosen for looking like others, and a console
+            // that cannot show them shows the character they imitate.
+            var first = entry.First(c => !char.IsAscii(c));
+            return $"{NotAsMatched} it is not ASCII (it holds U+{(int)first:X4}). The filter converts an entry to its "
+                + "punycode form before it matches, and where the runtime has ICU the conversion folds characters into "
+                + "others: a full-width asterisk, U+FF0A, becomes *, which switches filtering off. Write an "
+                + "internationalised name in its punycode form, which begins xn--.";
+        }
+
+        if (entry.Contains('*', StringComparison.Ordinal))
+        {
+            return $"{NotAsMatched} it contains *. The filter reads *.example.com as every name under example.com, so "
+                + "*.com, or *., admits nearly any host.";
+        }
+
+        if (entry.EndsWith('.'))
+        {
+            return $"{NotAsMatched} it ends with a dot. The filter compares names exactly, so this is another name "
+                + "than the one without the dot, and *. admitted every name written with one.";
+        }
+
+        string matched;
+        try
+        {
+            matched = new HostString(entry).ToUriComponent();
+        }
+        catch (ArgumentException ex)
+        {
+            return $"{NotAsMatched} the filter cannot convert it to a host name ({ex.Message}).";
+        }
+
+        return string.Equals(matched, entry, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : $"{NotAsMatched} the filter converts it to '{matched}' before it matches, so it would not match the name written.";
     }
 
     private static bool IsLoopback(string bindAddress) =>

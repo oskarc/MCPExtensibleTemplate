@@ -23,6 +23,14 @@ public static class IdentityConfigurationBinder
     /// <summary>The registered JWT claims (RFC 7519 §4.1), none of which names the calling client.</summary>
     private static readonly string[] RegisteredClaims = ["iss", "sub", "aud", "exp", "nbf", "iat", "jti"];
 
+    /// <summary>
+    /// contract-005 · G-12 (3) — the claims identity providers put the calling client in, and the only
+    /// values ClientIdClaim may take: azp (Keycloak, Entra ID v2), cid (Okta), appid (Entra ID v1) and
+    /// client_id (RFC 9068's JWT access token profile), each checked against the vendor's own token
+    /// reference when the setting was first applied.
+    /// </summary>
+    private static readonly string[] ClientClaims = ["azp", "cid", "appid", "client_id"];
+
     public static AuthenticationConfig Bind(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -61,13 +69,38 @@ public static class IdentityConfigurationBinder
         // contract-005 · G-12 (1) — the resource is the URL a client connects to, and a standard client
         // refuses metadata whose resource is not that URL. MCP answers at /mcp, so the resource's path
         // must be /mcp too; any other path names a URL where nothing answers.
-        if (!string.Equals(resource.AbsolutePath.TrimEnd('/'), HttpServerComposition.McpPath, StringComparison.Ordinal))
+        //
+        // Held as written, not as parsed: the string is what the metadata publishes and what every
+        // token's audience must equal, character for character. Parsed, /./mcp and /x/../mcp are /mcp,
+        // /%6Dcp is decoded, \ becomes /, and a query, a fragment and user information are set aside —
+        // each of those bound, and the metadata published https://host/./mcp. None may appear, and the
+        // path as written is /mcp with at most one trailing slash.
+        var notAsClientsCarryIt =
+            QueryFragmentOrUserInfo(config.Resource, resource)
+            ?? (config.Resource.Contains('\\', StringComparison.Ordinal) ? "a backslash"
+                : config.Resource.Contains('%', StringComparison.Ordinal) ? "percent-encoding"
+                : WrittenPath(config.Resource).Split('/').Any(segment => segment is "." or "..") ? "a dot-segment"
+                : null);
+
+        if (notAsClientsCarryIt is not null)
+        {
+            throw new ConfigurationException(
+                $"Authentication:Resource must be written as clients connect to it, https://{{host}}{HttpServerComposition.McpPath}, "
+                + "with no query, fragment, user information, backslash, percent-encoding or dot-segment; it is "
+                + $"'{config.Resource}', which carries {notAsClientsCarryIt}. It is published as written, and every token's "
+                + "audience must equal it character for character, so a spelling that parses to the same URL is still "
+                + "another resource.");
+        }
+
+        var path = WrittenPath(config.Resource);
+        if (!string.Equals(path, HttpServerComposition.McpPath, StringComparison.Ordinal)
+            && !string.Equals(path, HttpServerComposition.McpPath + "/", StringComparison.Ordinal))
         {
             throw new ConfigurationException(
                 $"Authentication:Resource must name this server's MCP endpoint, https://{{host}}{HttpServerComposition.McpPath}; "
-                + $"it is '{config.Resource}', whose path is '{resource.AbsolutePath}'. MCP answers at "
-                + $"{HttpServerComposition.McpPath}, and a client that connects to a resource URL where nothing answers "
-                + "cannot connect.");
+                + $"it is '{config.Resource}', whose path is '{path}'. MCP answers at {HttpServerComposition.McpPath} "
+                + "(with one trailing slash at most), and a client that connects to a resource URL where nothing "
+                + "answers cannot connect.");
         }
 
         foreach (var (name, provider) in config.IdentityProviders)
@@ -81,6 +114,17 @@ public static class IdentityConfigurationBinder
                     $"{key}:Authority must be an absolute https URI; it is '{provider.Authority}'. "
                     + "Discovery and signing keys are fetched from it, so plaintext would put key "
                     + "material on the wire.");
+            }
+
+            // contract-005 · G-12 (4) — discovery and keys are fetched from paths appended to the Authority,
+            // so a query or a fragment would swallow them, and user information is a credential written into a
+            // URL.
+            if (QueryFragmentOrUserInfo(provider.Authority, authority) is { } authorityPart)
+            {
+                throw new ConfigurationException(
+                    $"{key}:Authority must not carry {authorityPart}; it is '{provider.Authority}'. Discovery and signing "
+                    + "keys are fetched from paths appended to it, which a query or a fragment would swallow, and user "
+                    + "information would be a credential written into a URL.");
             }
 
             if (string.IsNullOrWhiteSpace(provider.Issuer))
@@ -99,6 +143,16 @@ public static class IdentityConfigurationBinder
                     $"{key}:Issuer must be an absolute https URI; it is '{provider.Issuer}'. It is published as "
                     + "an authorization server, and clients are sent to it to find its metadata and to sign in, "
                     + "so plaintext would hand their credentials to anyone on the path.");
+            }
+
+            // contract-005 · G-12 (4) — an issuer identifier is an https URL with no query or fragment (RFC 8414
+            // §2), and this one is published as written; user information in it would publish a credential.
+            if (QueryFragmentOrUserInfo(provider.Issuer, issuer) is { } issuerPart)
+            {
+                throw new ConfigurationException(
+                    $"{key}:Issuer must not carry {issuerPart}; it is '{provider.Issuer}'. An issuer identifier is an https "
+                    + "URL with no query or fragment (RFC 8414, section 2), and this one is published as written, as an "
+                    + "authorization server clients are sent to; user information in it would publish a credential.");
             }
 
             if (provider.Algorithms.Length == 0)
@@ -148,22 +202,31 @@ public static class IdentityConfigurationBinder
             // contract-005 · G-12 (3) — the client claim is required of every token, so it must name a
             // claim that says which client called. A registered claim is present on every token this
             // server accepts or means something else, and the scope claim means the scopes: either
-            // would switch the requirement off. Compared without case, because that is how a claim is
-            // found on the principal (ClaimsIdentity.FindFirst): ClientIdClaim=SUB finds sub.
+            // would switch the requirement off. So would any claim one provider or another puts on every
+            // token — typ, ver, tid, acr, sid, auth_time, nonce, amr — and those passed a check that named
+            // only the first two kinds, so ClientIdClaim is now one of the four names providers use for the
+            // client, and nothing else. Compared exactly, as the claim is found on a validated token: the
+            // bearer handler's identity matches claim names by case, so AZP would find no azp and refuse
+            // every token. Trimmed, as it is looked up (IdentityRegistration).
             var clientClaim = provider.ClientIdClaim.Trim();
             var notAClient =
-                RegisteredClaims.Contains(clientClaim, StringComparer.OrdinalIgnoreCase)
-                    ? "it is a registered JWT claim, present on every token or meaning something else"
-                : string.Equals(clientClaim, provider.ScopeClaim.Trim(), StringComparison.OrdinalIgnoreCase)
-                    ? "it is this identity provider's ScopeClaim"
+                RegisteredClaims.Contains(clientClaim, StringComparer.Ordinal)
+                    ? "it is a registered JWT claim, present on every token or meaning something else, so requiring it "
+                        + "would require nothing"
+                : string.Equals(clientClaim, provider.ScopeClaim.Trim(), StringComparison.Ordinal)
+                    ? "it is this identity provider's ScopeClaim, so requiring it would require nothing"
+                : !ClientClaims.Contains(clientClaim, StringComparer.Ordinal)
+                    ? "it is not one of the claims identity providers put the client in, and a claim some provider puts "
+                        + "on every token (typ, ver, tid and the like) would require nothing, while any other name is on "
+                        + "no token at all"
                 : null;
 
             if (notAClient is not null)
             {
                 throw new ConfigurationException(
                     $"{key}:ClientIdClaim is '{provider.ClientIdClaim}', which does not name the calling client: "
-                    + $"{notAClient}, so requiring it would require nothing. Name the claim this identity provider "
-                    + "puts the client in: azp (Keycloak, Entra ID v2), cid (Okta), appid (Entra ID v1) or client_id.");
+                    + $"{notAClient}. It must be exactly one of azp (Keycloak, Entra ID v2), cid (Okta), appid (Entra ID v1) "
+                    + "or client_id (RFC 9068), whichever this identity provider puts the client in.");
             }
         }
 
@@ -183,5 +246,51 @@ public static class IdentityConfigurationBinder
                     + "contain mcp:admin. The administrative plane would be unreachable.");
             }
         }
+    }
+
+    private static readonly char[] EndOfAuthority = ['/', '?', '#', '\\'];
+
+    private static readonly char[] QueryOrFragment = ['?', '#'];
+
+    /// <summary>
+    /// What an absolute URI carries, as written, that a URL this server publishes or fetches from may
+    /// not: a query, a fragment or user information. Null when it carries none. Read from the string as
+    /// well as the parsed URI, because the string is what is published and fetched.
+    /// </summary>
+    private static string? QueryFragmentOrUserInfo(string written, Uri parsed) =>
+        written.Contains('?', StringComparison.Ordinal) ? "a query"
+        : written.Contains('#', StringComparison.Ordinal) ? "a fragment"
+        : parsed.UserInfo.Length > 0 || WrittenAuthority(written).Contains('@', StringComparison.Ordinal) ? "user information"
+        : null;
+
+    /// <summary>The authority of an absolute URI as written: from after :// to the first / ? # or \.</summary>
+    private static string WrittenAuthority(string written)
+    {
+        var start = written.IndexOf("://", StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return string.Empty;
+        }
+
+        start += 3;
+        var end = written.IndexOfAny(EndOfAuthority, start);
+        return end < 0 ? written[start..] : written[start..end];
+    }
+
+    /// <summary>
+    /// The path of an absolute URI as written: from the first / after the authority, up to a query or a
+    /// fragment. Empty when it has none, or when it is not written scheme://authority at all.
+    /// </summary>
+    private static string WrittenPath(string written)
+    {
+        var scheme = written.IndexOf("://", StringComparison.Ordinal);
+        var start = scheme < 0 ? -1 : written.IndexOf('/', scheme + 3);
+        if (start < 0)
+        {
+            return string.Empty;
+        }
+
+        var end = written.IndexOfAny(QueryOrFragment, start);
+        return end < 0 ? written[start..] : written[start..end];
     }
 }

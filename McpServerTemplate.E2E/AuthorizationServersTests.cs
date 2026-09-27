@@ -58,4 +58,21 @@ public sealed class AuthorizationServersTests(AuthorizationServersTests.Server f
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(key, StringComparison.Ordinal) == true,
             $"{key}=http://idp-b.e2e.test/ would send clients to a plaintext issuer, and {outcome.Describe()}");
     }
+
+    /// <summary>
+    /// contract-005 · G-12 (4) — an issuer identifier has no query or fragment (RFC 8414 §2), and the
+    /// Issuer is published verbatim as an authorization server.
+    /// </summary>
+    [Fact]
+    public async Task T11_4_an_issuer_with_a_query_refuses_to_start()
+    {
+        var key = $"Authentication:IdentityProviders:{E2EEnvironment.IdpB}:Issuer";
+        const string issuer = "https://idp-b.e2e.test/?tenant=e2e";
+        await using var outcome = await fixture.Environment.StartupAsync("issuer-query", SettingsDelta.None.Set(key, issuer));
+        output.WriteLine(outcome.Describe());
+
+        Assert.True(
+            outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(key, StringComparison.Ordinal) == true,
+            $"{key}={issuer} would be published as an authorization server with a query, and {outcome.Describe()}");
+    }
 }

@@ -56,10 +56,15 @@ public sealed class ClientClaimTests(ClientClaimTests.Server fixture, ITestOutpu
             + "ClientIdClaim names was not the one required.");
     }
 
-    /// <summary>sub is a registered claim every accepted token carries; scope is this provider's ScopeClaim.</summary>
+    /// <summary>
+    /// sub is a registered claim every accepted token carries; scope is this provider's ScopeClaim; typ
+    /// is on every Keycloak access token (Bearer) and is neither, so it passed the check that named only
+    /// those — ClientIdClaim is now one of the four claims identity providers name the client in.
+    /// </summary>
     [Theory]
     [InlineData("sub")]
     [InlineData("scope")]
+    [InlineData("typ")]
     public async Task T11_3_a_client_claim_that_is_always_present_or_means_something_else_refuses_to_start(string claim)
     {
         var key = $"Authentication:IdentityProviders:{E2EEnvironment.KeycloakIssuer}:ClientIdClaim";

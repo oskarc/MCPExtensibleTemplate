@@ -67,9 +67,23 @@ public static partial class SettingsAllowlist
         ["HttpTransport:Certificate:Subject"] = NoTlsTermination,
     };
 
+    // contract-005 · G-12 (2) — sections governed with no setting known in them, so every key there refuses
+    // startup, with the reason rather than a guess at a nearest key. ASP.NET Core reads Kestrel on its own:
+    // Kestrel__Endpoints__Web__Url=http://0.0.0.0:3001 put a server whose BindAddress said localhost on every
+    // interface, behind the host allowlist chosen for loopback, and its certificates and limits would reach
+    // the listener past every check here as well.
+    private static readonly Dictionary<string, string> NothingHonoured = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Kestrel"] =
+            "this server configures its own listener, from HttpTransport:BindAddress and HttpTransport:Port, behind the "
+            + "checks those settings pass. Kestrel's endpoints would bind wherever they name — around the host "
+            + "allowlist chosen for HttpTransport:BindAddress — and its certificates and limits would change the "
+            + "listener past every check. Set HttpTransport:BindAddress and HttpTransport:Port instead.",
+    };
+
     /// <summary>The sections this check governs. Anything else in configuration is left alone.</summary>
     public static readonly IReadOnlyList<string> GovernedSections =
-        ["Authentication", "Providers", "Limits", "Confirmation", "Development", "RateLimit", "HttpTransport"];
+        ["Authentication", "Providers", "Limits", "Confirmation", "Development", "RateLimit", "HttpTransport", "Kestrel"];
 
     /// <summary>
     /// Whether <paramref name="key"/> is a setting the server reads in a governed section. The same
@@ -130,6 +144,10 @@ public static partial class SettingsAllowlist
                 if (Retired.TryGetValue(key, out var why))
                 {
                     problems.Add($"'{key}' is retired: {why}");
+                }
+                else if (NothingHonoured.TryGetValue(section, out var because))
+                {
+                    problems.Add($"'{key}' is not a setting this server honours: {because}");
                 }
                 else if (!patterns.Any(p => p.Pattern.IsMatch(key)))
                 {

@@ -161,9 +161,16 @@ public class TransportAndPrincipalTests
     [InlineData("[::]")]
     [InlineData("::")]
     [InlineData(" * ")]
+    // The filter honours *.example.com as every name under example.com: *.com and *. admit nearly any
+    // host, and a subdomain wildcard admits names nobody listed.
+    [InlineData("*.com")]
+    [InlineData("*.")]
+    [InlineData("*.example.com")]
+    // A full-width asterisk: where the runtime has ICU, the filter's punycode conversion folds it into *.
+    [InlineData("\uFF0A")]
     public void G12_2_a_wildcard_allowed_host_is_refused_naming_its_key(string entry)
     {
-        // At any index, and on a loopback bind too: the entry switches the filter off wherever it is.
+        // At any index, and on a loopback bind too: the entry widens the filter wherever it is.
         var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(Config(new()
         {
             ["HttpTransport:BindAddress"] = "localhost",
@@ -172,6 +179,76 @@ public class TransportAndPrincipalTests
         })));
 
         Assert.StartsWith("HttpTransport:AllowedHosts:1 is", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2) — the filter does not match an entry as written: it converts it to
+    /// punycode first (IdnMapping, which on a runtime with ICU applies Unicode's IDNA mapping), and
+    /// compares names exactly. Each of these is refused rather than left to mean what the conversion
+    /// makes of it: a soft hyphen or a zero-width space vanishes beside *, full-width digits, an
+    /// ideographic full stop and full-width colons fold into 0.0.0.0 and [::] — each switched filtering
+    /// off on such a runtime — and a trailing dot is another name than the one without it. An
+    /// internationalised name is written in its punycode form.
+    /// </summary>
+    [Theory]
+    [InlineData("*\u00AD")]
+    [InlineData("*\u200B")]
+    [InlineData("\uFF10.\uFF10.\uFF10.\uFF10")]
+    [InlineData("0\u30020\u30020\u30020")]
+    [InlineData("[\uFF1A\uFF1A]")]
+    [InlineData("b\u00FCcher.example")]
+    [InlineData("mcp.example.com.")]
+    public void G12_2_an_allowed_host_the_filter_would_not_match_as_written_is_refused_naming_its_key(string entry)
+    {
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(Config(new()
+        {
+            ["HttpTransport:BindAddress"] = "0.0.0.0",
+            ["HttpTransport:AllowedHosts:0"] = entry,
+        })));
+
+        Assert.StartsWith("HttpTransport:AllowedHosts:0 is", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2) — belt and braces: the host filter's own matcher is asked, over the final
+    /// list, whether it admits a random name under .invalid, bare and with a trailing dot. The entry
+    /// rules refuse every spelling that would, so this is reached only through the list itself.
+    /// </summary>
+    [Theory]
+    [InlineData("*")]
+    [InlineData("*.invalid")]
+    [InlineData("*.")]
+    public void G12_2_a_list_the_filter_would_widen_is_refused_by_the_filters_own_matcher(string pattern)
+    {
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.RefuseHostsNobodyNamed(["mcp.example.com", pattern]));
+
+        Assert.StartsWith("HttpTransport:AllowedHosts (mcp.example.com, ", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(".invalid", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void G12_2_the_filters_own_matcher_passes_names_and_the_loopback_default()
+    {
+        HttpServerComposition.RefuseHostsNobodyNamed(["mcp.example.com", "10.1.2.3", "[::1]"]);
+        HttpServerComposition.RefuseHostsNobodyNamed(HttpServerComposition.AllowedHosts(Config([])));
+    }
+
+    [Theory]
+    [InlineData("xn--bcher-kva.example")]
+    [InlineData("MCP.Example.com")]
+    [InlineData("10.1.2.3")]
+    [InlineData("[::1]")]
+    public void G12_2_a_host_named_as_the_filter_matches_it_binds(string entry)
+    {
+        // The controls for the rows above: a punycode name, capitals (the filter ignores case) and
+        // address literals each name one host, and pass.
+        var hosts = HttpServerComposition.AllowedHosts(Config(new()
+        {
+            ["HttpTransport:BindAddress"] = "0.0.0.0",
+            ["HttpTransport:AllowedHosts:0"] = entry,
+        }));
+
+        Assert.Equal([entry], hosts);
     }
 
     [Fact]

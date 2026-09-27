@@ -105,6 +105,7 @@ export Transport=http
 export Authentication__Resource=https://localhost:3001/mcp
 export Authentication__IdentityProviders__corp__Authority=https://your-idp/realms/corp
 export Authentication__IdentityProviders__corp__Issuer=https://your-idp/realms/corp
+export Authentication__IdentityProviders__corp__ClientIdClaim=azp        # Keycloak puts the client in azp
 export Authentication__IdentityProviders__corp__Algorithms__0=RS256
 export Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
 export Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
@@ -206,9 +207,9 @@ All settings live in `appsettings.json` and can be overridden via environment va
 | `Transport` | `stdio` | `stdio` or `http` |
 | `HttpTransport:Port` | `3001` | HTTP listen port |
 | `HttpTransport:BindAddress` | `localhost` | Bind address (`localhost`, `0.0.0.0`, etc.). Any bind that is not loopback needs `HttpTransport:AllowedHosts` |
-| `HttpTransport:AllowedHosts` | loopback names | The host names clients use (`mcp.example.com`). Required off loopback; `*`, `0.0.0.0`, `[::]` and `::` are refused |
+| `HttpTransport:AllowedHosts` | loopback names | The host names clients use (`mcp.example.com`), each written exactly: ASCII (punycode for an internationalised name), no `*`, no trailing dot. Required off loopback; `0.0.0.0`, `[::]` and `::` are refused |
 | `HttpTransport:AllowedOrigins` | `[]` | CORS allowed origins (empty = deny all) |
-| `Authentication:IdentityProviders:{name}:*` | — | Authority, issuer, algorithms and scope catalog per identity provider (HTTP) |
+| `Authentication:IdentityProviders:{name}:*` | — | Authority, issuer, algorithms, scope catalog and client claim per identity provider (HTTP). The client claim (`ClientIdClaim`) is exactly one of `azp` (Keycloak, Entra ID v2), `cid` (Okta), `appid` (Entra ID v1) or `client_id` (the default) |
 | `Providers:Enabled` | — | The providers this deployment serves. Required outside Development |
 | `Providers:{Name}:IdentityProvider` | — | The one identity provider a provider answers to. Required |
 | `Limits:Redis` | — | Redis connection string for per-caller limits and used confirmations. Required outside Development |

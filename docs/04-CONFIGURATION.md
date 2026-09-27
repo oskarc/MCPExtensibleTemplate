@@ -4,7 +4,7 @@
 
 The MCP Server Template uses a hierarchical configuration system where settings can come from multiple sources, with clear precedence rules. This guide explains every setting the server reads and how to set them.
 
-One rule shapes everything below: **in the sections the frame governs — `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development`, `HttpTransport` — a key the server does not read stops it from starting.** A misspelled key is otherwise ignored silently, and an operator believes it is in force. The startup message names the key and the nearest real one.
+One rule shapes everything below: **in the sections the frame governs — `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development`, `HttpTransport` and `Kestrel` — a key the server does not read stops it from starting.** A misspelled key is otherwise ignored silently, and an operator believes it is in force. The startup message names the key and the nearest real one. `Kestrel` holds no key the server reads: the server configures its own listener from `HttpTransport`, so any `Kestrel` key stops it, with the reason.
 
 ---
 
@@ -153,7 +153,10 @@ export HttpTransport__Port=8080
 #### `HttpTransport:AllowedHosts`
 - **Type**: `string[]`
 - **Default**: `localhost`, `127.0.0.1`, `[::1]` when bound to loopback; **required** on any other bind address
-- **Description**: The `Host` header values this server answers for. Stops DNS rebinding. Set it to the host names clients use, for example `mcp.example.com`. The server refuses to start if an entry is `*`, `0.0.0.0`, `[::]` or `::`: the first three switch host filtering off entirely, and the last is the IPv6 any-address.
+- **Description**: The `Host` header values this server answers for. Stops DNS rebinding. Set it to the host names clients use, for example `mcp.example.com`, each one name written exactly as the host filter matches it: ASCII (an internationalised name in its punycode form, which begins `xn--`), with no `*` anywhere and no trailing dot. The server refuses to start on any other entry — `*.example.com` admits every name under `example.com`, `*.com` nearly any host, and a non-ASCII entry can fold into `*` as the filter converts it — and on `0.0.0.0`, `[::]` or `::`: the first two switch host filtering off entirely, and the last is the IPv6 any-address.
+
+#### `Kestrel`
+- **Description**: Not read. The server configures its listener itself, from `HttpTransport:BindAddress` and `HttpTransport:Port`; Kestrel's own endpoints would bind around them and around the host allowlist chosen for that address. Any `Kestrel` key stops the server from starting.
 
 #### `HttpTransport:AllowedOrigins`
 - **Type**: `string[]`
@@ -174,6 +177,7 @@ Required for `Transport=http`. Callers present a bearer token issued by one of t
 #### `Authentication:Resource`
 - **Type**: `string` — an absolute `https` URI whose path is `/mcp`, for example `https://mcp.example.com/mcp`
 - **Description**: This server's identity as an OAuth resource, and the URL a client connects to: MCP answers at `/mcp`, and the server refuses to start when the resource's path (a trailing slash aside) is anything else. Every identity provider must issue tokens whose audience is exactly this value. Published in the protected-resource metadata at `/.well-known/oauth-protected-resource/mcp` — RFC 9728's location for the resource, and the URL the `401` challenge names.
+- **Written exactly**: it is published as written, and every token's audience must equal it character for character, so the server holds the string, not what it parses to. A query, a fragment, user information, a backslash, percent-encoding or a dot-segment (`/./`, `/../`) stops the server from starting, as does a path of `/mcp` with more than one trailing slash.
 
 #### `Authentication:IdentityProviders:{name}:*`
 
@@ -181,14 +185,14 @@ One section per identity provider, under a name of your choosing (the examples u
 
 | Key | Required | Description |
 |-----|----------|-------------|
-| `Authentication:IdentityProviders:{name}:Authority` | Yes | Absolute `https` URI; discovery and signing keys are fetched from it |
-| `Authentication:IdentityProviders:{name}:Issuer` | Yes | Absolute `https` URI; the exact `iss` value tokens must carry, and the authorization server the protected-resource metadata sends clients to (which may differ from the authority, for example by a trailing slash) |
+| `Authentication:IdentityProviders:{name}:Authority` | Yes | Absolute `https` URI with no query, fragment or user information; discovery and signing keys are fetched from it |
+| `Authentication:IdentityProviders:{name}:Issuer` | Yes | Absolute `https` URI with no query, fragment or user information; the exact `iss` value tokens must carry, and the authorization server the protected-resource metadata sends clients to (which may differ from the authority, for example by a trailing slash) |
 | `Authentication:IdentityProviders:{name}:Algorithms` | Yes | One or more of `RS256`, `PS256`, `ES256` |
 | `Authentication:IdentityProviders:{name}:ScopeCatalog` | Yes | Every scope this identity provider may assert; no wildcards |
 | `Authentication:IdentityProviders:{name}:ScopeClaim` | No | The claim carrying scopes: `scope` (default; Keycloak, Auth0) or `scp` (Entra ID) |
-| `Authentication:IdentityProviders:{name}:ClientIdClaim` | No | The claim naming the calling client, which every token must carry: `client_id` (default), `azp` (Keycloak, Entra ID v2), `cid` (Okta) or `appid` (Entra ID v1). A registered claim (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`) or the provider's `ScopeClaim` is refused at startup |
+| `Authentication:IdentityProviders:{name}:ClientIdClaim` | No | The claim naming the calling client, which every token must carry. It must be exactly one of four, the one your identity provider puts the client in: `azp` (Keycloak, Entra ID v2), `cid` (Okta), `appid` (Entra ID v1) or `client_id` (RFC 9068's JWT access token profile; the default). Anything else is refused at startup |
 
-Tokens must also carry `sub`, `jti`, the claim `ClientIdClaim` names, and `iat`, and are refused over 8 KB.
+Tokens must also carry `sub`, `jti`, the claim `ClientIdClaim` names, and `iat`, and are refused over 8 KB. The default is `client_id`; Keycloak and Entra ID v2 name the client in `azp`, Okta in `cid` and Entra ID v1 in `appid`, so set `ClientIdClaim` for those, as the Keycloak examples below do — a token without the claim it names is refused.
 
 #### `Authentication:AdminIdentityProvider`
 - **Type**: `string`
@@ -196,10 +200,11 @@ Tokens must also carry `sub`, `jti`, the claim `ClientIdClaim` names, and `iat`,
 - **Description**: The one identity provider whose `mcp:admin` scope is honoured. When set, it must name a configured identity provider whose catalog contains `mcp:admin`. (The administrative plane itself arrives in a later phase.)
 
 ```bash
-# An identity provider named corp, from environment variables
+# An identity provider named corp (a Keycloak realm), from environment variables
 export Authentication__Resource=https://mcp.example.com/mcp
 export Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
 export Authentication__IdentityProviders__corp__Issuer=https://login.example.com/realms/corp
+export Authentication__IdentityProviders__corp__ClientIdClaim=azp        # Keycloak puts the client in azp
 export Authentication__IdentityProviders__corp__Algorithms__0=RS256
 export Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
 export Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
@@ -313,7 +318,7 @@ With no identity providers configured, a stdio run synthesizes one per name the 
 
 #### `Serilog:WriteTo`
 - **Type**: `array`
-- **Description**: Where logs are written. The console sink writes to **stderr**, so stdout stays clean for the MCP protocol. Every `File` sink, at any index (and in a sub-logger), is checked at startup: a path containing `..`, or one the process cannot write — resolved against the working directory, as the sink resolves it — stops the server, naming the resolved path. A sink that fails later (a full disk, a removed directory, a sink name Serilog does not know) is reported by Serilog's self-log, which also goes to stderr.
+- **Description**: Where logs are written. The console sink writes to **stderr**, so stdout stays clean for the MCP protocol. Every `File` sink, at any index (and in a sub-logger), is checked at startup where it will write: its path with any `%VARIABLE%` expanded, as Serilog's reader expands it, and resolved against the working directory, as the sink resolves it. A path that contains `..` once expanded, a directory the process cannot write, or an existing file at that path it cannot append to stops the server, naming the resolved path; the check leaves nothing behind. A sink that fails later (a full disk, a removed directory, a rolling sink's dated file it cannot open, a sink name Serilog does not know) is reported by Serilog's self-log, which also goes to stderr.
 
 ---
 
@@ -390,6 +395,7 @@ services:
       - Authentication__Resource=https://mcp.example.com/mcp
       - Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
       - Authentication__IdentityProviders__corp__Issuer=https://login.example.com/realms/corp
+      - Authentication__IdentityProviders__corp__ClientIdClaim=azp
       - Authentication__IdentityProviders__corp__Algorithms__0=RS256
       - Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
       - Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
@@ -461,6 +467,7 @@ export Transport=http
 export Authentication__Resource=https://localhost:3001/mcp
 export Authentication__IdentityProviders__corp__Authority=https://your-idp/realms/corp
 export Authentication__IdentityProviders__corp__Issuer=https://your-idp/realms/corp
+export Authentication__IdentityProviders__corp__ClientIdClaim=azp        # Keycloak puts the client in azp
 export Authentication__IdentityProviders__corp__Algorithms__0=RS256
 export Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
 export Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
@@ -498,6 +505,7 @@ export Limits__Redis=redis.internal:6379
 export Authentication__Resource=https://mcp.example.com/mcp
 export Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
 export Authentication__IdentityProviders__corp__Issuer=https://login.example.com/realms/corp
+export Authentication__IdentityProviders__corp__ClientIdClaim=azp        # Keycloak puts the client in azp
 export Authentication__IdentityProviders__corp__Algorithms__0=RS256
 export Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
 export Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
@@ -551,10 +559,12 @@ Every one of these stops the server at startup, with a message saying what to fi
 | A governed key the server does not read, or a retired one | A setting that is ignored answers a question falsely |
 | `Transport=stdio` outside Development | stdio authenticates nobody |
 | HTTP with no identity provider, or with a non-`https` authority, issuer or resource | The server could verify no token, would fetch keys over plaintext, or would send clients to a plaintext issuer |
-| A resource whose path is not `/mcp` | MCP answers at `/mcp`; a client connecting to the resource URL would find nothing |
-| A `ClientIdClaim` that is a registered JWT claim or the provider's `ScopeClaim` | Every token carries it, or it means something else: the client requirement would be off |
-| A `File` log sink whose path contains `..`, or that cannot write where it resolves | A sink that cannot write writes nothing and says nothing |
-| A bind address that is not loopback with no `HttpTransport:AllowedHosts`, or an allowed host of `*`, `0.0.0.0`, `[::]` or `::` | Host filtering would be off, and DNS rebinding could make a browser a client |
+| An authority or issuer with a query, a fragment or user information | An issuer identifier has neither (RFC 8414), and is published as written; discovery is fetched from paths appended to the authority |
+| A resource whose path is not `/mcp`, or that is not written as clients connect to it (a query, fragment, user information, backslash, percent-encoding or dot-segment) | MCP answers at `/mcp`; the resource is published as written, and every audience must equal it exactly |
+| A `ClientIdClaim` other than `azp`, `cid`, `appid` or `client_id`, or equal to the provider's `ScopeClaim` | A claim every token carries, or one that means something else, would switch the client requirement off |
+| A `File` log sink whose path contains `..` once expanded, or that cannot write where it resolves | A sink that cannot write writes nothing and says nothing |
+| A bind address that is not loopback with no `HttpTransport:AllowedHosts`, or an allowed host that is not one name written as the filter matches it (any `*`, a non-ASCII character, a trailing dot) or is `0.0.0.0`, `[::]` or `::` | Host filtering would be off or wider than written, and DNS rebinding could make a browser a client |
+| Any `Kestrel` key | Kestrel's endpoints would bind around `HttpTransport:BindAddress` and the host allowlist chosen for it |
 | Production without a declared proxy | Bearer tokens over plaintext can be read and replayed |
 | `Providers:Enabled` missing outside Development, or naming an unknown provider | A deployment says which providers it serves |
 | A provider with no `IdentityProvider`, or one not configured | A provider with no trust domain would be reachable from all of them |
@@ -572,6 +582,14 @@ Every one of these stops the server at startup, with a message saying what to fi
 **Cause**: A key in `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development` or `HttpTransport` is misspelled, or belongs to a provider this server does not have.
 
 **Fix**: Use the key the message suggests, or remove it.
+
+---
+
+### "'Kestrel…' is not a setting this server honours"
+
+**Cause**: A key under `Kestrel`, which would configure the listener around the server's own checks.
+
+**Fix**: Remove it. Set `HttpTransport:BindAddress` and `HttpTransport:Port`; terminate TLS at the proxy named in `HttpTransport:KnownProxies`.
 
 ---
 

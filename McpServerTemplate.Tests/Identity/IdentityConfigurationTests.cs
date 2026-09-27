@@ -61,6 +61,15 @@ public class IdentityConfigurationTests
     [InlineData("Authentication:IdentityProviders:corp:Issuer", "http://login.example.com/", "Issuer must be an absolute https URI")]
     [InlineData("Authentication:IdentityProviders:corp:Issuer", "login.example.com", "Issuer must be an absolute https URI")]
     [InlineData("Authentication:IdentityProviders:corp:ScopeClaim", "", "ScopeClaim")]
+    // contract-005 · G-12 (4) — an issuer identifier has no query or fragment (RFC 8414 §2), and is
+    // published as written; discovery and keys are fetched from paths appended to the Authority. User
+    // information in either is a credential in a URL.
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://login.example.com/?tenant=corp", "Issuer must not carry a query")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://login.example.com/#corp", "Issuer must not carry a fragment")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://user:secret@login.example.com/", "Issuer must not carry user information")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "https://login.example.com?tenant=corp", "Authority must not carry a query")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "https://login.example.com#corp", "Authority must not carry a fragment")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "https://user:secret@login.example.com", "Authority must not carry user information")]
     public void T9_a_malformed_setting_is_refused_by_name(string key, string value, string named)
     {
         var settings = Wellformed();
@@ -94,6 +103,33 @@ public class IdentityConfigurationTests
         Assert.Contains("/mcp", ex.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// contract-005 · G-12 (1) — the Resource is held as written, because the string is what the
+    /// metadata publishes and what every token's audience must equal. Parsed, each of these is the /mcp
+    /// endpoint — dot-segments resolved, %6D decoded, \ turned into /, the query, fragment and user
+    /// information set aside — and each bound, publishing a resource no client connects to.
+    /// </summary>
+    [Theory]
+    [InlineData("https://mcp.example.com/./mcp")]
+    [InlineData("https://mcp.example.com/x/../mcp")]
+    [InlineData("https://mcp.example.com/%6Dcp")]
+    [InlineData("https://mcp.example.com/mcp#frag")]
+    [InlineData("https://mcp.example.com/mcp?x")]
+    [InlineData("https://mcp.example.com/mcp//")]
+    [InlineData("https://mcp.example.com/mcp\\")]
+    [InlineData("https://user@mcp.example.com/mcp")]
+    [InlineData("https://user:secret@mcp.example.com/mcp")]
+    public void T9_a_resource_whose_path_is_mcp_only_once_parsed_is_refused(string resource)
+    {
+        var settings = Wellformed();
+        settings["Authentication:Resource"] = resource;
+
+        var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
+
+        Assert.StartsWith("Authentication:Resource", ex.Message, StringComparison.Ordinal);
+        Assert.Contains($"'{resource}'", ex.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void T9_a_resource_at_mcp_with_a_trailing_slash_binds()
     {
@@ -105,8 +141,11 @@ public class IdentityConfigurationTests
 
     /// <summary>
     /// contract-005 · G-12 (3) — ClientIdClaim is required of every token, so a claim every accepted
-    /// token carries, or one that means something else, would require nothing. Without case, because
-    /// that is how the claim is found on the principal.
+    /// token carries, or one that means something else, would require nothing. It must be one of the
+    /// four claims identity providers name the client in, exactly: a validated token's claims are
+    /// found by exact name, so SUB or AZP would find no claim at all. typ, ver, tid, acr, sid,
+    /// auth_time, nonce and amr are on every token of one provider or another, and each passed the
+    /// check that named only the registered claims and the scope claim.
     /// </summary>
     [Theory]
     [InlineData("iss")]
@@ -120,6 +159,15 @@ public class IdentityConfigurationTests
     [InlineData(" jti ")]
     [InlineData("scope")]
     [InlineData("Scope")]
+    [InlineData("typ")]
+    [InlineData("ver")]
+    [InlineData("tid")]
+    [InlineData("acr")]
+    [InlineData("sid")]
+    [InlineData("auth_time")]
+    [InlineData("nonce")]
+    [InlineData("amr")]
+    [InlineData("AZP")]
     public void T9_a_client_claim_that_names_no_client_is_refused(string claim)
     {
         var settings = Wellformed();
@@ -128,6 +176,10 @@ public class IdentityConfigurationTests
         var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
 
         Assert.StartsWith("Authentication:IdentityProviders:corp:ClientIdClaim is", ex.Message, StringComparison.Ordinal);
+        foreach (var name in new[] { "azp", "cid", "appid", "client_id" })
+        {
+            Assert.Contains(name, ex.Message, StringComparison.Ordinal);
+        }
     }
 
     [Theory]

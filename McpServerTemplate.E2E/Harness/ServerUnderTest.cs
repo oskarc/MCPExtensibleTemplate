@@ -228,12 +228,13 @@ public sealed class ServerUnderTest : IAsyncDisposable
     /// same base settings and the same delta as <see cref="StartAsync"/>, and no front and no
     /// self-checks: the outcome is the server's own, either an exit (its code and its stderr) or an
     /// answer on /readyz. A refusal at startup is the outcome a test asserts, so it is returned here
-    /// rather than thrown.
+    /// rather than thrown. With no front, KnownProxies names an address no container holds
+    /// (<see cref="E2ENetwork.NoFront"/>), so these servers take nothing from the static half.
     /// </summary>
     internal static async Task<StartupOutcome> StartupAsync(
         E2EEnvironment environment, string name, SettingsDelta delta, CancellationToken cancellationToken)
     {
-        var settings = delta.ApplyTo(BaseSettings(E2EEnvironment.Issuers, E2ENetwork.AllocateStatic()));
+        var settings = delta.ApplyTo(BaseSettings(E2EEnvironment.Issuers, E2ENetwork.NoFront));
         var container = new ContainerBuilder(environment.ServerImage)
             .WithNetwork(environment.Network)
             .WithNetworkAliases($"server-{name}")
