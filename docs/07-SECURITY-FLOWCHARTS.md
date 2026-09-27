@@ -210,7 +210,7 @@ flowchart TB
     S5 -->|"no"| R3["401<br/>token claimed A, was signed by B"]
     S5 -->|"yes"| S6{"aud is the resource URI,<br/>exp valid, alg allowed?"}
     S6 -->|"no"| R4["401"]
-    S6 -->|"yes"| S7["Normalise claims with<br/>this provider's mapping<br/>scp or scope; its client claim<br/>azp, cid, appid or client_id"]
+    S6 -->|"yes"| S7["Normalise claims with<br/>this provider's mapping<br/>scp or scope, azp or client_id"]
     S7 --> OUT["Principal<br/>idp, sub, client_id, jti, scopes"]
 
     classDef deny fill:#ffcdd2,stroke:#c62828,color:#000
@@ -220,6 +220,8 @@ flowchart TB
     class S1,S3,S5,S6 gate
     class OUT,S7 pass
 ```
+
+> **Amended 2026-09-27 (contract-005 as built).** The client claim is no longer "azp or client_id" for every provider: each provider names its own in `ClientIdClaim`, which must be exactly one of `azp` (Keycloak, Entra ID v2), `cid` (Okta), `appid` (Entra ID v1) or `client_id` (RFC 9068), and a token without that claim is refused. The issuer is pinned on each provider's own check as well as by routing, and the protected-resource metadata lists each provider's issuer, which must be an https URI with no query, fragment or userinfo.
 
 **What to notice.** Reading `iss` before validating it sounds dangerous and is not: it selects a scheme, nothing more. A token naming issuer A but signed by B dies at the signature check. And an unregistered issuer is refused *before* any network call, so an attacker cannot use a made-up issuer to make the server fetch a URL.
 
