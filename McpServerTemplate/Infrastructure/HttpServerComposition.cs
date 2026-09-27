@@ -4,6 +4,7 @@ using System.Threading.RateLimiting;
 using McpServerTemplate.Infrastructure.Frame;
 using McpServerTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -78,6 +79,9 @@ public static class HttpServerComposition
         builder.Services.AddIdentity(identity, configureIdentityForTests);
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton(identity);
+
+        // ── Data protection: in memory, and no key ring (contract-005 · G-18) ──
+        KeepNoKeyRing(builder.Services);
 
         // ── Kestrel hardening ──
         builder.WebHost.ConfigureKestrel(kestrel =>
@@ -163,6 +167,28 @@ public static class HttpServerComposition
         });
 
         return identity;
+    }
+
+    /// <summary>
+    /// contract-005 · G-18 — data protection, configured explicitly. Authentication registers it as a side effect,
+    /// and nothing in this server protects data with it: JWT bearer, host filtering, CORS, rate limiting, the health
+    /// endpoints and the MCP SDK reference none of it (in the framework, only the cookie and remote sign-in ticket
+    /// formats do, unused here). Left as it came, the framework loaded a key ring at startup — on Windows the user's
+    /// own, from the profile; in the image a key written unencrypted under /home/app/.aspnet, with two warnings saying
+    /// so. An in-memory, ephemeral provider instead, with keys of its own that no disk sees, and no key ring loaded at
+    /// startup: the framework's hosted service that loads one (DataProtectionHostedService) is all that ever read a key
+    /// repository here, so it goes.
+    /// </summary>
+    private static void KeepNoKeyRing(IServiceCollection services)
+    {
+        services.AddDataProtection().UseEphemeralDataProtectionProvider();
+        foreach (var loadsKeyRing in services
+            .Where(d => d.ServiceType == typeof(IHostedService) && !d.IsKeyedService
+                && d.ImplementationType?.Assembly == typeof(DataProtectionOptions).Assembly)
+            .ToArray())
+        {
+            services.Remove(loadsKeyRing);
+        }
     }
 
     /// <summary>
@@ -279,6 +305,16 @@ public static class HttpServerComposition
     /// </summary>
     private static string? BindAddressRefusal(string bindAddress)
     {
+        // Review round 6, addendum — an unset variable in a compose file leaves the address empty, and the server
+        // passed its checks and stopped in Kestrel instead ("Invalid url", exit 70); whitespace alone reads as nothing.
+        if (string.IsNullOrWhiteSpace(bindAddress))
+        {
+            return $"HttpTransport:BindAddress is empty{(bindAddress.Length == 0 ? string.Empty : " but for whitespace")}, as an unset "
+                + "variable in a compose file leaves it: HttpTransport__BindAddress=${MCP_BIND} with MCP_BIND not set. Write the "
+                + "address to listen on: 127.0.0.1 for this machine alone, or 0.0.0.0 behind a proxy, with "
+                + "HttpTransport:AllowedHosts set.";
+        }
+
         if (AddressBeforeAPort(bindAddress) is { } address)
         {
             return $"HttpTransport:BindAddress is '{bindAddress}', which carries a port. The server listens on the port "

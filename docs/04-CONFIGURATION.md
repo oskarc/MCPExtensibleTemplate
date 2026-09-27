@@ -155,7 +155,7 @@ export HttpTransport__Port=8080
   - `"localhost"` or `"127.0.0.1"`: Only accessible from this machine
   - `"0.0.0.0"`: Accessible from any address — only behind a proxy and firewall, and only with `HttpTransport:AllowedHosts` set: on any bind that is not loopback the server refuses to start without it
   - A bind is loopback as Kestrel binds it: `localhost`, or an address as written that is loopback (`::1`, `[::1]`, `0::1`, `127.1`, `127.0.0.2`). Kestrel binds every interface for text it does not read as an address — text in brackets that is not an address, such as `[127.0.0.1]`, brackets that do not close, whitespace around an address, a host name — so the server counts those as not loopback, and its refusal says Kestrel would listen on every interface before it asks for allowed hosts
-  - Write the address alone: the port is `HttpTransport:Port`. The server refuses to start on a bind address that carries a port (`[::1]:9999`, `127.0.0.1:9999`, `localhost:9999`), which it would otherwise ignore, and on an IPv4-mapped address, bracketed or not (`::ffff:127.0.0.1`, `[::ffff:127.0.0.1]`), which Kestrel cannot listen on: write the IPv4 address itself (`127.0.0.1`)
+  - Write the address alone: the port is `HttpTransport:Port`. The server refuses to start on an empty bind address, or one of whitespace alone (an unset variable in a compose file leaves it empty: set `HttpTransport__BindAddress` to the address), on a bind address that carries a port (`[::1]:9999`, `127.0.0.1:9999`, `localhost:9999`), which it would otherwise ignore, and on an IPv4-mapped address, bracketed or not (`::ffff:127.0.0.1`, `[::ffff:127.0.0.1]`), which Kestrel cannot listen on: write the IPv4 address itself (`127.0.0.1`)
 
 #### `HttpTransport:AllowedHosts`
 - **Type**: `string[]`
@@ -178,6 +178,8 @@ export HttpTransport__Port=8080
 ---
 
 ### Authentication Settings
+
+**Data protection is in memory only.** Nothing in the server protects data with it, so it keeps no key material on disk and loads no key ring from the user's profile: an in-memory, ephemeral provider, and no key ring loaded at startup.
 
 Required for `Transport=http`. Callers present a bearer token issued by one of these identity providers.
 
@@ -573,7 +575,7 @@ Every one of these stops the server at startup, with a message saying what to fi
 | A `ClientIdClaim` other than `azp`, `cid`, `appid` or `client_id`, or equal to the provider's `ScopeClaim` | A claim every token carries, or one that means something else, would switch the client requirement off |
 | A `File` log sink whose path contains `..` once expanded, or that cannot write where it resolves | A sink that cannot write writes nothing and says nothing |
 | A bind address that is not loopback as Kestrel binds it (`[127.0.0.1]` binds every interface) with no `HttpTransport:AllowedHosts`, or an allowed host, written out or given by a loopback bind address, that is not one name written as the filter matches it (any `*`, a non-ASCII character, a trailing dot), is `0.0.0.0`, `[::]` or `::`, or is one no request can match (empty, whitespace around it, a port, an IPv6 address without brackets, anything Kestrel never lets a request carry as its `Host`) | Host filtering would be off or wider than written, and DNS rebinding could make a browser a client; or the server would answer `400` to every request meant for that name, and not say why |
-| A bind address that carries a port (`[::1]:9999`, `127.0.0.1:9999`), or is IPv4-mapped (`::ffff:127.0.0.1`, bracketed or not) | The server listens on `HttpTransport:Port` and would ignore the port; Kestrel cannot listen on an IPv4-mapped address |
+| A bind address that is empty or whitespace alone, carries a port (`[::1]:9999`, `127.0.0.1:9999`), or is IPv4-mapped (`::ffff:127.0.0.1`, bracketed or not) | An empty one names nothing to listen on; the server listens on `HttpTransport:Port` and would ignore the port; Kestrel cannot listen on an IPv4-mapped address |
 | Any `Kestrel` key | Kestrel's endpoints would bind around `HttpTransport:BindAddress` and the host allowlist chosen for it |
 | Production without a declared proxy | Bearer tokens over plaintext can be read and replayed |
 | `Providers:Enabled` missing outside Development, or naming an unknown provider | A deployment says which providers it serves |

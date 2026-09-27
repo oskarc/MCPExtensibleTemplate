@@ -90,6 +90,23 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
     }
 
     /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 6 addendum — HttpTransport__BindAddress=${MCP_BIND} in a compose
+    /// file, with MCP_BIND unset: an empty bind address, with the environment's allowed host set. The image used to
+    /// pass its checks and stop in Kestrel, "Invalid url", exit 70; it refuses, naming the key.
+    /// </summary>
+    [Fact]
+    public async Task T11_2_an_empty_bind_address_refuses_to_start_naming_the_key()
+    {
+        const string key = "HttpTransport:BindAddress";
+        await using var outcome = await fixture.Environment.StartupAsync("bind-unset-variable", SettingsDelta.None.Set(key, string.Empty));
+        output.WriteLine(outcome.Describe());
+
+        Assert.True(
+            outcome.ExitCode == 78 && outcome.RefusalLine?.Contains($"{key} is empty", StringComparison.Ordinal) == true,
+            $"{key}= (empty): {outcome.Describe()}");
+    }
+
+    /// <summary>
     /// contract-005 · T-11 (2) (G-12 (2)), review round 6 — an IPv4-mapped bind address refuses to start, naming why,
     /// allowed hosts or none: Kestrel binds any IPv6 address but [::] on an IPv6-only socket, which cannot take an
     /// IPv4-mapped one, so the image used to fail at the bind instead. Here with the environment's allowed host set.

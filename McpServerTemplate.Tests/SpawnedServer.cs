@@ -4,8 +4,7 @@ using System.Diagnostics;
 namespace McpServerTemplate.Tests;
 
 /// <summary>
-/// What every test that spawns the real server gives it, so no spawned server reads anyone's user secrets, and on
-/// Linux none uses anyone's data-protection keys.
+/// What every test that spawns the real server gives it, so no spawned server reads anyone's user secrets.
 ///
 /// contract-005 review round 4 — a server in Development reads the user secrets its assembly names
 /// (UserSecretsId), from a store the framework finds through the APPDATA variable first, on every operating
@@ -14,44 +13,33 @@ namespace McpServerTemplate.Tests;
 /// machine with secrets set could see different results. Each spawned server gets an APPDATA of its own
 /// that no test creates, so its store is always empty. Nothing else the server reads comes from APPDATA.
 ///
-/// Review round 5, addendum 2 — data protection keeps its keys where the framework finds them
-/// (Microsoft.AspNetCore.DataProtection 10.0.1, XmlKeyManager and DefaultKeyStorageDirectories). On Linux, where
-/// the CI job runs these tests, that is through the LOCALAPPDATA variable first, then HOME, so a spawned server
-/// there used the keys in its account's home. It gets the same location as its user secrets, and writes a key of
-/// its own there, under the temp directory; nothing else it reads comes from LOCALAPPDATA (the MCP SDK names it
-/// only for processes its stdio client launches, which this server never does). On Windows LOCALAPPDATA is left
-/// as it is, because no variable moves the keys there: the framework asks the known-folder API first, and that
-/// ignores the environment. Nothing in the server uses data protection — authentication registers it, and the
-/// framework loads the key ring at startup — and a full test run left the developer's key folder unchanged,
-/// checked by its files' names and modified times.
+/// Review round 5, addendum 2 pointed LOCALAPPDATA there too, on Linux, where data protection found its key ring
+/// through that variable, and left it alone on Windows, where no variable moves it: the framework asks the
+/// known-folder API, which ignores the environment. Since contract-005 · G-18 the server keeps no key ring on any
+/// operating system — an in-memory, ephemeral provider, and no key ring loaded at startup (T17_a_spawned_server_loads_
+/// no_key_ring) — so the Windows limitation no longer matters, and the Linux isolation is gone: nothing else the server
+/// reads comes from LOCALAPPDATA.
 /// </summary>
 internal static class SpawnedServer
 {
     /// <summary>
-    /// Points <paramref name="info"/>'s user secrets, and on Linux its data-protection keys, at a location of its own
-    /// that nobody keeps, and returns it. A test that starts the server removes it when it ends (<see cref="Cleanup"/>).
+    /// Points <paramref name="info"/>'s user secrets at a location of its own that nobody keeps, and returns it. A test
+    /// that starts the server removes it when it ends (<see cref="Cleanup"/>).
     /// </summary>
-    public static string IsolateFromTheDeveloper(ProcessStartInfo info) => IsolateFromTheDeveloper(info, OperatingSystem.IsWindows());
-
-    /// <summary>The same, as it is done on Windows or on Linux, so a test on either can check both.</summary>
-    public static string IsolateFromTheDeveloper(ProcessStartInfo info, bool windows)
+    public static string IsolateFromTheDeveloper(ProcessStartInfo info)
     {
         ArgumentNullException.ThrowIfNull(info);
         var root = Path.Combine(Path.GetTempPath(), $"mcp-tests-no-user-secrets-{Guid.NewGuid():N}");
         info.Environment["APPDATA"] = root;
-        if (!windows)
-        {
-            info.Environment["LOCALAPPDATA"] = root;
-        }
-
         return root;
     }
 
     /// <summary>
     /// contract-005 review round 5 — nothing left behind: the locations a test's spawned servers were given, and the
     /// servers, ended when the test ends — its class's Dispose, which xUnit calls after every test, passed or failed.
-    /// A server still running is stopped, and every server has exited before any location is removed: on Linux a
-    /// server writes its data-protection key there, and on Windows a file it holds open cannot be removed.
+    /// A server still running is stopped, and every server has exited before any location is removed: a server can
+    /// write there (a File log sink under %APPDATA%, as the test that proves this gives one), and on Windows a file it
+    /// holds open cannot be removed.
     /// </summary>
     internal sealed class Cleanup : IDisposable
     {
@@ -95,32 +83,6 @@ internal static class SpawnedServer
                 }
             }
         }
-    }
-
-    /// <summary>
-    /// The directory ASP.NET Core's data protection keeps its keys in, on Linux, for a process with
-    /// <paramref name="environment"/>: the framework's own order (Microsoft.AspNetCore.DataProtection 10.0.1,
-    /// XmlKeyManager and DefaultKeyStorageDirectories) — Azure App Service's, where WEBSITE_INSTANCE_ID and HOME are
-    /// set, then LOCALAPPDATA, then HOME. Null where it would come from the account's entry, HOME being unset. A path
-    /// only; nothing is read or listed.
-    /// </summary>
-    public static string? KeyDirectoryOnLinux(IDictionary<string, string?> environment)
-    {
-        ArgumentNullException.ThrowIfNull(environment);
-
-        var home = environment.TryGetValue("HOME", out var h) ? h : null;
-        var website = environment.TryGetValue("WEBSITE_INSTANCE_ID", out var w) ? w : null;
-        if (!string.IsNullOrEmpty(website) && !string.IsNullOrEmpty(home))
-        {
-            return Path.Combine(home, "ASP.NET", "DataProtection-Keys");
-        }
-
-        if (environment.TryGetValue("LOCALAPPDATA", out var localAppData) && localAppData is not null)
-        {
-            return Path.Combine(localAppData, "ASP.NET", "DataProtection-Keys");
-        }
-
-        return string.IsNullOrEmpty(home) ? null : Path.Combine(home, ".aspnet", "DataProtection-Keys");
     }
 
     /// <summary>

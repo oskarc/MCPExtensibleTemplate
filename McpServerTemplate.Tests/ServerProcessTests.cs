@@ -202,28 +202,19 @@ public sealed class ServerProcessTests : IDisposable
     }
 
     /// <summary>
-    /// contract-005 review round 5, addendum 2 — on Linux, where the CI job runs these tests, a spawned server keeps no
-    /// one's data-protection keys: the directory it resolves, by the framework's own order, lies beside its user
-    /// secrets, in the location nobody keeps. On Windows the variable is left as this process has it, because no
-    /// variable moves the keys there (SpawnedServer says why). Paths only; nothing is read or listed.
+    /// contract-005 review round 5, addendum 2, then G-18 — a spawned server is given no key location. Addendum 2 gave
+    /// it one on Linux, beside its user secrets, for data protection's key ring; since G-18 the server loads no key
+    /// ring on any operating system (T17_a_spawned_server_loads_no_key_ring), so LOCALAPPDATA is left as this process
+    /// has it everywhere (SpawnedServer says why). Paths only; nothing is read or listed.
     /// </summary>
     [Fact]
-    public void T3_a_spawned_server_on_linux_resolves_a_key_directory_nobody_keeps()
+    public void T3_a_spawned_server_is_given_no_key_location_since_it_loads_no_key_ring()
     {
-        var linux = new ProcessStartInfo("server");
-        SpawnedServer.IsolateFromTheDeveloper(linux, windows: false);
-        var root = linux.Environment["APPDATA"]!;
-        var keys = SpawnedServer.KeyDirectoryOnLinux(linux.Environment);
-        Assert.True(
-            keys == Path.Combine(root, "ASP.NET", "DataProtection-Keys"),
-            $"a spawned server on Linux keeps its data-protection keys in {keys ?? "its account's home"}, not beside its user "
-            + $"secrets in {root}.");
-
-        var windows = new ProcessStartInfo("server");
-        SpawnedServer.IsolateFromTheDeveloper(windows, windows: true);
+        var info = new ProcessStartInfo("server");
+        SpawnedServer.IsolateFromTheDeveloper(info);
         Assert.Equal(
             Environment.GetEnvironmentVariable("LOCALAPPDATA"),
-            windows.Environment.TryGetValue("LOCALAPPDATA", out var local) ? local : null);
+            info.Environment.TryGetValue("LOCALAPPDATA", out var local) ? local : null);
     }
 
     /// <summary>
@@ -862,6 +853,67 @@ public sealed class ServerProcessTests : IDisposable
                 bracketed == HttpStatusCode.OK && named == HttpStatusCode.OK,
                 $"a server bound to {bindAddress}, which Kestrel binds as [::1], with no AllowedHosts, answered GET /healthz at "
                 + $"http://[::1]:{port} with {(int?)bracketed} and at http://localhost:{port} with {(int?)named}. {spawned.Stderr}");
+        }
+        finally
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 6 addendum — an empty bind address refuses to start, naming
+    /// the key. With an allowed host set, as a compose file with an unset variable leaves it, the server used to
+    /// pass its checks and stop in Kestrel instead: "Invalid url", exit 70.
+    /// </summary>
+    [Fact]
+    public async Task T11_2_an_empty_bind_address_refuses_to_start_naming_the_key()
+    {
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = string.Empty;
+        environment["HttpTransport__AllowedHosts__0"] = "mcp.example.com";
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        var (exitCode, stderr) = await RunToCompletionAsync(environment);
+
+        Assert.True(
+            exitCode == 78 && stderr.Contains("HttpTransport:BindAddress is empty", StringComparison.Ordinal),
+            $"a server with an empty HttpTransport:BindAddress exited {exitCode}: {stderr}");
+    }
+
+    /// <summary>
+    /// contract-005 · T-17 (G-18) — a spawned server loads no key ring. Data protection came with authentication,
+    /// unused, and at startup the framework loaded a key ring for it: on Windows the user's own, from the profile's
+    /// ASP.NET\DataProtection-Keys, saying so on the log. Development, whose log carries that Information line.
+    /// </summary>
+    [Fact]
+    public async Task T17_a_spawned_server_loads_no_key_ring()
+    {
+        var port = FreePort();
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "127.0.0.1";
+
+        // Development serves the demo provider's writing tool, whose scope the catalog must hold.
+        environment["Authentication__IdentityProviders__corp__ScopeCatalog__3"] = "demo:write";
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        var spawned = Start(environment);
+        using var process = spawned.Process;
+        try
+        {
+            Assert.True(await AnswerWithinAsync(http, port, TimeSpan.FromSeconds(60)) == HttpStatusCode.OK, $"the server did not come up: {spawned.Stderr}");
+
+            var keyRing = spawned.Stderr.Split('\n')
+                .Where(l => l.Contains("DataProtection", StringComparison.Ordinal) || l.Contains("key repository", StringComparison.OrdinalIgnoreCase))
+                .Select(l => l.Trim())
+                .ToList();
+            Assert.True(keyRing.Count == 0, $"a spawned server loaded a key ring: {string.Join(" | ", keyRing)}");
         }
         finally
         {

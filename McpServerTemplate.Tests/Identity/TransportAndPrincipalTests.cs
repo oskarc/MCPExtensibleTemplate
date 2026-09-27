@@ -479,6 +479,29 @@ public class TransportAndPrincipalTests
     }
 
     /// <summary>
+    /// contract-005 · G-12 (2), review round 6 addendum — an empty bind address, or one of whitespace alone, refuses
+    /// to start naming the key, allowed hosts or none. An unset variable in a compose file leaves it empty, and the
+    /// server used to pass its checks and stop in Kestrel instead, "Invalid url", exit 70.
+    /// </summary>
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("", false)]
+    [InlineData("   ", true)]
+    [InlineData("   ", false)]
+    public void G12_2_an_empty_bind_address_is_refused_naming_the_key(string bindAddress, bool allowedHosts)
+    {
+        var settings = new Dictionary<string, string?> { ["HttpTransport:BindAddress"] = bindAddress };
+        if (allowedHosts)
+        {
+            settings["HttpTransport:AllowedHosts:0"] = "mcp.example.com";
+        }
+
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(Config(settings)));
+
+        Assert.StartsWith("HttpTransport:BindAddress is empty", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// contract-005 · G-12 (2), review round 6 — an IPv4-mapped bind address refuses to start, bracketed or not, and
     /// allowed hosts or none: Kestrel binds any IPv6 address but [::] on an IPv6-only socket, which cannot take an
     /// IPv4-mapped one. [::ffff:127.0.0.1] counted as loopback, and the server then failed to bind it.
