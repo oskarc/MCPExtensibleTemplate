@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Reflection;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -96,6 +97,11 @@ public class ServerProcessTests
     /// </param>
     /// <param name="arguments">The server's command line.</param>
     private static Spawned Start(
+        IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null, IReadOnlyList<string>? arguments = null) =>
+        new(Process.Start(StartInfo(environment, redirectStdin, workingDirectory, arguments))!);
+
+    /// <summary>How <see cref="Start"/> starts the server: the same parameters.</summary>
+    private static ProcessStartInfo StartInfo(
         IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null, IReadOnlyList<string>? arguments = null)
     {
         var exe = ServerExecutable();
@@ -116,12 +122,76 @@ public class ServerProcessTests
         // change what these tests assert.
         info.Environment.Remove("ASPNETCORE_ENVIRONMENT");
         info.Environment.Remove("DOTNET_ENVIRONMENT");
+
+        // contract-005 review round 4 — nor the developer's own user secrets: a store nobody keeps, unless the
+        // test names one.
+        SpawnedServer.ReadNoUserSecrets(info);
         foreach (var (key, value) in environment)
         {
             info.Environment[key] = value;
         }
 
-        return new Spawned(Process.Start(info)!);
+        return info;
+    }
+
+    /// <summary>
+    /// contract-005 review round 4 — a spawned server reads no one's user secrets: the store it resolves,
+    /// by the framework's own order, is never the one this process resolves (the developer's), and lies in
+    /// a location nobody keeps. Paths only — neither store is opened or listed.
+    /// </summary>
+    [Theory]
+    [InlineData("Development", "stdio")]
+    [InlineData("Development", "http")]
+    [InlineData("Production", "http")]
+    public void T3_a_spawned_server_resolves_a_user_secrets_store_nobody_keeps(string environmentName, string transport)
+    {
+        var serverSecrets = typeof(McpServerTemplate.Infrastructure.HostBuilders).Assembly
+            .GetCustomAttribute<Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute>()!.UserSecretsId;
+        var developers = Microsoft.Extensions.Configuration.UserSecrets.PathHelper.GetSecretsPathFromSecretsId(serverSecrets);
+
+        // Positive control: the order followed here gives the framework's own answer for this process.
+        Assert.Equal(developers, SpawnedServer.UserSecretsPath(SpawnedServer.CurrentEnvironment(), serverSecrets));
+
+        var info = StartInfo(new Dictionary<string, string> { ["ASPNETCORE_ENVIRONMENT"] = environmentName, ["Transport"] = transport });
+        var spawned = SpawnedServer.UserSecretsPath(info.Environment, serverSecrets);
+        Assert.True(
+            spawned != developers && spawned.StartsWith(Path.GetTempPath(), StringComparison.OrdinalIgnoreCase)
+                && !Directory.Exists(Path.GetDirectoryName(spawned)),
+            $"a spawned {environmentName} {transport} server resolves its user secrets (UserSecretsId {serverSecrets}) to "
+            + (spawned == developers ? "the store this process resolves: the developer's own." : "a location this test does not own."));
+    }
+
+    /// <summary>
+    /// The control for the rows above: the variable set there is the one the real server finds its store
+    /// by. Given an APPDATA of this test's own, holding a store with a setting the server does not read, a
+    /// Development server reads that store, and refuses the setting, naming it.
+    /// </summary>
+    [Fact]
+    public async Task T3_a_spawned_server_reads_user_secrets_only_from_the_store_it_is_given()
+    {
+        var appData = Directory.CreateTempSubdirectory("mcp-tests-user-secrets-").FullName;
+        try
+        {
+            var serverSecrets = typeof(McpServerTemplate.Infrastructure.HostBuilders).Assembly
+                .GetCustomAttribute<Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute>()!.UserSecretsId;
+            var store = SpawnedServer.UserSecretsPath(new Dictionary<string, string?> { ["APPDATA"] = appData }, serverSecrets);
+            Directory.CreateDirectory(Path.GetDirectoryName(store)!);
+            await File.WriteAllTextAsync(store, """{ "Limits": { "OnlyInTheTestStore": "1" } }""");
+
+            var (exitCode, stderr) = await RunToCompletionAsync(new Dictionary<string, string>
+            {
+                ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                ["Transport"] = "stdio",
+                ["APPDATA"] = appData,
+            });
+
+            Assert.Equal(78, exitCode);
+            Assert.Contains("'Limits:OnlyInTheTestStore' is not a setting this server reads", stderr, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(appData, recursive: true);
+        }
     }
 
     private static async Task<(int ExitCode, string Stderr)> RunToCompletionAsync(

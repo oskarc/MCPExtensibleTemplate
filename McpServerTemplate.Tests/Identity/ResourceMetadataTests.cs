@@ -60,6 +60,9 @@ public class ResourceMetadataTests
         };
         info.Environment.Remove("ASPNETCORE_ENVIRONMENT");
         info.Environment.Remove("DOTNET_ENVIRONMENT");
+
+        // contract-005 review round 4 — no spawned server reads anyone's user secrets (SpawnedServer).
+        SpawnedServer.ReadNoUserSecrets(info);
         info.Environment["ASPNETCORE_ENVIRONMENT"] = "Production";
         info.Environment["Transport"] = "http";
         info.Environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
