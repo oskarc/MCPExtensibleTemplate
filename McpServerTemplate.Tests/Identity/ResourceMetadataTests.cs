@@ -12,8 +12,14 @@ namespace McpServerTemplate.Tests.Identity;
 /// all, so a client with no token had nowhere to go. RFC 9728 says the challenge must point at
 /// the metadata document, and that document is how a client discovers where to authenticate.
 /// </summary>
-public class ResourceMetadataTests
+public sealed class ResourceMetadataTests : IDisposable
 {
+    // contract-005 review round 5 — what this test's server was given, and the server, ended when the test ends
+    // (SpawnedServer.Cleanup).
+    private readonly SpawnedServer.Cleanup _cleanup = new();
+
+    public void Dispose() => _cleanup.Dispose();
+
     private static string RepositoryRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -37,7 +43,7 @@ public class ResourceMetadataTests
 
     /// Starts the server over HTTP and drains its stderr, which a redirected pipe requires —
     /// an undrained one fills and the server blocks mid-request (drift-003).
-    private static async Task<(Process Process, HttpClient Client, StringBuilder Stderr)> StartAsync()
+    private async Task<(Process Process, HttpClient Client, StringBuilder Stderr)> StartAsync()
     {
         var exe = Path.Combine(
             RepositoryRoot(), "McpServerTemplate", "bin",
@@ -61,8 +67,9 @@ public class ResourceMetadataTests
         info.Environment.Remove("ASPNETCORE_ENVIRONMENT");
         info.Environment.Remove("DOTNET_ENVIRONMENT");
 
-        // contract-005 review round 4 — no spawned server reads anyone's user secrets (SpawnedServer).
-        SpawnedServer.ReadNoUserSecrets(info);
+        // contract-005 review round 4 — no spawned server reads anyone's user secrets, and, round 5 addendum 2, on
+        // Linux none uses anyone's data-protection keys (SpawnedServer). Removed when the test ends.
+        _cleanup.Isolate(info);
         info.Environment["ASPNETCORE_ENVIRONMENT"] = "Production";
         info.Environment["Transport"] = "http";
         info.Environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -88,7 +95,7 @@ public class ResourceMetadataTests
         // contract-003 · G-8 — Production refuses to start without Redis.
         info.Environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
 
-        var process = Process.Start(info)!;
+        var process = _cleanup.Started(Process.Start(info)!);
         var stderr = new StringBuilder();
         process.ErrorDataReceived += (_, e) =>
         {

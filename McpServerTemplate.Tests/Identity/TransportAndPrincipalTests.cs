@@ -1,6 +1,8 @@
+using System.Reflection;
 using System.Security.Claims;
 using McpServerTemplate.Infrastructure;
 using McpServerTemplate.Infrastructure.Identity;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.JsonWebTokens;
 
@@ -210,6 +212,101 @@ public class TransportAndPrincipalTests
     }
 
     /// <summary>
+    /// contract-005 · G-12 (2), review round 5 — an entry no request can match leaves the server refusing
+    /// every host, its own included, without saying why; a setting it would never act on, which the frame
+    /// refuses everywhere else. An unset variable in a compose file (HttpTransport__AllowedHosts__0=${MCP_HOST})
+    /// leaves it empty. A Host header loses its surrounding whitespace in HTTP, never carries a path or user
+    /// information, and puts an IPv6 address in brackets; the filter compares a request's name without its
+    /// port, so an entry with a port matches nothing.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(" mcp.example.com")]
+    [InlineData("mcp.example.com ")]
+    [InlineData("mcp.example.com:443")]
+    [InlineData("::1")]
+    [InlineData("mcp.example.com/mcp")]
+    [InlineData("user@mcp.example.com")]
+    // Found by asking Kestrel and the filter: an empty port, an IPv6 address with a port, a zone, or never
+    // closed, a port that is not digits, and ASP.NET Core's own AllowedHosts habit of one list in one value.
+    [InlineData("mcp.example.com:")]
+    [InlineData("[::1]:443")]
+    [InlineData("[fe80::1%eth0]")]
+    [InlineData("[::1")]
+    [InlineData("mcp.example.com:abc")]
+    [InlineData("mcp.example.com;mcp2.example.com")]
+    [InlineData("mcp.example.com,mcp2.example.com")]
+    public void G12_2_an_allowed_host_no_request_can_match_is_refused_naming_its_key(string entry)
+    {
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(Config(new()
+        {
+            ["HttpTransport:BindAddress"] = "0.0.0.0",
+            ["HttpTransport:AllowedHosts:0"] = entry,
+        })));
+
+        Assert.StartsWith("HttpTransport:AllowedHosts:0 is", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 5 — the server writes out Kestrel's rule for the Host a request can
+    /// carry, because Kestrel keeps it internal (HttpUtilities.IsHostHeaderValid). This asks Kestrel's own, by
+    /// reflection, about every ASCII character at the start, in the middle and at the end of a name, inside and
+    /// after an IPv6 address, and in a port, and holds the server to its answers: an entry is refused whenever
+    /// Kestrel would refuse a request whose Host is that entry, or the entry is empty or has a port; and one
+    /// Kestrel lets through, with no port, is never refused as matching no request.
+    /// </summary>
+    [Fact]
+    public void G12_2_an_allowed_host_is_refused_as_matching_no_request_exactly_when_kestrel_or_the_filter_would_refuse_it()
+    {
+        var kestrel = typeof(KestrelServerOptions).Assembly
+            .GetType("Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Infrastructure.HttpUtilities")
+            ?.GetMethod("IsHostHeaderValid", BindingFlags.Public | BindingFlags.Static)
+            ?? throw new InvalidOperationException(
+                "Kestrel's Host rule is no longer HttpUtilities.IsHostHeaderValid: find where Kestrel checks a Host "
+                + "header now, and hold HttpServerComposition's copy of it to that.");
+
+        var entries = new List<string> { string.Empty, "::1", "[::1", "[]", "[1]", "[::1]", "[::1]:443", "[::1]:", ":443", "mcp.example.com:" };
+        for (var code = 0; code < 128; code++)
+        {
+            var c = (char)code;
+            entries.AddRange([$"{c}mcp.example.com", $"mcp{c}example.com", $"mcp.example.com{c}", $"[:{c}:1]", $"[::1]{c}", $"mcp.example.com:4{c}3"]);
+        }
+
+        var wrong = new List<string>();
+        foreach (var entry in entries)
+        {
+            var carried = (bool)kestrel.Invoke(null, [entry])!;
+            var hasPort = entry.StartsWith('[') ? entry.Contains("]:", StringComparison.Ordinal) : entry.Contains(':', StringComparison.Ordinal);
+            string? refusal = null;
+            try
+            {
+                HttpServerComposition.AllowedHosts(Config(new()
+                {
+                    ["HttpTransport:BindAddress"] = "0.0.0.0",
+                    ["HttpTransport:AllowedHosts:0"] = entry,
+                }));
+            }
+            catch (ConfigurationException ex)
+            {
+                refusal = ex.Message;
+            }
+
+            var shown = string.Concat(entry.Select(c => c is < ' ' or > '~' ? $"U+{(int)c:X4}" : $"{c}"));
+            if (refusal is null && (!carried || hasPort || entry.Length == 0))
+            {
+                wrong.Add($"'{shown}' binds, and no request can match it (Kestrel lets a request with it as its Host through: {carried}).");
+            }
+            else if (carried && !hasPort && entry.Length > 0 && refusal?.Contains("which no request can match", StringComparison.Ordinal) == true)
+            {
+                wrong.Add($"'{shown}' is refused as matching no request, and Kestrel lets a request with it as its Host through: {refusal}");
+            }
+        }
+
+        Assert.True(wrong.Count == 0, $"{wrong.Count} of {entries.Count} entries:{Environment.NewLine}{string.Join(Environment.NewLine, wrong)}");
+    }
+
+    /// <summary>
     /// contract-005 · G-12 (2) — belt and braces: the host filter itself is asked, over the final list,
     /// whether it lets through a request for a random name under .invalid, bare and with a trailing dot.
     /// The entry rules refuse every spelling that would, so this is reached only through the list
@@ -282,5 +379,79 @@ public class TransportAndPrincipalTests
         }
 
         Assert.Equal(["localhost", "127.0.0.1", "[::1]"], HttpServerComposition.AllowedHosts(Config(settings)));
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 5 addendum — the loopback names are the default however the loopback
+    /// address is written. Kestrel binds [::1] for 0::1, 0:0:0:0:0:0:0:1 and [::1], 127.0.0.1 for 127.1, and both for
+    /// LOCALHOST; the default used to be the bind address as written unless it was spelled localhost, 127.0.0.1 or
+    /// ::1, and 0::1, unbracketed, matches no request, so such a server started and answered every request 400.
+    /// </summary>
+    [Theory]
+    [InlineData("0::1")]
+    [InlineData("0:0:0:0:0:0:0:1")]
+    [InlineData("[::1]")]
+    [InlineData("127.1")]
+    [InlineData("LOCALHOST")]
+    public void G12_2_a_loopback_bind_however_written_defaults_to_the_loopback_names(string bindAddress)
+    {
+        Assert.Equal(
+            ["localhost", "127.0.0.1", "[::1]"],
+            HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = bindAddress })));
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 5 addendum 2 — any other loopback address gives that address alone, in
+    /// its standard form. Kestrel binds 127.0.0.2 alone for each of these spellings, and a request reaching it carries
+    /// 127.0.0.2 as its Host; the loopback names reach none of it, and the spelling as written is not what a request
+    /// carries.
+    /// </summary>
+    [Theory]
+    [InlineData("127.0.0.2")]
+    [InlineData("127.2")]
+    [InlineData("127.0.2")]
+    [InlineData("0x7f.0.0.2")]
+    [InlineData("2130706434")]
+    public void G12_2_another_loopback_address_defaults_to_itself_alone_in_its_standard_form(string bindAddress)
+    {
+        Assert.Equal(
+            ["127.0.0.2"],
+            HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = bindAddress })));
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 5 addendum — a bind address is loopback as Kestrel binds it. Kestrel
+    /// reads it with IPAddress.TryParse as written and binds every interface for text that is not an address; the
+    /// server took the brackets off first, so it took [127.0.0.1] for loopback and asked for no allowed host while
+    /// Kestrel listened on every interface.
+    /// </summary>
+    [Theory]
+    [InlineData("[127.0.0.1]")]
+    [InlineData("[::1")]
+    [InlineData("::1]")]
+    [InlineData("[[::1]]")]
+    public void G12_2_a_bind_address_kestrel_binds_on_every_interface_is_not_loopback(string bindAddress)
+    {
+        var ex = Assert.Throws<ConfigurationException>(() =>
+            HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = bindAddress })));
+
+        Assert.StartsWith("HttpTransport:AllowedHosts must name", ex.Message, StringComparison.Ordinal);
+        Assert.Contains($"'{bindAddress}'", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 5 addendum — the entry rules hold for the list the server runs with
+    /// wherever it came from, a loopback bind included. An IPv4-mapped loopback address is loopback, and not an
+    /// address the loopback names reach; the list it gives is the address as written, which, unbracketed, no
+    /// request can match.
+    /// </summary>
+    [Fact]
+    public void G12_2_a_default_allowed_host_no_request_can_match_is_refused_naming_the_bind_address()
+    {
+        var ex = Assert.Throws<ConfigurationException>(() =>
+            HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = "::ffff:127.0.0.1" })));
+
+        Assert.StartsWith("HttpTransport:BindAddress is '::ffff:127.0.0.1'", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("no request can match", ex.Message, StringComparison.Ordinal);
     }
 }

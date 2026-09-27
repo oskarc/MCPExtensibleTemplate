@@ -154,11 +154,12 @@ export HttpTransport__Port=8080
 - **Description**: The address to bind to
   - `"localhost"` or `"127.0.0.1"`: Only accessible from this machine
   - `"0.0.0.0"`: Accessible from any address — only behind a proxy and firewall, and only with `HttpTransport:AllowedHosts` set: on any bind that is not loopback the server refuses to start without it
+  - A bind is loopback as Kestrel binds it: `localhost`, or an address as written that is loopback (`::1`, `[::1]`, `0::1`, `127.1`, `127.0.0.2`). Kestrel binds every interface for text in brackets that is not an address, such as `[127.0.0.1]`, or brackets that do not close, so the server counts those as not loopback
 
 #### `HttpTransport:AllowedHosts`
 - **Type**: `string[]`
-- **Default**: `localhost`, `127.0.0.1`, `[::1]` when bound to loopback; **required** on any other bind address
-- **Description**: The `Host` header values this server answers for. Stops DNS rebinding. Set it to the host names clients use, for example `mcp.example.com`, each one name written exactly as the host filter matches it: ASCII (an internationalised name in its punycode form, which begins `xn--`), with no `*` anywhere and no trailing dot. The server refuses to start on any other entry — `*.example.com` admits every name under `example.com`, `*.com` nearly any host, and a non-ASCII entry can fold into `*` as the filter converts it — and on `0.0.0.0`, `[::]` or `::`: the first two switch host filtering off entirely, and the last is the IPv6 any-address.
+- **Default**: `localhost`, `127.0.0.1`, `[::1]` when bound to `localhost`, `127.0.0.1` or `::1`, however written (`0::1`, `[::1]`, `127.1`); that address alone, in its standard form, when bound to any other IPv4 loopback address (`127.2` gives `127.0.0.2`: Kestrel binds that address alone, and it is the `Host` a request reaching it carries); `::ffff:127.0.0.1` is refused. The default is held to the rules below like an entry written out; **required** on any other bind address
+- **Description**: The `Host` header values this server answers for. Stops DNS rebinding. Set it to the host names clients use, for example `mcp.example.com`, each one name written exactly as the host filter matches it: ASCII (an internationalised name in its punycode form, which begins `xn--`), with no `*` anywhere and no trailing dot. The server refuses to start on any other entry — `*.example.com` admits every name under `example.com`, `*.com` nearly any host, and a non-ASCII entry can fold into `*` as the filter converts it — and on `0.0.0.0`, `[::]` or `::`: the first two switch host filtering off entirely, and the last is the IPv6 any-address. Nor does it start on an entry no request can match, which would leave it answering `400` to every request meant for that name without saying why: an empty entry (an unset variable leaves one, as `HttpTransport__AllowedHosts__0=${MCP_HOST}` does in a compose file when `MCP_HOST` is not set), whitespace around a name, a port (`mcp.example.com:443`; the filter compares a request's host without its port), an IPv6 address without its brackets (`::1`; write `[::1]`), or anything else Kestrel never lets a request carry as its `Host`, such as a path, a user name or two names in one entry.
 
 #### `Kestrel`
 - **Description**: Not read. The server configures its listener itself, from `HttpTransport:BindAddress` and `HttpTransport:Port`; Kestrel's own endpoints would bind around them and around the host allowlist chosen for that address. Any `Kestrel` key stops the server from starting.
@@ -394,10 +395,12 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - Transport=http
       - HttpTransport__BindAddress=0.0.0.0
-      - HttpTransport__AllowedHosts__0=mcp.example.com
+      # The host name clients reach this server by. Compose stops, saying so, when MCP_HOST is unset or
+      # empty; without the :? an empty entry reaches the server, which refuses to start on it.
+      - HttpTransport__AllowedHosts__0=${MCP_HOST:?set MCP_HOST to the host name clients reach this server by, such as mcp.example.com}
       - HttpTransport__KnownNetworks__0=172.16.0.0/12
       - Limits__Redis=redis:6379
-      - Authentication__Resource=https://mcp.example.com/mcp
+      - Authentication__Resource=https://${MCP_HOST}/mcp
       - Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
       - Authentication__IdentityProviders__corp__Issuer=https://login.example.com/realms/corp
       - Authentication__IdentityProviders__corp__ClientIdClaim=azp
@@ -568,7 +571,7 @@ Every one of these stops the server at startup, with a message saying what to fi
 | A resource whose path is not `/mcp`, or that is not written as clients connect to it (a query, fragment, user information, backslash, percent-encoding or dot-segment) | MCP answers at `/mcp`; the resource is published as written, and every audience must equal it exactly |
 | A `ClientIdClaim` other than `azp`, `cid`, `appid` or `client_id`, or equal to the provider's `ScopeClaim` | A claim every token carries, or one that means something else, would switch the client requirement off |
 | A `File` log sink whose path contains `..` once expanded, or that cannot write where it resolves | A sink that cannot write writes nothing and says nothing |
-| A bind address that is not loopback with no `HttpTransport:AllowedHosts`, or an allowed host that is not one name written as the filter matches it (any `*`, a non-ASCII character, a trailing dot) or is `0.0.0.0`, `[::]` or `::` | Host filtering would be off or wider than written, and DNS rebinding could make a browser a client |
+| A bind address that is not loopback as Kestrel binds it (`[127.0.0.1]` binds every interface) with no `HttpTransport:AllowedHosts`, or an allowed host, written out or given by a loopback bind address, that is not one name written as the filter matches it (any `*`, a non-ASCII character, a trailing dot), is `0.0.0.0`, `[::]` or `::`, or is one no request can match (empty, whitespace around it, a port, an IPv6 address without brackets, anything Kestrel never lets a request carry as its `Host`) | Host filtering would be off or wider than written, and DNS rebinding could make a browser a client; or the server would answer `400` to every request meant for that name, and not say why |
 | Any `Kestrel` key | Kestrel's endpoints would bind around `HttpTransport:BindAddress` and the host allowlist chosen for it |
 | Production without a declared proxy | Bearer tokens over plaintext can be read and replayed |
 | `Providers:Enabled` missing outside Development, or naming an unknown provider | A deployment says which providers it serves |

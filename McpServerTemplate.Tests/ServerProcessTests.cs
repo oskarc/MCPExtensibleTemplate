@@ -17,8 +17,14 @@ namespace McpServerTemplate.Tests;
 /// tool names a client actually sees are all properties of the process, not of a class.
 /// </summary>
 [Collection("server-process")]
-public class ServerProcessTests
+public sealed class ServerProcessTests : IDisposable
 {
+    // contract-005 review round 5 — what this test's servers were given, and the servers, ended when the test ends
+    // (SpawnedServer.Cleanup).
+    private readonly SpawnedServer.Cleanup _cleanup = new();
+
+    public void Dispose() => _cleanup.Dispose();
+
     private static string RepositoryRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -96,12 +102,12 @@ public class ServerProcessTests
     /// resolves log paths. The executable's own directory unless a test needs settings files of its own.
     /// </param>
     /// <param name="arguments">The server's command line.</param>
-    private static Spawned Start(
+    private Spawned Start(
         IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null, IReadOnlyList<string>? arguments = null) =>
-        new(Process.Start(StartInfo(environment, redirectStdin, workingDirectory, arguments))!);
+        new(_cleanup.Started(Process.Start(StartInfo(environment, redirectStdin, workingDirectory, arguments))!));
 
     /// <summary>How <see cref="Start"/> starts the server: the same parameters.</summary>
-    private static ProcessStartInfo StartInfo(
+    private ProcessStartInfo StartInfo(
         IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null, IReadOnlyList<string>? arguments = null)
     {
         var exe = ServerExecutable();
@@ -124,8 +130,9 @@ public class ServerProcessTests
         info.Environment.Remove("DOTNET_ENVIRONMENT");
 
         // contract-005 review round 4 — nor the developer's own user secrets: a store nobody keeps, unless the
-        // test names one.
-        SpawnedServer.ReadNoUserSecrets(info);
+        // test names one; and, round 5 addendum 2, on Linux nobody's data-protection keys (SpawnedServer). Removed when
+        // the test ends.
+        _cleanup.Isolate(info);
         foreach (var (key, value) in environment)
         {
             info.Environment[key] = value;
@@ -194,7 +201,76 @@ public class ServerProcessTests
         }
     }
 
-    private static async Task<(int ExitCode, string Stderr)> RunToCompletionAsync(
+    /// <summary>
+    /// contract-005 review round 5, addendum 2 — on Linux, where the CI job runs these tests, a spawned server keeps no
+    /// one's data-protection keys: the directory it resolves, by the framework's own order, lies beside its user
+    /// secrets, in the location nobody keeps. On Windows the variable is left as this process has it, because no
+    /// variable moves the keys there (SpawnedServer says why). Paths only; nothing is read or listed.
+    /// </summary>
+    [Fact]
+    public void T3_a_spawned_server_on_linux_resolves_a_key_directory_nobody_keeps()
+    {
+        var linux = new ProcessStartInfo("server");
+        SpawnedServer.IsolateFromTheDeveloper(linux, windows: false);
+        var root = linux.Environment["APPDATA"]!;
+        var keys = SpawnedServer.KeyDirectoryOnLinux(linux.Environment);
+        Assert.True(
+            keys == Path.Combine(root, "ASP.NET", "DataProtection-Keys"),
+            $"a spawned server on Linux keeps its data-protection keys in {keys ?? "its account's home"}, not beside its user "
+            + $"secrets in {root}.");
+
+        var windows = new ProcessStartInfo("server");
+        SpawnedServer.IsolateFromTheDeveloper(windows, windows: true);
+        Assert.Equal(
+            Environment.GetEnvironmentVariable("LOCALAPPDATA"),
+            windows.Environment.TryGetValue("LOCALAPPDATA", out var local) ? local : null);
+    }
+
+    /// <summary>
+    /// contract-005 review round 5 — nothing a spawned server is given is left behind: its location of its own
+    /// (SpawnedServer) is removed, with whatever the server wrote there, when the test that started it ends, passed or
+    /// failed, once the server has exited. On Linux a server writes its data-protection key there; on Windows nothing
+    /// does, so this one is given a log file there, which it holds open while it runs. The test it belongs to ends
+    /// with it still running, as a failing test would.
+    /// </summary>
+    [Fact]
+    public async Task T3_a_spawned_servers_own_location_is_removed_when_its_test_ends()
+    {
+        var test = new ServerProcessTests();
+        Spawned spawned;
+        string location;
+        bool wrote;
+        try
+        {
+            spawned = test.Start(
+                new Dictionary<string, string>
+                {
+                    ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                    ["Transport"] = "stdio",
+                    ["Serilog__WriteTo__2__Name"] = "File",
+                    ["Serilog__WriteTo__2__Args__path"] = "%APPDATA%/server.log",
+                },
+                redirectStdin: true);
+            location = spawned.Process.StartInfo.Environment["APPDATA"]!;
+
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            while (DateTime.UtcNow < deadline && !File.Exists(Path.Combine(location, "server.log")) && !spawned.Process.HasExited)
+            {
+                await Task.Delay(100);
+            }
+
+            wrote = File.Exists(Path.Combine(location, "server.log"));
+        }
+        finally
+        {
+            test.Dispose();
+        }
+
+        Assert.True(wrote, $"the server wrote nothing in {location}: {spawned.Stderr}");
+        Assert.False(Directory.Exists(location), $"{location}, given to a server its test started, is still there after the test ended.");
+    }
+
+    private async Task<(int ExitCode, string Stderr)> RunToCompletionAsync(
         IDictionary<string, string> environment, string? workingDirectory = null)
     {
         var spawned = Start(environment, workingDirectory: workingDirectory);
@@ -598,14 +674,14 @@ public class ServerProcessTests
     }
 
     /// <summary>What /healthz on 127.0.0.1:<paramref name="port"/> answered within <paramref name="window"/>, or null when nothing did.</summary>
-    private static async Task<HttpStatusCode?> AnswerWithinAsync(HttpClient http, int port, TimeSpan window)
+    private static async Task<HttpStatusCode?> AnswerWithinAsync(HttpClient http, int port, TimeSpan window, string host = "127.0.0.1")
     {
         var deadline = DateTime.UtcNow + window;
         while (true)
         {
             try
             {
-                using var response = await http.GetAsync(new Uri($"http://127.0.0.1:{port}/healthz"));
+                using var response = await http.GetAsync(new Uri($"http://{host}:{port}/healthz"));
                 return response.StatusCode;
             }
             catch (HttpRequestException)
@@ -683,7 +759,7 @@ public class ServerProcessTests
         ["HttpTransport__KnownNetworks__0"] = "127.0.0.0/8",
     };
 
-    private static async Task<HttpServer> StartHttpAsync()
+    private async Task<HttpServer> StartHttpAsync()
     {
         var port = FreePort();
         var environment = IdentityEnvironment();
@@ -756,6 +832,79 @@ public class ServerProcessTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 5 addendum — a loopback bind written another way than ::1
+    /// answers for the loopback names. Kestrel binds [::1] for 0::1 and 0:0:0:0:0:0:0:1, exactly as for ::1; the
+    /// host allowlist used to default to the spelling, which no request can match, so the server started and
+    /// answered every request 400, under its own names too.
+    /// </summary>
+    [Theory]
+    [InlineData("0::1")]
+    [InlineData("0:0:0:0:0:0:0:1")]
+    public async Task T11_2_a_loopback_bind_however_written_answers_for_the_loopback_names(string bindAddress)
+    {
+        var port = FreePort();
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = bindAddress;
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        var spawned = Start(environment);
+        using var process = spawned.Process;
+        try
+        {
+            var bracketed = await AnswerWithinAsync(http, port, TimeSpan.FromSeconds(60), "[::1]");
+            var named = await AnswerWithinAsync(http, port, TimeSpan.FromSeconds(5), "localhost");
+            Assert.True(
+                bracketed == HttpStatusCode.OK && named == HttpStatusCode.OK,
+                $"a server bound to {bindAddress}, which Kestrel binds as [::1], with no AllowedHosts, answered GET /healthz at "
+                + $"http://[::1]:{port} with {(int?)bracketed} and at http://localhost:{port} with {(int?)named}. {spawned.Stderr}");
+        }
+        finally
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 5 addendum 2 — another loopback address, written in a form
+    /// Kestrel accepts, answers under its standard form. Kestrel binds 127.0.0.2 alone for 127.2, and a request
+    /// reaching it carries Host 127.0.0.2; the allowlist used to default to the spelling, 127.2, which that request
+    /// does not match.
+    /// </summary>
+    [Fact]
+    public async Task T11_2_another_loopback_address_however_written_answers_under_its_standard_form()
+    {
+        var port = FreePort();
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "127.2";
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        var spawned = Start(environment);
+        using var process = spawned.Process;
+        try
+        {
+            var answer = await AnswerWithinAsync(http, port, TimeSpan.FromSeconds(60), "127.0.0.2");
+            Assert.True(
+                answer == HttpStatusCode.OK,
+                $"a server bound to 127.2, which Kestrel binds as 127.0.0.2, with no AllowedHosts, answered GET /healthz at "
+                + $"http://127.0.0.2:{port} with {(int?)answer}. {spawned.Stderr}");
+        }
+        finally
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+        }
+    }
+
     [Fact]
     public async Task T4_the_mcp_endpoint_requires_a_verified_token()
     {
@@ -826,7 +975,7 @@ public class ServerProcessTests
     /// Calls one tool over stdio and returns the reply, or null if none arrived. A null return is
     /// the failure this exists to catch, so the wait is generous rather than tight.
     /// </summary>
-    private static async Task<JsonElement?> CallToolAsync(string tool, object arguments)
+    private async Task<JsonElement?> CallToolAsync(string tool, object arguments)
     {
         using var process = Start(
             new Dictionary<string, string>
@@ -1048,7 +1197,7 @@ public class ServerProcessTests
         Assert.True(missing.Count == 0, "tools the server exposes but the docs never name: " + string.Join(", ", missing));
     }
 
-    private static async Task<HashSet<string>> ListToolNamesAsync()
+    private async Task<HashSet<string>> ListToolNamesAsync()
     {
         using var process = Start(
             new Dictionary<string, string>

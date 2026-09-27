@@ -67,6 +67,10 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
         { "subdomain-wildcard", "*.example.com", Attacker },
         { "fullwidth-star", "\uFF0A", Attacker },
         { "trailing-dot", $"{TlsFront.Host}.", $"{TlsFront.Host}." },
+
+        // Review round 5 — HttpTransport__AllowedHosts__0=${MCP_HOST} in a compose file, with MCP_HOST unset:
+        // an empty entry, which no request matches, so the server answers every host 400, its own included.
+        { "unset-variable", string.Empty, TlsFront.Host },
     };
 
     [Theory]

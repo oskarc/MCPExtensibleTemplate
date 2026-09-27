@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using System.Threading.RateLimiting;
 using McpServerTemplate.Infrastructure.Frame;
@@ -183,45 +184,97 @@ public static class HttpServerComposition
     /// punycode form), no * anywhere, no trailing dot, and unchanged by the filter's own conversion.
     /// Then the filter itself is built over the final list and asked whether it lets through a request
     /// for a name nobody could have configured, in case a spelling gets past all of that.
+    ///
+    /// Review round 5 — the opposite mistake, an entry no request can match, left a server that answered
+    /// every request 400, its own name included, without saying why: a setting it would never act on,
+    /// which the frame refuses wherever it finds one. An unset variable in a compose file leaves an entry
+    /// empty, and an entry with a port, with whitespace around it or an unbracketed IPv6 address never
+    /// matches either. So each entry must also be one a request can match, which
+    /// <see cref="NoRequestMatches"/> asks of Kestrel's rule and of the filter itself.
+    ///
+    /// Review round 5, addendum — these rules hold for the list the filter runs with, wherever it came from:
+    /// one written out, or the one a loopback bind gives (<see cref="LoopbackDefault"/>), which is refused
+    /// naming HttpTransport:BindAddress. And a bind counts as loopback only where Kestrel binds it to
+    /// loopback (<see cref="IsLoopback"/>).
     /// </summary>
-    /// <exception cref="ConfigurationException">A non-loopback bind names no host, or an entry does not name exactly one host.</exception>
+    /// <exception cref="ConfigurationException">A non-loopback bind names no host, or an entry does not name exactly one host a request can match.</exception>
     public static string[] AllowedHosts(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
         var bindAddress = configuration.GetValue("HttpTransport:BindAddress", "localhost") ?? "localhost";
-        var section = configuration.GetSection("HttpTransport:AllowedHosts");
 
-        foreach (var entry in section.GetChildren())
+        // Each entry the filter will run with, how a refusal names it, and what it tells the operator to set.
+        (string Host, string Named, string Remedy)[] entries;
+        var configured = configuration.GetSection("HttpTransport:AllowedHosts").GetChildren().ToArray();
+        if (configured.Length > 0)
         {
-            if (NotOneHostName(entry.Value ?? string.Empty) is { } why)
+            entries = [.. configured.Select(entry => (
+                entry.Value ?? string.Empty,
+                $"{entry.Path} is '{entry.Value}'",
+                "Name the host names clients reach this server by"))];
+        }
+        else if (IsLoopback(bindAddress))
+        {
+            entries = [.. LoopbackDefault(bindAddress).Select(host => (
+                host,
+                $"HttpTransport:BindAddress is '{bindAddress}', a loopback address, so the host filter allows '{host}' by default",
+                "Set HttpTransport:AllowedHosts to the host names clients reach this server by"))];
+        }
+        else
+        {
+            throw new ConfigurationException(
+                $"HttpTransport:AllowedHosts must name the host names clients reach this server by, because "
+                + $"HttpTransport:BindAddress is '{bindAddress}', which is not a loopback address. With none, every "
+                + "Host header would be answered, and DNS rebinding could turn a browser into a client of this "
+                + "server. For example HttpTransport:AllowedHosts:0=mcp.example.com.");
+        }
+
+        foreach (var (host, named, remedy) in entries)
+        {
+            if (NotOneHostName(host) is { } why)
             {
                 throw new ConfigurationException(
-                    $"{entry.Path} is '{entry.Value}', which {why} Name the host names clients reach this server by, "
-                    + "for example mcp.example.com. Without them DNS rebinding can turn a browser into a client of "
-                    + "this server.");
+                    $"{named}, which {why} {remedy}, for example mcp.example.com. Without them DNS rebinding can turn a "
+                    + "browser into a client of this server.");
+            }
+
+            if (NoRequestMatches(host) is { } never)
+            {
+                throw new ConfigurationException(
+                    $"{named}, which no request can match: {never} {remedy}, each on its own and without a port, for "
+                    + "example mcp.example.com.");
             }
         }
 
-        var allowedHosts = section.Get<string[]>();
-        if (allowedHosts is not { Length: > 0 })
-        {
-            if (!IsLoopback(bindAddress))
-            {
-                throw new ConfigurationException(
-                    $"HttpTransport:AllowedHosts must name the host names clients reach this server by, because "
-                    + $"HttpTransport:BindAddress is '{bindAddress}', which is not a loopback address. With none, every "
-                    + "Host header would be answered, and DNS rebinding could turn a browser into a client of this "
-                    + "server. For example HttpTransport:AllowedHosts:0=mcp.example.com.");
-            }
-
-            allowedHosts = bindAddress is "localhost" or "127.0.0.1" or "::1"
-                ? ["localhost", "127.0.0.1", "[::1]"]
-                : [bindAddress];
-        }
-
+        string[] allowedHosts = [.. entries.Select(entry => entry.Host)];
         RefuseHostsNobodyNamed(allowedHosts);
         return allowedHosts;
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 5 addendum — the host allowlist a loopback bind gives when none is set.
+    /// Where Kestrel binds the addresses the loopback names reach — localhost, or 127.0.0.1 or ::1 however written
+    /// (0::1, [::1], 127.1) — it is those names. It used to be them only for the spellings localhost, 127.0.0.1 and
+    /// ::1, and otherwise the address as written, which for 0::1, unbracketed, no request can match: the server
+    /// started and answered every request 400.
+    ///
+    /// Review round 5, addendum 2 — any other IPv4 loopback address the names do not reach: Kestrel binds that
+    /// address alone, and a request reaching it carries it as its Host in its standard form, so it is that alone,
+    /// as IPAddress writes it (127.2 gives 127.0.0.2). The one other IPv6 loopback address, ::ffff:127.0.0.1, stays
+    /// as written, and the entry rules refuse it: unbracketed, no request can match it, and on Windows Kestrel cannot
+    /// bind it at all.
+    /// </summary>
+    private static string[] LoopbackDefault(string bindAddress)
+    {
+        if (bindAddress.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            || (System.Net.IPAddress.TryParse(bindAddress, out var address)
+                && (address.Equals(System.Net.IPAddress.Loopback) || address.Equals(System.Net.IPAddress.IPv6Loopback))))
+        {
+            return ["localhost", "127.0.0.1", "[::1]"];
+        }
+
+        return address?.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? [address.ToString()] : [bindAddress];
     }
 
     /// <summary>
@@ -241,16 +294,7 @@ public static class HttpServerComposition
         ArgumentNullException.ThrowIfNull(allowedHosts);
 
         var admitted = false;
-        var options = new HostFilteringOptions();
-        ConfigureHostFilter(options, [.. allowedHosts]);
-        var filter = new HostFilteringMiddleware(
-            _ =>
-            {
-                admitted = true;
-                return Task.CompletedTask;
-            },
-            NullLogger<HostFilteringMiddleware>.Instance,
-            new FixedOptions<HostFilteringOptions>(options));
+        var filter = HostFilter([.. allowedHosts], () => admitted = true);
 
         var nobody = $"{Guid.NewGuid():N}.invalid";
         foreach (var probe in new[] { nobody, nobody + "." })
@@ -271,12 +315,139 @@ public static class HttpServerComposition
         }
     }
 
-    /// <summary>The host filter's options, as the server runs it and as <see cref="RefuseHostsNobodyNamed"/> tries it.</summary>
+    /// <summary>The host filter's options, as the server runs it and as <see cref="HostFilter"/> builds it to be tried.</summary>
     private static void ConfigureHostFilter(HostFilteringOptions options, IList<string> allowedHosts)
     {
         options.AllowedHosts = allowedHosts;
         options.AllowEmptyHosts = false;
         options.IncludeFailureMessage = false;
+    }
+
+    /// <summary>
+    /// ASP.NET Core's host-filtering middleware over <paramref name="allowedHosts"/>, with the options the server
+    /// runs it with, calling <paramref name="admit"/> for each request it lets through. A refusal completes at
+    /// once: 400, and no body (IncludeFailureMessage is off).
+    /// </summary>
+    private static HostFilteringMiddleware HostFilter(IList<string> allowedHosts, Action admit)
+    {
+        var options = new HostFilteringOptions();
+        ConfigureHostFilter(options, allowedHosts);
+        return new HostFilteringMiddleware(
+            _ =>
+            {
+                admit();
+                return Task.CompletedTask;
+            },
+            NullLogger<HostFilteringMiddleware>.Instance,
+            new FixedOptions<HostFilteringOptions>(options));
+    }
+
+    /// <summary>
+    /// Why no request can match <paramref name="entry"/>, completing "…, which no request can match:", or null
+    /// when one can. contract-005 · G-12 (2), review round 5 — decided by what decides it at run time: Kestrel,
+    /// which refuses a request whose Host breaks its rule before any middleware sees it, and then the host
+    /// filter itself, given this entry alone and handed a request whose Host header is exactly it. The filter
+    /// refuses a request with no host; it compares a request's host without its port; and it puts an
+    /// unbracketed IPv6 address in brackets before it compares. Asked in-process, the filter would match an
+    /// entry with whitespace around it, a path or a user name, which Kestrel never lets a request carry; so
+    /// Kestrel's rule is asked first.
+    /// </summary>
+    private static string? NoRequestMatches(string entry)
+    {
+        if (!KestrelLetsThrough(entry))
+        {
+            var trimmed = entry.Trim(' ', '\t');
+            if (trimmed.Length == 0)
+            {
+                return "it is only whitespace, which HTTP drops from around a Host header, leaving no host, and the "
+                    + "host filter refuses a request with no host.";
+            }
+
+            if (trimmed.Length != entry.Length)
+            {
+                return "it begins or ends with whitespace, which HTTP drops from around a Host header, so no "
+                    + "request's Host is ever this.";
+            }
+
+            return "Kestrel refuses a request, before the host filter sees it, unless its Host is a name of letters, "
+                + "digits and !$&'()-._~, or an IPv6 address in brackets, as [::1], either followed by a colon and a "
+                + "port.";
+        }
+
+        var admitted = false;
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Host = entry;
+
+        // Nothing here throws: the entry rules before this refuse whatever the filter cannot convert, and
+        // Kestrel's rule a port that is not digits.
+        HostFilter([entry], () => admitted = true).Invoke(context).GetAwaiter().GetResult();
+        if (admitted)
+        {
+            return null;
+        }
+
+        if (entry.Length == 0)
+        {
+            return "it is empty, and the host filter refuses a request with no host. An unset variable leaves an "
+                + "entry empty: HttpTransport__AllowedHosts__0=${MCP_HOST} in a compose file, with MCP_HOST not set.";
+        }
+
+        var hasPort = entry.StartsWith('[') ? entry.Contains("]:", StringComparison.Ordinal) : entry.Contains(':', StringComparison.Ordinal);
+        return hasPort
+            ? "the host filter compares a request's host without its port, so an entry with a port matches nothing."
+            : "ASP.NET Core's host filter, given it alone, refuses a request whose Host is exactly it.";
+    }
+
+    /// <summary>The characters Kestrel lets a Host header's name be made of.</summary>
+    private static readonly SearchValues<char> HostNameChars =
+        SearchValues.Create("!$&'()-._~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+
+    /// <summary>The characters Kestrel lets stand between the brackets of an IPv6 address in a Host header.</summary>
+    private static readonly SearchValues<char> IPv6AddressChars = SearchValues.Create(".0123456789:ABCDEFabcdef");
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 5 — whether Kestrel lets a request whose Host is <paramref name="host"/>
+    /// through to the middleware. On every protocol it answers 400, before any middleware runs, unless the Host
+    /// is empty, a name of letters, digits and !$&amp;'()-._~, or an IPv6 address in brackets, either followed by
+    /// a colon and a port of digits; and HTTP drops the spaces and tabs around a header's value first. This is
+    /// Kestrel's own rule (HttpUtilities.IsHostHeaderValid), written out because Kestrel keeps it internal; a
+    /// test asks Kestrel's, by reflection, about every ASCII character in each place, and holds this to it.
+    /// </summary>
+    private static bool KestrelLetsThrough(string host)
+    {
+        if (host.Length == 0)
+        {
+            return true;
+        }
+
+        int rest;
+        if (host[0] == '[')
+        {
+            // [::1] is the shortest: the closing bracket comes fourth at the earliest.
+            var close = host.AsSpan(1).IndexOfAnyExcept(IPv6AddressChars) + 1;
+            if (close < 4 || host[close] != ']')
+            {
+                return false;
+            }
+
+            rest = close + 1;
+        }
+        else
+        {
+            rest = host.AsSpan().IndexOfAnyExcept(HostNameChars);
+            if (rest < 0)
+            {
+                return true;
+            }
+
+            if (rest == 0)
+            {
+                return false;
+            }
+        }
+
+        return rest == host.Length
+            || (host[rest] == ':' && rest + 1 < host.Length && host.AsSpan(rest + 1).IndexOfAnyExceptInRange('0', '9') < 0);
     }
 
     /// <summary>Options that are what they are: the host filter asks for a monitor, and nothing here changes.</summary>
@@ -341,9 +512,16 @@ public static class HttpServerComposition
             : $"{NotAsMatched} the filter converts it to '{matched}' before it matches, so it would not match the name written.";
     }
 
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 5 addendum — whether Kestrel binds <paramref name="bindAddress"/> to
+    /// loopback: the name localhost, or text IPAddress.TryParse reads, as written, as a loopback address. That is
+    /// the parse Kestrel's address binder applies to the same text, and it binds every interface for text it
+    /// cannot read. The brackets used to be taken off first, so [127.0.0.1], [::1 and [[::1]] counted as loopback,
+    /// with no allowed host asked for, while Kestrel listened on every interface; [::1] parses with its brackets.
+    /// </summary>
     private static bool IsLoopback(string bindAddress) =>
         bindAddress.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-        || (System.Net.IPAddress.TryParse(bindAddress.Trim('[', ']'), out var address) && System.Net.IPAddress.IsLoopback(address));
+        || (System.Net.IPAddress.TryParse(bindAddress, out var address) && System.Net.IPAddress.IsLoopback(address));
 
     /// <summary>
     /// The middleware order (contract-001 · G-3), fixed, each stage depending on the ones before:
