@@ -871,6 +871,58 @@ public sealed class ServerProcessTests : IDisposable
     }
 
     /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 6 — a bind address that carries a port refuses to start. The
+    /// server listens on HttpTransport:Port, and [::1]:9999 used to start there, on [::1], ignoring 9999: a setting
+    /// the server would not act on.
+    /// </summary>
+    [Fact]
+    public async Task T11_2_a_bind_address_that_carries_a_port_refuses_to_start()
+    {
+        var port = FreePort();
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "[::1]:9999";
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        var spawned = Start(environment);
+        using var process = spawned.Process;
+        try
+        {
+            HttpStatusCode? answered = null;
+            var deadline = DateTime.UtcNow.AddSeconds(60);
+            while (answered is null && !process.HasExited && DateTime.UtcNow < deadline)
+            {
+                answered = await AnswerWithinAsync(http, port, TimeSpan.FromMilliseconds(200), "[::1]");
+            }
+
+            if (process.HasExited)
+            {
+                await process.WaitForExitAsync();
+            }
+
+            Assert.True(
+                answered is null && process.HasExited && process.ExitCode == 78
+                    && spawned.Stderr.Contains("HttpTransport:BindAddress is '[::1]:9999', which carries a port.", StringComparison.Ordinal),
+                answered is null
+                    ? $"a server with HttpTransport:BindAddress [::1]:9999 did not refuse, naming the port: {spawned.Stderr}"
+                    : $"a server with HttpTransport:BindAddress [::1]:9999 started, and answered GET /healthz at http://[::1]:{port}, "
+                        + $"its HttpTransport:Port, with {(int)answered}: 9999 was ignored.");
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+
+            await process.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>
     /// contract-005 · T-11 (2) (G-12 (2)), review round 5 addendum 2 — another loopback address, written in a form
     /// Kestrel accepts, answers under its standard form. Kestrel binds 127.0.0.2 alone for 127.2, and a request
     /// reaching it carries Host 127.0.0.2; the allowlist used to default to the spelling, 127.2, which that request

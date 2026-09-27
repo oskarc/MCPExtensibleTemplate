@@ -90,6 +90,25 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
     }
 
     /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 6 — an IPv4-mapped bind address refuses to start, naming why,
+    /// allowed hosts or none: Kestrel binds any IPv6 address but [::] on an IPv6-only socket, which cannot take an
+    /// IPv4-mapped one, so the image used to fail at the bind instead. Here with the environment's allowed host set.
+    /// </summary>
+    [Theory]
+    [InlineData("ipv4-mapped-bracketed", "[::ffff:127.0.0.1]")]
+    [InlineData("ipv4-mapped", "::ffff:127.0.0.1")]
+    public async Task T11_2_an_ipv4_mapped_bind_address_refuses_to_start(string variant, string bindAddress)
+    {
+        const string key = "HttpTransport:BindAddress";
+        await using var outcome = await fixture.Environment.StartupAsync($"bind-{variant}", SettingsDelta.None.Set(key, bindAddress));
+        output.WriteLine(outcome.Describe());
+
+        Assert.True(
+            outcome.ExitCode == 78 && outcome.RefusalLine?.Contains($"{key} is '{bindAddress}', an IPv4-mapped", StringComparison.Ordinal) == true,
+            $"{key}={bindAddress}: {outcome.Describe()}");
+    }
+
+    /// <summary>
     /// contract-005 · G-12 (2) — ASP.NET Core reads the Kestrel section on its own, and its endpoints
     /// override the address the server binds: here the server says it binds localhost, with the
     /// loopback names as its host allowlist, and Kestrel:Endpoints puts it on every interface.

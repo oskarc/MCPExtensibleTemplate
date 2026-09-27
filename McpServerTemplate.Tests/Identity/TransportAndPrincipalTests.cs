@@ -153,7 +153,9 @@ public class TransportAndPrincipalTests
         var ex = Assert.Throws<ConfigurationException>(() =>
             HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = bindAddress })));
 
-        Assert.StartsWith("HttpTransport:AllowedHosts must name", ex.Message, StringComparison.Ordinal);
+        // Review round 6 — for text Kestrel does not read as an address (*, mcp.internal) the refusal first says what
+        // Kestrel would do with it; the advice about allowed hosts follows.
+        Assert.Contains("HttpTransport:AllowedHosts must name", ex.Message, StringComparison.Ordinal);
         Assert.Contains($"'{bindAddress}'", ex.Message, StringComparison.Ordinal);
     }
 
@@ -255,6 +257,11 @@ public class TransportAndPrincipalTests
     /// after an IPv6 address, and in a port, and holds the server to its answers: an entry is refused whenever
     /// Kestrel would refuse a request whose Host is that entry, or the entry is empty or has a port; and one
     /// Kestrel lets through, with no port, is never refused as matching no request.
+    ///
+    /// Review round 6 — a documented limit: this runs on the runtime the tests run on (10.0.1, from the SDK
+    /// global.json pins), and the image ships 10.0.12. When either runtime moves to another patch, run this
+    /// comparison again on the shipped runtime, as the review did. Should the rules drift apart, the cost is
+    /// precision only, and it fails closed.
     /// </summary>
     [Fact]
     public void G12_2_an_allowed_host_is_refused_as_matching_no_request_exactly_when_kestrel_or_the_filter_would_refuse_it()
@@ -423,27 +430,84 @@ public class TransportAndPrincipalTests
     /// contract-005 · G-12 (2), review round 5 addendum — a bind address is loopback as Kestrel binds it. Kestrel
     /// reads it with IPAddress.TryParse as written and binds every interface for text that is not an address; the
     /// server took the brackets off first, so it took [127.0.0.1] for loopback and asked for no allowed host while
-    /// Kestrel listened on every interface.
+    /// Kestrel listened on every interface. Review round 6 — the refusal says so plainly, and how to write loopback,
+    /// before any advice about allowed hosts: whitespace around an address, or a host name, is not an address to
+    /// Kestrel either.
     /// </summary>
     [Theory]
     [InlineData("[127.0.0.1]")]
     [InlineData("[::1")]
     [InlineData("::1]")]
     [InlineData("[[::1]]")]
+    [InlineData(" 127.0.0.1")]
+    [InlineData("mcp.internal")]
     public void G12_2_a_bind_address_kestrel_binds_on_every_interface_is_not_loopback(string bindAddress)
     {
         var ex = Assert.Throws<ConfigurationException>(() =>
             HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = bindAddress })));
 
-        Assert.StartsWith("HttpTransport:AllowedHosts must name", ex.Message, StringComparison.Ordinal);
-        Assert.Contains($"'{bindAddress}'", ex.Message, StringComparison.Ordinal);
+        var kestrel = $"Kestrel does not read '{bindAddress}' as an address and would listen on every interface.";
+        var loopback = ex.Message.IndexOf("127.0.0.1, or [::1]", StringComparison.Ordinal);
+        var allowedHosts = ex.Message.IndexOf("HttpTransport:AllowedHosts", StringComparison.Ordinal);
+        Assert.True(
+            ex.Message.IndexOf(kestrel, StringComparison.Ordinal) is >= 0 and var said && said < loopback && loopback < allowedHosts,
+            $"the refusal should say \"{kestrel}\", then how to write loopback, then the advice about allowed hosts: {ex.Message}");
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 6 — a bind address that carries a port refuses to start, whatever the
+    /// form, and allowed hosts or none. The server listens on HttpTransport:Port: IPAddress reads [::1]:9999 as ::1,
+    /// dropping 9999, and Kestrel reads 127.0.0.1:9999 or localhost:9999 as no address at all.
+    /// </summary>
+    [Theory]
+    [InlineData("[::1]:9999", "[::1]")]
+    [InlineData("[::1]:", "[::1]")]
+    [InlineData("127.0.0.1:9999", "127.0.0.1")]
+    [InlineData("127.0.0.1:0", "127.0.0.1")]
+    [InlineData("localhost:9999", "localhost")]
+    [InlineData("mcp.internal:9999", "mcp.internal")]
+    public void G12_2_a_bind_address_that_carries_a_port_is_refused_saying_where_the_port_goes(string bindAddress, string address)
+    {
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(Config(new()
+        {
+            ["HttpTransport:BindAddress"] = bindAddress,
+            ["HttpTransport:AllowedHosts:0"] = "mcp.example.com",
+        })));
+
+        Assert.StartsWith($"HttpTransport:BindAddress is '{bindAddress}', which carries a port.", ex.Message, StringComparison.Ordinal);
+        Assert.Contains($"Write the address alone, as {address}, and set the port in HttpTransport:Port.", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 6 — an IPv4-mapped bind address refuses to start, bracketed or not, and
+    /// allowed hosts or none: Kestrel binds any IPv6 address but [::] on an IPv6-only socket, which cannot take an
+    /// IPv4-mapped one. [::ffff:127.0.0.1] counted as loopback, and the server then failed to bind it.
+    /// </summary>
+    [Theory]
+    [InlineData("[::ffff:127.0.0.1]", false, "127.0.0.1")]
+    [InlineData("[::ffff:127.0.0.1]", true, "127.0.0.1")]
+    [InlineData("::ffff:127.0.0.1", true, "127.0.0.1")]
+    [InlineData("::ffff:10.1.2.3", true, "10.1.2.3")]
+    public void G12_2_an_ipv4_mapped_bind_address_is_refused_naming_why(string bindAddress, bool allowedHosts, string ipv4)
+    {
+        var settings = new Dictionary<string, string?> { ["HttpTransport:BindAddress"] = bindAddress };
+        if (allowedHosts)
+        {
+            settings["HttpTransport:AllowedHosts:0"] = "mcp.example.com";
+        }
+
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(Config(settings)));
+
+        Assert.StartsWith($"HttpTransport:BindAddress is '{bindAddress}', an IPv4-mapped IPv6 address", ex.Message, StringComparison.Ordinal);
+        Assert.Contains($"Write the IPv4 address itself, {ipv4}.", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
     /// contract-005 · G-12 (2), review round 5 addendum — the entry rules hold for the list the server runs with
     /// wherever it came from, a loopback bind included. An IPv4-mapped loopback address is loopback, and not an
-    /// address the loopback names reach; the list it gives is the address as written, which, unbracketed, no
-    /// request can match.
+    /// address the loopback names reach; the list it gave was the address as written, which, unbracketed, no
+    /// request can match. Review round 6 — it is refused before any list is made, as an IPv4-mapped address
+    /// (above), still naming the bind address.
     /// </summary>
     [Fact]
     public void G12_2_a_default_allowed_host_no_request_can_match_is_refused_naming_the_bind_address()
@@ -452,6 +516,6 @@ public class TransportAndPrincipalTests
             HttpServerComposition.AllowedHosts(Config(new() { ["HttpTransport:BindAddress"] = "::ffff:127.0.0.1" })));
 
         Assert.StartsWith("HttpTransport:BindAddress is '::ffff:127.0.0.1'", ex.Message, StringComparison.Ordinal);
-        Assert.Contains("no request can match", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("IPv4-mapped", ex.Message, StringComparison.Ordinal);
     }
 }
