@@ -581,6 +581,92 @@ public class TransportAndPrincipalTests
     }
 
     /// <summary>
+    /// contract-005 · G-12 (2), review round 9 — a bind address that cannot accept connections refuses to start,
+    /// allowed hosts or none: the IPv4 limited broadcast address, IPv4 multicast (224.0.0.0/4) and IPv6 multicast
+    /// (ff00::/8). The server used to pass every check and log "Now listening on http://255.255.255.255:3001", and
+    /// nobody could connect.
+    /// </summary>
+    [Theory]
+    [InlineData("255.255.255.255", "broadcast")]
+    [InlineData("224.0.0.1", "multicast")]
+    [InlineData("239.255.255.250", "multicast")]
+    [InlineData("ff02::1", "multicast")]
+    [InlineData("[ff02::1]", "multicast")]
+    public void G12_2_a_bind_address_that_cannot_accept_connections_is_refused(string bindAddress, string kind)
+    {
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.AllowedHosts(Config(new()
+        {
+            ["HttpTransport:BindAddress"] = bindAddress,
+            ["HttpTransport:AllowedHosts:0"] = "mcp.example.com",
+        })));
+
+        Assert.StartsWith($"HttpTransport:BindAddress is '{bindAddress}', a {kind} address, which cannot accept connections", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 9 — the proxies and networks forwarded headers are trusted from are read at
+    /// startup, and an entry that is not one is refused naming its key: it used to be parsed only as the pipeline was
+    /// built, and stopped the server with exit 70 and a stack trace. An IPv4 address, alone or as a network's, is held
+    /// to the standard form, as the bind address is: 010.0.0.1 would be read as 8.0.0.1. A network needs its prefix
+    /// length, 0-32 for IPv4 and 0-128 for IPv6; an IPv4 address alone is that one address, and an IPv6 address alone was
+    /// read as a /32 network, so it is refused.
+    /// </summary>
+    [Theory]
+    [InlineData("HttpTransport:KnownProxies:0", "not-an-ip", "which is not an IP address")]
+    [InlineData("HttpTransport:KnownProxies:0", "010.0.0.1", "which would be read as 8.0.0.1; write 8.0.0.1, or 10.0.0.1 if that is what you meant")]
+    [InlineData("HttpTransport:KnownNetworks:0", "10.0.0.0/99", "whose prefix length is outside 0-32")]
+    [InlineData("HttpTransport:KnownNetworks:0", "fd00::/200", "whose prefix length is outside 0-128")]
+    [InlineData("HttpTransport:KnownNetworks:0", "10.0.0.0/x", "whose prefix length is outside 0-32")]
+    [InlineData("HttpTransport:KnownNetworks:0", "not-an-ip/8", "whose address, 'not-an-ip', is not an IP address")]
+    [InlineData("HttpTransport:KnownNetworks:0", "010.0.0.0/8", "whose address would be read as 8.0.0.0; write 8.0.0.0/8, or 10.0.0.0/8 if that is what you meant")]
+    [InlineData("HttpTransport:KnownNetworks:0", "fd00::1", "an IPv6 address with no prefix length")]
+    public void G12_2_a_trusted_proxy_or_network_that_is_not_one_is_refused_naming_its_key(string key, string value, string says)
+    {
+        var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.TrustedProxies(Config(new() { [key] = value })));
+
+        Assert.StartsWith($"{key} is '{value}'", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(says, ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>contract-005 · G-12 (2), review round 9 — the control: entries that are what they say are read as written.</summary>
+    [Fact]
+    public void G12_2_trusted_proxies_and_networks_written_as_addresses_are_read_as_written()
+    {
+        var (proxies, networks) = HttpServerComposition.TrustedProxies(Config(new()
+        {
+            ["HttpTransport:KnownProxies:0"] = "10.0.0.2",
+            ["HttpTransport:KnownProxies:1"] = "fd00::2",
+            ["HttpTransport:KnownNetworks:0"] = "10.0.0.0/8",
+            ["HttpTransport:KnownNetworks:1"] = "10.1.2.3",
+            ["HttpTransport:KnownNetworks:2"] = "fd00::/8",
+        }));
+
+        Assert.Equal(["10.0.0.2", "fd00::2"], proxies.Select(p => p.ToString()));
+        Assert.Equal(["10.0.0.0/8", "10.1.2.3/32", "fd00::/8"], networks.Select(n => n.ToString()));
+    }
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review round 9 — a bind failure the server has no plain words for says what the operating
+    /// system said, not only the error's name. A real one, raised inside Kestrel's socket transport: a file's handle
+    /// given to it as a socket's.
+    /// </summary>
+    [Fact]
+    public void G12_2_a_bind_failure_without_plain_words_says_what_the_operating_system_said()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"mcp-tests-not-a-socket-{Guid.NewGuid():N}");
+        using var file = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.DeleteOnClose);
+        var raised = Assert.Throws<System.Net.Sockets.SocketException>(() =>
+            Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportOptions.CreateDefaultBoundListenSocket(
+                new Microsoft.AspNetCore.Connections.FileHandleEndPoint(
+                    (ulong)file.SafeFileHandle.DangerousGetHandle(), Microsoft.AspNetCore.Connections.FileHandleType.Auto)));
+
+        var refusal = HttpServerComposition.BindFailure(raised, "127.0.0.1", 3001);
+
+        Assert.NotNull(refusal);
+        Assert.Contains($"({raised.SocketErrorCode}: {raised.Message})", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// contract-005 · G-12 (2), review round 8 — a zone on the any-address: Kestrel binds :: with both IPv4 and IPv6
     /// only for :: itself, so ::%1 binds :: for IPv6 alone on Linux, the zone ignored; the refusal says so.
     /// </summary>

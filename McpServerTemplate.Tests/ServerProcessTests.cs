@@ -1108,6 +1108,30 @@ public sealed class ServerProcessTests : IDisposable
     }
 
     /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 9 — a trusted proxy or network that is not one refuses to start,
+    /// naming its key. It used to be parsed only as the pipeline was built: exit 70, with a stack trace.
+    /// </summary>
+    [Theory]
+    [InlineData("HttpTransport__KnownProxies__0", "not-an-ip", "HttpTransport:KnownProxies:0 is 'not-an-ip'")]
+    [InlineData("HttpTransport__KnownNetworks__0", "10.0.0.0/99", "HttpTransport:KnownNetworks:0 is '10.0.0.0/99'")]
+    public async Task T11_2_a_trusted_proxy_that_is_not_one_refuses_to_start_naming_its_key(string variable, string value, string refusal)
+    {
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "127.0.0.1";
+        environment[variable] = value;
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        var (exitCode, stderr) = await RunToCompletionAsync(environment);
+
+        Assert.True(
+            exitCode == 78 && stderr.Contains(refusal, StringComparison.Ordinal) && !stderr.Contains("   at ", StringComparison.Ordinal),
+            $"a server with {variable}={value} exited {exitCode}: {stderr}");
+    }
+
+    /// <summary>
     /// contract-005 · T-11 (2) (G-12 (2)), review round 8 — a port already in use refuses to start, naming
     /// HttpTransport:Port, the cause: the server used to exit 70 with Kestrel's "address already in use" and a stack trace.
     /// </summary>

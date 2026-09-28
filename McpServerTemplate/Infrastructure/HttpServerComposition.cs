@@ -96,6 +96,7 @@ public static class HttpServerComposition
         // Known networks and proxies default to loopback, so a forwarded header from anywhere
         // else is ignored. Without that, any caller could set X-Forwarded-For and choose which
         // bucket of the per-client rate limiter to spend.
+        var trusted = TrustedProxies(configuration);
         builder.Services.Configure<ForwardedHeadersOptions>(options =>
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -106,10 +107,7 @@ public static class HttpServerComposition
             // by nothing else: declaring a trusted proxy satisfied the startup check and left the
             // middleware trusting only its defaults. A setting that is checked but never applied
             // is worse than an absent one, because it answers a question falsely.
-            var proxies = configuration.GetSection("HttpTransport:KnownProxies").Get<string[]>() ?? [];
-            var networks = configuration.GetSection("HttpTransport:KnownNetworks").Get<string[]>() ?? [];
-
-            if (proxies.Length > 0 || networks.Length > 0)
+            if (trusted.Proxies.Count > 0 || trusted.Networks.Count > 0)
             {
                 // Defaults trust loopback. An operator who names their proxies means those, so the
                 // defaults are replaced rather than added to.
@@ -117,17 +115,14 @@ public static class HttpServerComposition
                 options.KnownIPNetworks.Clear();
             }
 
-            foreach (var proxy in proxies)
+            foreach (var proxy in trusted.Proxies)
             {
-                options.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
+                options.KnownProxies.Add(proxy);
             }
 
-            foreach (var network in networks)
+            foreach (var network in trusted.Networks)
             {
-                var parts = network.Split('/', 2);
-                options.KnownIPNetworks.Add(new System.Net.IPNetwork(
-                    System.Net.IPAddress.Parse(parts[0]),
-                    parts.Length == 2 ? int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture) : 32));
+                options.KnownIPNetworks.Add(network);
             }
         });
 
@@ -189,6 +184,110 @@ public static class HttpServerComposition
         {
             services.Remove(loadsKeyRing);
         }
+    }
+
+    /// <summary>
+    /// contract-002 · G-12 — the proxies and networks forwarded headers are trusted from, HttpTransport:KnownProxies and
+    /// HttpTransport:KnownNetworks, read once, at composition.
+    ///
+    /// contract-005 · G-12 (2), review round 9 — every entry read at startup, and one that is not what its key says
+    /// refused naming the key and index: they used to be parsed only as the pipeline was built, and stopped the server
+    /// with exit 70 and a stack trace. An IPv4 address, alone or as a network's, is held to the standard form, as the bind
+    /// address is (010.0.0.1 would be read as 8.0.0.1). A network's prefix length is 0-32 for IPv4 and 0-128 for IPv6. An
+    /// IPv4 address alone is that one address, as before; an IPv6 address alone was read with the IPv4 default, /32, and
+    /// IPNetwork clears the bits past a prefix without a word, so fd00::1 stood for all of fd00::/32 — it is refused, and
+    /// asked for its prefix length.
+    /// </summary>
+    /// <exception cref="ConfigurationException">An entry is not an IP address, or a network, as its key says.</exception>
+    public static (IReadOnlyList<System.Net.IPAddress> Proxies, IReadOnlyList<System.Net.IPNetwork> Networks) TrustedProxies(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var proxies = new List<System.Net.IPAddress>();
+        foreach (var entry in configuration.GetSection("HttpTransport:KnownProxies").GetChildren())
+        {
+            var value = entry.Value ?? string.Empty;
+            if (!System.Net.IPAddress.TryParse(value, out var address))
+            {
+                throw new ConfigurationException(
+                    $"{entry.Path} is '{value}', which is not an IP address. Write the address of the proxy in front of this "
+                    + "server, as 10.0.0.2, or its network in HttpTransport:KnownNetworks, as 10.0.0.0/8.");
+            }
+
+            if (NotInStandardForm(value, address) is { } reading)
+            {
+                throw new ConfigurationException($"{entry.Path} is '{value}', which {reading}. {StandardIPv4}");
+            }
+
+            proxies.Add(address);
+        }
+
+        var networks = new List<System.Net.IPNetwork>();
+        foreach (var entry in configuration.GetSection("HttpTransport:KnownNetworks").GetChildren())
+        {
+            var value = entry.Value ?? string.Empty;
+            var slash = value.IndexOf('/', StringComparison.Ordinal);
+            var written = slash < 0 ? value : value[..slash];
+            if (!System.Net.IPAddress.TryParse(written, out var address))
+            {
+                throw new ConfigurationException(
+                    $"{entry.Path} is '{value}', whose address, '{written}', is not an IP address. Write a network in CIDR "
+                    + "form, as 10.0.0.0/8.");
+            }
+
+            if (NotInStandardForm(written, address, slash < 0 ? string.Empty : value[slash..]) is { } reading)
+            {
+                throw new ConfigurationException($"{entry.Path} is '{value}', whose address {reading}. {StandardIPv4}");
+            }
+
+            var bits = address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128;
+            int prefix;
+            if (slash < 0)
+            {
+                if (bits == 128)
+                {
+                    throw new ConfigurationException(
+                        $"{entry.Path} is '{value}', an IPv6 address with no prefix length, which a network needs: read with "
+                        + $"the IPv4 default, /32, it stood for far more than this address. Write {value}/128 for the one "
+                        + "address, or its network, as fd00::/8.");
+                }
+
+                prefix = 32;
+            }
+            else if (!int.TryParse(value.AsSpan(slash + 1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out prefix)
+                || prefix > bits)
+            {
+                throw new ConfigurationException(
+                    $"{entry.Path} is '{value}', whose prefix length is outside 0-{bits}. Write a network in CIDR form, as "
+                    + $"{(bits == 32 ? "10.0.0.0/8" : "fd00::/8")}.");
+            }
+
+            networks.Add(new System.Net.IPNetwork(address, prefix));
+        }
+
+        return (proxies, networks);
+    }
+
+    /// <summary>What <see cref="NotInStandardForm"/> is followed by in a refusal.</summary>
+    private const string StandardIPv4 = "An IPv4 address is written in its standard form: four decimal parts, without leading zeros.";
+
+    /// <summary>
+    /// contract-005 · G-12 (2), review rounds 8 and 9 — how <paramref name="text"/>, an IPv4 address not written in its
+    /// standard form, would be read, completing "…, which": "would be read as 8.0.0.1; write 8.0.0.1, or 10.0.0.1 if that
+    /// is what you meant", each written form followed by <paramref name="suffix"/>; or null when it is in its standard
+    /// form, or IPv6. The parser reads the other spellings as some address, not always the one meant (010.0.0.1 is octal).
+    /// </summary>
+    private static string? NotInStandardForm(string text, System.Net.IPAddress parsed, string suffix = "")
+    {
+        if (parsed.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork || text == parsed.ToString())
+        {
+            return null;
+        }
+
+        var read = parsed.ToString();
+        var meant = DecimalReading(text);
+        return $"would be read as {read}; write {read}{suffix}"
+            + (meant is not null && meant != read ? $", or {meant}{suffix} if that is what you meant" : string.Empty);
     }
 
     /// <summary>
@@ -338,13 +437,21 @@ public static class HttpServerComposition
 
         if (System.Net.IPAddress.TryParse(bindAddress, out var parsed))
         {
-            if (parsed.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && bindAddress != parsed.ToString())
+            if (NotInStandardForm(bindAddress, parsed) is { } reading)
             {
-                var read = parsed.ToString();
-                var meant = DecimalReading(bindAddress);
-                return $"HttpTransport:BindAddress is '{bindAddress}', which would be read as {read}; write {read}"
-                    + (meant is not null && meant != read ? $", or {meant} if that is what you meant" : string.Empty)
-                    + ". An IPv4 address is written in its standard form: four decimal parts, without leading zeros.";
+                return $"HttpTransport:BindAddress is '{bindAddress}', which {reading}. {StandardIPv4}";
+            }
+
+            // Review round 9 — an address no connection can be accepted on: the server bound 255.255.255.255 and logged
+            // "Now listening on http://255.255.255.255:3001", and nobody could connect.
+            var broadcast = parsed.Equals(System.Net.IPAddress.Broadcast);
+            if (broadcast || parsed.IsIPv6Multicast
+                || (parsed.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && (parsed.GetAddressBytes()[0] & 0xF0) == 0xE0))
+            {
+                return $"HttpTransport:BindAddress is '{bindAddress}', a {(broadcast ? "broadcast" : "multicast")} address, "
+                    + "which cannot accept connections: a server listens on a unicast address. Write one: 127.0.0.1, or "
+                    + "[::1], for this machine alone, or 0.0.0.0, or [::], for every interface, behind a proxy, with "
+                    + "HttpTransport:AllowedHosts set.";
             }
 
             if (parsed.IsIPv4MappedToIPv6)
@@ -466,7 +573,7 @@ public static class HttpServerComposition
                         + "and the operating system can reserve others. Set HttpTransport:Port to a free port of 1024 or above, "
                         + "such as 3001.",
                     _ => $"HttpTransport:BindAddress is '{bindAddress}' and HttpTransport:Port is {port}, and the server cannot "
-                        + $"listen there: the operating system refused it ({socket.SocketErrorCode}).",
+                        + $"listen there: the operating system refused it ({socket.SocketErrorCode}: {socket.Message}).",
                 });
             }
         }

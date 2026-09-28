@@ -90,6 +90,27 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
     }
 
     /// <summary>
+    /// contract-005 · T-11 (2) (G-12 (2)), review round 9 — settings the image used to start on and serve nobody, or die
+    /// on with a stack trace, with the environment's allowed host set: a broadcast or multicast bind address, which it
+    /// bound and nobody could connect to; and a trusted proxy or network that is not one, which it parsed only as the
+    /// pipeline was built, exit 70. Each refuses to start, naming its key.
+    /// </summary>
+    [Theory]
+    [InlineData("bind-broadcast", "HttpTransport:BindAddress", "255.255.255.255")]
+    [InlineData("bind-multicast", "HttpTransport:BindAddress", "224.0.0.1")]
+    [InlineData("proxy-not-an-address", "HttpTransport:KnownProxies:0", "not-an-ip")]
+    [InlineData("network-prefix-too-long", "HttpTransport:KnownNetworks:0", "10.0.0.0/99")]
+    public async Task T11_2_a_setting_the_image_cannot_serve_by_refuses_to_start(string variant, string key, string value)
+    {
+        await using var outcome = await fixture.Environment.StartupAsync(variant, SettingsDelta.None.Set(key, value));
+        output.WriteLine(outcome.Describe());
+
+        Assert.True(
+            outcome.ExitCode == 78 && outcome.RefusalLine?.Contains($"{key} is '{value}'", StringComparison.Ordinal) == true,
+            $"{key}={value}: {outcome.Describe()}");
+    }
+
+    /// <summary>
     /// contract-005 · T-11 (2) (G-12 (2)), review round 8 — accepted-looking addresses the image cannot bind, with the
     /// environment's allowed host set: a link-local address without its zone (none, or one the parser drops), an
     /// address the container does not hold, and an IPv4 address in octal (read as 8.0.0.1). Each used to exit 70,
