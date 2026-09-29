@@ -648,17 +648,22 @@ public class TransportAndPrincipalTests
     /// <summary>
     /// contract-005 · G-12 (2), review round 9 — a bind failure the server has no plain words for says what the operating
     /// system said, not only the error's name. A real one, raised inside Kestrel's socket transport: a file's handle
-    /// given to it as a socket's.
+    /// given to it as a socket's, bound through the transport's factory as Kestrel binds an address, which creates the
+    /// socket and then listens on it. Windows refuses the handle as the socket is created; Linux takes it without a word
+    /// and refuses it as the transport listens on it, so creating the socket alone raised nothing there (CI run
+    /// 36497415078). On both it is not a socket, which the server has no plain words for.
     /// </summary>
     [Fact]
-    public void G12_2_a_bind_failure_without_plain_words_says_what_the_operating_system_said()
+    public async Task G12_2_a_bind_failure_without_plain_words_says_what_the_operating_system_said()
     {
         var path = Path.Combine(Path.GetTempPath(), $"mcp-tests-not-a-socket-{Guid.NewGuid():N}");
         using var file = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.DeleteOnClose);
-        var raised = Assert.Throws<System.Net.Sockets.SocketException>(() =>
-            Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportOptions.CreateDefaultBoundListenSocket(
-                new Microsoft.AspNetCore.Connections.FileHandleEndPoint(
-                    (ulong)file.SafeFileHandle.DangerousGetHandle(), Microsoft.AspNetCore.Connections.FileHandleType.Auto)));
+        var transport = new Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportFactory(
+            Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportOptions()),
+            Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+        var raised = await Assert.ThrowsAsync<System.Net.Sockets.SocketException>(() =>
+            transport.BindAsync(new Microsoft.AspNetCore.Connections.FileHandleEndPoint(
+                (ulong)file.SafeFileHandle.DangerousGetHandle(), Microsoft.AspNetCore.Connections.FileHandleType.Auto)).AsTask());
 
         var refusal = HttpServerComposition.BindFailure(raised, "127.0.0.1", 3001);
 
