@@ -76,6 +76,9 @@ public static class HttpServerComposition
         // contract-005 · G-17 round 1 — the framework's own forwarded-headers switch, which the server would ignore.
         RefuseForwardedHeadersSwitch(configuration);
 
+        // contract-005 · G-17 round 2 (SEC-R2-06) — and the framework's own host list, which it would ignore as well.
+        RefuseFrameworksAllowedHosts(configuration);
+
         // contract-002 · G-12 — refuse plaintext before anything binds; contract-005 · G-17 round 1 — in every environment
         // but Development, where the frame's other deployment rules apply, not only in one named Production.
         TransportSecurityGuard.Validate(configuration, builder.Environment);
@@ -232,6 +235,65 @@ public static class HttpServerComposition
         }
     }
 
+    /// <summary>ASP.NET Core's own host-filtering list, which its web host reads from the app's settings.</summary>
+    private const string FrameworksAllowedHosts = "AllowedHosts";
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-06) — ASP.NET Core's web host reads a host-filtering list of its own, the top-level
+    /// <c>AllowedHosts</c> (found in the appsettings.json of its templates, and settable as ASPNETCORE_ALLOWEDHOSTS), outside
+    /// every section the settings allowlist governs. Its defaults fill the host filter from that key only when the filter's own
+    /// list is empty, and this composition always sets the list (<see cref="AllowedHosts"/>), so the key was ignored without a
+    /// word: an operator who set it to the name clients use believed the server answered that name, and it answered 400. A
+    /// setting the server would ignore is refused, from every route the web host reads it by — the command line, the
+    /// environment as DOTNET_, ASPNETCORE_ or unprefixed, a settings file — naming the route, as the forwarded-headers switch
+    /// is (<see cref="RefuseForwardedHeadersSwitch"/>): the key itself, as the framework reads it, a list of names split at ;,
+    /// or an entry under it, as a list is written in a settings file or the environment.
+    /// </summary>
+    private static void RefuseFrameworksAllowedHosts(IConfigurationRoot configuration)
+    {
+        foreach (var provider in configuration.Providers)
+        {
+            // The key as the source holds it, so an environment variable is named as it was written: ASPNETCORE_ALLOWEDHOSTS.
+            var written = provider.GetChildKeys([], parentPath: null)
+                .FirstOrDefault(k => k.Equals(FrameworksAllowedHosts, StringComparison.OrdinalIgnoreCase));
+            if (written is null)
+            {
+                continue;
+            }
+
+            string? key = null;
+            string? value = null;
+            if (provider.TryGet(written, out var list) && !string.IsNullOrEmpty(list))
+            {
+                (key, value) = (written, list);
+            }
+            else
+            {
+                foreach (var index in provider.GetChildKeys([], written).Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    var entry = ConfigurationPath.Combine(written, index);
+                    if (provider.TryGet(entry, out var name) && !string.IsNullOrEmpty(name))
+                    {
+                        (key, value) = (entry, name);
+                        break;
+                    }
+                }
+            }
+
+            if (key is null)
+            {
+                continue;
+            }
+
+            var named = FrameworksAllowedHosts + key[written.Length..];
+            throw new ConfigurationException(
+                $"{named} is '{value}' from {SettingsReadOnce.Route(provider, key)}: it is ASP.NET Core's own host-filtering list, "
+                + "which this server does not read. It answers only the host names in HttpTransport:AllowedHosts, one to an entry, "
+                + "and would ignore this: a request for a name only this holds would be answered 400. Remove it, and name the host "
+                + "names clients reach this server by there, as HttpTransport:AllowedHosts:0=mcp.example.com.");
+        }
+    }
+
     /// <summary>
     /// contract-005 · G-17 round 1 — the web host's defaults register a forwarded-headers step of their own (a startup filter
     /// that runs the middleware ahead of the whole pipeline) and an options setup that empties the trusted lists, both acting
@@ -271,6 +333,14 @@ public static class HttpServerComposition
     /// it falls in (10.213.99.250/2, a digit short of /24, trusted a quarter of every address), so it is refused, naming that
     /// network. And none is broader than <see cref="BroadestIPv4Network"/> or <see cref="BroadestIPv6Network"/>: no proxy
     /// needs more, and two /1 entries would trust every address, walking round the refusal of /0.
+    ///
+    /// contract-005 · G-17 round 2 — an entry is judged by the addresses it matches, not by the family it is written in
+    /// (SEC-R2-01): on a dual-stack bind every IPv4 client arrives as an IPv4-mapped IPv6 address, so an IPv6 network
+    /// overlapping ::ffff:0:0/96 is an IPv4 network held only to the IPv6 limit, and the /1 pair walked round the refusal of
+    /// /0 in that spelling. One inside the mapped range is refused naming the IPv4 network to write, one holding the whole
+    /// range is refused as every IPv4 client, and a proxy written in its mapped form is asked for in its IPv4 form. And an
+    /// entry no connection can come from — the unspecified, broadcast or a multicast address, or a network of multicast
+    /// addresses — names no proxy, and is refused (SEC-R2-04): it satisfied the Production guard while nothing was trusted.
     /// </summary>
     /// <exception cref="ConfigurationException">An entry is not an IP address, or a network, as its key says.</exception>
     public static (IReadOnlyList<System.Net.IPAddress> Proxies, IReadOnlyList<System.Net.IPNetwork> Networks) TrustedProxies(IConfiguration configuration)
@@ -291,6 +361,31 @@ public static class HttpServerComposition
             if (NotInStandardForm(value, address) is { } reading)
             {
                 throw new ConfigurationException($"{entry.Path} is '{value}', which {reading}. {StandardIPv4}");
+            }
+
+            // contract-005 · G-17 round 2 (SEC-R2-01) — an IPv4 address written in its IPv4-mapped IPv6 form, as the bind
+            // address refuses one: every network is now judged by the IPv4 addresses it stands for, and so is a proxy.
+            if (address.IsIPv4MappedToIPv6)
+            {
+                var ipv4 = address.MapToIPv4();
+                throw new ConfigurationException(
+                    $"{entry.Path} is '{value}', an IPv4-mapped IPv6 address: the IPv4 address {ipv4}, in the form an IPv4 "
+                    + "client's address takes on a dual-stack bind. "
+                    + (NoConnectionFrom(ipv4) is { } none
+                        ? $"{ipv4} is {none}, which no connection comes from, so it names no proxy. Write the address of the "
+                            + "proxy in front of this server, as 10.0.0.2."
+                        : $"Write the IPv4 address itself, {ipv4}: the server matches a client arriving in either form against it."));
+            }
+
+            // contract-005 · G-17 round 2 (SEC-R2-04) — an address no connection can come from names no proxy, and satisfied
+            // the Production guard as if it did, while nothing was trusted: every client behind the real proxy shared its
+            // address and was seen as http. Refused, as the bind address refuses the broadcast and multicast addresses.
+            if (NoConnectionFrom(address) is { } nothing)
+            {
+                throw new ConfigurationException(
+                    $"{entry.Path} is '{value}', {nothing}, which no connection comes from, so it names no proxy: the server "
+                    + "would trust nothing from it, while starting as if a proxy were named. Write the address of the proxy in "
+                    + "front of this server, as 10.0.0.2, or its network in HttpTransport:KnownNetworks, as 10.0.0.0/8.");
             }
 
             proxies.Add(address);
@@ -320,6 +415,13 @@ public static class HttpServerComposition
             {
                 if (bits == 128)
                 {
+                    // contract-005 · G-17 round 2 (SEC-R2-01) — an IPv4 address in its IPv4-mapped form is asked for in its
+                    // IPv4 form, as it would be once written with its prefix length.
+                    if (MappedNetworkRefusal(address, 128) is { } mapped)
+                    {
+                        throw new ConfigurationException($"{entry.Path} is '{value}', {mapped}");
+                    }
+
                     throw new ConfigurationException(
                         $"{entry.Path} is '{value}', an IPv6 address with no prefix length, which a network needs: read with "
                         + $"the IPv4 default, /32, it stood for far more than this address. Write {value}/128 for the one "
@@ -348,8 +450,30 @@ public static class HttpServerComposition
                     + $"{(bits == 32 ? "10.0.0.0/8" : "fd00::/64")}.");
             }
 
+            // contract-005 · G-17 round 2 (SEC-R2-01) — judged by the addresses it matches, not by the family it is written in.
+            // On a dual-stack bind (::, [::], * or +) every IPv4 client arrives as an IPv4-mapped IPv6 address, and the
+            // forwarded-headers step checks that address against these networks: ::ffff:0:0/97 and ::ffff:128.0.0.0/97 are
+            // 0.0.0.0/1 and 128.0.0.0/1 in another spelling, were held only to the /32 limit on IPv6 networks, and together
+            // made the server believe every IPv4 client's X-Forwarded-For and X-Forwarded-Proto. A network inside the mapped
+            // range is refused naming the IPv4 network to write instead, which meets the IPv4 rules and still matches a mapped
+            // client (the step maps one to IPv4 before it checks); one that contains the whole range is refused outright.
+            if (bits == 128 && MappedNetworkRefusal(address, prefix) is { } overlaps)
+            {
+                throw new ConfigurationException($"{entry.Path} is '{value}', {overlaps}");
+            }
+
             var network = new System.Net.IPNetwork(address, prefix);
             var broadest = bits == 32 ? BroadestIPv4Network : BroadestIPv6Network;
+
+            // contract-005 · G-17 round 2 (SEC-R2-04) — a network no connection can come from names no proxy's network, and
+            // satisfied the Production guard as if it did, while nothing was trusted.
+            if (NoConnectionFrom(network) is { } nothing)
+            {
+                throw new ConfigurationException(
+                    $"{entry.Path} is '{value}', {nothing}, which no connection comes from, so it names no proxy's network: the "
+                    + "server would trust nothing from it, while starting as if a proxy were named. Write the network the proxy "
+                    + "in front of this server is in, as 10.0.0.0/8, or the proxy itself in HttpTransport:KnownProxies, as 10.0.0.2.");
+            }
 
             // contract-005 · G-17 round 1, follow-up — in its exact form: IPNetwork clears the bits past the prefix without a
             // word, so the network trusted was another than the one written. Refused, naming it — and, where it is broader
@@ -387,6 +511,89 @@ public static class HttpServerComposition
 
     /// <summary>contract-005 · G-17 round 1, follow-up — the broadest IPv6 network forwarded headers are trusted from: /32.</summary>
     private const int BroadestIPv6Network = 32;
+
+    /// <summary>contract-005 · G-17 round 2 (SEC-R2-01) — the length of the IPv4-mapped IPv6 prefix, ::ffff:0:0/96: 80 zero bits, 16 one bits.</summary>
+    private const int MappedPrefix = 96;
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-01) — why the IPv6 network <paramref name="address"/>/<paramref name="prefix"/>
+    /// is refused for overlapping ::ffff:0:0/96, the IPv4-mapped addresses, completing "{key} is '{value}', …"; or null when
+    /// it does not overlap them. Two networks overlap only when one holds the other: one of /97 or narrower whose first 96
+    /// bits are the mapped prefix lies inside the range, and stands for the IPv4 network a.b.c.d/(p-96), which the refusal
+    /// names, and which then meets the IPv4 rules (no broader than /8); one of /96 or broader whose first bits match holds the
+    /// whole range (::/32 … ::ffff:0:0/96), every IPv4 client, and is refused as such.
+    /// </summary>
+    private static string? MappedNetworkRefusal(System.Net.IPAddress address, int prefix)
+    {
+        var bytes = address.GetAddressBytes();
+        for (var bit = 0; bit < Math.Min(prefix, MappedPrefix); bit++)
+        {
+            var set = (bytes[bit / 8] & (0x80 >> (bit % 8))) != 0;
+            if (set != (bit >= 80))
+            {
+                return null;
+            }
+        }
+
+        if (prefix <= MappedPrefix)
+        {
+            return "which contains ::ffff:0:0/96, the IPv4-mapped IPv6 addresses. On a dual-stack bind every IPv4 client's address "
+                + "arrives in that form, so every IPv4 client's X-Forwarded-For and X-Forwarded-Proto would be believed, as with "
+                + "0.0.0.0/0: each would choose the address the per-address limit counts it by, and its scheme. Name the proxy in "
+                + "front of this server, as 10.0.0.2 in HttpTransport:KnownProxies, or its network here, as 10.0.0.0/8 or fd00::/64.";
+        }
+
+        var ipv4 = address.MapToIPv4();
+        var ipv4Prefix = prefix - MappedPrefix;
+        var ipv4Network = new System.Net.IPNetwork(ipv4, ipv4Prefix);
+        return $"an IPv4-mapped IPv6 network: the IPv4 network {ipv4Network}, in the form an IPv4 client's address takes on a "
+            + "dual-stack bind, where the rules for IPv4 networks did not reach it. Write the IPv4 network itself, "
+            + $"{ipv4Network}"
+            + (ipv4Prefix < BroadestIPv4Network
+                ? $" — though that is broader than /{BroadestIPv4Network}, which no proxy needs, and is refused as well. Name the "
+                    + $"proxy itself, as {ipv4}/32, or the network it is in, no broader than /{BroadestIPv4Network}."
+                : ": the server matches a client arriving in either form against it.");
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-04) — what <paramref name="address"/> is when no connection can come from it: the
+    /// unspecified address (0.0.0.0, ::), the IPv4 broadcast address, or a multicast address (224.0.0.0/4, ff00::/8); null
+    /// for any other. A connection's source is always a unicast address.
+    /// </summary>
+    private static string? NoConnectionFrom(System.Net.IPAddress address)
+    {
+        var bytes = address.GetAddressBytes();
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            return address.Equals(System.Net.IPAddress.Any) ? "the unspecified address"
+                : address.Equals(System.Net.IPAddress.Broadcast) ? "the broadcast address"
+                : (bytes[0] & 0xF0) == 0xE0 ? "a multicast address"
+                : null;
+        }
+
+        return bytes.All(b => b == 0) ? "the unspecified address"
+            : address.IsIPv6Multicast ? "a multicast address"
+            : null;
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-04) — what <paramref name="network"/> is when no connection can come from any
+    /// address in it: a network of multicast addresses, or the one address, unspecified or broadcast, written as a network of
+    /// itself (0.0.0.0/32, ::/128); null for any other. A broader network with such a base address holds addresses a
+    /// connection can come from (::/96 holds ::1), and is left to the other rules.
+    /// </summary>
+    private static string? NoConnectionFrom(System.Net.IPNetwork network)
+    {
+        var address = network.BaseAddress;
+        var ipv4 = address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork;
+        if ((ipv4 && network.PrefixLength >= 4 && (address.GetAddressBytes()[0] & 0xF0) == 0xE0)
+            || (!ipv4 && network.PrefixLength >= 8 && address.IsIPv6Multicast))
+        {
+            return "a network of multicast addresses";
+        }
+
+        return network.PrefixLength == (ipv4 ? 32 : 128) ? NoConnectionFrom(address) : null;
+    }
 
     /// <summary>What <see cref="NotInStandardForm"/> is followed by in a refusal.</summary>
     private const string StandardIPv4 = "An IPv4 address is written in its standard form: four decimal parts, without leading zeros.";

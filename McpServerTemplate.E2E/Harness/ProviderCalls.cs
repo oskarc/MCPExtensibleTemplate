@@ -53,27 +53,33 @@ public static class ProviderCalls
         message.TryGetProperty("error", out _)
         || (message.TryGetProperty("result", out var result) && result.TryGetProperty("isError", out var flag) && flag.ValueKind == JsonValueKind.True);
 
-    /// <summary>The requests <paramref name="owner"/> has recorded from <paramref name="server"/> under <paramref name="host"/>.</summary>
+    /// <summary>
+    /// The requests <paramref name="owner"/> has recorded from <paramref name="server"/> under <paramref name="host"/> — at
+    /// <paramref name="path"/> alone, when one is given. contract-005 · G-17 round 2 (HAR-R2-02) — from its address since it
+    /// started (<see cref="RequestSource"/>): read by address alone, a record an earlier server at the same address had left
+    /// counted as this one's.
+    /// </summary>
     public static async Task<IReadOnlyList<UpstreamRequest>> FromServerAsync(
-        IUpstreamService owner, HttpClient http, IPAddress server, string host, CancellationToken cancellationToken = default)
+        IUpstreamService owner, HttpClient http, RequestSource server, string host, string? path = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(server);
-        return [.. (await owner.RecordedAsync(http, cancellationToken)).Where(r => server.Equals(r.Client) && r.Host.Equals(host, StringComparison.OrdinalIgnoreCase))];
+        return [.. (await owner.RecordedAsync(http, cancellationToken))
+            .Where(r => server.Made(r) && r.Host.Equals(host, StringComparison.OrdinalIgnoreCase) && (path is null || r.Path == path))];
     }
 
     /// <summary>
-    /// How many requests <paramref name="owner"/> has recorded from <paramref name="server"/> under <paramref name="host"/> beyond
-    /// the <paramref name="before"/> it had, looking again for up to three seconds until there is one: a record follows its
-    /// request a moment later (the stand-in's is its container's log).
+    /// How many requests <paramref name="owner"/> has recorded from <paramref name="server"/> under <paramref name="host"/> (at
+    /// <paramref name="path"/>, when one is given) beyond the <paramref name="before"/> it had, looking again for up to three
+    /// seconds until there is one: a record follows its request a moment later (the stand-in's is its container's log).
     /// </summary>
     public static async Task<int> SeenSinceAsync(
-        IUpstreamService owner, HttpClient http, IPAddress server, string host, int before, CancellationToken cancellationToken = default)
+        IUpstreamService owner, HttpClient http, RequestSource server, string host, int before, string? path = null, CancellationToken cancellationToken = default)
     {
         var deadline = DateTime.UtcNow.AddSeconds(3);
         while (true)
         {
-            var seen = (await FromServerAsync(owner, http, server, host, cancellationToken)).Count - before;
+            var seen = (await FromServerAsync(owner, http, server, host, path, cancellationToken)).Count - before;
             if (seen > 0 || DateTime.UtcNow >= deadline)
             {
                 return seen;

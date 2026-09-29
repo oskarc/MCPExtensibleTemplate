@@ -46,13 +46,12 @@ public sealed class RedisService : IAsyncDisposable
 
     public IContainer Container => _container;
 
-    internal static Task<RedisService> StartAsync(INetwork network, string runId, CancellationToken cancellationToken) =>
-        StartAsync(network, runId, Alias, cancellationToken);
+    internal static Task<RedisService> StartAsync(Docker.DotNet.IDockerClient docker, INetwork network, string runId, CancellationToken cancellationToken) =>
+        StartAsync(docker, network, runId, Alias, cancellationToken);
 
-    internal static async Task<RedisService> StartAsync(INetwork network, string runId, string host, CancellationToken cancellationToken)
+    internal static async Task<RedisService> StartAsync(Docker.DotNet.IDockerClient docker, INetwork network, string runId, string host, CancellationToken cancellationToken)
     {
-        var container = new ContainerBuilder(Image)
-            .OnTheRunNetwork(network, runId)
+        var container = E2ENetwork.OnTheRunNetwork(Image, docker, network, runId)
             .WithNetworkAliases(host)
             // contract-005 · UC-1 edge — the wait has a deadline of its own, so a Redis that never
             // becomes ready is a named fault rather than a run held until CI's hang timeout.

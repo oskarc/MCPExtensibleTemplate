@@ -149,7 +149,7 @@ public sealed class IssuerSet : IDisposable
     /// <param name="Kind">valid, wrong-audience, expired, alg-none, hs256, key-confusion, cross-signed, missing-claim or stale-iat.</param>
     /// <param name="Audience">The audience; the server's resource for every kind but wrong-audience.</param>
     /// <param name="Scopes">Scopes to put in the scope claim.</param>
-    /// <param name="Subject">The sub claim.</param>
+    /// <param name="Subject">The sub claim; one of the token's own when none is named.</param>
     /// <param name="ClientId">The client_id claim.</param>
     /// <param name="Claim">For missing-claim: sub, jti, client_id or iat.</param>
     /// <param name="IssuedSecondsAgo">For stale-iat: how long ago iat says the token was issued.</param>
@@ -364,13 +364,17 @@ public sealed class IssuerSet : IDisposable
             });
         }
 
-        /// <summary>The tokens Keycloak will not mint, each wrong in exactly one way.</summary>
+        /// <summary>
+        /// The tokens Keycloak will not mint, each wrong in exactly one way. contract-005 · G-17 round 2 (FLA-R2-02) — for the
+        /// subject the request names, or else for one of its own: a token with no subject named was e2e-user's, one caller in
+        /// every server's per-caller windows across the run, which the harness's mints now name a subject for anyway.
+        /// </summary>
         public IResult Mint(MintRequest request, IssuerSet set)
         {
             var audience = request.Audience ?? string.Empty;
-            var subject = request.Subject ?? "e2e-user";
-            var clientId = request.ClientId ?? "e2e-client";
             var jti = Guid.NewGuid().ToString("N");
+            var subject = request.Subject ?? $"e2e-user-{jti}";
+            var clientId = request.ClientId ?? "e2e-client";
             var now = DateTime.UtcNow;
 
             string token;

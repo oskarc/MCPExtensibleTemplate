@@ -39,7 +39,9 @@ public enum ServerBuild
 ///   Running:   stderr is kept by Docker and read back through the container's logs; the server is
 ///              ready when /readyz answers on its own published port — directly, not through the
 ///              front, so a broken front is not mistaken for a server that never started.
-/// There is one per test class, so counts in Redis and at the fakes never leak between classes.
+/// There is one per test class, so counts in Redis and at the fakes never leak between classes: contract-005 · G-17 round 2
+/// (FLA-R2-02) — in Redis because its clients' test-issuer tokens are its own caller's (<see cref="Caller"/>), and at the
+/// fakes because a witness is read for this server alone, from its address and since it started (<see cref="RequestSourceAsync"/>).
 /// </summary>
 public sealed partial class ServerUnderTest : IAsyncDisposable
 {
@@ -151,8 +153,7 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
         var frontAddress = E2ENetwork.AllocateStatic();
         var settings = delta.ApplyTo(BaseSettings(E2EEnvironment.Issuers, frontAddress));
 
-        var container = new ContainerBuilder(environment.ImageOf(build))
-            .OnTheRunNetwork(environment.Network, environment.RunId)
+        var container = E2ENetwork.OnTheRunNetwork(environment.ImageOf(build), environment.Docker, environment.Network, environment.RunId)
             .WithNetworkAliases(alias)
             .WithPortBinding(Port, true)
             .WithLoopbackPortsOnly()
@@ -177,7 +178,7 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
                 CheckTrustAsync(environment, container, cancellationToken));
 
             front = await E2EEnvironment.Timings.MeasureEnvironmentAsync($"{name}: front", () =>
-                TlsFront.StartAsync(environment.Network, environment.Pki, frontAddress, alias, Port, environment.RunId, cancellationToken));
+                TlsFront.StartAsync(environment.Docker, environment.Network, environment.Pki, frontAddress, alias, Port, environment.RunId, cancellationToken));
 
             var server = new ServerUnderTest(environment, name, build, container, front, settings);
             await E2EEnvironment.Timings.MeasureEnvironmentAsync($"{name}: forwarded-headers self-check", () =>
@@ -313,9 +314,34 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
     [System.Text.RegularExpressions.GeneratedRegex(@"(\.\d{7})\d+")]
     private static partial System.Text.RegularExpressions.Regex BeyondSevenFractionalDigits();
 
-    /// <summary>An HTTP client through this server's name map, forwarding <paramref name="clientAddress"/>.</summary>
-    public HttpClient CreateClient(string clientAddress, NameMapLog? log = null, DelegatingHandler? outermost = null) =>
-        Names.CreateClient(log, clientAddress, outermost);
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-02) — this server as every witness that records by client address must read it: its
+    /// address on the run's network, from the moment its container started (<see cref="RequestSource"/>). A test reads the fake's
+    /// journal, the stand-in's record and the test issuer's counts for its server through this, and HarnessSelfTests fails on a
+    /// test that asks for its server's bare address or start instead.
+    /// </summary>
+    public async Task<RequestSource> RequestSourceAsync() => new(Name, await NetworkAddressAsync(), await StartedAtAsync());
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (FLA-R2-02) — the caller this server's clients mint test-issuer tokens for when a test names
+    /// no subject: e2e-{its name}, which no other server of the run has. The frame counts a caller's calls in the run's one Redis
+    /// by issuer and subject (caller-rate, tool-rate), and every token the test issuer minted without a subject was e2e-user:
+    /// one caller across every class, whose windows held calls from three classes at once in a watched run, in an order that
+    /// changes with every run. Keycloak's tokens were already a class's own (G-5: a client per class); now the test issuer's
+    /// are too (<see cref="TestIssuerService.MintAsync"/>).
+    /// </summary>
+    public string Caller => $"e2e-{Name}";
+
+    /// <summary>
+    /// An HTTP client through this server's name map, forwarding <paramref name="clientAddress"/>, whose test-issuer tokens are
+    /// minted for this server's <see cref="Caller"/> unless a test names a subject.
+    /// </summary>
+    public HttpClient CreateClient(string clientAddress, NameMapLog? log = null, DelegatingHandler? outermost = null)
+    {
+        var client = Names.CreateClient(log, clientAddress, outermost);
+        TestIssuerService.MintFor(client, Caller);
+        return client;
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -336,8 +362,7 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
         E2EEnvironment environment, string name, SettingsDelta delta, ServerBuild build, CancellationToken cancellationToken)
     {
         var settings = delta.ApplyTo(BaseSettings(E2EEnvironment.Issuers, E2ENetwork.NoFront));
-        var container = new ContainerBuilder(environment.ImageOf(build))
-            .OnTheRunNetwork(environment.Network, environment.RunId)
+        var container = E2ENetwork.OnTheRunNetwork(environment.ImageOf(build), environment.Docker, environment.Network, environment.RunId)
             .WithNetworkAliases($"server-{name}")
             .WithPortBinding(Port, true)
             .WithLoopbackPortsOnly()
@@ -581,8 +606,11 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
                 + "it would take nothing the front forwards.");
         }
 
-        // The front sends the headers to this server.
-        using var http = CreateClient(ClientAddresses.SelfCheck);
+        // The front sends the headers to this server. contract-005 · G-17 round 2 (FLA-R2-02) — forwarded as an address of this
+        // server's own, which no class and no other server's self-check is given: every server's self-checks were forwarded as
+        // one address, the only address two servers' requests shared.
+        var selfCheck = ClientAddresses.Next();
+        using var http = CreateClient(selfCheck);
         HttpStatusCode answered;
         try
         {
@@ -594,10 +622,10 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
             throw new EnvironmentFaultException("front", $"CA trust missing: the front's certificate did not validate against the run's test CA ({ex.InnerException.Message}).", ex);
         }
 
-        var line = await Front.AccessLogLineAsync(ClientAddresses.SelfCheck, cancellationToken);
+        var line = await Front.AccessLogLineAsync(selfCheck, cancellationToken);
         var fault = line switch
         {
-            null => $"the front's access log has no line forwarded for {ClientAddresses.SelfCheck}: a GET of {MetadataDocument} "
+            null => $"the front's access log has no line forwarded for {selfCheck}: a GET of {MetadataDocument} "
                 + $"(answered {(int)answered}) never passed through it.",
             _ when !line.Contains(" forwarded-proto=https ", StringComparison.Ordinal) =>
                 $"the front did not send X-Forwarded-Proto: https to the server: its access log line is '{line}'.",
@@ -664,4 +692,44 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
             // Diagnostics are best effort; the failure they would explain is already on its way.
         }
     }
+}
+
+/// <summary>
+/// contract-005 · G-17 round 2 (HAR-R2-02) — one server, as a witness that records requests by the address they came from must
+/// read it: its address on the run's network, and the moment from which that address is its own — its container's start, by the
+/// Docker engine's clock, which the witnesses' clocks are (every container of the run shares the engine's kernel).
+///
+/// Every witness a test reads by address — the fake's journal, the stand-in's record, the test issuer's counts — is shared by
+/// every server of the run, and Docker hands a freed address to the next container at once. A request an earlier holder of the
+/// address made was recorded before that server stopped, and so before this one started; so a record is this server's only
+/// when it came from this address at or after this start (<see cref="Made(IPAddress?, DateTimeOffset)"/>). The fake's journal
+/// and the stand-in's record were read by address alone, over the whole run: in saved runs, T-3's and T-15's positive controls
+/// counted a request an earlier server at the same address had made, and nothing kept T-15's claim from doing so. G-17 round 1
+/// (FLA-R1-05) had bounded the issuer's counts so; every read by address goes through this now.
+/// </summary>
+/// <param name="Server">The server's name in the run.</param>
+/// <param name="Address">Its address on the run's network.</param>
+/// <param name="Since">When its container started, by the engine's clock.</param>
+public sealed record RequestSource(string Server, IPAddress Address, DateTimeOffset Since)
+{
+    /// <summary>Whether a request a witness recorded from <paramref name="client"/> at <paramref name="at"/> is this server's.</summary>
+    public bool Made(IPAddress? client, DateTimeOffset at) => Address.Equals(client) && at >= Since;
+
+    /// <summary>Whether <paramref name="request"/>, as an upstream owner recorded it, is this server's.</summary>
+    public bool Made(UpstreamRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return Made(request.Client, request.At);
+    }
+
+    /// <summary>Whether <paramref name="entry"/> of the fake's journal is this server's.</summary>
+    public bool Made(WireMockService.JournalEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return Made(entry.Client, entry.At);
+    }
+
+    /// <summary>The server, its address and its start, for a failure message.</summary>
+    public override string ToString() =>
+        string.Create(CultureInfo.InvariantCulture, $"{Server} ({Address}, since {Since.UtcDateTime:yyyy-MM-ddTHH:mm:ss.fffZ})");
 }

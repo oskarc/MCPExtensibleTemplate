@@ -60,8 +60,7 @@ public sealed class WireMockService : IUpstreamService
         CancellationToken cancellationToken)
     {
         var tls = pki.LeafDirectory(Owner.Name);
-        var container = new ContainerBuilder(Image)
-            .OnTheRunNetwork(network, runId)
+        var container = E2ENetwork.OnTheRunNetwork(Image, docker, network, runId)
             .WithNetworkAliases([.. hosts])
             .WithPortBinding(Port, true)
             .WithLoopbackPortsOnly()
@@ -98,18 +97,25 @@ public sealed class WireMockService : IUpstreamService
         return await http.GetFromJsonAsync<JsonElement>(new Uri($"https://{Alias}/__admin/requests"), cancellationToken);
     }
 
-    /// <summary>One request the fake recorded: the address it came from, and what it asked for.</summary>
+    /// <summary>One request the fake recorded: the address it came from, when, and what it asked for.</summary>
     /// <param name="Id">WireMock's own id for the entry.</param>
     /// <param name="Client">The address the request came from: on the run's network, the server that made it.</param>
     /// <param name="Method">The HTTP method.</param>
     /// <param name="Url">The URL as the fake received it, host included.</param>
     /// <param name="Path">The path.</param>
-    public sealed record JournalEntry(string Id, System.Net.IPAddress? Client, string Method, string Url, string Path);
+    /// <param name="At">
+    /// contract-005 · G-17 round 2 (HAR-R2-02) — when the fake received it (its Request.DateTime, UTC), by the Docker engine's
+    /// clock, which the fake's is: what a read bounds by a server's start (<see cref="RequestSource"/>).
+    /// </param>
+    public sealed record JournalEntry(string Id, System.Net.IPAddress? Client, string Method, string Url, string Path, DateTimeOffset At);
 
     /// <summary>
     /// contract-005 · T-2, T-8 — every request the fake has recorded, read from its admin API. A request is attributed
     /// to the server that made it by its client address, which WireMock records for each: every server in a run shares
-    /// the fake, and a test reads what its own server sent.
+    /// the fake, and a test reads what its own server sent. contract-005 · G-17 round 2 (HAR-R2-02) — and by when it came,
+    /// since Docker hands a freed address to the next container at once: a test reads its server's entries through
+    /// <see cref="RequestSource.Made(JournalEntry)"/>, never by address alone. An entry with no time the fake wrote is a fault
+    /// of the fake, named, and never a request silently left out.
     /// </summary>
     public static async Task<IReadOnlyList<JournalEntry>> EntriesAsync(HttpClient http, CancellationToken cancellationToken = default)
     {
@@ -128,21 +134,17 @@ public sealed class WireMockService : IUpstreamService
             var client = System.Net.IPAddress.TryParse(Read(request, "ClientIP"), out var address)
                 ? (address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address)
                 : null;
-            return new JournalEntry(Read(entry, "Guid"), client, Read(request, "Method"), Read(request, "Url"), Read(request, "Path"));
+            var at = DateTimeOffset.TryParse(
+                Read(request, "DateTime"),
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out var received)
+                ? received
+                : throw new InvalidOperationException(
+                    $"WireMock's journal entry {Read(entry, "Guid")} carries no time it was received ('{Read(request, "DateTime")}'), so it "
+                    + "cannot be told from an earlier server's at the same address.");
+            return new JournalEntry(Read(entry, "Guid"), client, Read(request, "Method"), Read(request, "Url"), Read(request, "Path"), at);
         })];
-    }
-
-    /// <summary>
-    /// How many recorded requests mention <paramref name="fragment"/> anywhere in their record — a
-    /// path, a host, a header. A count, so a test compares it before and after its own call.
-    /// </summary>
-    public static async Task<int> CountAsync(HttpClient http, string fragment, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(fragment);
-        var journal = await JournalAsync(http, cancellationToken);
-        return journal.ValueKind == JsonValueKind.Array
-            ? journal.EnumerateArray().Count(entry => entry.GetRawText().Contains(fragment, StringComparison.Ordinal))
-            : 0;
     }
 
     /// <summary>
@@ -199,7 +201,23 @@ public sealed class WireMockService : IUpstreamService
             e.Client,
             e.Method,
             Uri.TryCreate(e.Url, UriKind.Absolute, out var url) ? url.Host : string.Empty,
-            e.Path))];
+            e.Path,
+            e.At))];
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-06) — through the test process's name map, as a server would send it: a POST to
+    /// <see cref="UpstreamWitness.Path"/> on the fake's own name, answered by no mapping, recorded as every request is.
+    /// </summary>
+    public async Task SendWitnessAsync(HttpClient http, string header, string body, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(http);
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri($"https://{Alias}{UpstreamWitness.Path}"))
+        {
+            Content = new StringContent(body, System.Text.Encoding.UTF8, "text/plain"),
+        };
+        request.Headers.Add(UpstreamWitness.Header, header);
+        using var response = await http.SendAsync(request, cancellationToken);
+    }
 
     /// <summary>
     /// contract-005 · T-6 — every entry of the journal, whole, as WireMock's admin API returns it: the request's URL, every

@@ -22,8 +22,10 @@ namespace McpServerTemplate.E2E.Harness;
 /// the same task, and a start that fails fails every class with the same named fault instead of
 /// retrying. It is torn down when the assembly finishes (<see cref="E2ETestFramework"/>), which writes
 /// the diagnostics bundle, removes the containers and the network, and deletes the run directory with
-/// every key in it. A run killed before that teardown is removed by the next run's start
-/// (<see cref="SweepDeadRunsAsync"/>).
+/// every key in it. contract-005 · G-17 round 2 (CON-R2-05) — a run stopped before that teardown (Ctrl+C,
+/// or a process that exits some other way than through the assembly's end) removes itself on its way out,
+/// as well as it can in the time it is given (<see cref="OnExit"/>); a run killed outright, which runs
+/// nothing on its way out, is removed by the next run's start (<see cref="SweepDeadRunsAsync"/>).
 ///
 /// contract-005 · G-16 — the four extension points the harness is built in, and later contracts add
 /// through: <see cref="StartServerAsync"/> with a <see cref="SettingsDelta"/>, the
@@ -32,7 +34,8 @@ namespace McpServerTemplate.E2E.Harness;
 /// contract-005 · UC-6 — the pioneer's decision of 2026-09-29 ("2. yes, cut it and mock any calls"): the run's network
 /// resolves no real name (<see cref="E2ENetwork.NameServer"/>), so every call a server of the run makes is answered by a
 /// fake the registries give out or fails at the name lookup. The start checks it of every container it started (phase
-/// 'environment: no real names'), and T-6 of every container there when it runs.
+/// 'environment: no real names'), and T-6 of every container there when it runs. contract-005 · G-17 round 2 (HAR-R2-08) — and
+/// every container the harness makes, the moment the engine starts it (<see cref="E2ENetwork.OnTheRunNetwork"/>).
 /// </summary>
 public sealed class E2EEnvironment : IAsyncDisposable
 {
@@ -115,7 +118,8 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// (<see cref="StandInUpstream"/>), which is not WireMock, in place of the fake — and in a run of T-15's sabotage
     /// (<see cref="StandInLeftOut"/>), the host is left to the fake. contract-005 · T-6 — T-15 is no longer the only test
     /// that reaches that host: T-6's (UpstreamTests, UpstreamNamesTests) call every observations tool, and each test reads the
-    /// stand-in's record for its own server's address alone.
+    /// stand-in's record for its own server alone: contract-005 · G-17 round 2 (HAR-R2-02) — from its address since it started
+    /// (<see cref="RequestSource"/>).
     /// </summary>
     public static UpstreamRegistry Upstreams { get; } = Sabotage.Choose(
         StandInLeftOut,
@@ -210,7 +214,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
             throw new ArgumentException($"'{host}' is the environment's own Redis; a test's own answers under another name.", nameof(host));
         }
 
-        return await Timings.MeasureEnvironmentAsync($"container: redis {host}", () => RedisService.StartAsync(Network, RunId, host, cancellationToken));
+        return await Timings.MeasureEnvironmentAsync($"container: redis {host}", () => RedisService.StartAsync(Docker, Network, RunId, host, cancellationToken));
     }
 
     /// <summary>
@@ -268,6 +272,9 @@ public sealed class E2EEnvironment : IAsyncDisposable
             // contract-005 · G-3 — the keys go whatever else failed.
             Docker.Dispose();
             Pki.Dispose();
+
+            // contract-005 · G-17 round 2 (CON-R2-05) — torn down: nothing is left for the way out.
+            OnExit.Done();
         }
     }
 
@@ -300,6 +307,10 @@ public sealed class E2EEnvironment : IAsyncDisposable
 
             await Timings.MeasureEnvironmentAsync("environment: sweep dead runs", () => SweepDeadRunsAsync(docker, root, runId, cancellationToken));
 
+            // contract-005 · G-17 round 2 (CON-R2-05) — from here the run creates things; stopped before its teardown, it removes
+            // them on its way out, as well as it can.
+            OnExit.Register(runId, root);
+
             pki = await Timings.MeasureEnvironmentAsync("environment: test pki", () => Task.FromResult(CreatePki(root, runId)));
 
             var contextHash = await Timings.MeasureEnvironmentAsync("environment: build context hash", () => Task.Run(() => Images.ContextHash(root), cancellationToken));
@@ -324,7 +335,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
             // contract-005 · G-10 — the test host, built like the others from the same context and tagged by its hash.
             var testHostImage = Timings.MeasureEnvironmentAsync("image: test host", () =>
                 Images.BuildAsync(Images.TestHostRepository, "McpServerTemplate.E2EHost/Dockerfile", root, contextHash, revision, cancellationToken));
-            var redis = Timings.MeasureEnvironmentAsync("container: redis", () => RedisService.StartAsync(network, runId, cancellationToken));
+            var redis = Timings.MeasureEnvironmentAsync("container: redis", () => RedisService.StartAsync(docker, network, runId, cancellationToken));
             var keycloak = Timings.MeasureEnvironmentAsync("container: keycloak", () =>
                 KeycloakService.StartAsync(docker, network, pki, names, ServerUnderTest.Resource, ServerFixture.AllClientIds(), runId, cancellationToken));
             var testIssuer = Timings.MeasureEnvironmentAsync("container: test issuer", async () =>
@@ -402,6 +413,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
 
             docker?.Dispose();
             pki?.Dispose();
+            OnExit.Done();
             throw;
         }
     }
@@ -480,7 +492,9 @@ public sealed class E2EEnvironment : IAsyncDisposable
     }
 
     /// <summary>
-    /// contract-005 · G-3, T-13 — nothing a run creates outlives it by more than one run. With the
+    /// contract-005 · G-3, T-13 — nothing a run creates outlives it by more than one run. contract-005 · G-17 round 2 (CON-R2-05) —
+    /// a run stopped before its teardown removes itself on its way out, best effort (<see cref="OnExit"/>); this sweep is the
+    /// backstop, for one killed outright. With the
     /// resource reaper off, a run killed before its teardown leaves its containers and its network
     /// behind, and its network holds the subnet the next run needs. So before it creates anything, a
     /// run removes every container and network labelled with another run whose owning process is gone
@@ -493,6 +507,14 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// before that run (<see cref="RecordingDockerClient.TakeBackAsync"/>): a run killed during the docs profile left
     /// mcp-server:latest, the name docs/04 deploys, on its own build. The run directory, which holds the record, is removed
     /// after this, with the rest of the dead run's key material (<see cref="RunDirectories.RemoveStale"/>).
+    ///
+    /// contract-005 · G-17 round 2 (CON-R2-06, FLA-R2-04) — only a run of this owner is judged: one whose owner label
+    /// (<see cref="E2ENetwork.OwnerLabel"/>) names this machine, operating system, account and temporary directory, for only
+    /// such a run's directory lies where this process looks for it. A run was taken for dead whenever its directory was not
+    /// under this process's temporary directory, so a live run of a WSL distro on the same Docker Desktop, of another account
+    /// on a shared engine, or of an IDE that sets its own TMP, had its containers and network removed mid-run. Every other run
+    /// is left alone; its network then holds the subnet, and this run stops with a fault naming its owner. A run of an earlier
+    /// harness, which carries no owner label, is removed only when its directory is here, marked, and its owner gone.
     /// </summary>
     private static async Task<bool> SweepDeadRunsAsync(IDockerClient docker, string repositoryRoot, string runId, CancellationToken cancellationToken)
     {
@@ -501,10 +523,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
             ["label"] = new Dictionary<string, bool> { [E2ENetwork.RunLabel] = true },
         };
 
-        bool Dead(IDictionary<string, string>? labels, out string run) =>
-            (run = labels is not null && labels.TryGetValue(E2ENetwork.RunLabel, out var r) ? r : string.Empty) is { Length: > 0 }
-            && run != runId
-            && !RunDirectories.IsLive(run);
+        bool Dead(IDictionary<string, string>? labels, out string run) => IsDeadRun(labels, runId, out run);
 
         var swept = new List<string>();
         foreach (var container in await docker.Containers.ListContainersAsync(new ContainersListParameters { All = true, Filters = labelled }, cancellationToken))
@@ -552,6 +571,26 @@ public sealed class E2EEnvironment : IAsyncDisposable
             {
             }
         }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (CON-R2-06, FLA-R2-04) — whether what carries <paramref name="labels"/> is a dead run's, which
+    /// the run <paramref name="thisRun"/> removes at its start (<see cref="SweepDeadRunsAsync"/>): a run's, not this one's, and
+    /// either this owner's (<see cref="E2ENetwork.OwnerLabel"/>) and no longer tended (<see cref="RunDirectories.IsLive"/>), or of
+    /// no owner at all — an earlier harness's — and dead beyond doubt by its own directory here (<see cref="RunDirectories.ProvablyDead"/>).
+    /// A run of any other owner is never dead to this one: its directory is not where this process looks.
+    /// </summary>
+    internal static bool IsDeadRun(IDictionary<string, string>? labels, string thisRun, out string run)
+    {
+        run = labels is not null && labels.TryGetValue(E2ENetwork.RunLabel, out var named) ? named : string.Empty;
+        if (run.Length == 0 || run == thisRun)
+        {
+            return false;
+        }
+
+        return labels!.TryGetValue(E2ENetwork.OwnerLabel, out var owner)
+            ? owner == E2ENetwork.ThisOwner && !RunDirectories.IsLive(run)
+            : RunDirectories.ProvablyDead(run);
     }
 
     /// <summary>
@@ -637,7 +676,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 "names",
                 $"these containers on the run's network were started able to resolve real names: {string.Join("; ", resolving)}. Every "
                 + $"container joins it through {nameof(E2ENetwork)}.{nameof(E2ENetwork.OnTheRunNetwork)}, with {E2ENetwork.NameServer} as its "
-                + "only name server and no search domain, so that no call of the run reaches the internet by name.");
+                + "only name server, no search domain and no host names written in, so that no call of the run reaches the internet by name.");
         }
     }
 
@@ -818,16 +857,31 @@ public sealed class E2EEnvironment : IAsyncDisposable
     }
 
     /// <summary>
+    /// contract-005 · G-17 round 2 (CON-R2-06) — this process, "pid@start", as its run directory's mark and the process label on
+    /// everything its run creates name it (<see cref="E2ENetwork.ProcessLabel"/>).
+    /// </summary>
+    internal static string ThisProcess { get; } = RunDirectories.Owner(Environment.ProcessId);
+
+    /// <summary>
     /// The run directories under the machine's temporary directory, one per run, each marked with the
     /// process that owns it. A run killed before its teardown leaves one behind; the next run removes
     /// every directory whose owner is gone, so key material never outlives a run by more than one.
+    /// contract-005 · G-17 round 2 (CON-R2-05) — and a run stopped before its teardown, not killed outright, deletes its own on its
+    /// way out (<see cref="OnExit"/>).
     ///
     /// contract-005 · G-17 round 1 (CON-R1-04, FLA-R1-04) — an owner is its process id and that process's start time, as
     /// the fast suite's TestRedis names a run ("pid@start"), so a dead run's id handed to another process is not taken for
     /// the run: judged by the id alone, such a run was live for as long as the other process lived — its key material kept,
     /// its network holding the subnet, and every later run told to wait for it.
+    ///
+    /// contract-005 · G-17 round 2 (FLA-R2-04) — the temporary directory is not always this account's alone: on Linux it is
+    /// /tmp, which every account shares, and a run directory is its owner's only (mode 0700, TestPki). Another account's
+    /// directory cannot be entered, so its mark read as missing, and an unmarked directory more than five minutes old was
+    /// judged dead: its run's containers and network were removed mid-run. A directory this account cannot enter is now
+    /// judged live (<see cref="CanEnter"/>), since what cannot be proven dead is never removed; and the sweep judges only runs
+    /// whose owner label is this owner's (<see cref="E2ENetwork.OwnerLabel"/>).
     /// </summary>
-    private static class RunDirectories
+    internal static class RunDirectories
     {
         private const string Prefix = "mcp-e2e-";
         private const string OwnerFile = "owner.pid";
@@ -837,12 +891,24 @@ public sealed class E2EEnvironment : IAsyncDisposable
         /// <summary>
         /// Whether the run <paramref name="runId"/> is still tended: its directory is here and the
         /// process that owns it is alive. A run whose directory is gone has been torn down, or was
-        /// removed as stale, and a run whose owner has exited will never tear itself down.
+        /// removed as stale, and a run whose owner has exited will never tear itself down. Asked only of
+        /// a run of this owner (<see cref="E2ENetwork.ThisOwner"/>), whose directory, if it has one, is here.
         /// </summary>
         public static bool IsLive(string runId)
         {
             var directory = For(runId);
             return Directory.Exists(directory) && OwnerIsAlive(directory);
+        }
+
+        /// <summary>
+        /// contract-005 · G-17 round 2 (CON-R2-06) — whether the run <paramref name="runId"/>, which names no owner (a run of an
+        /// earlier harness), is dead beyond doubt: its directory is here, marked, and the process it names is gone. A directory
+        /// that is not here may be the run's own in another temporary directory, and that run alive, so it is not.
+        /// </summary>
+        public static bool ProvablyDead(string runId)
+        {
+            var directory = For(runId);
+            return Directory.Exists(directory) && CanEnter(directory) && OwnerOf(directory) is not null && !OwnerIsAlive(directory);
         }
 
         public static void MarkOwned(string directory) =>
@@ -887,10 +953,34 @@ public sealed class E2EEnvironment : IAsyncDisposable
         }
 
         /// <summary>"pid@start": a process by its id and its start, in whole seconds since the Unix epoch.</summary>
-        private static string Owner(int processId)
+        public static string Owner(int processId)
         {
             using var process = Process.GetProcessById(processId);
             return string.Create(CultureInfo.InvariantCulture, $"{processId}@{new DateTimeOffset(process.StartTime.ToUniversalTime()).ToUnixTimeSeconds()}");
+        }
+
+        /// <summary>
+        /// contract-005 · G-17 round 2 (FLA-R2-04) — whether this account can enter <paramref name="directory"/>: list what is in
+        /// it. One it cannot is another account's (a run directory is its owner's alone, mode 0700 on Linux), and its mark
+        /// cannot be read: File.Exists answers false for a file it may not see, which read as a directory with no mark. One that
+        /// has gone meanwhile is entered as well as any, and judged as gone.
+        /// </summary>
+        public static bool CanEnter(string directory)
+        {
+            try
+            {
+                using var entries = Directory.EnumerateFileSystemEntries(directory).GetEnumerator();
+                entries.MoveNext();
+                return true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return true;
+            }
         }
 
         /// <summary>
@@ -904,9 +994,19 @@ public sealed class E2EEnvironment : IAsyncDisposable
         /// (access denied: the system's, a service's, another account's) is not that test process, so the id has been handed
         /// on and the run is dead. Taken for alive, as before, every later run failed at its sweep with an access-denied
         /// error that named no directory, for as long as that process lived.
+        ///
+        /// contract-005 · G-17 round 2 (FLA-R2-04) — "always this account's own" was not so where accounts share the temporary
+        /// directory (/tmp on Linux): a directory this account cannot enter is another account's, and is judged live, whatever
+        /// its age (<see cref="CanEnter"/>). <paramref name="now"/> is the moment an unmarked directory's age is judged at: now,
+        /// except in the harness's self-test of this, which judges a directory it has just made as it would ten minutes on.
         /// </summary>
-        private static bool OwnerIsAlive(string directory)
+        public static bool OwnerIsAlive(string directory, DateTime? now = null)
         {
+            if (!CanEnter(directory))
+            {
+                return true;
+            }
+
             var owner = OwnerOf(directory);
             var parts = owner?.Split('@');
             if (parts is not [var id, var start]
@@ -915,7 +1015,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
             {
                 // Unmarked, or marked in a form no run of this harness writes (a process id alone, as before contract-005 ·
                 // G-17 round 1): a run that died between creating the directory and marking it, unless it is new.
-                return Directory.GetCreationTimeUtc(directory) > DateTime.UtcNow.AddMinutes(-5);
+                return Directory.GetCreationTimeUtc(directory) > (now ?? DateTime.UtcNow).AddMinutes(-5);
             }
 
             try
@@ -936,6 +1036,141 @@ public sealed class E2EEnvironment : IAsyncDisposable
             {
                 return false; // another account's process: not this account's test run
             }
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (CON-R2-05) — a run stopped before its teardown takes itself down on its way out, best effort.
+    ///
+    /// The resource reaper is off (it published its port on every interface), and the teardown runs only when the assembly
+    /// finishes, so a run stopped by Ctrl+C, an IDE's cancel or a crash left Keycloak, the test issuer with its unauthenticated
+    /// /admin/mint, WireMock's writable /__admin and every server that trusts that issuer running on 127.0.0.1, and its keys in
+    /// its run directory, until another run started on the same machine and account — which might never happen. Now, on Ctrl+C,
+    /// on the process's exit and on an unhandled exception that ends it, a run whose own teardown has not finished removes what it
+    /// made, from the engine's own record
+    /// of its label, within thirty seconds: every image name it gave put back as it was (its run directory records them), every
+    /// container and network it labelled removed, then its run directory, with every key, deleted. What it did is written to its
+    /// bundle as interrupted.txt. A run killed outright runs no handler at all; the next run's sweep stays the backstop for it.
+    /// </summary>
+    private static class OnExit
+    {
+        private static readonly TimeSpan Within = TimeSpan.FromSeconds(30);
+
+        private static string? _runId;
+        private static string? _repositoryRoot;
+        private static int _done;
+        private static int _registered;
+
+        /// <summary>From the moment the run <paramref name="runId"/> may create anything, until its own teardown is done.</summary>
+        public static void Register(string runId, string repositoryRoot)
+        {
+            _runId = runId;
+            _repositoryRoot = repositoryRoot;
+            if (Interlocked.Exchange(ref _registered, 1) == 0)
+            {
+                AppDomain.CurrentDomain.ProcessExit += (_, _) => TearDown("the test process exited before the run's teardown");
+                Console.CancelKeyPress += (_, _) => TearDown("Ctrl+C stopped the run before its teardown");
+
+                // A crash ends the process without its exit event: an unhandled exception that ends it is a way out too.
+                AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+                {
+                    if (e.IsTerminating)
+                    {
+                        TearDown("an unhandled exception ended the test process before the run's teardown");
+                    }
+                };
+            }
+        }
+
+        /// <summary>The run's own teardown has finished — or a failed start has removed what it made: nothing is left to do on the way out.</summary>
+        public static void Done() => Interlocked.Exchange(ref _done, 1);
+
+        private static void TearDown(string why)
+        {
+            if (_runId is not { } run || _repositoryRoot is not { } root || Interlocked.Exchange(ref _done, 1) == 1)
+            {
+                return;
+            }
+
+            try
+            {
+                Task.Run(() => RemoveAsync(run, root, why)).Wait(Within);
+            }
+            catch (AggregateException)
+            {
+                // Best effort, on the way out: what is left, the next run's sweep removes.
+            }
+        }
+
+        /// <summary>Removes what the run <paramref name="run"/> made, each step on its own, so one that fails stops none after it.</summary>
+        private static async Task RemoveAsync(string run, string repositoryRoot, string why)
+        {
+            using var deadline = new CancellationTokenSource(Within);
+            var cancellationToken = deadline.Token;
+            var done = new List<string> { why };
+            async Task StepAsync(string what, Func<Task> step)
+            {
+                try
+                {
+                    await step();
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    done.Add($"{what}: not done ({ex.GetType().Name}: {ex.Message})");
+                }
+            }
+
+            using var docker = TestcontainersSettings.OS.DockerEndpointAuthConfig?.GetDockerClientBuilder().Build();
+            var directory = RunDirectories.For(run);
+            if (docker is not null)
+            {
+                var labelled = new Dictionary<string, IDictionary<string, bool>>
+                {
+                    ["label"] = new Dictionary<string, bool> { [$"{E2ENetwork.RunLabel}={run}"] = true },
+                };
+
+                // The image names it gave, put back from its directory's record before the directory goes.
+                await StepAsync("image names", async () => done.AddRange(await RecordingDockerClient.TakeBackAsync(docker, directory, cancellationToken)));
+                await StepAsync("containers", async () =>
+                {
+                    foreach (var container in await docker.Containers.ListContainersAsync(new ContainersListParameters { All = true, Filters = labelled }, cancellationToken))
+                    {
+                        await docker.Containers.RemoveContainerAsync(container.ID, new ContainerRemoveParameters { Force = true, RemoveVolumes = true }, cancellationToken);
+                        done.Add($"container {container.Names?.FirstOrDefault()?.TrimStart('/') ?? container.ID} ({container.Image})");
+                    }
+                });
+                await StepAsync("networks", async () =>
+                {
+                    foreach (var network in await docker.Networks.ListNetworksAsync(new NetworksListParameters { Filters = labelled }, cancellationToken))
+                    {
+                        await docker.Networks.DeleteNetworkAsync(network.ID, cancellationToken);
+                        done.Add($"network {network.Name}");
+                    }
+                });
+            }
+            else
+            {
+                done.Add("containers and networks: not removed, Testcontainers found no Docker endpoint");
+            }
+
+            // contract-005 · G-3 — the keys go whatever else failed.
+            await StepAsync("run directory", () =>
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, recursive: true);
+                    done.Add($"run directory {directory}, with every key in it");
+                }
+
+                return Task.CompletedTask;
+            });
+
+            await StepAsync("bundle", async () =>
+            {
+                var bundle = Path.Combine(repositoryRoot, "TestResults", "e2e", run);
+                Directory.CreateDirectory(bundle);
+                await File.WriteAllLinesAsync(Path.Combine(bundle, "interrupted.txt"), done, CancellationToken.None);
+            });
         }
     }
 }

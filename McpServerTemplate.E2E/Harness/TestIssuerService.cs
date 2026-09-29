@@ -59,8 +59,7 @@ public sealed class TestIssuerService : IAsyncDisposable
     {
         IReadOnlyList<string> hosts = [.. issuers.Select(i => new Uri(i).Host)];
         var tls = pki.LeafDirectory("issuer");
-        var builder = new ContainerBuilder(image)
-            .OnTheRunNetwork(network, runId)
+        var builder = E2ENetwork.OnTheRunNetwork(image, docker, network, runId)
             .WithNetworkAliases([.. hosts])
             .WithPortBinding(Port, true)
             .WithLoopbackPortsOnly()
@@ -97,7 +96,20 @@ public sealed class TestIssuerService : IAsyncDisposable
     }
 
     /// <summary>
-    /// A token from the admin endpoint of issuer <paramref name="host"/>.
+    /// contract-005 · G-17 round 2 (FLA-R2-02) — the caller each client mints for when a test names no subject: its server's
+    /// (<see cref="ServerUnderTest.Caller"/>), written down when the server makes the client. Kept beside the client rather than
+    /// sent with it: nothing of it leaves the test process.
+    /// </summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<HttpClient, string> Callers = new();
+
+    /// <summary>contract-005 · G-17 round 2 (FLA-R2-02) — the tokens <paramref name="client"/> mints are for <paramref name="caller"/>, unless a test names a subject.</summary>
+    internal static void MintFor(HttpClient client, string caller) => Callers.AddOrUpdate(client, caller);
+
+    /// <summary>
+    /// A token from the admin endpoint of issuer <paramref name="host"/>. contract-005 · G-17 round 2 (FLA-R2-02) — for the
+    /// subject the test names, or else for the caller of the server whose client <paramref name="http"/> is
+    /// (<see cref="ServerUnderTest.Caller"/>), or else, from a client no server made, for a caller of its own: never for one
+    /// subject every class shares, which the frame counts in the run's one Redis as one caller.
     /// </summary>
     /// <param name="http">A client made from the environment's name map.</param>
     /// <param name="host">The issuer name, e.g. idp-a.e2e.test.</param>
@@ -125,6 +137,11 @@ public sealed class TestIssuerService : IAsyncDisposable
         foreach (var (key, value) in extra ?? new Dictionary<string, object>())
         {
             request[key] = value;
+        }
+
+        if (!request.ContainsKey("subject"))
+        {
+            request["subject"] = Callers.TryGetValue(http, out var caller) ? caller : $"e2e-caller-{Guid.NewGuid():N}";
         }
 
         using var response = await http.PostAsJsonAsync(new Uri($"https://{host}/admin/mint"), request, cancellationToken);
@@ -158,25 +175,21 @@ public sealed class TestIssuerService : IAsyncDisposable
 
     /// <summary>
     /// Requests counted per issuer name and path — discovery and JWKS among them. contract-005 · T-3 — with
-    /// <paramref name="from"/>, only the requests made from that address: one server's, where every server in
-    /// the run asks the same issuers. contract-005 · G-17 round 1 (FLA-R1-05) — and with <paramref name="since"/>, only
-    /// those made at or after it (<see cref="ServerUnderTest.StartedAtAsync"/>): an address Docker gave an earlier server
-    /// counts that server's requests too, all made before this one started.
+    /// <paramref name="from"/>, only the requests made by that server: one server's, where every server in the run asks the
+    /// same issuers. contract-005 · G-17 round 1 (FLA-R1-05) — from its address and at or after its start: an address Docker
+    /// gave an earlier server counts that server's requests too, all made before this one started. contract-005 · G-17 round 2
+    /// (HAR-R2-02) — the two now come together (<see cref="RequestSource"/>), so no count is one server's by address alone:
+    /// T-1's was.
     /// </summary>
     public static async Task<IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>>> CountsAsync(
-        HttpClient http, string anyHost, System.Net.IPAddress? from = null, DateTimeOffset? since = null, CancellationToken cancellationToken = default)
+        HttpClient http, string anyHost, RequestSource? from = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(http);
-        if (since is not null && from is null)
-        {
-            throw new ArgumentException("A count since a time is one client's: give the address it is made from as well.", nameof(since));
-        }
 
-        var query = from is null ? string.Empty : $"?from={Uri.EscapeDataString(from.ToString())}";
-        if (since is { } time)
-        {
-            query += $"&since={Uri.EscapeDataString(time.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture))}";
-        }
+        var query = from is null
+            ? string.Empty
+            : $"?from={Uri.EscapeDataString(from.Address.ToString())}"
+                + $"&since={Uri.EscapeDataString(from.Since.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture))}";
         var counts = await http.GetFromJsonAsync<Dictionary<string, Dictionary<string, int>>>(new Uri($"https://{anyHost}/admin/counts{query}"), cancellationToken);
         return counts!.ToDictionary(
             c => c.Key,

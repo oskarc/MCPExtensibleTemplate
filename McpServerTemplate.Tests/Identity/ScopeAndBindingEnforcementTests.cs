@@ -161,6 +161,60 @@ public class ScopeAndBindingEnforcementTests
         Assert.DoesNotContain("idp-binding", bound, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 2 — the pioneer's decision of 2026-09-29 (contract-005's revision of that date, "1: A"), for a
+    /// resource and a prompt as for a tool: a caller from another trust domain is answered in the words for one that does not
+    /// exist, and the log keeps the rule that refused it, idp-binding. A resource or a prompt of another trust domain was logged
+    /// as not-permitted, while a tool was logged as idp-binding; the reply is unchanged.
+    /// </summary>
+    [Theory]
+    [InlineData("resources/read", "uri", "smhi://coverage-area", "smhi://no-such-resource")]
+    [InlineData("prompts/get", "name", "forecast_briefing", "no_such_prompt")]
+    public async Task T6_a_resource_or_prompt_of_another_trust_domain_is_logged_by_its_binding_and_answered_as_one_that_does_not_exist(
+        string method, string parameter, string bound, string missing)
+    {
+        using var corp = new TestIdentityProvider("corp", "https://login.corp.test/");
+        using var partner = new TestIdentityProvider("partner", "https://login.partner.test/");
+        using var log = new RequestGateTests.CapturedLog();
+
+        await using var server = await InProcessServer.StartAsync([corp, partner], logs: log);
+
+        var partnerToken = partner.MintToken(Resource, scopes: ["weather:read"]);
+
+        var boundReply = await SendAsync(server, partnerToken, method, new Dictionary<string, string> { [parameter] = bound });
+        var missingReply = await SendAsync(server, partnerToken, method, new Dictionary<string, string> { [parameter] = missing });
+
+        // The log keeps the rule that refused the bound one.
+        Assert.Contains(
+            log.Lines,
+            l => l.Contains("authz_fail: rule=idp-binding principal=partner:", StringComparison.Ordinal)
+                && l.Contains($" target={bound} ", StringComparison.Ordinal));
+
+        // The reply is the one an item that does not exist gets, the names aside, and says nothing of the binding.
+        Assert.Contains("rule: not-permitted", missingReply, StringComparison.Ordinal);
+        Assert.Equal(
+            missingReply.Replace(missing, "{name}", StringComparison.Ordinal),
+            boundReply.Replace(bound, "{name}", StringComparison.Ordinal));
+        Assert.DoesNotContain("idp-binding", boundReply, StringComparison.Ordinal);
+    }
+
+    /// <summary>The body of one JSON-RPC request with <paramref name="parameters"/>, as the server sent it.</summary>
+    private static async Task<string> SendAsync(InProcessServer server, string token, string method, Dictionary<string, string> parameters)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, InProcessServer.McpPath)
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 1, method, @params = parameters }),
+                System.Text.Encoding.UTF8,
+                "application/json"),
+        };
+        request.Headers.Accept.ParseAdd("application/json, text/event-stream");
+        request.Headers.Add("Authorization", $"Bearer {token}");
+
+        using var response = await server.Client.SendAsync(request);
+        return await response.Content.ReadAsStringAsync();
+    }
+
     /// <summary>The body of a tools/call of <paramref name="tool"/>, with a blog post's arguments, as the server sent it.</summary>
     private static async Task<string> CallToolAsync(InProcessServer server, string token, string tool)
     {

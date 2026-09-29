@@ -29,6 +29,14 @@ public static class Claim
     /// HttpRequestException with no status), an environment fault, a timeout — is not the claim's: a test lets it propagate,
     /// and it is never turned into a <see cref="ClaimException"/>. Three tests turned any exception into their claim's
     /// failure, so a container dying or a connection reset mid-test was recorded as a red on the claim.
+    ///
+    /// contract-005 · G-17 round 2 (HAR-R2-03) — an McpException is not always the server's answer. The SDK's OAuth client
+    /// (ModelContextProtocol.Core 2.2.0) also throws one of its own for a connection or TLS failure at the authorization server
+    /// — "Failed to find .well-known/openid-configuration or .well-known/oauth-authorization-server metadata …", with no inner
+    /// exception — so from an OAuth flow it counts only when every request the flow sent to a name of the environment was
+    /// answered: a test folding one into its claim reads its name map's log first, and a request no mapped name answered is
+    /// thrown as the environment fault it is (<see cref="NameMapLog.ThrowIfAMappedNameGaveNoAnswer"/>). HarnessSelfTests fails
+    /// on a file that makes the SDK's OAuth client and never reads that log.
     /// </summary>
     public static bool IsTheServersAnswer(Exception exception) => exception switch
     {

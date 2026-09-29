@@ -13,8 +13,9 @@ namespace McpServerTemplate.Infrastructure.Frame;
 /// to a provider bound to the caller's identity provider; the caller holds its scope; the risk gate
 /// holds; the caller is within their limits; the arguments fit the declared shape; and the answer
 /// fits its cap. Each refusal is logged as a security event with its rule, and names its rule to
-/// the caller — but a tool of a provider bound to another identity provider, which is answered as
-/// a tool that does not exist (contract-005 · T-5, the pioneer's decision of 2026-09-29).
+/// the caller — but a tool, resource or prompt of a provider bound to another identity provider,
+/// which is answered as one that does not exist (contract-005 · T-5, the pioneer's decision of
+/// 2026-09-29; for the resource and the prompt, G-17 round 2) while the log keeps idp-binding.
 /// </summary>
 public sealed class RequestGate(
     PolicyRegistry registry,
@@ -73,14 +74,17 @@ public sealed class RequestGate(
             return;
         }
 
+        // contract-005 · G-17 round 2 (SEC-R2-03) — the method is the caller's to write: made safe for a log line and cut
+        // (LogSafe.Text), in the line and in the reply, which the SDK logs with the exception.
+        var shown = LogSafe.Text(method ?? context.JsonRpcMessage.GetType().Name);
         context.Services?.GetService<ILogger<RequestGate>>()?.LogWarning(
             "authz_fail: rule=request-kind method={Method} — refused, the frame does not govern it",
-            method ?? context.JsonRpcMessage.GetType().Name);
+            shown);
 
         if (context.JsonRpcMessage is JsonRpcRequest)
         {
             throw new McpProtocolException(
-                $"authz_fail (rule: request-kind). This server does not accept '{method}' requests.",
+                $"authz_fail (rule: request-kind). This server does not accept '{shown}' requests.",
                 McpErrorCode.MethodNotFound);
         }
 
@@ -136,21 +140,29 @@ public sealed class RequestGate(
         return result;
     };
 
-    /// <summary>The resource-read filter.</summary>
+    /// <summary>
+    /// The resource-read filter.
+    ///
+    /// contract-005 · G-17 round 2 (SEC-R2-02) — the SDK matches the URI read to a resource ignoring the case of its scheme
+    /// and host and reading an empty path as /, and matches a resource template to any URI it describes. The resource is
+    /// governed under its own key (its URI, or its URI template), which is what the gate looks up and what the log records;
+    /// the reply names the URI as the caller sent it, so SMHI://weather-symbols is refused naming SMHI://weather-symbols, as
+    /// SMHI://no-such-thing is, and never names the key it was matched to, which confirmed that a hidden resource exists.
+    /// </summary>
     public static McpRequestFilter<ReadResourceRequestParams, ReadResourceResult> ReadResource() => next => async (context, cancellationToken) =>
     {
         var gate = GateOf(context.Services);
         var key = context.MatchedPrimitive is McpServerResource resource ? PolicyRegistry.KeyOf(resource) : context.Params?.Uri;
-        await gate.AdmitScopedAsync(context, gate.Registry.Resources, key, "resource", cancellationToken).ConfigureAwait(false);
+        await gate.AdmitScopedAsync(context, gate.Registry.Resources, key, context.Params?.Uri, "resource", cancellationToken).ConfigureAwait(false);
         return await next(context, cancellationToken).ConfigureAwait(false);
     };
 
-    /// <summary>The prompt-get filter.</summary>
+    /// <summary>The prompt-get filter. contract-005 · G-17 round 2 (SEC-R2-02) — the reply names the prompt as the caller sent it.</summary>
     public static McpRequestFilter<GetPromptRequestParams, GetPromptResult> GetPrompt() => next => async (context, cancellationToken) =>
     {
         var gate = GateOf(context.Services);
         var key = context.MatchedPrimitive is McpServerPrompt prompt ? prompt.ProtocolPrompt.Name : context.Params?.Name;
-        await gate.AdmitScopedAsync(context, gate.Registry.Prompts, key, "prompt", cancellationToken).ConfigureAwait(false);
+        await gate.AdmitScopedAsync(context, gate.Registry.Prompts, key, context.Params?.Name, "prompt", cancellationToken).ConfigureAwait(false);
         return await next(context, cancellationToken).ConfigureAwait(false);
     };
 
@@ -161,10 +173,10 @@ public sealed class RequestGate(
         switch (context.Params?.Ref)
         {
             case PromptReference prompt:
-                await gate.AdmitScopedAsync(context, gate.Registry.Prompts, prompt.Name, "prompt", cancellationToken).ConfigureAwait(false);
+                await gate.AdmitScopedAsync(context, gate.Registry.Prompts, prompt.Name, prompt.Name, "prompt", cancellationToken).ConfigureAwait(false);
                 break;
             case ResourceTemplateReference resource:
-                await gate.AdmitScopedAsync(context, gate.Registry.Resources, resource.Uri, "resource", cancellationToken).ConfigureAwait(false);
+                await gate.AdmitScopedAsync(context, gate.Registry.Resources, resource.Uri, resource.Uri, "resource", cancellationToken).ConfigureAwait(false);
                 break;
             default:
                 throw gate.Refuse(CallerOf(context, gate.Clock), "completion", Refusal.Of("unknown-item", "authz_fail", "Completion is available only for a prompt or a resource template you may use."));
@@ -291,17 +303,44 @@ public sealed class RequestGate(
         return refusal is null ? id : throw Refuse(caller, name, refusal);
     }
 
+    /// <param name="context">The request.</param>
+    /// <param name="entries">The resources or prompts the frame governs, by key.</param>
+    /// <param name="key">What the caller asked for is governed under: the matched resource's URI or URI template, the prompt's name.</param>
+    /// <param name="sent">What the caller asked for, as they wrote it.</param>
+    /// <param name="kind">resource or prompt.</param>
+    /// <param name="cancellationToken">The request's cancellation.</param>
     private async Task AdmitScopedAsync<TParams>(
         RequestContext<TParams> context,
         System.Collections.Frozen.FrozenDictionary<string, PolicyRegistry.ScopedEntry> entries,
         string? key,
+        string? sent,
         string kind,
         CancellationToken cancellationToken)
     {
+        // contract-005 · G-17 round 2 (SEC-R2-02) — a refusal names what the caller asked for as they wrote it, never the key
+        // it was matched to: a missing item's reply names what was sent, and so must a hidden one's. The log names the key.
+        var asked = sent ?? key ?? string.Empty;
         var caller = CallerOf(context, clock) ?? throw Refuse(null, key ?? kind, NotSignedIn());
-        if (key is null || !entries.TryGetValue(key, out var entry) || !Sees(caller, entry.IdentityProvider, entry.Scope))
+        if (key is null || !entries.TryGetValue(key, out var entry))
         {
-            throw Refuse(caller, key ?? kind, NotPermitted(kind, key ?? string.Empty));
+            throw Refuse(caller, key ?? kind, NotPermitted(kind, asked));
+        }
+
+        if (caller.IdentityProvider != entry.IdentityProvider)
+        {
+            // contract-005 · G-17 round 2 — the pioneer's decision of 2026-09-29 ("1: A"), as for a tool (AdmitCallAsync): the
+            // reply is the one an item that does not exist gets, and the log keeps the rule that refused it, idp-binding. A
+            // resource or a prompt of another trust domain was logged as not-permitted, a tool as idp-binding.
+            throw Refuse(caller, key, Refusal.Concealed(
+                "idp-binding",
+                "authz_fail",
+                $"The {kind} '{key}' belongs to a provider bound to a different identity provider than the one that issued the caller's token; the binding is a deployment decision, not a scope the caller can request. The caller was answered as for a {kind} that does not exist.",
+                NotPermitted(kind, asked)));
+        }
+
+        if (!caller.Scopes.Contains(entry.Scope))
+        {
+            throw Refuse(caller, key, NotPermitted(kind, asked));
         }
 
         await WithinLimitsAsync(caller, null, 0, cancellationToken).ConfigureAwait(false);
@@ -369,11 +408,15 @@ public sealed class RequestGate(
     private static bool Sees(Caller? caller, string identityProvider, string scope) =>
         caller is not null && caller.IdentityProvider == identityProvider && caller.Scopes.Contains(scope);
 
+    // contract-005 · G-17 round 2 (SEC-R2-03) — the target is often the caller's to write (a tool that is not there, a URI
+    // matched to nothing), and so is the principal's subject at some identity providers: each is made safe for a log line
+    // and cut (LogSafe.Text). The message names what the caller wrote only through the refusals built for it, which make it
+    // safe themselves (NotPermitted, ArgumentGuard).
     private McpException Refuse(Caller? caller, string target, Refusal refusal)
     {
         logger.LogWarning(
             "{Event}: rule={Rule} principal={Principal} target={Target} — {Detail}",
-            refusal.SecurityEvent, refusal.Rule, caller?.Key ?? "anonymous", target, refusal.Message);
+            refusal.SecurityEvent, refusal.Rule, LogSafe.Text(caller?.Key ?? "anonymous"), LogSafe.Text(target), refusal.Message);
         return refusal.ToException();
     }
 
@@ -381,10 +424,12 @@ public sealed class RequestGate(
         Refusal.Of("principal", "authz_fail", "The request carries no principal the server can attribute. Sign in with a configured identity provider.");
 
     // Something hidden and something forbidden are refused in the same words, so a refusal does not
-    // confirm that a hidden item exists; and so is a tool of another trust domain (AdmitCallAsync,
-    // contract-005 · T-5), whose log line keeps the rule that refused it.
+    // confirm that a hidden item exists; and so is a tool, a resource or a prompt of another trust domain
+    // (contract-005 · T-5; G-17 round 2 for the resource and the prompt), whose log line keeps the rule that refused it.
+    // contract-005 · G-17 round 2 — the name is as the caller wrote it (SEC-R2-02), made safe for a log line and cut
+    // (SEC-R2-03): the reply is logged too, by the SDK, with the exception it travels in.
     private static Refusal NotPermitted(string kind, string name) =>
-        Refusal.Of("not-permitted", "authz_fail", $"You may not use the {kind} '{name}', or it does not exist.");
+        Refusal.Of("not-permitted", "authz_fail", $"You may not use the {kind} '{LogSafe.Text(name)}', or it does not exist.");
 
     private static RequestGate GateOf(IServiceProvider? services) =>
         services?.GetService<RequestGate>()

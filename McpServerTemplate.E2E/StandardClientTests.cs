@@ -20,6 +20,14 @@ namespace McpServerTemplate.E2E;
 /// On this class's server the weather provider answers to idp-a, so the token the client gets there
 /// is one the tool will take. The fake has no forecast stubbed, so the tool answers with its own
 /// error; the call is shown to have reached the tool by the fake's record of the upstream request.
+///
+/// contract-005 · G-17 round 2 (HAR-R2-01) — this server's upstream request: read from the owner of the forecast host, from this
+/// server's address since it started, beyond what it held before the flow began. The fake's journal was counted for every
+/// server, and two other classes fetch the same Stockholm forecast in parallel, as the saved runs show them doing inside this
+/// test's window; a server that never ran the tool passed on theirs. The fake is left without a forecast: a stub for that path
+/// would answer every class that asks it, and the tool's own answer is not the claim — that it ran and reached its upstream is.
+/// contract-005 · G-17 round 2 (HAR-R2-03) — and a flow that failed because a name of the environment did not answer (the
+/// test issuer stopped, or its certificate untrusted) is that environment fault, named, never the claim's red.
 /// </summary>
 public sealed class StandardClientTests(StandardClientTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<StandardClientTests.Server>
@@ -31,6 +39,9 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
     private const string IssuerA = "idp-a.e2e.test";
     private const string WeatherLeftToKeycloak = "t4-weather-left-bound-to-keycloak";
     private const string Tool = "get_forecast_model_info";
+
+    /// <summary>The host that tool's provider calls.</summary>
+    private const string ForecastHost = "opendata-download-metfcst.smhi.se";
 
     /// <summary>The upstream request that tool makes: SMHI's point forecast for Stockholm.</summary>
     private const string ToolUpstreamRequest = "/api/category/snow1g/version/1/geotype/point/lon/18.070000/lat/59.330000/data.json";
@@ -47,7 +58,12 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
         var log = new NameMapLog();
         using var http = fixture.CreateClient(log);
 
-        var upstreamBefore = await WireMockService.CountAsync(http, ToolUpstreamRequest);
+        // contract-005 · G-17 round 2 (HAR-R2-01) — the witness, read for this server alone, through a client of its own so the
+        // name map's log holds the client's flow and nothing else.
+        using var witness = fixture.CreateClient();
+        var server = await fixture.Server.RequestSourceAsync();
+        var owner = fixture.Environment.UpstreamFor(ForecastHost);
+        var upstreamBefore = (await ProviderCalls.FromServerAsync(owner, witness, server, ForecastHost, ToolUpstreamRequest)).Count;
 
         CallToolResult? result = null;
         Exception? failure = null;
@@ -60,7 +76,10 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
         {
             // contract-005 · G-17 round 1 (HAR-R1-04) — the claim's failures only: a status the server answered, or an MCP
             // error (the SDK's own, when the flow the server's metadata sent it on could not be completed). A connection or
-            // TLS failure, or an environment fault, propagates as what it is.
+            // TLS failure, or an environment fault, propagates as what it is. contract-005 · G-17 round 2 (HAR-R2-03) — and the
+            // SDK's OAuth client throws its own McpException for a connection or TLS failure at the authorization server, so the
+            // name map's log is read first: a request no name of the environment answered is thrown as that fault.
+            log.ThrowIfAMappedNameGaveNoAnswer("t4: the standard client's flow", ex);
             failure = ex;
         }
 
@@ -76,9 +95,11 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
         var text = string.Join(" ", result!.Content.OfType<TextContentBlock>().Select(c => c.Text));
         output.WriteLine($"{Tool} answered (isError={result.IsError}): {text}");
         Claim.Holds(() => Assert.DoesNotContain("rule:", text, StringComparison.Ordinal));
+        var ran = await ProviderCalls.SeenSinceAsync(owner, witness, server, ForecastHost, upstreamBefore, ToolUpstreamRequest);
         Claim.True(
-            await WireMockService.CountAsync(http, ToolUpstreamRequest) > upstreamBefore,
-            $"{Tool} answered '{text}', but the fake recorded no request from it: the tool did not run.");
+            ran > 0,
+            $"{Tool} answered '{text}', but {owner.Container.Name.TrimStart('/')}, which answers {ForecastHost}, recorded no request for "
+            + $"{ToolUpstreamRequest} from this server, {server}, after the flow began: the tool did not run.");
 
         // The flow, as the authorization server saw it: one authorization request and one token
         // request from this client, each for this resource and with S256.

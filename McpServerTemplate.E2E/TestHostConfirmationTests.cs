@@ -44,7 +44,9 @@ public sealed class TestHostConfirmationTests(TestHostConfirmationTests.Server f
         var recorder = new RequestRecorder();
         using var recorded = fixture.CreateClient(outermost: recorder);
         using var http = fixture.CreateClient();
-        var server = await fixture.Server.NetworkAddressAsync();
+
+        // contract-005 · G-17 round 2 (HAR-R2-02) — the runs the witness recorded from this server: from its address since it started.
+        var server = await fixture.Server.RequestSourceAsync();
 
         // The tool is the test host's, and irreversible, on its own startup line (G-11).
         var line = FrameLine.Parse(await fixture.Server.StartupLineAsync());
@@ -146,9 +148,9 @@ public sealed class TestHostConfirmationTests(TestHostConfirmationTests.Server f
             http, IssuerA, "valid", ServerUnderTest.Resource, [TestHost.ToolScope], new Dictionary<string, object> { ["subject"] = subject });
 
     /// <summary>The runs the witness recorded from <paramref name="server"/>: each report's marker, which no other run has.</summary>
-    private static async Task<IReadOnlyList<string>> RunsAsync(HttpClient http, System.Net.IPAddress server) =>
+    private static async Task<IReadOnlyList<string>> RunsAsync(HttpClient http, RequestSource server) =>
         [.. (await WireMockService.EntriesAsync(http))
-            .Where(e => server.Equals(e.Client) && e.Path.StartsWith(TestHost.WitnessPath, StringComparison.Ordinal))
+            .Where(e => server.Made(e) && e.Path.StartsWith(TestHost.WitnessPath, StringComparison.Ordinal))
             .Select(e => e.Path[TestHost.WitnessPath.Length..])
             .Distinct(StringComparer.Ordinal)];
 

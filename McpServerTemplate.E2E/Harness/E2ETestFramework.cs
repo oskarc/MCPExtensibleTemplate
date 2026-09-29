@@ -14,7 +14,10 @@ namespace McpServerTemplate.E2E.Harness;
 /// contract-005 · G-3, G-14 — xUnit 2 has no assembly fixture, and the environment is started lazily by
 /// whichever class needs it first. What it may not do is outlive the run: its diagnostics bundle is
 /// written, its containers and network are removed, and the run directory — every key of the test
-/// PKI — is deleted here, before the assembly reports that it finished.
+/// PKI — is deleted here, before the assembly reports that it finished. contract-005 · G-17 round 2
+/// (CON-R2-05) — a run stopped before this (Ctrl+C, or a process that exits another way) removes what it
+/// made on its way out, best effort; a run killed outright runs nothing, and the next run's start removes
+/// what it left (E2EEnvironment's sweep of dead runs).
 ///
 /// contract-005 · G-11, T-12 — a sabotage weakens one thing for one test, so a run of it (MCP_E2E_SABOTAGE) runs that
 /// test and no other, whatever the runner's filter let through, and its result is written for scripts/e2e-sabotage.sh

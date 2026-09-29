@@ -61,6 +61,10 @@ public static class IdentityConfigurationBinder
                 + "refuse every request.");
         }
 
+        // contract-005 · G-17 round 2 (SEC-R2-05) — before the https check, which trims it.
+        RefuseWhitespace("Authentication:Resource", config.Resource,
+            "It is published as written, and every token's audience must equal it character for character, which no token's would.");
+
         if (!Uri.TryCreate(config.Resource, UriKind.Absolute, out var resource) ||
             resource.Scheme != Uri.UriSchemeHttps)
         {
@@ -111,6 +115,10 @@ public static class IdentityConfigurationBinder
         {
             var key = $"Authentication:IdentityProviders:{name}";
 
+            // contract-005 · G-17 round 2 (SEC-R2-05) — before the https check, which trims it.
+            RefuseWhitespace($"{key}:Authority", provider.Authority,
+                "Discovery and signing keys are fetched from paths appended to it as written, where no identity provider answers.");
+
             if (!Uri.TryCreate(provider.Authority, UriKind.Absolute, out var authority) ||
                 authority.Scheme != Uri.UriSchemeHttps)
             {
@@ -137,6 +145,13 @@ public static class IdentityConfigurationBinder
                     $"{key}:Issuer is required. It is the exact iss value tokens must carry, and it "
                     + "is pinned rather than read from the token.");
             }
+
+            // contract-005 · G-17 round 2 (SEC-R2-05) — before the https check, which trims it, and so before the duplicate
+            // check below, which compares what is published.
+            RefuseWhitespace($"{key}:Issuer", provider.Issuer,
+                "Every token's iss must equal it character for character, and it is published as written as an authorization "
+                + "server: no token's iss would, so this identity provider would authenticate no one, and every provider bound "
+                + "to it would refuse every caller.");
 
             // contract-005 · G-12 (4) — the same rule as Authority: the metadata's authorization_servers
             // lists the Issuer, and clients are sent to it for its metadata and to sign in.
@@ -267,6 +282,60 @@ public static class IdentityConfigurationBinder
                     + "contain mcp:admin. The administrative plane would be unreachable.");
             }
         }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-05) — refuses <paramref name="value"/>, the setting <paramref name="key"/>, when it
+    /// holds whitespace, a control character or an invisible format character anywhere, naming which and where. The https
+    /// check reads the value with Uri.TryCreate, which trims whitespace around it and escapes a space inside its path, so it
+    /// looked well formed; everything else uses it as written. The router, the duplicate check and the issuer's validation
+    /// compare an Issuer character for character, and the metadata publishes it, so 'https://idp.example.com ' was accepted
+    /// beside 'https://idp.example.com' and authenticated no one: the outcome the duplicate check refuses (G-17 round 1). The
+    /// Resource and an Authority had the same gap. No case or port is normalised: an issuer is compared exactly. An empty or
+    /// missing value is left to the checks after this one, which say what it must be.
+    /// </summary>
+    /// <param name="key">The setting's key.</param>
+    /// <param name="value">Its value.</param>
+    /// <param name="consequence">What using it as written would do, as a sentence.</param>
+    private static void RefuseWhitespace(string key, string? value, string consequence)
+    {
+        var at = string.IsNullOrEmpty(value) ? -1 : FirstInvisible(value);
+        if (at < 0)
+        {
+            return;
+        }
+
+        var c = value![at];
+        var which = c switch
+        {
+            ' ' => "a space",
+            '\t' => "a tab",
+            _ => $"U+{(int)c:X4}",
+        };
+        var where = at == 0 ? "at its start" : at == value.Length - 1 ? "at its end" : $"at character {at + 1}";
+        throw new ConfigurationException(
+            $"{key} is '{LogSafe.Escaped(LogSafe.Url(value))}', which holds {which} {where}. {consequence} Read as a URL, the "
+            + "whitespace around it is trimmed and a space inside it escaped, so it looked well formed. Write it without "
+            + "whitespace or control characters.");
+    }
+
+    /// <summary>
+    /// The index of the first whitespace, control or format character in <paramref name="value"/>, or -1 when there is none.
+    /// Letters beyond ASCII are left alone: an internationalised name's are allowed here, and judged by the checks after.
+    /// </summary>
+    private static int FirstInvisible(string value)
+    {
+        for (var i = 0; i < value.Length; i++)
+        {
+            var c = value[i];
+            if (char.IsWhiteSpace(c) || char.IsControl(c)
+                || System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Format)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary><paramref name="items"/> as a sentence lists them: "a", "a and b", "a, b and c".</summary>

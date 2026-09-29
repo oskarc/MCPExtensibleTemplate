@@ -44,7 +44,9 @@ public sealed class ShippedImageRefusalTests(ShippedImageRefusalTests.Server fix
     public async Task T2_contract_003s_refusals_each_carry_their_rule_return_nothing_and_reach_no_upstream()
     {
         using var http = fixture.CreateClient();
-        var server = await fixture.Server.NetworkAddressAsync();
+
+        // contract-005 · G-17 round 2 (HAR-R2-02) — what the fake recorded from this server: from its address since it started.
+        var server = await fixture.Server.RequestSourceAsync();
 
         // The image's own account (G-11): Production with Redis, and the items the cases name, with their scopes.
         var line = FrameLine.Parse(await fixture.Server.StartupLineAsync());
@@ -129,7 +131,7 @@ public sealed class ShippedImageRefusalTests(ShippedImageRefusalTests.Server fix
     private static Task<JsonElement> CallAsync(HttpClient http, string token, IReadOnlyDictionary<string, object> arguments) =>
         McpRequests.ExchangeAsync(http, McpRequests.Rpc(ServerUnderTest.Endpoint, token, "tools/call", new { name = Tool, arguments }));
 
-    /// <summary>What the fake has recorded from <paramref name="server"/>.</summary>
-    private static async Task<IReadOnlyList<WireMockService.JournalEntry>> FromServerAsync(HttpClient http, IPAddress server) =>
-        [.. (await WireMockService.EntriesAsync(http)).Where(e => server.Equals(e.Client))];
+    /// <summary>What the fake has recorded from <paramref name="server"/>: contract-005 · G-17 round 2 (HAR-R2-02) — since it started.</summary>
+    private static async Task<IReadOnlyList<WireMockService.JournalEntry>> FromServerAsync(HttpClient http, RequestSource server) =>
+        [.. (await WireMockService.EntriesAsync(http)).Where(server.Made)];
 }

@@ -40,6 +40,13 @@ COPY --from=build --chown=1654:1654 /runtime/logs ./logs
 # The default port (HttpTransport:Port). Binding and every other setting come from the environment.
 EXPOSE 3001
 
+# contract-005 · G-17 round 2 — the aspnet base image sets ASPNETCORE_HTTP_PORTS=8080, ASP.NET Core's own port setting,
+# which this server would ignore: it listens where HttpTransport:BindAddress and HttpTransport:Port say, and refuses at
+# startup a listening setting it would ignore (HostBuilders.RefuseListeningSettings). Set empty here, which asks for
+# nothing and is not refused, so the image carries no such request and the start-up warning it caused
+# ("Overriding HTTP_PORTS '8080' ...") is gone.
+ENV ASPNETCORE_HTTP_PORTS=
+
 # The chiseled image's app user, stated rather than inherited.
 USER 1654
 

@@ -8,7 +8,11 @@ namespace McpServerTemplate.E2E.Harness;
 /// contract-005 · G-8 — one server container per test class, so no count in Redis or at a fake leaks
 /// from one class into another. A test class declares its server by nesting a subclass of this and
 /// taking it as an IClassFixture; the subclass passes the class's <see cref="SettingsDelta"/>, which is
-/// the only way the class configures its server.
+/// the only way the class configures its server. contract-005 · G-17 round 2 (FLA-R2-02) — a server of
+/// its own was not enough: every test-issuer token was one caller (e2e-user) in the run's one Redis, and
+/// T-4 counted the fake's journal for every server. Now a class's test-issuer tokens are its server's
+/// own caller (<see cref="ServerUnderTest.Caller"/>), its forwarded address is its own, and a witness is
+/// read for its server alone, since that server started (<see cref="ServerUnderTest.RequestSourceAsync"/>).
 ///
 /// contract-005 · G-5 — each subclass is also a Keycloak client of its own: the realm is imported with
 /// one client-credentials client per subclass in this assembly, so two classes never share a
@@ -102,14 +106,12 @@ public abstract partial class ServerFixture : IAsyncLifetime
 public sealed class KeycloakClientAttribute : Attribute;
 
 /// <summary>
-/// Client addresses for the front's test-only header: RFC 5737 TEST-NET-3, which no real client has.
+/// Client addresses for the front's test-only header: RFC 5737 TEST-NET-3, which no real client has. contract-005 · G-17
+/// round 2 (FLA-R2-02) — each handed out once in a run: a class's, a test's, a server's self-check's; no two share one.
 /// </summary>
 public static class ClientAddresses
 {
     private static int _next;
-
-    /// <summary>The address the harness's own self-checks are forwarded as, apart from every test's.</summary>
-    public const string SelfCheck = "203.0.113.254";
 
     /// <summary>An address no other caller in this run has been given.</summary>
     public static string Next()

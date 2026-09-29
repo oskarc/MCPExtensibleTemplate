@@ -15,6 +15,12 @@ namespace McpServerTemplate.E2E;
 /// client-credentials token carries azp and no client_id, and must be refused. A ClientIdClaim that
 /// every token carries (a registered claim) or that means something else (the scope claim) would
 /// switch the requirement off, so it refuses startup.
+///
+/// contract-005 · G-17 round 2 (HAR-R2-04) — refused for that claim and nothing else: the same server takes the same client's
+/// Keycloak token once it carries client_id (asked for with <see cref="KeycloakService.ClientIdScope"/>, which adds that claim
+/// alone), and the refusal of the token without it is logged naming client_id as the missing client claim, and not the token.
+/// The positive control was idp-a's token, which showed the server takes tokens, not that it would take Keycloak's but for the
+/// claim; and the log said the reason, which this test had not read.
 /// </summary>
 public sealed class ClientClaimTests(ClientClaimTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<ClientClaimTests.Server>
@@ -26,6 +32,12 @@ public sealed class ClientClaimTests(ClientClaimTests.Server fixture, ITestOutpu
 
     private const string ClientIdClaimKey = $"Authentication:IdentityProviders:{E2EEnvironment.KeycloakIssuer}:ClientIdClaim";
     private const string KeycloakClaimLeftAsAzp = "t11-3-keycloak-client-claim-left-as-azp";
+
+    /// <summary>The server's log line for a refused token.</summary>
+    private const string AuthenticationFailed = "authn_login_fail";
+
+    /// <summary>What the server logs for a token missing the claim ClientIdClaim names (IdentityRegistration, OnTokenValidated), as T-3 reads it.</summary>
+    private const string MissingClientClaim = "missing client_id (the client claim)";
 
     [Fact]
     [Sabotage(KeycloakClaimLeftAsAzp, SabotageActs.ContainerEnvironment,
@@ -41,25 +53,42 @@ public sealed class ClientClaimTests(ClientClaimTests.Server fixture, ITestOutpu
             claims.TryGetClaim("azp", out _) && !claims.TryGetClaim("client_id", out _),
             $"the Keycloak token was expected to carry azp and no client_id; it carries {string.Join(", ", claims.Claims.Select(c => c.Type).Distinct())}.");
 
-        // Positive control: a token that carries client_id is accepted by this same server, so the
-        // refusal below is the claim's, not a server that refuses everything.
-        var carrying = await TestIssuerService.MintAsync(http, "idp-a.e2e.test", "valid", ServerUnderTest.Resource, ["weather:read"]);
+        // contract-005 · G-17 round 2 (HAR-R2-04) — positive control: the same client's Keycloak token, asked for with the one scope
+        // that adds client_id and nothing else, is taken by this same server. It is the token below but for that claim — same
+        // issuer, same subject — so the refusal below is for the claim ClientIdClaim names, and for nothing else about it.
+        var carrying = await fixture.KeycloakTokenAsync(KeycloakService.ClientIdScope);
+        var carried = new JsonWebToken(carrying);
+        Assert.True(
+            carried.TryGetClaim("client_id", out _) && carried.Issuer == claims.Issuer && carried.Subject == claims.Subject,
+            $"the Keycloak token asked for with {KeycloakService.ClientIdScope} was expected to be the same client's with client_id added; "
+            + $"it is {carried.Issuer}'s for {carried.Subject}, carrying {string.Join(", ", carried.Claims.Select(c => c.Type).Distinct())}.");
         using (var accepted = await http.SendAsync(McpRequests.Initialize(ServerUnderTest.Endpoint, carrying)))
         {
             Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
         }
 
         // The same Keycloak token is accepted where Keycloak's ClientIdClaim is azp (every other class
-        // in the run), so the one thing this server changes is the claim required. The refusal's
-        // reason is not logged: a missing required claim fails in OnTokenValidated, which no log line
-        // reports yet — T-3's "with its reason in the log" is that clause, and it is not this phase's.
+        // in the run), so the one thing this server changes is the claim required.
+        var before = (await fixture.Server.StderrLinesAsync(AuthenticationFailed)).Count;
         using var response = await http.SendAsync(McpRequests.Initialize(ServerUnderTest.Endpoint, keycloak));
-        output.WriteLine($"The Keycloak token got {(int)response.StatusCode}.");
+        var logged = await fixture.Server.StderrLinesAfterAsync(AuthenticationFailed, before);
+        output.WriteLine($"The Keycloak token got {(int)response.StatusCode}; logged: {string.Join(" | ", logged)}");
 
         Claim.True(
             response.StatusCode == HttpStatusCode.Unauthorized,
             $"with ClientIdClaim=client_id, a Keycloak token carrying only azp got {(int)response.StatusCode}, not 401: the claim "
             + "ClientIdClaim names was not the one required.");
+
+        // contract-005 · G-17 round 2 (HAR-R2-04) — refused for that claim, said so, and the token not written down, as T-3 holds of
+        // idp-a's tokens.
+        Claim.True(
+            logged.Count > 0 && logged.All(line => line.Contains(MissingClientClaim, StringComparison.Ordinal)),
+            $"a Keycloak token carrying only azp was refused with 401, and the server's log "
+            + $"{(logged.Count == 0 ? $"has no {AuthenticationFailed} line for it" : $"says '{string.Join(" | ", logged)}'")}, not its reason ('{MissingClientClaim}').");
+        var stderr = await fixture.Server.StderrAsync();
+        Claim.True(
+            !(stderr.Contains(keycloak, StringComparison.Ordinal) || stderr.Contains(keycloak.Split('.')[1], StringComparison.Ordinal)),
+            "the server's log holds the Keycloak token it refused.");
     }
 
     /// <summary>

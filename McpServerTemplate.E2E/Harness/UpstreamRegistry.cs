@@ -130,6 +130,8 @@ public interface IUpstreamService : IAsyncDisposable
     /// <summary>
     /// contract-005 · G-16, T-15 — every request it has recorded, whatever kind of container it is: how a test reads what
     /// reached the container answering a host (<see cref="E2EEnvironment.UpstreamFor"/>) without assuming it is WireMock.
+    /// contract-005 · G-17 round 2 (HAR-R2-02) — each with when it was recorded, which a test reads one server's requests by,
+    /// through <see cref="ProviderCalls.FromServerAsync"/> and <see cref="RequestSource"/>, and never by address alone.
     /// </summary>
     /// <param name="http">A client made from the environment's name map, for an owner whose record is read over HTTPS.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
@@ -143,6 +145,31 @@ public interface IUpstreamService : IAsyncDisposable
     /// <param name="http">A client made from the environment's name map, for an owner whose record is read over HTTPS.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
     public Task<IReadOnlyList<string>> WholeRecordsAsync(HttpClient http, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-06) — sends this owner one request of the test's own, carrying
+    /// <paramref name="header"/> as the value of the header <see cref="UpstreamWitness.Header"/> and <paramref name="body"/> as
+    /// its body, to <see cref="UpstreamWitness.Path"/>: T-6's positive control, which requires <see cref="WholeRecordsAsync"/>
+    /// to hold both before it searches every record for a token. A record that kept no header, or no body, would find no token
+    /// there however many a server had passed on, and nothing had ever seen the stand-in's record hold either. Every owner can
+    /// be sent one, whether the test process reaches it (the fake, through its published port) or not (the stand-in, from
+    /// inside its own container).
+    /// </summary>
+    /// <param name="http">A client made from the environment's name map, for an owner the test process reaches over HTTPS.</param>
+    /// <param name="header">The header's value, a marker no other request carries.</param>
+    /// <param name="body">The body, another such marker.</param>
+    /// <param name="cancellationToken">Cancels the request.</param>
+    public Task SendWitnessAsync(HttpClient http, string header, string body, CancellationToken cancellationToken = default);
+}
+
+/// <summary>contract-005 · G-17 round 2 (HAR-R2-06) — the request T-6 sends every upstream owner before its search (<see cref="IUpstreamService.SendWitnessAsync"/>).</summary>
+public static class UpstreamWitness
+{
+    /// <summary>The header its marker travels in.</summary>
+    public const string Header = "X-E2E-Witness";
+
+    /// <summary>The path it is sent to: one no provider asks for.</summary>
+    public const string Path = "/e2e-t6-witness";
 }
 
 /// <summary>One request an upstream container recorded.</summary>
@@ -150,4 +177,9 @@ public interface IUpstreamService : IAsyncDisposable
 /// <param name="Method">The HTTP method.</param>
 /// <param name="Host">The host name it was sent to, as its Host header named it.</param>
 /// <param name="Path">The path, with its query.</param>
-public sealed record UpstreamRequest(System.Net.IPAddress? Client, string Method, string Host, string Path);
+/// <param name="At">
+/// contract-005 · G-17 round 2 (HAR-R2-02) — when the owner recorded it, by the Docker engine's clock, which every container
+/// of the run shares: the fake's own time for the request, the stand-in's log line's time. What a read bounds by a server's
+/// start (<see cref="RequestSource"/>), since Docker hands a freed address to the next container at once.
+/// </param>
+public sealed record UpstreamRequest(System.Net.IPAddress? Client, string Method, string Host, string Path, DateTimeOffset At);

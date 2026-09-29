@@ -25,6 +25,9 @@ namespace McpServerTemplate.E2E;
 /// A fault in the environment rather than the product fails with an <see cref="EnvironmentFaultException"/>
 /// naming its phase and cause, never as one of these assertions: contract-005 · G-17 round 1 (HAR-R1-04) — a call's
 /// failure is folded into a claim only when it is the server's answer (<see cref="Claim.IsTheServersAnswer"/>).
+/// contract-005 · G-17 round 2 (HAR-R2-03) — and an OAuth flow's only when every name of the environment it asked answered
+/// (<see cref="NameMapLog.ThrowIfAMappedNameGaveNoAnswer"/>): the SDK's OAuth client reports a connection or TLS failure at
+/// the authorization server as an McpException of its own.
 /// </summary>
 public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<WalkingSkeletonTests.Server>
@@ -123,7 +126,9 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
     {
         var log = new NameMapLog();
         using var http = fixture.CreateClient(log);
-        var server = await fixture.Server.NetworkAddressAsync();
+
+        // contract-005 · G-17 round 2 (HAR-R2-02) — this server's requests: from its address since it started.
+        var server = await fixture.Server.RequestSourceAsync();
 
         var before = await TestIssuerService.CountsAsync(http, IssuerA, server);
 
@@ -153,10 +158,10 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
         var why = refused is null ? string.Empty : $"; and it refused {IssuerA}'s token ({refused})";
         Claim.True(
             Count(after, IssuerA, "/.well-known/openid-configuration") > Count(before, IssuerA, "/.well-known/openid-configuration"),
-            $"the server ({server}) fetched no discovery document from {IssuerA}; counts {JsonSerializer.Serialize(after)}{why}");
+            $"the server, {server}, fetched no discovery document from {IssuerA}; counts {JsonSerializer.Serialize(after)}{why}");
         Claim.True(
             Count(after, IssuerA, "/jwks") > Count(before, IssuerA, "/jwks"),
-            $"the server ({server}) fetched no key set from {IssuerA}; counts {JsonSerializer.Serialize(after)}{why}");
+            $"the server, {server}, fetched no key set from {IssuerA}; counts {JsonSerializer.Serialize(after)}{why}");
         Claim.True(refused is null, $"the server fetched {IssuerA}'s discovery document and key set, and refused its token: {refused}");
     }
 
@@ -179,8 +184,14 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
             await client.ListToolsAsync();
             output.WriteLine("The SDK client completed its OAuth flow.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (Claim.IsTheServersAnswer(ex) || log.Refused.Count > 0)
         {
+            // contract-005 · G-17 round 2 (HAR-R2-03) — the flow's end is this test's only when it is the server's answer, or the
+            // name map refused where the flow went (which is this claim's to judge); any other failure propagates as what it is.
+            // It caught every exception, and went on to claim the whole flow, so an environment fault in it read as "Filter not
+            // matched" on this test's claim. And the SDK's OAuth client throws an McpException of its own for a connection or TLS
+            // failure at the authorization server: a request no name of the environment answered is thrown as that fault.
+            log.ThrowIfAMappedNameGaveNoAnswer("t1: the sdk client's oauth flow", ex);
             output.WriteLine($"The SDK client's OAuth attempt ended: {ex.GetType().Name}: {ex.Message.Split('\n')[0]}");
         }
 
@@ -201,8 +212,10 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
 
         // contract-005 · G-12 (1) — with the endpoint at the resource's URL, the flow goes on: to the
         // authorization server the metadata names first (read here through a client of its own, so
-        // this read is not in the log), for its RFC 8414 metadata, /authorize and /token, and back to
-        // the front with the token. The whole OAuth flow went through the map.
+        // this read is not in the log), for its RFC 8414 metadata — the rest of its discovery. Its
+        // /authorize and /token, and the front's answer to the token, are T-4's claim (StandardClientTests):
+        // contract-005 · G-17 round 2 (HAR-R2-03) — this test claimed them as well, so a flow cut short by
+        // anything was a red here too. Where the flow went is this test's: through the map, and nowhere else.
         string authorizationServer;
         using (var reader = fixture.CreateClient())
         {
@@ -213,9 +226,6 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
         Claim.Holds(() =>
         {
             Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/.well-known/oauth-authorization-server" && r.Status == (int)HttpStatusCode.OK);
-            Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/authorize" && r.Status == (int)HttpStatusCode.Redirect);
-            Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/token" && r.Status == (int)HttpStatusCode.OK);
-            Assert.Contains(log.Requests, r => r.Method == HttpMethod.Post && r.Uri.Host == TlsFront.Host && r.Status == (int)HttpStatusCode.OK);
 
             // Nothing it asked for lay outside the map, and it connected to exactly the names its flow
             // calls for: the front, and the authorization server.

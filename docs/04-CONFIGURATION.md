@@ -398,10 +398,14 @@ services:
     # registry, a digest cannot. To update it, read the tag's current digest with
     # `docker buildx imagetools inspect redis:7.4-alpine` (the Digest line) and put it after the @.
     image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    # Started again when the Docker daemon restarts or the host reboots, and after a failure, until you stop it; so is
+    # each service below.
+    restart: unless-stopped
     networks:
       - mcp
   mcp-server:
     image: mcp-server:latest
+    restart: unless-stopped
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - Transport=http
@@ -429,6 +433,7 @@ services:
     # The only service published. nginx, pinned as Redis is (`docker buildx imagetools inspect nginx:1.30.5-alpine`),
     # given nginx.conf, below, and your certificate and key from beside this file, each mounted read-only.
     image: nginx:1.30.5-alpine@sha256:bf3201ab56f23e5954646379c775d511fc466e9f11376d9725361064ad07ed35
+    restart: unless-stopped
     ports:
       - "443:443"
     volumes:
@@ -454,15 +459,40 @@ networks:
 
 ```nginx
 # The TLS front: it terminates TLS for MCP_HOST and forwards every request to the server, on the compose file's network.
-events {}
+
+# A worker per CPU core, each holding up to 1024 connections: the image's own defaults, which a bare events {} lowers to
+# one worker of 512.
+worker_processes auto;
+
+events {
+    worker_connections 1024;
+}
 
 http {
+    # No nginx version in any response.
+    server_tokens off;
+
+    # Requests in flight per client address, counted by the address nginx sees.
+    limit_conn_zone $binary_remote_addr zone=perclient:10m;
+
     server {
         listen 443 ssl;
 
         ssl_certificate     /etc/nginx/tls/tls.crt;
         ssl_certificate_key /etc/nginx/tls/tls.key;
         ssl_protocols       TLSv1.2 TLSv1.3;
+        # Under TLS 1.2, only forward-secret, authenticated ciphers; TLS 1.3's are all of that kind.
+        ssl_ciphers         ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+
+        # A client that takes over 10 seconds to complete its TLS handshake or to send its request header, or that stalls
+        # sending its body for 10, is dropped; so is a kept-alive connection idle for 30. nginx's own are 60, 60 and 75.
+        client_header_timeout 10s;
+        client_body_timeout   10s;
+        keepalive_timeout     30s;
+
+        # At most 20 requests in flight from one client address; the rest are answered 429.
+        limit_conn        perclient 20;
+        limit_conn_status 429;
 
         location / {
             proxy_pass http://mcp-server:3001;
@@ -482,7 +512,11 @@ http {
 }
 ```
 
-Put your certificate for `MCP_HOST`, with its chain, at `tls/tls.crt` beside the compose file, and its key at `tls/tls.key`. Then start it with `MCP_HOST=mcp.example.com docker compose up -d`: clients connect to `https://mcp.example.com/mcp`, through the proxy, and nothing else of the deployment is published.
+Put your certificate for `MCP_HOST`, with its chain, at `tls/tls.crt` beside the compose file, and its key at `tls/tls.key`. Put the host name in a file named `.env` beside the compose file, the one line `MCP_HOST=mcp.example.com`: Compose reads it for every command run in that directory (`up`, `ps`, `logs`, `stop`, `down`), where a variable given on one command line is gone by the next and each later command stops, asking for `MCP_HOST`. Then start it with `docker compose up -d`: clients connect to `https://mcp.example.com/mcp`, through the proxy, and nothing else of the deployment is published. Each service is started again after a failure, and when the Docker daemon restarts or the host reboots, until you stop it.
+
+What the proxy holds: a worker per CPU core, each with up to 1024 connections (a request on its way to the server holds two, the client's and the server's); a client that takes more than 10 seconds for its TLS handshake or its request header, or stalls its body for 10, is dropped, and an idle connection after 30; one client address has at most 20 requests in flight, and the rest are answered 429. That address is the one nginx sees, and so is the address the server's own limit counts, 60 requests a minute per client address. Where every client reaches nginx from one address, as through Docker Desktop's port forwarding or a load balancer that rewrites the source address, both limits are one limit shared by every client: carry each client's own address to nginx there, with the PROXY protocol or `real_ip` from a balancer you trust. The proxy names no nginx version in its responses, and offers TLS 1.2 only with forward-secret, authenticated ciphers.
+
+The server listens where `HttpTransport:BindAddress` and `HttpTransport:Port` say, and nowhere else. ASP.NET Core's own listening settings, `ASPNETCORE_URLS`, `ASPNETCORE_HTTP_PORTS` and `ASPNETCORE_HTTPS_PORTS` (or `urls`, `http_ports` and `https_ports` by any other route), are settings it would ignore, so it refuses to start on any of them, naming where it came from; an empty one asks for nothing. The image clears the port its base image sets, `ASPNETCORE_HTTP_PORTS=8080`, that way.
 
 ---
 

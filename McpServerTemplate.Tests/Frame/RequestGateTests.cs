@@ -100,6 +100,86 @@ public class RequestGateTests
         Assert.Equal(forbidden.Replace("smhi://coverage-area", "X", StringComparison.Ordinal), nonexistent.Replace("smhi://does-not-exist", "X", StringComparison.Ordinal));
     }
 
+    /// <summary>The weather symbols' URI, which the SDK matches ignoring the case of its scheme and host, with an empty path read as /.</summary>
+    private const string HiddenRespelled = "SMHI://WEATHER-SYMBOLS/";
+
+    /// <summary>A URI no resource has, spelled the same way.</summary>
+    private const string MissingRespelled = "SMHI://NO-SUCH-THING/";
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-02) — the SDK matches a resource read ignoring the case of the URI's scheme and host
+    /// and reading an empty path as /, and the refusal named the resource's own URI, the key it was matched to: a caller who
+    /// respelled a hidden resource's URI was told it exists, and what it is, while a missing one was echoed as sent. The reply
+    /// names the URI as the caller sent it, so the hidden one respelled gets the words a missing one spelled the same way gets,
+    /// whether it is hidden by its scope or by its trust domain. The log keeps the key it was matched to, and the rule: for
+    /// another trust domain's resource, idp-binding (the pioneer's decision 1 (A), as for a tool).
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task T3_a_hidden_resource_respelled_is_refused_in_the_words_a_missing_one_spelled_the_same_way_gets(bool otherTrustDomain)
+    {
+        using var corp = new TestIdentityProvider("corp", "https://corp.example.com/");
+        using var partner = new TestIdentityProvider("partner", "https://partner.example.com/");
+        using var log = new CapturedLog();
+        await using var server = await InProcessServer.StartAsync([corp, partner], modules: Everything, logs: log);
+        var caller = otherTrustDomain
+            ? partner.MintToken(GateClient.Resource, scopes: ["weather:read", "observations:read"])
+            : corp.MintToken(GateClient.Resource, scopes: ["observations:read"]);
+
+        // Positive control: the respelling names the resource. Its owner, holding its scope, reads it by that spelling.
+        var owner = await GateClient.RpcAsync(server, corp.MintToken(GateClient.Resource, scopes: ["weather:read"]), "resources/read", new { uri = HiddenRespelled });
+        Assert.Contains("Weather Symbol Codes", owner.GetRawText(), StringComparison.Ordinal);
+
+        var hidden = GateClient.TextOf(await GateClient.RpcAsync(server, caller, "resources/read", new { uri = HiddenRespelled }));
+        var missing = GateClient.TextOf(await GateClient.RpcAsync(server, caller, "resources/read", new { uri = MissingRespelled }));
+
+        Assert.Contains("rule: not-permitted", missing, StringComparison.Ordinal);
+        Assert.Contains($"'{HiddenRespelled}'", hidden, StringComparison.Ordinal);
+        Assert.DoesNotContain("smhi://weather-symbols", hidden, StringComparison.Ordinal);
+        Assert.Equal(
+            missing.Replace(MissingRespelled, "X", StringComparison.Ordinal),
+            hidden.Replace(HiddenRespelled, "X", StringComparison.Ordinal));
+
+        // The log names the key the read was matched to, and the rule that refused it.
+        var rule = otherTrustDomain ? "idp-binding" : "not-permitted";
+        Assert.Contains(
+            log.Lines,
+            l => l.Contains($"authz_fail: rule={rule} principal={(otherTrustDomain ? "partner" : "corp")}:", StringComparison.Ordinal)
+                && l.Contains(" target=smhi://weather-symbols ", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-02) — a resource served under a URI template is matched to any URI the template
+    /// describes, and the refusal named the template: any concrete URI exposed a hidden template, even spelled exactly. The
+    /// reply names the URI sent, never the template, in the words a URI no resource has gets; the log names the template.
+    /// </summary>
+    [Fact]
+    public async Task T3_a_hidden_templated_resource_read_by_a_uri_it_describes_is_refused_naming_that_uri_and_not_the_template()
+    {
+        using var corp = new TestIdentityProvider("corp", "https://corp.example.com/");
+        using var log = new CapturedLog();
+        await using var server = await InProcessServer.StartAsync([corp], modules: [new TemplatedResourceModule()], logs: log);
+        var caller = corp.MintToken(GateClient.Resource, scopes: ["weather:read"]);
+
+        // Positive control: a caller holding its scope reads the item by that URI.
+        var owner = await GateClient.RpcAsync(server, corp.MintToken(GateClient.Resource, scopes: ["test:act"]), "resources/read", new { uri = "test://item/42" });
+        Assert.Contains("item 42", owner.GetRawText(), StringComparison.Ordinal);
+
+        var hidden = GateClient.TextOf(await GateClient.RpcAsync(server, caller, "resources/read", new { uri = "test://item/42" }));
+        var missing = GateClient.TextOf(await GateClient.RpcAsync(server, caller, "resources/read", new { uri = "test://nothing/42" }));
+
+        Assert.Contains("'test://item/42'", hidden, StringComparison.Ordinal);
+        Assert.DoesNotContain("{id}", hidden, StringComparison.Ordinal);
+        Assert.Equal(
+            missing.Replace("test://nothing/42", "X", StringComparison.Ordinal),
+            hidden.Replace("test://item/42", "X", StringComparison.Ordinal));
+        Assert.Contains(
+            log.Lines,
+            l => l.Contains("authz_fail: rule=not-permitted", StringComparison.Ordinal)
+                && l.Contains($" target={TestItemResources.Template} ", StringComparison.Ordinal));
+    }
+
     // ── T-4 (G-5): a request kind nobody governs goes no further ──
 
     [Theory]

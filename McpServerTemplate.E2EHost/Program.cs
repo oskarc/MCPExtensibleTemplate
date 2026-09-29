@@ -15,9 +15,10 @@ using Serilog.Events;
 // T-8 holds this host's "Frame installed" line to the shipped image's.
 //
 // It is not the program's Program.cs, whose startup functions are its own; nothing the test host is asked to prove
-// depends on them. It reads its settings as the program does (HostBuilders), checks its log sinks as the program
-// does, and never passes AddHttpServer's configureIdentityForTests: every token it accepts is verified against an
-// identity provider over HTTPS, as the shipped server's are.
+// depends on them. It reads its settings as the program does (HostBuilders), refuses the listening settings it would
+// ignore as the program does, checks its log sinks as the program does, writes its log through the program's line-safe
+// stage (LineSafeLogging), and never passes AddHttpServer's configureIdentityForTests: every token it accepts is
+// verified against an identity provider over HTTPS, as the shipped server's are.
 //
 // CONTAINMENT (Containment.cs): it refuses to start unless Authentication:Resource and every identity provider's
 // Authority and Issuer are hosts under .test, checked on the fully built configuration, under any environment name.
@@ -48,9 +49,18 @@ try
         throw new ConfigurationException($"Transport is '{transport}'; the test host serves HTTP only. Set Transport=http.");
     }
 
+    // contract-005 · G-17 round 2 — as the program does, at the same point: ASP.NET Core's own urls, http_ports and https_ports,
+    // which this host would ignore (it listens where HttpTransport:BindAddress and :Port say, UseUrls below), are refused before
+    // UseUrls writes its own address into every settings source, which would hide what was set (HostBuilders).
+    HostBuilders.RefuseListeningSettings(configuration);
+
     LogSinkGuard.Validate(configuration, Directory.GetCurrentDirectory());
+
+    // contract-005 · G-17 round 2 (SEC-R2-03) — through the shipped server's own line-safe stage (LineSafeLogging): every sink
+    // the settings name gets each event with a caller's line breaks, escape sequences and direction overrides escaped, as the
+    // program's do, so the test host logs what a hostile tool or prompt name carries the way the image that ships does.
     builder.Services.AddSerilog(logging => logging
-        .ReadFrom.Configuration(configuration)
+        .ReadFromConfigurationLineSafe(configuration)
         .Enrich.FromLogContext()
         .Filter.ByExcluding(logEvent => logEvent.Exception is { } exception
             && logEvent.MessageTemplate.Text == "Hosting failed to start"

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using Docker.DotNet;
@@ -23,9 +24,12 @@ namespace McpServerTemplate.E2E.Harness;
 /// upper half to everything else, so a static address can never be taken by a dynamic one.
 ///
 /// contract-005 · UC-6 — the pioneer's decision of 2026-09-29 (contract-005's revision of that date, "2. yes, cut it and
-/// mock any calls"): the network resolves no real name. Every container joins it one way (<see cref="OnTheRunNetwork"/>),
-/// with its own loopback address as its only name server (<see cref="NameServer"/>) and no search domain, so every call a
-/// server makes is answered by a fake of the run or fails at the name lookup, and none reaches the internet by name.
+/// mock any calls"), as implemented: the network resolves no real name. Every container joins it one way
+/// (<see cref="OnTheRunNetwork"/>), with its own loopback address as its only name server (<see cref="NameServer"/>) and no
+/// search domain, so every call a server makes by name is answered by a fake of the run or fails at the name lookup.
+/// contract-005 · G-17 round 2 (CON-R2-01) — that is all it holds: the network itself is not cut, and a container of the run
+/// still reaches the internet by an address written as one. Names only or a real cut is put back to the pioneer
+/// (contract-005's log, the correction of 2026-09-30); until then the harness claims no more than names.
 /// </summary>
 public static class E2ENetwork
 {
@@ -34,6 +38,45 @@ public static class E2ENetwork
 
     /// <summary>A label on everything a run creates, so a run's leftovers can be found by hand.</summary>
     public const string RunLabel = "org.mcp-server-template.e2e.run";
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (CON-R2-06, FLA-R2-04) — a label on everything a run creates beside the run's own, naming who
+    /// owns it: the machine, the operating system, the account and the temporary directory its process ran with
+    /// (<see cref="ThisOwner"/>). A run's liveness is read from its run directory, which lies in its owner's temporary directory,
+    /// so only a run of this owner can be judged at all: the next run's sweep removes a dead run of this owner, and leaves every
+    /// other alone. It judged every run by this process's temporary directory, so a live run of another — a WSL run on the same
+    /// Docker Desktop, another account on a shared engine — had its containers and network removed from under it mid-run.
+    /// </summary>
+    public const string OwnerLabel = "org.mcp-server-template.e2e.owner";
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (CON-R2-06) — a label naming the process that owns the run, "pid@start", as its run directory
+    /// records it: what a fault naming a run it leaves alone says of it.
+    /// </summary>
+    public const string ProcessLabel = "org.mcp-server-template.e2e.process";
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (CON-R2-06, FLA-R2-04) — this process's owner, as <see cref="OwnerLabel"/> carries it: the
+    /// machine, the operating system's family, the account and the temporary directory.
+    /// </summary>
+    public static string ThisOwner { get; } = string.Create(
+        CultureInfo.InvariantCulture,
+        $"machine={Environment.MachineName}; os={OperatingSystemFamily()}; account={Environment.UserDomainName}\\{Environment.UserName}; temp={Path.GetFullPath(Path.GetTempPath())}");
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (CON-R2-06) — the labels on everything the run <paramref name="runId"/> creates: the run, its
+    /// owner and its owner's process.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> RunLabels(string runId) => new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [RunLabel] = runId,
+        [OwnerLabel] = ThisOwner,
+        [ProcessLabel] = E2EEnvironment.ThisProcess,
+    };
+
+    /// <summary>The operating system's family, which does not change with its updates: an owner's, as <see cref="ThisOwner"/> names it.</summary>
+    private static string OperatingSystemFamily() =>
+        OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsLinux() ? "linux" : OperatingSystem.IsMacOS() ? "macos" : "other";
 
     /// <summary>
     /// contract-005 · UC-6 — the pioneer's decision of 2026-09-29 ("2. yes, cut it and mock any calls"): the one name server
@@ -56,7 +99,9 @@ public static class E2ENetwork
     /// name server would cut the same names, but each lookup would wait out the embedded DNS's four-second forward, and
     /// would rely on nothing routing or answering that address. What this does not cut is a connection to an address
     /// written as one: nothing the suite configures is — a provider's BaseUrl must name its policy's host, an identity
-    /// provider's Authority names a host — so nothing reaches the internet by name, as the decision reads it.
+    /// provider's Authority names a host — so no call reaches the internet by name. contract-005 · G-17 round 2 (CON-R2-01) — the
+    /// narrowing of "cut it" to names was the agent's, not the pioneer's; whether a connection by address must be cut as well is
+    /// the pioneer's to decide, and this cuts names only.
     /// </summary>
     public const string NameServer = "127.0.0.1";
 
@@ -153,32 +198,84 @@ public static class E2ENetwork
     }
 
     /// <summary>
-    /// contract-005 · G-4, UC-6 — the one way a container joins the run's network: on <paramref name="network"/>, carrying the
-    /// run's label (<see cref="RunLabel"/>), with <see cref="NameServer"/> as its only name server and no search domain
-    /// (<see cref="NoSearchDomain"/>) — the pioneer's decision of 2026-09-29, "cut it and mock any calls". HarnessSelfTests
-    /// fails on a file of the suite that joins a container to a network any other way.
+    /// contract-005 · G-4, UC-6 — the one way a container of the run is made: of <paramref name="image"/>, on
+    /// <paramref name="network"/>, carrying the run's labels (<see cref="RunLabels"/>), with <see cref="NameServer"/> as its only
+    /// name server and no search domain (<see cref="NoSearchDomain"/>) — the pioneer's decision of 2026-09-29, "cut it and mock
+    /// any calls", as implemented (names). HarnessSelfTests fails on a file of the suite that makes a container builder, joins a
+    /// container to a network, or sets a startup callback any other way.
+    ///
+    /// contract-005 · G-17 round 2 (HAR-R2-08) — and checked as it starts: the moment the engine has started it, the container's
+    /// own record of how it was created — its name servers, search domains and written-in host names — is read back, and a
+    /// container that could resolve a real name fails its start as an environment fault naming it (<see cref="CouldResolveRealNames"/>).
+    /// What the engine gave a container used to be read only for the shared services, at the environment's start, and in T-6's
+    /// last class; every other class's server and front, T-7's Redis, the docs profile's services and the startup-outcome
+    /// servers were held by the suite's source alone, which a later create-parameter modifier, or ExtraHosts, would pass.
     /// </summary>
-    internal static ContainerBuilder OnTheRunNetwork(this ContainerBuilder builder, INetwork network, string runId)
+    internal static ContainerBuilder OnTheRunNetwork(string image, IDockerClient docker, INetwork network, string runId)
     {
-        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(image);
+        ArgumentNullException.ThrowIfNull(docker);
         ArgumentNullException.ThrowIfNull(network);
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
 
-        return builder
+        return new ContainerBuilder(image)
             .WithNetwork(network)
-            .WithLabel(RunLabel, runId)
+            .WithLabel(RunLabels(runId))
             .WithCreateParameterModifier(parameters =>
             {
                 parameters.HostConfig ??= new HostConfig();
                 parameters.HostConfig.DNS = [NameServer];
                 parameters.HostConfig.DNSSearch = [NoSearchDomain];
-            });
+            })
+            .WithStartupCallback((container, cancellationToken) => CheckStartedResolvingNoRealNameAsync(docker, container.Id, cancellationToken));
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-08) — the container <paramref name="containerId"/>, as the engine records how it was
+    /// created, resolves no real name; an environment fault naming it and what it was given otherwise. Run the moment each
+    /// container of the run starts (<see cref="OnTheRunNetwork"/>), and again for a server whose start is let stop at once
+    /// (<see cref="DockerEngine.StartServerAsync"/>).
+    /// </summary>
+    internal static async Task CheckStartedResolvingNoRealNameAsync(IDockerClient docker, string containerId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(docker);
+
+        var container = await docker.Containers.InspectContainerAsync(containerId, cancellationToken);
+        if (CouldResolveRealNames(container) is { } why)
+        {
+            throw new EnvironmentFaultException(
+                "names",
+                $"the container {container.Name.TrimStart('/')} ({container.Config?.Image}) was started able to resolve real names: {why}. "
+                + $"Every container of the run is made through {nameof(E2ENetwork)}.{nameof(OnTheRunNetwork)}, with {NameServer} as its only "
+                + "name server, no search domain and no host names written in, so that no call of the run reaches the internet by name.");
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · UC-6, G-17 round 2 (HAR-R2-08) — why a container, as the engine records how it was created, could resolve a
+    /// real name, or null when it could not: a name server other than its own loopback alone, a search domain, or a host name
+    /// written into its hosts file (ExtraHosts), which is answered before any name server is asked.
+    /// </summary>
+    internal static string? CouldResolveRealNames(ContainerInspectResponse container)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+
+        var servers = container.HostConfig?.DNS ?? [];
+        var search = container.HostConfig?.DNSSearch ?? [];
+        var written = container.HostConfig?.ExtraHosts ?? [];
+        return servers.SequenceEqual([NameServer], StringComparer.Ordinal)
+            && search.SequenceEqual([NoSearchDomain], StringComparer.Ordinal)
+            && written.Count == 0
+            ? null
+            : $"name servers [{string.Join(", ", servers)}], search domains [{string.Join(", ", search)}], host names written in "
+                + $"[{string.Join(", ", written)}]";
     }
 
     /// <summary>
     /// contract-005 · UC-6 — the pioneer's decision of 2026-09-29: each container attached to <paramref name="network"/> that was
-    /// not started resolving no real name, as the engine records how it started — its name servers and search domains — named
-    /// with what it was given. Empty when every one was started with <see cref="NameServer"/> alone and no search domain. A
+    /// not started resolving no real name, as the engine records how it started — its name servers, search domains and, since
+    /// G-17 round 2 (HAR-R2-08), host names written in — named with what it was given (<see cref="CouldResolveRealNames"/>).
+    /// Empty when every one was started with <see cref="NameServer"/> alone, no search domain and no host name written in. A
     /// container removed while it is asked has left the network, and is not one.
     /// </summary>
     internal static async Task<IReadOnlyList<string>> ResolvingRealNamesAsync(IDockerClient docker, string network, CancellationToken cancellationToken)
@@ -199,11 +296,9 @@ public static class E2ENetwork
                 continue;
             }
 
-            var servers = container.HostConfig?.DNS ?? [];
-            var search = container.HostConfig?.DNSSearch ?? [];
-            if (!servers.SequenceEqual([NameServer], StringComparer.Ordinal) || !search.SequenceEqual([NoSearchDomain], StringComparer.Ordinal))
+            if (CouldResolveRealNames(container) is { } why)
             {
-                found.Add($"{container.Name.TrimStart('/')} (name servers [{string.Join(", ", servers)}], search domains [{string.Join(", ", search)}])");
+                found.Add($"{container.Name.TrimStart('/')} ({why})");
             }
         }
 
@@ -214,13 +309,14 @@ public static class E2ENetwork
     /// Creates the run's network. A subnet another network already holds is an environment fault,
     /// named with the network that holds it. A killed run's network is removed before this, by the
     /// start's sweep of dead runs, so the holder is a run still alive on this machine or a network that
-    /// is not a run's at all.
+    /// is not a run's at all. contract-005 · G-17 round 2 (CON-R2-06, FLA-R2-04) — or a run of another owner
+    /// (<see cref="OwnerLabel"/>), which the sweep cannot judge and leaves alone: the fault names that owner.
     /// </summary>
     internal static async Task<INetwork> CreateAsync(string runId, IDockerClient docker, CancellationToken cancellationToken)
     {
         var network = new NetworkBuilder()
             .WithName($"mcp-e2e-{runId}")
-            .WithLabel(RunLabel, runId)
+            .WithLabel(RunLabels(runId))
             .WithCreateParameterModifier(parameters =>
             {
                 parameters.EnableIPv6 = false;
@@ -252,10 +348,19 @@ public static class E2ENetwork
                 holder switch
                 {
                     null => $"the run's network on {Subnet} could not be created: {ex.Message}",
-                    { Labels: { } labels } when labels.TryGetValue(RunLabel, out var run) =>
+                    { Labels: { } labels } when labels.TryGetValue(RunLabel, out var run)
+                        && labels.TryGetValue(OwnerLabel, out var owner) && owner == ThisOwner =>
                         $"subnet taken: {Subnet} is held by network '{holder.Name}' of run {run}, whose owner "
                         + $"({E2EEnvironment.RunOwner(run) ?? "unrecorded"}, process id @ start time) is still running on this machine (a dead "
                         + "run's would have been swept). Wait for it to finish; two runs cannot share the subnet.",
+                    { Labels: { } labels } when labels.TryGetValue(RunLabel, out var run) =>
+                        $"subnet taken: {Subnet} is held by network '{holder.Name}' of run {run}, "
+                        + (labels.TryGetValue(OwnerLabel, out var other)
+                            ? $"owned by {other} (process {(labels.TryGetValue(ProcessLabel, out var process) ? process : "unrecorded")})"
+                            : "which names no owner (a run of an earlier harness, whose run directory is not here)")
+                        + $": not this owner's ({ThisOwner}), so this run cannot tell whether it is alive, and leaves it alone rather than "
+                        + "pull a live run's environment out from under it. If it is still running, wait for it to finish; if it is not, "
+                        + $"remove it by hand: docker rm -f $(docker ps -aq --filter label={RunLabel}={run}), then docker network rm {holder.Name}.",
                     _ => $"subnet taken: {Subnet} overlaps network '{holder.Name}', which is not a run's. Remove it or move it "
                         + "off the subnet (docker network rm " + holder.Name + ").",
                 },

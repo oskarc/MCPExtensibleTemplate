@@ -233,7 +233,11 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
     public async Task T3_a_write_tool_called_with_a_token_issued_six_minutes_ago_is_refused_for_its_age()
     {
         using var http = fixture.CreateClient();
-        var server = await fixture.Server.NetworkAddressAsync();
+
+        // contract-005 · G-17 round 2 (HAR-R2-02) — this server's POSTs: from its address since it started, and counted from what
+        // the fake held before the fresh call. Counted by address alone, the positive control took another class's POST, made from
+        // this address before this server held it, for this server's (seen in a saved run), and the absence stood on it.
+        var server = await fixture.Server.RequestSourceAsync();
         var arguments = new Dictionary<string, object> { ["userId"] = 1, ["title"] = $"e2e-{Guid.NewGuid():N}", ["completed"] = false };
 
         // The write tool is on the image's startup line, as a Write tool.
@@ -242,12 +246,13 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
 
         // Positive control, and the witness seen active: a token issued now reaches the tool, which calls its upstream.
         var fresh = await TestIssuerService.MintAsync(http, IssuerA, "valid", ServerUnderTest.Resource, ["demo:write"]);
+        var before = await UpstreamPostsAsync(http, server);
         var ran = await CallAsync(http, fresh, arguments);
         var upstream = await UpstreamPostsAsync(http, server);
         Assert.True(
-            McpRequests.RuleOf(McpRequests.TextOf(ran)) is null && upstream > 0,
-            $"a token issued now did not reach {WriteTool}: it answered '{McpRequests.TextOf(ran)}', and the fake recorded {upstream} "
-            + "POSTs from this server.");
+            McpRequests.RuleOf(McpRequests.TextOf(ran)) is null && upstream > before,
+            $"a token issued now did not reach {WriteTool}: it answered '{McpRequests.TextOf(ran)}', and the fake recorded {upstream - before} "
+            + $"POSTs from this server, {server}, during the call.");
 
         var stale = await TestIssuerService.MintAsync(
             http, IssuerA, "stale-iat", ServerUnderTest.Resource, ["demo:write"],
@@ -286,16 +291,16 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
                     .ToSettings()
                     .Aggregate(d, (delta, setting) => delta.Set(setting.Key, setting.Value))));
         using var http = server.CreateClient(ClientAddresses.Next());
-        var address = await server.NetworkAddressAsync();
         var names = E2EEnvironment.Issuers.HostsServedBy(IssuerRegistry.Owner.TestIssuer);
 
         // contract-005 · G-17 round 1 (FLA-R1-05) — counted from this server's address since it started, and only since: Docker
         // gives a freed address to the next container at once, so an earlier server that held this address, and asked the
         // issuers for their keys, left counts there. Every one of its requests was made before this server started.
-        var since = await server.StartedAtAsync();
+        // contract-005 · G-17 round 2 (HAR-R2-02) — the two together, as every read by address now is.
+        var address = await server.RequestSourceAsync();
 
         // Cold: nothing this server has done so far asked any issuer for anything.
-        var cold = await TestIssuerService.CountsAsync(http, IssuerA, address, since);
+        var cold = await TestIssuerService.CountsAsync(http, IssuerA, address);
         Assert.True(
             names.All(name => Lookups(cold, name) == 0),
             $"the server was not fresh: it had asked the issuers for {JsonSerializer.Serialize(cold)} before any token arrived.");
@@ -310,7 +315,7 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
             status = refused.StatusCode;
         }
 
-        var after = await TestIssuerService.CountsAsync(http, IssuerA, address, since);
+        var after = await TestIssuerService.CountsAsync(http, IssuerA, address);
         output.WriteLine($"After the stranger's token ({(int)status}), from {address}: {JsonSerializer.Serialize(after)}");
         Claim.True(
             names.All(name => after.ContainsKey(name) && Lookups(after, name) == 0),
@@ -337,7 +342,7 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
             Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
         }
 
-        var raised = await TestIssuerService.CountsAsync(http, IssuerA, address, since);
+        var raised = await TestIssuerService.CountsAsync(http, IssuerA, address);
         output.WriteLine($"After {IssuerA}'s token: {JsonSerializer.Serialize(raised)}");
         Assert.True(
             Count(raised, IssuerA, "/.well-known/openid-configuration") > 0 && Count(raised, IssuerA, "/jwks") > 0,
@@ -378,9 +383,12 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
     private static Task<JsonElement> CallAsync(HttpClient http, string token, IReadOnlyDictionary<string, object> arguments) =>
         McpRequests.ExchangeAsync(http, McpRequests.Rpc(ServerUnderTest.Endpoint, token, "tools/call", new { name = WriteTool, arguments }));
 
-    /// <summary>The POSTs the fake recorded from <paramref name="server"/>: the write tool's upstream requests.</summary>
-    private static async Task<int> UpstreamPostsAsync(HttpClient http, IPAddress server) =>
-        (await WireMockService.EntriesAsync(http)).Count(e => server.Equals(e.Client) && e.Method == "POST" && e.Path == "/todos");
+    /// <summary>
+    /// The POSTs the fake recorded from <paramref name="server"/>: the write tool's upstream requests. contract-005 · G-17 round 2
+    /// (HAR-R2-02) — from its address since it started.
+    /// </summary>
+    private static async Task<int> UpstreamPostsAsync(HttpClient http, RequestSource server) =>
+        (await WireMockService.EntriesAsync(http)).Count(e => server.Made(e) && e.Method == "POST" && e.Path == "/todos");
 
     private static int Lookups(IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>> counts, string host) =>
         Count(counts, host, "/.well-known/openid-configuration") + Count(counts, host, "/jwks");

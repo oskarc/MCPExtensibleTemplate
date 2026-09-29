@@ -27,8 +27,10 @@ namespace McpServerTemplate.E2E.Harness;
 /// Nothing else about the file changes. Its image, mcp-server:latest, is this run's server image, tagged with that name
 /// for the run and untagged after it (a tag it replaced is put back).
 ///
-/// Each service runs as Compose runs it: its image, its environment, its read-only mounts and its fixed address, on the
-/// network under its service name, after the services it depends on. The file's one network is the run's (G-4), which the
+/// Each service runs as Compose runs it: its image, its environment, its read-only mounts, its fixed address and — contract-005
+/// · G-17 round 2 — its restart policy, on the network under its service name, after the services it depends on; every image
+/// it pulls is pinned by digest (CON-R2-04), and every container is checked as it starts (HAR-R2-08). The file's one network
+/// is the run's (G-4), which the
 /// network row follows; the containers carry the run's label, which no server reads. The deployment is reached the way the
 /// file lets a client reach it and no other: through what it publishes on the host's 443, where https://${MCP_HOST}/mcp is
 /// dialled — its own proxy — and it is ready when /readyz answers 200 there. It then serves as the document describes only if
@@ -351,6 +353,7 @@ public sealed partial class DocsProfile : IAsyncDisposable
                 Ports = [.. s.Ports.Select(Interpolated)],
                 Volumes = [.. s.Volumes.Select(Interpolated)],
                 Networks = [.. s.Networks.Select(n => (n.Network, n.Address is null ? null : Interpolated(n.Address)))],
+                Restart = s.Restart is null ? null : Interpolated(s.Restart),
             })
             .ToList();
         var networks = project.Networks.Select(n => n with { Subnet = n.Subnet is null ? null : Interpolated(n.Subnet) }).ToList();
@@ -358,6 +361,22 @@ public sealed partial class DocsProfile : IAsyncDisposable
         var server = services.FirstOrDefault(s => s.Name == ServerService)
             ?? throw new InvalidOperationException(
                 $"The compose file in {documentPath} has no '{ServerService}' service: nothing in it runs the server's image.");
+
+        // contract-005 · G-17 round 2 (CON-R2-04) — before anything is pulled: every image the documented deployment pulls is pinned
+        // by the digest of what it names, as every image of this repository is (T-13; docs/04 says so of its own). The server's is
+        // not pulled: it is this run's build, given the file's name for the run. The profile pulled every other as named, and
+        // T-13's check reads the harness's own image references, never this file's, so an edit to a tag would have been pulled
+        // and run in every end-to-end job with every check green.
+        var unpinned = services.Where(s => s.Name != ServerService && !PinnedByDigest().IsMatch(s.Image)).ToList();
+        if (unpinned.Count > 0)
+        {
+            throw new EnvironmentFaultException(
+                "docs profile: images",
+                $"the compose file in {documentPath} pulls {string.Join(" and ", unpinned.Select(s => $"'{s.Image}' for the '{s.Name}' service"))}, "
+                + "not pinned by digest (image@sha256:<64 hex digits>): a tag can be moved on its registry, and the deployment the "
+                + "profile runs would change with no line of the document changing. Pin each by the digest of its multi-arch index, "
+                + "as every image of this repository is.");
+        }
 
         if (RunNetworkFor(networks, services) is { } network)
         {
@@ -457,8 +476,7 @@ public sealed partial class DocsProfile : IAsyncDisposable
     {
         // contract-005 · the pioneer's decision of 2026-09-29 — on the run's network the one way, which resolves no real name: a
         // row of the table (Scope.EveryService), reported for each service.
-        var builder = new ContainerBuilder(service.Image)
-            .OnTheRunNetwork(environment.Network, environment.RunId)
+        var builder = E2ENetwork.OnTheRunNetwork(service.Image, environment.Docker, environment.Network, environment.RunId)
             .WithNetworkAliases(service.Name);
         applied.Add($"'{service.Name}': {Table.Single(r => r.Where == Scope.EveryService)}");
 
@@ -495,6 +513,18 @@ public sealed partial class DocsProfile : IAsyncDisposable
             builder = builder.WithCreateParameterModifier(parameters =>
                 parameters.NetworkingConfig!.EndpointsConfig![environment.Network.Name].IPAMConfig =
                     new EndpointIPAMConfig { IPv4Address = address });
+        }
+
+        // contract-005 · G-17 round 2 — the service's restart policy, as the file writes it: the engine starts the container again
+        // as Compose would have it start the service. Not a row of the table: nothing about it is the run's.
+        if (service.Restart is { } restart)
+        {
+            var policy = Compose.RestartPolicyOf(restart, service.Name);
+            builder = builder.WithCreateParameterModifier(parameters =>
+            {
+                parameters.HostConfig ??= new HostConfig();
+                parameters.HostConfig.RestartPolicy = policy;
+            });
         }
 
         if (service.Name == ServerService)
@@ -656,6 +686,10 @@ public sealed partial class DocsProfile : IAsyncDisposable
     /// <summary>The environment's name map, with mcp.e2e.test:443 sent to what <paramref name="front"/> publishes of <paramref name="port"/>.</summary>
     private static NameMap NamesThrough(NameMap names, IContainer front, int port) =>
         names.With(TlsFront.Host, TlsFront.Port, front.Hostname, front.GetMappedPublicPort(port));
+
+    /// <summary>contract-005 · G-17 round 2 (CON-R2-04) — an image reference pinned by digest: it ends in @sha256: and 64 hex digits.</summary>
+    [GeneratedRegex("@sha256:[0-9a-f]{64}$")]
+    private static partial Regex PinnedByDigest();
 
     /// <summary>
     /// contract-005 · G-4, G-17 round 1 (DOC-R1-01) — the file's networks, as the run runs them: a run has one network, so the
@@ -881,6 +915,11 @@ public sealed partial class DocsProfile : IAsyncDisposable
     /// contract-005 · G-17 round 1 (DOC-R1-01) — volumes, depends_on, networks and the fixed address are the documented
     /// deployment's: a proxy that terminates TLS with a mounted configuration, certificate and key, the server and Redis, on
     /// the file's own network, where the proxy has the one address the server takes forwarded headers from.
+    ///
+    /// contract-005 · G-17 round 2 — and restart, once a service: the documented deployment restarts each of its services unless
+    /// it is stopped. Read as Compose reads it (no, always, on-failure, on-failure:N, unless-stopped) and run as written, as the
+    /// engine's restart policy of the service's container; a server that refuses its configuration then exits and is started
+    /// again, which every wait for an exit reads as that exit (<see cref="DockerEngine.ExitCodeIfStoppedAsync"/>).
     /// </summary>
     internal static partial class Compose
     {
@@ -892,7 +931,8 @@ public sealed partial class DocsProfile : IAsyncDisposable
             IReadOnlyList<string> Ports,
             IReadOnlyList<string> Volumes,
             IReadOnlyList<string> DependsOn,
-            IReadOnlyList<(string Network, string? Address)> Networks);
+            IReadOnlyList<(string Network, string? Address)> Networks,
+            string? Restart);
 
         /// <summary>One network the file defines, with its subnet when it names one.</summary>
         internal sealed record Network(string Name, string? Subnet);
@@ -962,6 +1002,12 @@ public sealed partial class DocsProfile : IAsyncDisposable
                         {
                             services[^1].Image = Scalar(value);
                         }
+                        else if (key == "restart" && value.Length > 0 && services[^1].Restart is null)
+                        {
+                            // contract-005 · G-17 round 2 — the service's restart policy, as Compose reads it; checked here, run as written.
+                            services[^1].Restart = Scalar(value);
+                            _ = RestartPolicyOf(services[^1].Restart!, services[^1].Name);
+                        }
                         else if (Lists.Contains(key) && value.Length == 0 && services[^1].Given.Add(key))
                         {
                             list = key;
@@ -970,8 +1016,8 @@ public sealed partial class DocsProfile : IAsyncDisposable
                         {
                             throw new InvalidOperationException(
                                 $"The compose file gives '{services[^1].Name}' '{text}', which the docs profile does not run: it runs "
-                                + "image and the lists environment, ports, volumes, depends_on and networks, once each, and refuses "
-                                + "anything else rather than ignore it.");
+                                + "image, restart and the lists environment, ports, volumes, depends_on and networks, once each, and "
+                                + "refuses anything else rather than ignore it.");
                         }
 
                         break;
@@ -1031,8 +1077,32 @@ public sealed partial class DocsProfile : IAsyncDisposable
                     s.Ports,
                     s.Volumes,
                     s.DependsOn,
-                    s.Networks))],
+                    s.Networks,
+                    s.Restart))],
                 [.. networks.Select(n => new Network(n.Name, n.Subnet))]);
+        }
+
+        /// <summary>
+        /// contract-005 · G-17 round 2 — a Compose restart value as the engine's restart policy: no, always, unless-stopped,
+        /// on-failure, or on-failure:N with N retries. Any other is refused, naming the service, as Compose would refuse it.
+        /// </summary>
+        internal static RestartPolicy RestartPolicyOf(string value, string service)
+        {
+            ArgumentNullException.ThrowIfNull(value);
+
+            var parts = value.Split(':');
+            return (parts[0], parts.Length) switch
+            {
+                ("no", 1) => new RestartPolicy { Name = RestartPolicyKind.No },
+                ("always", 1) => new RestartPolicy { Name = RestartPolicyKind.Always },
+                ("unless-stopped", 1) => new RestartPolicy { Name = RestartPolicyKind.UnlessStopped },
+                ("on-failure", 1) => new RestartPolicy { Name = RestartPolicyKind.OnFailure },
+                ("on-failure", 2) when long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var retries) && retries > 0 =>
+                    new RestartPolicy { Name = RestartPolicyKind.OnFailure, MaximumRetryCount = retries },
+                _ => throw new InvalidOperationException(
+                    $"The '{service}' service restarts '{value}', which is no restart policy Compose runs: no, always, on-failure, "
+                    + "on-failure:N or unless-stopped."),
+            };
         }
 
         /// <summary>
@@ -1158,6 +1228,9 @@ public sealed partial class DocsProfile : IAsyncDisposable
             public string Name { get; } = name;
 
             public string? Image { get; set; }
+
+            /// <summary>contract-005 · G-17 round 2 — its restart policy, as written; given once.</summary>
+            public string? Restart { get; set; }
 
             /// <summary>The lists given so far: each may be given once.</summary>
             public HashSet<string> Given { get; } = new(StringComparer.Ordinal);

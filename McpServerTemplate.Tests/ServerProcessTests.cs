@@ -226,6 +226,16 @@ public sealed class ServerProcessTests(ServerProcessTests.SharedServers shared) 
         info.Environment.Remove("ASPNETCORE_ENVIRONMENT");
         info.Environment.Remove("DOTNET_ENVIRONMENT");
 
+        // contract-005 · G-17 round 2 — nor a developer's own listening settings (ASPNETCORE_URLS and the like), which the
+        // program refuses: a test that means one names it below.
+        foreach (var prefix in new[] { "ASPNETCORE_", "DOTNET_", string.Empty })
+        {
+            foreach (var listening in new[] { "URLS", "HTTP_PORTS", "HTTPS_PORTS" })
+            {
+                info.Environment.Remove(prefix + listening);
+            }
+        }
+
         // contract-005 review round 4 — nor the developer's own user secrets: a store nobody keeps, unless the
         // test names one; and, round 5 addendum 2, on Linux nobody's data-protection keys (SpawnedServer). Removed when
         // the test ends.
@@ -960,6 +970,192 @@ public sealed class ServerProcessTests(ServerProcessTests.SharedServers shared) 
                 await process.WaitForExitAsync();
                 Assert.Equal(78, process.ExitCode);
                 Assert.Contains($"{setting} is 'true' from {from}", spawned.Stderr, StringComparison.Ordinal);
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            if (root is not null)
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-06) — ASP.NET Core's web host reads a host list of its own, the top-level AllowedHosts
+    /// (in its templates' appsettings.json, and ASPNETCORE_ALLOWEDHOSTS), outside every section the server governs, and fills
+    /// the host filter from it only when the filter's own list is empty, which the server never leaves it. So it was ignored
+    /// without a word: a loopback server given AllowedHosts=mcp.example.com started, and answered 400 for that name. A setting
+    /// the server would ignore is refused, from every route the web host reads it by, naming where it came from and the
+    /// server's own host list, HttpTransport:AllowedHosts — as ForwardedHeaders_Enabled and shutdownTimeoutSeconds are.
+    /// </summary>
+    [Theory]
+    [InlineData("the command line")]
+    [InlineData("DOTNET_")]
+    [InlineData("ASPNETCORE_")]
+    [InlineData("no prefix")]
+    [InlineData("a settings file")]
+    public async Task G12_2_the_frameworks_allowed_hosts_setting_exits_78_naming_where_it_came_from(string route)
+    {
+        const string setting = "AllowedHosts";
+        const string value = "mcp.example.com";
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "127.0.0.1";
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        // The variable in the form container guidance writes it: upper case.
+        string[] arguments = [];
+        string? root = null;
+        var variable = route == "no prefix" ? setting.ToUpperInvariant() : $"{route}{setting.ToUpperInvariant()}";
+        string from;
+        switch (route)
+        {
+            case "the command line":
+                arguments = [$"--{setting}={value}"];
+                from = route;
+                break;
+            case "a settings file":
+                // A content root of this test's own, holding the shipped settings files, one of them with the key in it, as a
+                // template's appsettings.json has it.
+                root = Directory.CreateTempSubdirectory("mcp-allowed-hosts-").FullName;
+                var bin = Path.GetDirectoryName(ServerExecutable())!;
+                File.Copy(Path.Combine(bin, "appsettings.Production.json"), Path.Combine(root, "appsettings.Production.json"));
+                var settings = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(bin, "appsettings.json")))!.AsObject();
+                settings[setting] = value;
+                await File.WriteAllTextAsync(Path.Combine(root, "appsettings.json"), settings.ToJsonString());
+                from = "the settings file appsettings.json";
+                break;
+            default:
+                environment[variable] = value;
+                from = $"the environment, as {variable}";
+                break;
+        }
+
+        try
+        {
+            var spawned = Start(environment, workingDirectory: root, arguments: arguments);
+            using var process = spawned.Process;
+            try
+            {
+                // Started means the frame installed itself; refused means it exited first.
+                var deadline = DateTime.UtcNow.AddSeconds(30);
+                while (!process.HasExited && !spawned.Stderr.Contains("Frame installed:", StringComparison.Ordinal) && DateTime.UtcNow < deadline)
+                {
+                    await Task.Delay(100);
+                }
+
+                Assert.True(
+                    process.HasExited,
+                    $"given {setting}={value} from {route}, the http server started and installed its frame: a host list it ignores, "
+                    + "answering that name 400.");
+
+                await process.WaitForExitAsync();
+                Assert.Equal(78, process.ExitCode);
+                Assert.Contains($"{setting} is '{value}' from {from}", spawned.Stderr, StringComparison.Ordinal);
+                Assert.Contains("HttpTransport:AllowedHosts:0=mcp.example.com", spawned.Stderr, StringComparison.Ordinal);
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            if (root is not null)
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 — the program listens where HttpTransport:BindAddress and :Port say (it sets the web host's
+    /// addresses itself), so ASP.NET Core's own urls, http_ports and https_ports are settings it would ignore: urls without a
+    /// word — ASPNETCORE_URLS=http://0.0.0.0:9999 started a server that listened elsewhere — and the ports with a warning. Each
+    /// is refused, exit 78, from every route the web host reads it by, naming where it came from, as the host list and the
+    /// shutdown timeout are. An empty value asks for nothing and starts (HostBuildersTests); the image sets http_ports empty,
+    /// so every end-to-end start of it is that case on the image.
+    /// </summary>
+    [Theory]
+    [InlineData("urls", "http://0.0.0.0:9999", "the command line")]
+    [InlineData("urls", "http://0.0.0.0:9999", "DOTNET_")]
+    [InlineData("urls", "http://0.0.0.0:9999", "ASPNETCORE_")]
+    [InlineData("urls", "http://0.0.0.0:9999", "no prefix")]
+    [InlineData("urls", "http://0.0.0.0:9999", "a settings file")]
+    [InlineData("http_ports", "8080", "ASPNETCORE_")]
+    [InlineData("https_ports", "8443", "ASPNETCORE_")]
+    public async Task G17_the_frameworks_listening_settings_exit_78_naming_where_they_came_from(string setting, string value, string route)
+    {
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "127.0.0.1";
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        // The variable in the form container guidance writes it: upper case.
+        string[] arguments = [];
+        string? root = null;
+        var variable = route == "no prefix" ? setting.ToUpperInvariant() : $"{route}{setting.ToUpperInvariant()}";
+        string from;
+        switch (route)
+        {
+            case "the command line":
+                arguments = [$"--{setting}={value}"];
+                from = route;
+                break;
+            case "a settings file":
+                root = Directory.CreateTempSubdirectory("mcp-listening-settings-").FullName;
+                var bin = Path.GetDirectoryName(ServerExecutable())!;
+                File.Copy(Path.Combine(bin, "appsettings.Production.json"), Path.Combine(root, "appsettings.Production.json"));
+                var settings = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(bin, "appsettings.json")))!.AsObject();
+                settings[setting] = value;
+                await File.WriteAllTextAsync(Path.Combine(root, "appsettings.json"), settings.ToJsonString());
+                from = "the settings file appsettings.json";
+                break;
+            default:
+                environment[variable] = value;
+                from = $"the environment, as {variable}";
+                break;
+        }
+
+        try
+        {
+            var spawned = Start(environment, workingDirectory: root, arguments: arguments);
+            using var process = spawned.Process;
+            try
+            {
+                // Started means the frame installed itself; refused means it exited first.
+                var deadline = DateTime.UtcNow.AddSeconds(30);
+                while (!process.HasExited && !spawned.Stderr.Contains("Frame installed:", StringComparison.Ordinal) && DateTime.UtcNow < deadline)
+                {
+                    await Task.Delay(100);
+                }
+
+                Assert.True(
+                    process.HasExited,
+                    $"given {setting}={value} from {route}, the http server started and installed its frame: a listening setting it "
+                    + "ignores, listening where HttpTransport:BindAddress and :Port say instead.");
+
+                await process.WaitForExitAsync();
+                Assert.Equal(78, process.ExitCode);
+                Assert.Contains($"{setting} is '{value}' from {from}", spawned.Stderr, StringComparison.Ordinal);
+                Assert.Contains("set HttpTransport:BindAddress and HttpTransport:Port instead", spawned.Stderr, StringComparison.Ordinal);
             }
             finally
             {

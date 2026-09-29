@@ -29,6 +29,13 @@ WORKDIR /app
 COPY --from=build /app ./
 COPY --from=build --chown=1654:1654 /runtime/logs ./logs
 EXPOSE 3001
+
+# contract-005 · G-17 round 2 — as the root Dockerfile: the aspnet base image sets ASPNETCORE_HTTP_PORTS=8080, ASP.NET Core's
+# own port setting, which the test host would ignore as the program does (it listens where HttpTransport:BindAddress and
+# HttpTransport:Port say) and refuses at startup, as the program does (HostBuilders.RefuseListeningSettings). Set empty here,
+# which asks for nothing and is not refused, so the image carries no such request and logs no "Overriding HTTP_PORTS" warning.
+ENV ASPNETCORE_HTTP_PORTS=
+
 USER 1654
 LABEL org.opencontainers.image.title="McpServerTemplate end-to-end test host" \
       org.mcp-server-template.test-only="true"

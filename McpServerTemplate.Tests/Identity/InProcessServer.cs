@@ -66,6 +66,14 @@ public sealed class InProcessServer : IAsyncDisposable
     /// takes authentication's own check of a token's times out of the way to reach the gate's; the system clock when none
     /// is given.
     /// </param>
+    /// <param name="listenOn">
+    /// contract-005 · G-17 round 2 (SEC-R2-01) — where Kestrel listens: 127.0.0.1 on a port it chooses, unless a test needs
+    /// another bind, such as the dual-stack [::], where an IPv4 client arrives as an IPv4-mapped IPv6 address.
+    /// </param>
+    /// <param name="logLevel">
+    /// contract-005 · G-17 round 2 (SEC-R2-03) — the lowest level <paramref name="logs"/> is given: the framework's default,
+    /// Information, unless a test reads what the SDK writes below it.
+    /// </param>
     public static async Task<InProcessServer> StartAsync(
         IEnumerable<TestIdentityProvider> identityProviders,
         string resource = "https://mcp.example.com/mcp",
@@ -73,7 +81,9 @@ public sealed class InProcessServer : IAsyncDisposable
         IReadOnlyList<IProviderModule>? modules = null,
         string? redis = null,
         ILoggerProvider? logs = null,
-        TimeProvider? identityClock = null)
+        TimeProvider? identityClock = null,
+        string listenOn = "http://127.0.0.1:0",
+        LogLevel logLevel = LogLevel.Information)
     {
         var providers = identityProviders.ToArray();
         modules ??= BuiltInProviders.Create();
@@ -149,9 +159,10 @@ public sealed class InProcessServer : IAsyncDisposable
         if (logs is not null)
         {
             builder.Logging.AddProvider(logs);
+            builder.Logging.SetMinimumLevel(logLevel);
         }
 
-        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.WebHost.UseUrls(listenOn);
 
         var byName = providers.ToDictionary(p => p.Name, StringComparer.Ordinal);
 

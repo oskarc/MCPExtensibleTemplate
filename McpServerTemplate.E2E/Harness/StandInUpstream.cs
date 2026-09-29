@@ -64,7 +64,10 @@ public sealed partial class StandInUpstream : IUpstreamService
         var deadline = DateTime.UtcNow.AddSeconds(2);
         while (true)
         {
-            var (stdout, _) = await _container.GetLogsAsync(ct: cancellationToken);
+            // contract-005 · G-17 round 2 (HAR-R2-02) — with the engine's own time for each line, which is when the request was
+            // recorded: a record is one server's only from its address since it started (RequestSource), and a line whose time
+            // cannot be read is a fault of the record, named, never a request left out.
+            var (stdout, _) = await _container.GetLogsAsync(timestampsEnabled: true, ct: cancellationToken);
             var recorded = stdout.Split('\n')
                 .Select(line => RecordLine().Match(line))
                 .Where(match => match.Success)
@@ -72,7 +75,11 @@ public sealed partial class StandInUpstream : IUpstreamService
                     IPAddress.TryParse(match.Groups["client"].Value, out var client) ? client : null,
                     match.Groups["method"].Value,
                     match.Groups["host"].Value,
-                    match.Groups["path"].Value))
+                    match.Groups["path"].Value,
+                    ServerUnderTest.EngineTime(match.Groups["at"].Value)
+                        ?? throw new InvalidOperationException(
+                            $"The stand-in's record line '{match.Value}' carries no time the engine wrote, so it cannot be told from an "
+                            + "earlier server's at the same address.")))
                 .ToList();
 
             if (recorded.Count > 0 || DateTime.UtcNow >= deadline)
@@ -90,17 +97,50 @@ public sealed partial class StandInUpstream : IUpstreamService
     /// </summary>
     public async Task<IReadOnlyList<string>> WholeRecordsAsync(HttpClient http, CancellationToken cancellationToken = default)
     {
-        var (stdout, _) = await _container.GetLogsAsync(ct: cancellationToken);
+        var (stdout, _) = await _container.GetLogsAsync(timestampsEnabled: true, ct: cancellationToken);
         return [.. stdout.Split('\n').Where(line => RecordLine().IsMatch(line)).Select(line => line.Trim())];
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-06) — sent from inside the stand-in's own container, since it publishes no port the test
+    /// process could reach (<see cref="E2EEnvironment.WithoutNameAsync"/> takes a name only from an owner that publishes none): a
+    /// POST by the image's own wget to its witness door, a listener on the container's loopback that answers as every other of its
+    /// requests is answered and records the request the same way, whole. Nothing on the run's network can reach that door.
+    /// </summary>
+    public async Task SendWitnessAsync(HttpClient http, string header, string body, CancellationToken cancellationToken = default)
+    {
+        var sent = await _container.ExecAsync(
+            ["wget", "-q", "-O", "/dev/null", "--header", $"{UpstreamWitness.Header}: {header}", "--post-data", body, $"http://127.0.0.1:{WitnessPort}{UpstreamWitness.Path}"],
+            cancellationToken);
+        if (sent.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"The stand-in's witness request, sent from inside its container with wget, exited {sent.ExitCode}: {sent.Stdout}{sent.Stderr}");
+        }
+
+        // nginx writes the record once it has answered, and the engine's log follows a moment later: wait up to three seconds for
+        // the request to be recorded, as every read of the record does, so the record T-6 reads next holds it if it ever will.
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline && !(await WholeRecordsAsync(http, cancellationToken)).Any(r => r.Contains(header, StringComparison.Ordinal)))
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+        }
     }
 
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();
 
-    [GeneratedRegex(@"stand-in client=(?<client>\S+) method=(?<method>\S+) host=(?<host>\S+) path=(?<path>\S+) status=")]
+    /// <summary>
+    /// A record line of the access log, as the engine's log gives it back, with its time first (RFC 3339, to the nanosecond):
+    /// contract-005 · G-17 round 2 (HAR-R2-02) — the time is part of the record.
+    /// </summary>
+    [GeneratedRegex(@"^(?<at>\d{4}-\d{2}-\d{2}T\S+Z) stand-in client=(?<client>\S+) method=(?<method>\S+) host=(?<host>\S+) path=(?<path>\S+) status=")]
     private static partial Regex RecordLine();
 
     /// <summary>Where the stand-in's script is mounted, beside its configuration.</summary>
     private const string ScriptPath = "/etc/nginx/standin.js";
+
+    /// <summary>contract-005 · G-17 round 2 (HAR-R2-06) — the witness door's port, on the container's loopback alone.</summary>
+    private const int WitnessPort = 8080;
 
     private static string Configuration() => string.Create(
         CultureInfo.InvariantCulture,
@@ -142,6 +182,17 @@ public sealed partial class StandInUpstream : IUpstreamService
                     js_content standin.answer;
                 }
             }
+
+            # contract-005 · G-17 round 2 (HAR-R2-06) — the witness door: on the container's loopback alone, where nothing on the
+            # run's network reaches, answered and recorded as every request above is. T-6 sends one request through it, from
+            # inside this container, and requires the record to hold its header and its body before it searches for a token.
+            server {
+                listen 127.0.0.1:{{WitnessPort}};
+
+                location / {
+                    js_content standin.answer;
+                }
+            }
         }
         """);
 
@@ -171,8 +222,7 @@ public sealed partial class StandInUpstream : IUpstreamService
             var configuration = start.Pki.WriteFile("standin.conf", Configuration());
             var script = start.Pki.WriteFile("standin.js", Script());
             var tls = start.Pki.LeafDirectory(Name);
-            var container = new ContainerBuilder(TlsFront.Image)
-                .OnTheRunNetwork(start.Network, start.RunId)
+            var container = E2ENetwork.OnTheRunNetwork(TlsFront.Image, start.Docker, start.Network, start.RunId)
                 .WithNetworkAliases([.. hosts])
                 .WithBindMount(configuration, "/etc/nginx/nginx.conf", AccessMode.ReadOnly)
                 .WithBindMount(script, ScriptPath, AccessMode.ReadOnly)

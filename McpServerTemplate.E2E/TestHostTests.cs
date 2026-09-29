@@ -16,7 +16,11 @@ namespace McpServerTemplate.E2E;
 ///
 /// Containment: the test host serves only identity under .test, whatever its environment's name. Under Production and
 /// under Staging it comes up with every identity under .test, and exits 78, naming the setting, when one identity
-/// provider's Authority is not.
+/// provider's Authority is not. contract-005 · G-17 round 2 (CON-R2-03) — and naming every place the value reached, each a
+/// branch of its check (McpServerTemplate.E2EHost/Containment.cs) that a setting alone could reach: the Authority as the
+/// setting, as its scheme was built, and the MetadataAddress derived from it; an Issuer as the setting, among the issuers its
+/// scheme accepts, and among the authorization servers the metadata publishes; the Resource as the setting and as the
+/// metadata publishes it. Only the settings' Authority was held: removing any other branch left every suite green.
 ///
 /// Same frame: its whole "Frame installed" line is the shipped image's, except that providers= adds the test modules
 /// and the manifest adds their lines, and nothing else; both read limits=Redis.
@@ -32,7 +36,11 @@ public sealed class TestHostTests(TestHostTests.Server fixture, ITestOutputHelpe
 
     private const string UnscopedGivenTheScope = "t8-unscoped-caller-given-demo-read";
     private const string AuthorityUnderTest = "t8-authority-under-test";
+    private const string IssuerOrResourceUnderTest = "t8-issuer-or-resource-under-test";
     private const string AlsoServesJsonPlaceholder = "t8-test-host-also-serves-jsonplaceholder";
+
+    /// <summary>idp-a's bearer scheme, as the product names it (IdentityRegistration.SchemeFor).</summary>
+    private static readonly string IdpAScheme = $"idp:{E2EEnvironment.IdpA}";
 
     [Fact]
     [Sabotage(UnscopedGivenTheScope, SabotageActs.Inputs,
@@ -85,12 +93,7 @@ public sealed class TestHostTests(TestHostTests.Server fixture, ITestOutputHelpe
     public async Task T8_the_test_host_exits_78_given_an_identity_provider_outside_test(string environmentName)
     {
         var key = $"Authentication:IdentityProviders:{E2EEnvironment.IdpA}:Authority";
-        var delta = TestHost.Delta().Set("ASPNETCORE_ENVIRONMENT", environmentName);
-        if (environmentName != "Production")
-        {
-            // Only appsettings.Production.json names the providers to serve; any other environment names them here.
-            delta = delta.Set("Providers:Enabled:0", "Smhi").Set("Providers:Enabled:1", "SmhiObs");
-        }
+        var delta = ContainmentDelta(environmentName);
 
         // Positive control: under this environment's name, with every identity under .test, the test host comes up.
         await using (var contained = await fixture.Environment.StartupAsync($"test-host-{environmentName.ToLowerInvariant()}-contained", delta, ServerBuild.TestHost))
@@ -106,9 +109,64 @@ public sealed class TestHostTests(TestHostTests.Server fixture, ITestOutputHelpe
             $"test-host-{environmentName.ToLowerInvariant()}-outside", delta.Set(key, outside), ServerBuild.TestHost);
         output.WriteLine($"{environmentName}, {key}={outside}: {refused.Describe()}");
 
+        // contract-005 · G-17 round 2 (CON-R2-03) — named as the setting, and as idp-a's scheme was built: its Authority, and the
+        // MetadataAddress the framework derives from it, where the scheme fetches its keys.
+        string[] named = [$"{key} is '{outside}'", $"The {IdpAScheme} scheme's Authority is '{outside}'", $"The {IdpAScheme} scheme's MetadataAddress is '{outside}/"];
         Claim.True(
-            refused.ExitCode == 78 && refused.Refusal?.Contains($"{key} is '{outside}'", StringComparison.Ordinal) == true,
-            $"under {environmentName}, the test host given {key}={outside}, a host not under .test: {refused.Describe()}");
+            refused.ExitCode == 78 && named.All(n => refused.Refusal?.Contains(n, StringComparison.Ordinal) == true),
+            $"under {environmentName}, the test host given {key}={outside}, a host not under .test, was to exit 78 naming each of "
+            + $"[{string.Join("; ", named)}]: {refused.Describe()}");
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (CON-R2-03) — the branches of the test host's containment an Authority does not reach: an
+    /// Issuer outside .test, with idp-a's Authority kept under .test, is named as the setting, among the issuers idp-a's scheme
+    /// accepts, and among the authorization servers the metadata publishes; a Resource outside .test, as the setting and as the
+    /// metadata publishes it. Under Production and under Staging each; the Authority rows show the test host coming up under both
+    /// names with every identity under .test, so a refusal here that names the value in every place it reached is that value's.
+    /// </summary>
+    [Theory]
+    [InlineData("Issuer", "Production")]
+    [InlineData("Issuer", "Staging")]
+    [InlineData("Resource", "Production")]
+    [InlineData("Resource", "Staging")]
+    [Sabotage(IssuerOrResourceUnderTest, SabotageActs.ContainerEnvironment,
+        "The row's Issuer or Resource the test host is given is a host under .test (https://idp-a.example.test, "
+        + "https://mcp.example.test/mcp) instead of one outside it (https://idp-a.example.com, https://mcp.example.com/mcp).")]
+    public async Task T8_the_test_host_exits_78_given_an_issuer_or_a_resource_outside_test(string setting, string environmentName)
+    {
+        var (key, outside) = setting switch
+        {
+            "Issuer" => ($"Authentication:IdentityProviders:{E2EEnvironment.IdpA}:Issuer",
+                Sabotage.Choose(IssuerOrResourceUnderTest, "https://idp-a.example.com", "https://idp-a.example.test")),
+            "Resource" => ("Authentication:Resource",
+                Sabotage.Choose(IssuerOrResourceUnderTest, "https://mcp.example.com/mcp", "https://mcp.example.test/mcp")),
+            _ => throw new ArgumentOutOfRangeException(nameof(setting), setting, "Issuer or Resource"),
+        };
+
+        // Every place the value reached: the setting, and what the server was built with from it.
+        string[] named = setting == "Issuer"
+            ? [$"{key} is '{outside}'", $"An issuer the {IdpAScheme} scheme accepts is '{outside}'", $"An authorization server the metadata publishes is '{outside}'"]
+            : [$"{key} is '{outside}'", $"The resource the metadata publishes is '{outside}'"];
+
+        await using var refused = await fixture.Environment.StartupAsync(
+            $"test-host-{environmentName.ToLowerInvariant()}-{setting.ToLowerInvariant()}-outside", ContainmentDelta(environmentName).Set(key, outside), ServerBuild.TestHost);
+        output.WriteLine($"{environmentName}, {key}={outside}: {refused.Describe()}");
+
+        Claim.True(
+            refused.ExitCode == 78 && named.All(n => refused.Refusal?.Contains(n, StringComparison.Ordinal) == true),
+            $"under {environmentName}, the test host given {key}={outside}, a host not under .test, was to exit 78 naming each of "
+            + $"[{string.Join("; ", named)}]: {refused.Describe()}");
+    }
+
+    /// <summary>
+    /// The test host's settings under <paramref name="environmentName"/>: <see cref="TestHost.Delta"/>, and, outside Production,
+    /// the providers to serve, which only appsettings.Production.json names.
+    /// </summary>
+    private static SettingsDelta ContainmentDelta(string environmentName)
+    {
+        var delta = TestHost.Delta().Set("ASPNETCORE_ENVIRONMENT", environmentName);
+        return environmentName == "Production" ? delta : delta.Set("Providers:Enabled:0", "Smhi").Set("Providers:Enabled:1", "SmhiObs");
     }
 
     [Fact]

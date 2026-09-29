@@ -232,6 +232,155 @@ public partial class DocumentationTests
         Assert.True(offenders.Length == 0, $"'{phrase}' is still in: {string.Join(", ", offenders)}");
     }
 
+    // ── contract-005 · G-17 round 2 (DOC-R2-01, DOC-R2-03): the documented deployment's front, services and start line ──
+    //
+    // docs/04's compose file and nginx.conf are "the production deployment, whole", which the docs profile (T-9) runs
+    // verbatim. These read the same blocks the same way, without containers: the first yaml block after the Docker Compose
+    // line, and the first fenced block after the line below it that opens with **nginx.conf**.
+
+    /// <summary>docs/04, with its line ends as \n.</summary>
+    private static string ConfigurationGuide() =>
+        File.ReadAllText(Path.Combine(RepositoryRoot(), "docs", "04-CONFIGURATION.md")).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    /// <summary>The first fenced block at or after <paramref name="from"/>, whose fence opens with <paramref name="fence"/>.</summary>
+    private static string FencedBlock(string document, int from, string fence, string what)
+    {
+        Assert.True(from >= 0, $"docs/04 has no {what}.");
+        var open = document.IndexOf(fence, from, StringComparison.Ordinal);
+        var body = open < 0 ? -1 : document.IndexOf('\n', open) + 1;
+        var end = body <= 0 ? -1 : document.IndexOf("```", body, StringComparison.Ordinal);
+        Assert.True(end > 0, $"docs/04 gives no fenced block for {what}.");
+        return document[body..end];
+    }
+
+    private static string DocumentedComposeFile(string document) =>
+        FencedBlock(document, document.IndexOf("**Docker Compose**:", StringComparison.Ordinal), "```yaml", "the compose file");
+
+    private static string DocumentedNginxConf(string document) =>
+        FencedBlock(
+            document,
+            document.IndexOf("\n**nginx.conf**", document.IndexOf("**Docker Compose**:", StringComparison.Ordinal), StringComparison.Ordinal),
+            "```",
+            "nginx.conf");
+
+    /// <summary>An nginx configuration's simple directives, comments removed, each name with its arguments, in order.</summary>
+    private static List<(string Name, string Arguments)> NginxDirectives(string conf) =>
+        [.. conf.Split('\n')
+            .Select(line => (line.IndexOf('#', StringComparison.Ordinal) is var hash and >= 0 ? line[..hash] : line).Trim())
+            .Where(line => line.EndsWith(';'))
+            .Select(line => line.TrimEnd(';').Trim())
+            .Select(line => line.IndexOfAny([' ', '\t']) is var space and > 0
+                ? (line[..space], line[space..].Trim())
+                : (line, string.Empty))];
+
+    /// <summary>An nginx time, as seconds: 10s, 1m, or a bare number of seconds.</summary>
+    private static int? NginxSeconds(string? time) => time is null ? null
+        : NginxTime().Match(time) is { Success: true } match
+            ? int.Parse(match.Groups["value"].Value, System.Globalization.CultureInfo.InvariantCulture) * (match.Groups["unit"].Value == "m" ? 60 : 1)
+            : null;
+
+    /// <summary>
+    /// DOC-R2-01 — the documented nginx.conf replaced the image's own with a bare events {}: one worker of 512 connections, no
+    /// cap per client and nginx's 60-second handshake and header timeouts, so one unauthenticated client holding about 512
+    /// half-open connections locked every other client out. It keeps the image's worker defaults, a connection cap per client
+    /// address, and timeouts below nginx's own (60, 60 and 75 seconds).
+    /// </summary>
+    [Fact]
+    public void G17_the_documented_front_keeps_its_workers_caps_each_client_and_drops_the_slow()
+    {
+        var directives = NginxDirectives(DocumentedNginxConf(ConfigurationGuide()));
+        string? Value(string name) => directives.FirstOrDefault(d => d.Name == name).Arguments;
+
+        Assert.Equal("auto", Value("worker_processes"));
+        Assert.True(
+            int.TryParse(Value("worker_connections"), System.Globalization.CultureInfo.InvariantCulture, out var connections) && connections >= 1024,
+            $"the documented front holds {Value("worker_connections") ?? "nginx's own 512"} connections a worker, fewer than the image's own 1024.");
+
+        var zone = PerClientZone().Match(Value("limit_conn_zone") ?? string.Empty);
+        Assert.True(zone.Success, $"the documented front keys no connection zone by the client's address: limit_conn_zone is '{Value("limit_conn_zone")}'.");
+        var cap = (Value("limit_conn") ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        Assert.True(
+            cap is [var name, var count] && name == zone.Groups["zone"].Value && int.TryParse(count, System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0,
+            $"the documented front caps no client on its zone '{zone.Groups["zone"].Value}': limit_conn is '{Value("limit_conn")}'.");
+
+        Assert.True(NginxSeconds(Value("client_header_timeout")) is > 0 and < 60, $"client_header_timeout is '{Value("client_header_timeout")}', not under nginx's own 60 s.");
+        Assert.True(NginxSeconds(Value("client_body_timeout")) is > 0 and < 60, $"client_body_timeout is '{Value("client_body_timeout")}', not under nginx's own 60 s.");
+        Assert.True(NginxSeconds(Value("keepalive_timeout")) is > 0 and < 75, $"keepalive_timeout is '{Value("keepalive_timeout")}', not under nginx's own 75 s.");
+    }
+
+    /// <summary>
+    /// DOC-R2-03 — the documented front sent its nginx version in every response, and under TLS 1.2 accepted CBC suites and a
+    /// static-RSA exchange with no forward secrecy for the bearer tokens it carries. It names no version, and every TLS 1.2
+    /// suite it offers is an ECDHE exchange with an AEAD cipher.
+    /// </summary>
+    [Fact]
+    public void G17_the_documented_front_names_no_version_and_offers_only_forward_secret_authenticated_ciphers()
+    {
+        var directives = NginxDirectives(DocumentedNginxConf(ConfigurationGuide()));
+        string? Value(string name) => directives.FirstOrDefault(d => d.Name == name).Arguments;
+
+        Assert.Equal("off", Value("server_tokens"));
+        var suites = (Value("ssl_ciphers") ?? string.Empty).Split(':', StringSplitOptions.RemoveEmptyEntries);
+        Assert.NotEmpty(suites);
+        Assert.All(suites, suite => Assert.True(
+            suite.StartsWith("ECDHE-", StringComparison.Ordinal)
+                && (suite.Contains("-GCM-", StringComparison.Ordinal) || suite.EndsWith("-CHACHA20-POLY1305", StringComparison.Ordinal)),
+            $"the documented front offers '{suite}', which is not an ECDHE exchange with an AEAD cipher."));
+    }
+
+    /// <summary>
+    /// DOC-R2-03 — no service of the documented deployment had a restart policy, so a daemon restart or a reboot left it down;
+    /// and its start line set MCP_HOST for one command, so every later Compose command on the file (ps, logs, stop, down)
+    /// stopped asking for it. Each service restarts unless stopped, and the host name is kept in .env beside the file.
+    /// </summary>
+    [Fact]
+    public void G17_the_documented_deployment_restarts_each_service_and_keeps_its_host_name_for_every_compose_command()
+    {
+        var document = ConfigurationGuide();
+
+        var restart = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var inServices = false;
+        string? service = null;
+        foreach (var line in DocumentedComposeFile(document).Split('\n'))
+        {
+            var text = line.TrimStart();
+            var indent = line.Length - text.Length;
+            if (text.Length == 0 || text.StartsWith('#'))
+            {
+                continue;
+            }
+
+            if (indent == 0)
+            {
+                inServices = text == "services:";
+                service = null;
+            }
+            else if (inServices && indent == 2 && text.EndsWith(':'))
+            {
+                service = text.TrimEnd(':');
+                restart[service] = null;
+            }
+            else if (inServices && indent == 4 && service is not null && text.StartsWith("restart:", StringComparison.Ordinal))
+            {
+                restart[service] = text["restart:".Length..].Trim();
+            }
+        }
+
+        Assert.Equal(["redis", "mcp-server", "proxy"], restart.Keys);
+        Assert.All(restart, entry => Assert.True(entry.Value == "unless-stopped", $"the documented '{entry.Key}' service restarts '{entry.Value ?? "no"}'."));
+
+        var after = document[document.IndexOf("\n**nginx.conf**", StringComparison.Ordinal)..];
+        Assert.Contains("a file named `.env` beside the compose file", after, StringComparison.Ordinal);
+        Assert.Contains("`MCP_HOST=mcp.example.com`", after, StringComparison.Ordinal);
+        Assert.DoesNotContain("MCP_HOST=mcp.example.com docker compose", document, StringComparison.Ordinal);
+    }
+
+    [GeneratedRegex(@"^\$binary_remote_addr\s+zone=(?<zone>[A-Za-z0-9_]+):\d+[km]?$")]
+    private static partial Regex PerClientZone();
+
+    [GeneratedRegex(@"^(?<value>\d+)(?<unit>[sm]?)$")]
+    private static partial Regex NginxTime();
+
     [GeneratedRegex(@"<!--\s*retired\s*-->.*?<!--\s*/retired\s*-->", RegexOptions.Singleline)]
     private static partial Regex RetiredBlock();
 

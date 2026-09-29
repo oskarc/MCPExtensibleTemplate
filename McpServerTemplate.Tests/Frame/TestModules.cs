@@ -68,6 +68,20 @@ public sealed class NotStaticTools
     public static string TestInstance() => "?";
 }
 
+/// <summary>
+/// contract-005 · G-17 round 2 (SEC-R2-02) — a resource served under a URI template: the SDK matches any URI the template
+/// describes to it, and the frame governs it under the template.
+/// </summary>
+[McpServerResourceType]
+public static class TestItemResources
+{
+    /// <summary>The template the resource is served, and governed, under.</summary>
+    public const string Template = "test://item/{id}";
+
+    [McpServerResource(UriTemplate = Template, Name = "Test item", MimeType = "text/plain"), Description("An item, by its id.")]
+    public static string GetItem([Description("The item's id.")] string id) => $"item {id}";
+}
+
 // ── Modules ──
 
 /// <summary>A test module whose every part can be set. Defaults to a well-formed Read provider.</summary>
@@ -120,6 +134,34 @@ public class TestModule : IProviderModule
     public IReadOnlyCollection<string> Settings { get; } = [];
 
     public virtual void Register(IServiceCollection services, IConfiguration configuration)
+    {
+    }
+}
+
+/// <summary>
+/// contract-005 · G-17 round 2 (SEC-R2-02) — a provider serving one templated resource (<see cref="TestItemResources"/>),
+/// which a caller without test:act may not read.
+/// </summary>
+public sealed class TemplatedResourceModule : IProviderModule
+{
+    public string Name => "TestItems";
+
+    public ProviderPolicy Policy { get; } = new(
+        "TestItems",
+        TestModule.DefaultEgress,
+        new Dictionary<string, ToolPolicy>(),
+        new Dictionary<string, ResourcePolicy> { [TestItemResources.Template] = new("test:act") },
+        new Dictionary<string, PromptPolicy>());
+
+    public IReadOnlyList<Type> ToolTypes { get; } = [];
+
+    public IReadOnlyList<Type> ResourceTypes { get; } = [typeof(TestItemResources)];
+
+    public IReadOnlyList<Type> PromptTypes { get; } = [];
+
+    public IReadOnlyCollection<string> Settings { get; } = [];
+
+    public void Register(IServiceCollection services, IConfiguration configuration)
     {
     }
 }

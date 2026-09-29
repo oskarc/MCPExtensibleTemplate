@@ -59,6 +59,45 @@ public sealed class LogSafeTests
         Assert.DoesNotContain("S3cr3t", safe, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-03) — what the log pipeline writes on the way to its sinks keeps every character but
+    /// shows the ones that break or disguise a line as escapes, so what was there still shows and nothing starts a line.
+    /// </summary>
+    public static TheoryData<string, string, string> Escapes() => new()
+    {
+        { "a line break, forging the next line", "x\r\n[99:99:99 WRN] forged", "x\\r\\n[99:99:99 WRN] forged" },
+        { "a tab", "x\ty", "x\\ty" },
+        { "a terminal escape sequence", "x\u001b[2Jforged", "x\\u001B[2Jforged" },
+        { "next line and a C1 control", "x\u0085\u009by", "x\\u0085\\u009By" },
+        { "a direction override", "https://\u202Eelpmaxe.live", "https://\\u202Eelpmaxe.live" },
+        { "the Unicode line and paragraph separators", "x\u2028\u2029y", "x\\u2028\\u2029y" },
+        { "a tag character, beyond the basic plane", "x\U000E0041y", "x\\U000E0041y" },
+    };
+
+    [Theory]
+    [MemberData(nameof(Escapes))]
+    public void Escaped_writes_each_character_that_breaks_or_disguises_a_line_as_an_escape(string what, string value, string written)
+    {
+        var escaped = LogSafe.Escaped(value);
+        Assert.True(escaped == written, $"{what}: '{value}' was escaped as '{escaped}', not '{written}'.");
+        Assert.True(LogSafe.BreaksALine(value), $"{what}: '{value}' was not seen to break a line.");
+        Assert.False(LogSafe.BreaksALine(escaped), $"{what}: '{escaped}' still breaks a line.");
+    }
+
+    [Fact]
+    public void Escaped_shows_an_unpaired_surrogate_as_itself_and_leaves_an_ordinary_value_whole()
+    {
+        Assert.Equal("a\\uD800b", LogSafe.Escaped("a\uD800b"));
+
+        // Positive control: an ordinary value, non-ASCII letters and a surrogate pair included, is the same instance, and
+        // nothing is cut however long it is.
+        const string ordinary = "https://idp.exämple.se/tenant/Ω \U0001F600";
+        Assert.Same(ordinary, LogSafe.Escaped(ordinary));
+        var longValue = new string('a', 5000);
+        Assert.Same(longValue, LogSafe.Escaped(longValue));
+        Assert.False(LogSafe.BreaksALine(ordinary));
+    }
+
     [Fact]
     public void A_long_value_is_cut_and_the_cut_marked()
     {

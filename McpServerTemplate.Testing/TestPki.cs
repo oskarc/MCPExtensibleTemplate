@@ -12,7 +12,9 @@ namespace McpServerTemplate.Testing;
 /// lets the server be run as shipped — validating certificates the ordinary way, with no override —
 /// while a call to a host the environment does not serve fails TLS instead of reaching the internet.
 ///
-/// Nothing of it is committed and nothing of it outlives the run. The CA's private key never leaves
+/// Nothing of it is committed and nothing of it outlives the run: the run deletes it at its end, or, stopped
+/// before its end, on its way out (contract-005 · G-17 round 2, CON-R2-05, best effort); a run killed
+/// outright runs nothing on its way out, and the next run's start deletes what it left. The CA's private key never leaves
 /// this process: it signs the leaves and is discarded, so a leaked run directory can impersonate the
 /// run's own names for a day and nothing else. Each leaf's key is written only to that leaf's own
 /// directory, so a container is given its own key and not another's, and the trust directory holds

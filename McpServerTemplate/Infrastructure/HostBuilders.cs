@@ -86,6 +86,55 @@ public static class HostBuilders
         }
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 2 — ASP.NET Core's own listening settings, each read by the web host from its settings, and
+    /// what each asks for.
+    /// </summary>
+    private static readonly (string Key, string Asks)[] ListeningSettings =
+    [
+        ("urls", "the addresses ASP.NET Core's web host would listen on"),
+        ("http_ports", "the ports ASP.NET Core's web host would listen on for HTTP, on every interface"),
+        ("https_ports", "the ports ASP.NET Core's web host would listen on for HTTPS, on every interface; this server does not "
+            + "terminate TLS itself, the proxy in front of it does"),
+    ];
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 — refuses ASP.NET Core's own listening settings: <c>urls</c> (ASPNETCORE_URLS),
+    /// <c>http_ports</c> (ASPNETCORE_HTTP_PORTS, which the aspnet base image sets to 8080) and <c>https_ports</c>. The program
+    /// listens where HttpTransport:BindAddress and HttpTransport:Port say, and nowhere else (it sets the web host's addresses
+    /// itself, UseUrls), so the web host overrides each of these: the ports with no more than a warning, "Overriding HTTP_PORTS
+    /// '8080' …", and urls without a word — an operator who set ASPNETCORE_URLS=http://0.0.0.0:9999 believed the server
+    /// listened there. The same class as the host list (HttpServerComposition, AllowedHosts): a setting the server would
+    /// ignore is refused, from every route the web host reads it by — the command line, the environment as DOTNET_, ASPNETCORE_
+    /// or unprefixed, a settings file — naming the route, as <see cref="RefuseShutdownTimeoutSetting"/> does. An empty value
+    /// asks for nothing and is not refused: the image clears the base image's ASPNETCORE_HTTP_PORTS that way (Dockerfile).
+    ///
+    /// The program calls it before it sets its own addresses: the web host writes those into every settings source, after
+    /// which no source says what the operator wrote. The stdio host reads none of these, and is not asked.
+    /// </summary>
+    /// <exception cref="ConfigurationException">A route the web host reads its settings from sets one of them.</exception>
+    public static void RefuseListeningSettings(IConfigurationRoot configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        foreach (var provider in configuration.Providers)
+        {
+            foreach (var (key, asks) in ListeningSettings)
+            {
+                if (provider.TryGet(key, out var value) && !string.IsNullOrEmpty(value))
+                {
+                    // The key as the source holds it, so an environment variable is named as it was written: ASPNETCORE_URLS.
+                    var written = provider.GetChildKeys([], parentPath: null)
+                        .FirstOrDefault(k => k.Equals(key, StringComparison.OrdinalIgnoreCase)) ?? key;
+                    throw new ConfigurationException(
+                        $"{key} is '{LogSafe.Url(value)}' from {Frame.SettingsReadOnce.Route(provider, written)}: it is {asks}, and this "
+                        + "server would ignore it: it listens where HttpTransport:BindAddress and HttpTransport:Port say, and nowhere "
+                        + "else. Remove it, and set HttpTransport:BindAddress and HttpTransport:Port instead.");
+                }
+            }
+        }
+    }
+
     /// <summary>The plain generic host for Transport=stdio: no Kestrel, no port, no middleware.</summary>
     public static HostApplicationBuilder ForStdio(string[] args, string environmentName)
     {

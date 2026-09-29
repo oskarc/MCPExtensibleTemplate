@@ -1,4 +1,6 @@
+using System.Globalization;
 using Docker.DotNet;
+using Docker.DotNet.Models;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
 
@@ -17,15 +19,69 @@ internal static class DockerEngine
     /// <summary>
     /// The container's exit code if it has stopped, or null while it runs. Asked of the engine each
     /// time: Testcontainers' own State is a cached value, and its GetExitCodeAsync waits for an exit.
+    ///
+    /// contract-005 · G-17 round 2 (the documented deployment's restart policy) — or if it has stopped and a restart policy
+    /// is starting it again: docs/04's services restart unless stopped, and the docs profile runs them so, so a server that
+    /// refuses its configuration (exit 78) is started again by the engine and is never seen stopped. While the engine waits
+    /// to restart it (State.Restarting), its state keeps that exit's code; once it has started it again (RestartCount above
+    /// zero), its state no longer does, and the code is read from the engine's own record of the exit, its last die event.
+    /// Either is the exit this wait watches for.
     /// </summary>
     public static async Task<long?> ExitCodeIfStoppedAsync(IDockerClient docker, string containerId, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(docker);
 
         var inspected = await docker.Containers.InspectContainerAsync(containerId, cancellationToken);
-        return inspected.State is { Running: false, Restarting: false } state && state.Status is "exited" or "dead"
-            ? state.ExitCode
-            : null;
+        return inspected.State switch
+        {
+            { Running: false, Restarting: false, Status: "exited" or "dead" } state => state.ExitCode,
+            { Restarting: true } state => state.ExitCode,
+            _ when inspected.RestartCount > 0 => await LastExitCodeAsync(docker, inspected, cancellationToken),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (the documented deployment's restart policy) — the exit code of <paramref name="container"/>'s
+    /// last exit, which a restart policy has since started it again after: the engine's die event for it, read back from when
+    /// the container was created until now. An exit the engine keeps no event of is named, never taken for a clean one.
+    /// </summary>
+    private static async Task<long> LastExitCodeAsync(IDockerClient docker, ContainerInspectResponse container, CancellationToken cancellationToken)
+    {
+        // From a minute before the engine created it, so no reading of its creation time's kind puts the start after its exits.
+        var created = container.Created.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(container.Created, DateTimeKind.Utc)
+            : container.Created.ToUniversalTime();
+        var died = new LastEvent();
+        await docker.System.MonitorEventsAsync(
+            new ContainerEventsParameters
+            {
+                Since = new DateTimeOffset(created).AddMinutes(-1).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+                Until = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1).ToString(CultureInfo.InvariantCulture),
+                Filters = new Dictionary<string, IDictionary<string, bool>>
+                {
+                    ["container"] = new Dictionary<string, bool> { [container.ID] = true },
+                    ["event"] = new Dictionary<string, bool> { ["die"] = true },
+                },
+            },
+            died,
+            cancellationToken);
+
+        return died.Last?.Actor?.Attributes is { } attributes
+            && attributes.TryGetValue("exitCode", out var code)
+            && long.TryParse(code, NumberStyles.Integer, CultureInfo.InvariantCulture, out var exitCode)
+            ? exitCode
+            : throw new InvalidOperationException(
+                $"The container {container.Name.TrimStart('/')} was started again {container.RestartCount} time(s) by its restart policy, and "
+                + "the engine's events hold no exit code for it.");
+    }
+
+    /// <summary>The last event the engine reported, kept as it is reported: <see cref="Progress{T}"/> would report it later, on another thread.</summary>
+    private sealed class LastEvent : IProgress<Message>
+    {
+        public Message? Last { get; private set; }
+
+        public void Report(Message value) => Last = value;
     }
 
     /// <summary>
@@ -37,6 +93,10 @@ internal static class DockerEngine
     /// startup rows (T-10, T-11 (1), T-11 (4)) the same. A container found stopped when the check gives up is returned as it
     /// is: its exit is the outcome, which the caller reads, before it asks for any port (ServerUnderTest.WaitForStartupAsync).
     /// Such a refusal still costs that timeout; it no longer reads as a harness failure.
+    ///
+    /// contract-005 · G-17 round 2 (HAR-R2-08) — a start let stop like that has not had the check every container of the run gets
+    /// the moment it starts, should Testcontainers give up before it runs it (<see cref="E2ENetwork.OnTheRunNetwork"/>): it is
+    /// run here instead, on the engine's record of how the container was created, which a stopped container keeps.
     /// </summary>
     public static async Task StartServerAsync(this DotNet.Testcontainers.Containers.IContainer container, IDockerClient docker, CancellationToken cancellationToken)
     {
@@ -53,6 +113,8 @@ internal static class DockerEngine
             {
                 throw;
             }
+
+            await E2ENetwork.CheckStartedResolvingNoRealNameAsync(docker, container.Id, cancellationToken);
         }
     }
 

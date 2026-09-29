@@ -185,6 +185,104 @@ public class TransportCompositionTests
     }
 
     /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-06) — ASP.NET Core's own host list, the top-level AllowedHosts, is one the server
+    /// never reads: its host filter runs with HttpTransport:AllowedHosts, and the framework falls back to the top-level key only
+    /// when that list is empty. Written either way — the framework's own ;-separated string, or a list as a settings file or
+    /// the environment writes one — it is refused, naming the server's own list. ServerProcessTests holds each route.
+    /// </summary>
+    [Theory]
+    [InlineData("AllowedHosts", "mcp.example.com", "AllowedHosts is 'mcp.example.com' from ")]
+    [InlineData("AllowedHosts", "mcp.example.com;localhost", "AllowedHosts is 'mcp.example.com;localhost' from ")]
+    [InlineData("AllowedHosts:0", "mcp.example.com", "AllowedHosts:0 is 'mcp.example.com' from ")]
+    public void G12_2_the_frameworks_own_allowed_hosts_is_refused_naming_the_servers_host_list(string key, string value, string says)
+    {
+        // Positive control: the same settings without it compose.
+        Compose(Builder("Development", Settings()));
+
+        var settings = Settings();
+        settings[key] = value;
+        var ex = Assert.Throws<ConfigurationException>(() => Compose(Builder("Development", settings)));
+
+        Assert.StartsWith(says, ex.Message, StringComparison.Ordinal);
+        Assert.Contains("HttpTransport:AllowedHosts:0=mcp.example.com", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>The name the dual-stack tests' requests carry: one the host filter allows, and HSTS is not withheld from.</summary>
+    private const string DualStackHost = "mcp.example.com";
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-01) — on a dual-stack bind ([::]) a plain IPv4 client arrives as an IPv4-mapped IPv6
+    /// address, which the forwarded-headers step maps to IPv4 before it checks the trusted lists. The finding started a server
+    /// there trusting ::ffff:0:0/97 and ::ffff:128.0.0.0/97, and a client with no proxy in front chose its scheme (the server
+    /// sent it HSTS, which it sends only over https) and its address (a fresh per-address bucket for each X-Forwarded-For).
+    /// Those entries are refused now (TransportAndPrincipalTests); here the shipped composition, on [::], with a proxy trusted
+    /// elsewhere, ignores a plain IPv4 client's X-Forwarded-For and X-Forwarded-Proto: no HSTS, and its 61st request in the
+    /// minute is refused 429 whatever address it claims. The positive control trusts the client's own network, 127.0.0.0/8, in
+    /// its IPv4 form, on the same bind: then both are taken, so the test sees what believing looks like, and the IPv4 form of a
+    /// network is shown to match a mapped client.
+    /// </summary>
+    [Fact]
+    public async Task G12_2_on_a_dual_stack_bind_a_plain_ipv4_clients_forwarded_headers_are_believed_only_from_a_network_it_is_in()
+    {
+        using var corp = new TestIdentityProvider("corp", "https://corp.example.com/");
+
+        await using (var trusting = await InProcessServer.StartAsync(
+            [corp],
+            configure: settings => settings["HttpTransport:AllowedHosts:0"] = DualStackHost,
+            listenOn: "http://[::]:0"))
+        {
+            var (hsts, limited) = await ClaimAsync(trusting);
+            Assert.True(hsts, "positive control: trusting 127.0.0.0/8 on [::], a loopback client claiming https got no HSTS header.");
+            Assert.False(limited, "positive control: trusting 127.0.0.0/8 on [::], a loopback client claiming a second address was counted with the first.");
+        }
+
+        await using var server = await InProcessServer.StartAsync(
+            [corp],
+            configure: settings =>
+            {
+                settings["HttpTransport:AllowedHosts:0"] = DualStackHost;
+                settings.Remove("HttpTransport:KnownNetworks:0");
+                settings["HttpTransport:KnownProxies:0"] = "10.199.42.250";
+            },
+            listenOn: "http://[::]:0");
+
+        var (claimedHttps, oneBucket) = await ClaimAsync(server);
+
+        Assert.False(claimedHttps, "on [::], with the proxy at 10.199.42.250, a plain IPv4 client's X-Forwarded-Proto: https was believed: HSTS was sent.");
+        Assert.True(oneBucket, "on [::], with the proxy at 10.199.42.250, a plain IPv4 client's X-Forwarded-For was believed: a second claimed address got a bucket of its own.");
+    }
+
+    /// <summary>
+    /// From 127.0.0.1, sixty GETs of /healthz claiming X-Forwarded-For 203.0.113.50 and X-Forwarded-Proto https, then one
+    /// claiming 203.0.113.51: whether any answer carried Strict-Transport-Security, and whether the last was refused 429 — as
+    /// it is when all sixty-one are counted as one address's.
+    /// </summary>
+    private static async Task<(bool Hsts, bool Limited)> ClaimAsync(InProcessServer server)
+    {
+        using var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{server.Address.Port}"), Timeout = TimeSpan.FromSeconds(20) };
+
+        var hsts = false;
+        for (var i = 0; i < 60; i++)
+        {
+            using var answer = await ClaimOnceAsync(http, "203.0.113.50");
+            Assert.Equal(System.Net.HttpStatusCode.OK, answer.StatusCode);
+            hsts |= answer.Headers.Contains("Strict-Transport-Security");
+        }
+
+        using var last = await ClaimOnceAsync(http, "203.0.113.51");
+        return (hsts, last.StatusCode == System.Net.HttpStatusCode.TooManyRequests);
+    }
+
+    private static async Task<HttpResponseMessage> ClaimOnceAsync(HttpClient http, string forwardedFor)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/healthz");
+        request.Headers.Host = DualStackHost;
+        request.Headers.Add("X-Forwarded-For", forwardedFor);
+        request.Headers.Add("X-Forwarded-Proto", "https");
+        return await http.SendAsync(request);
+    }
+
+    /// <summary>
     /// The plaintext guard applies in every environment but Development, where the frame's other deployment rules (Redis,
     /// Providers:Enabled) already apply: a server that reads bearer tokens sits behind a proxy it trusts, which terminates
     /// TLS, whatever its environment is named.

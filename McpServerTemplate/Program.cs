@@ -159,6 +159,11 @@ static async Task<int> RunHttpAsync(string[] args)
     var builder = HostBuilders.ForHttp(args);
     var configuration = builder.Configuration;
 
+    // contract-005 · G-17 round 2 — ASP.NET Core's own urls, http_ports and https_ports, which this server would ignore: it
+    // listens where HttpTransport:BindAddress and :Port say (UseUrls, below). Refused before UseUrls writes the server's own
+    // address into every settings source, which would hide what the operator wrote.
+    HostBuilders.RefuseListeningSettings(configuration);
+
     ConfigureLogging(builder.Services, configuration);
 
     // Transport settings are read first, so a mistyped port is reported as a mistyped port
@@ -211,8 +216,11 @@ static void ConfigureLogging(IServiceCollection services, IConfiguration configu
     // check used to read Serilog:WriteTo:1 alone, for traversal only.
     LogSinkGuard.Validate(configuration, Directory.GetCurrentDirectory());
 
+    // contract-005 · G-17 round 2 (SEC-R2-03) — every sink the settings name gets each event with a caller's line breaks,
+    // escape sequences and direction overrides escaped, in the message, every property and the exception's text: the SDK's
+    // own lines name what the caller wrote, and the frame cannot reach them (LineSafeLogging).
     services.AddSerilog(config => config
-        .ReadFrom.Configuration(configuration)
+        .ReadFromConfigurationLineSafe(configuration)
         .Enrich.FromLogContext()
         // contract-005 · G-12 (2), review round 8 — a failure to bind is refused in plain words, exit 78
         // (HttpServerComposition.BindFailure); the host's own "Hosting failed to start", with its stack trace, is

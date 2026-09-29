@@ -259,9 +259,13 @@ public static class IdentityRegistration
                     //
                     // The exception message is logged and the token is not: a token in a log is a
                     // credential in a log (roadmap I8).
+                    //
+                    // contract-005 · G-17 round 2 (SEC-R2-03) — the message quotes what the token says, its kid among
+                    // them, which is the caller's to write before any signature is checked: a kid of 5,000 characters
+                    // holding U+2028 was logged whole. It is made safe for a log line and cut (LogSafe.Text).
                     OnAuthenticationFailed = context =>
                     {
-                        LogRefusal(context.HttpContext, scheme, context.Exception.Message);
+                        LogRefusal(context.HttpContext, scheme, LogSafe.Text(context.Exception.Message));
                         return Task.CompletedTask;
                     },
                 };
@@ -307,7 +311,8 @@ public static class IdentityRegistration
     /// contract-002 revision, 2026-09-20; contract-005 · T-3 — one refused token, as the event a SIEM correlates for
     /// credential attacks (roadmap P1.1): which scheme refused it, for which path, and why. The reason is the
     /// validator's message or the claims a token lacks, never the token: a token in a log is a credential in a log
-    /// (roadmap I8).
+    /// (roadmap I8). contract-005 · G-17 round 2 (SEC-R2-03) — a reason quoting the caller comes here made safe
+    /// (LogSafe.Text), and the path, the caller's too, is written escaped for a URL and cut.
     /// </summary>
     private static void LogRefusal(HttpContext context, string scheme, string reason) =>
         context.RequestServices
@@ -315,7 +320,7 @@ public static class IdentityRegistration
             .CreateLogger("McpServerTemplate.Identity")
             .LogWarning(
                 "authn_login_fail: {Scheme} refused a token for {Path} — {Reason}",
-                scheme, context.Request.Path, reason);
+                scheme, LogSafe.Text(context.Request.Path.ToString()), reason);
 
     /// <summary>
     /// Picks the scheme for a presented token by reading its issuer without validating anything.

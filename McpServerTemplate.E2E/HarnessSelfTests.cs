@@ -13,9 +13,11 @@ namespace McpServerTemplate.E2E;
 /// </summary>
 [NotEndToEnd(
     "In-process checks of the harness's own code — the settings delta, the revision label, the sabotage registry and its "
-    + "record, the held decisions, what constructs a claim's failure, how an exhausted address pool is named, and how every "
-    + "container joins the run's network: they start no container and send nothing to the image, so there is no fixture "
-    + "input, container environment or network for a sabotage to act on, and no claim about the image for it to break.")]
+    + "record, the held decisions, what constructs a claim's failure, how an exhausted address pool is named, how every "
+    + "container joins the run's network, how a run's liveness and a dead run are judged, when an OAuth flow's failure is the "
+    + "environment's, and how a witness is read by address: they start no container and send nothing to the image, so there "
+    + "is no fixture input, container environment or network for a sabotage to act on, and no claim about the image for it to "
+    + "break. Their source names nothing that starts one (checked here).")]
 public sealed partial class HarnessSelfTests
 {
     /// <summary>
@@ -141,6 +143,11 @@ public sealed partial class HarnessSelfTests
     /// by reflection, which missed shapes the runner runs — a static fact, a fact inherited from a base class — so such a
     /// test passed here with no sabotage, and only the local script's count noticed. And [NotEndToEnd] exempts this class
     /// alone: on any other class it failed nothing, and nothing checked the class started no container.
+    ///
+    /// contract-005 · G-17 round 2 (HAR-R2-05) — both ways out closed. The runner's list is read in every namespace, and every
+    /// test on it is this class's own or one the registry read, so a static or inherited fact anywhere in the assembly fails
+    /// here. And this class holds no end-to-end test: its own source names nothing that starts the environment, a server, a
+    /// class's fixture or a container (<see cref="StartsAContainer"/>), which the words "start no container" only said.
     /// </summary>
     [Fact]
     public async Task Every_end_to_end_test_has_a_named_sabotage()
@@ -161,27 +168,38 @@ public sealed partial class HarnessSelfTests
             .Where(n => n.Class != typeof(HarnessSelfTests))
             .Select(n => $"{n.Class.Name} is marked [NotEndToEnd], which only {nameof(HarnessSelfTests)} may be: its tests would have no sabotage."));
 
-        // The runner's own list, method by method, against what the registry read.
+        // The runner's own list, in every namespace, method by method, against what the registry read and this class's own tests.
         var listed = (await RunnerListAsync())
-            .Where(t => !t.StartsWith($"{typeof(HarnessSelfTests).FullName}.", StringComparison.Ordinal))
             .GroupBy(t => t.Split('(')[0], StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
         var read = tests
             .GroupBy(t => $"{t.Class.FullName}.{t.Method.Name}", StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        var own = typeof(HarnessSelfTests).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly)
+            .Where(m => m.IsDefined(typeof(FactAttribute), inherit: false))
+            .Select(m => $"{typeof(HarnessSelfTests).FullName}.{m.Name}")
+            .ToHashSet(StringComparer.Ordinal);
 
-        // Positive control: the runner listed the suite, rows included.
+        // Positive controls: the runner listed the suite, rows included, and this class's own tests, this one among them.
         Assert.Contains($"{typeof(WalkingSkeletonTests).FullName}.{nameof(WalkingSkeletonTests.T1_a_keycloak_token_lists_tools_through_the_front)}", listed.Keys);
+        Assert.Contains($"{typeof(HarnessSelfTests).FullName}.{nameof(Every_end_to_end_test_has_a_named_sabotage)}", listed.Keys);
 
         problems.AddRange(listed
-            .Where(l => read.GetValueOrDefault(l.Key) != l.Value)
+            .Where(l => !own.Contains(l.Key) && read.GetValueOrDefault(l.Key) != l.Value)
             .Select(l => read.TryGetValue(l.Key, out var n)
                 ? $"{l.Key}: the runner lists {l.Value} tests, and the registry read {n}."
                 : $"{l.Key}: the runner lists {l.Value} test{(l.Value == 1 ? string.Empty : "s")}, and the registry read none, so none has a sabotage: "
-                    + "a static fact, a fact declared on a base class, or a class marked [NotEndToEnd] reads so."));
+                    + "a static fact, a fact declared on a base class — in any namespace — or a class marked [NotEndToEnd] reads so."));
         problems.AddRange(read
             .Where(r => !listed.ContainsKey(r.Key))
             .Select(r => $"{r.Key}: the registry read {r.Value} tests, and the runner lists none."));
+
+        // contract-005 · G-17 round 2 (HAR-R2-05) — the exempt class starts nothing: its own source names nothing that would.
+        var exempt = File.ReadAllText(Path.Combine(E2EEnvironment.FindRepositoryRoot(), "McpServerTemplate.E2E", $"{nameof(HarnessSelfTests)}.cs"));
+        Assert.Contains("class HarnessSelfTests", exempt, StringComparison.Ordinal);
+        problems.AddRange(StartsAContainer().Matches(exempt).Select(m => m.Value).Distinct(StringComparer.Ordinal)
+            .Select(n => $"{nameof(HarnessSelfTests)}.cs names {n}, which starts the environment, a server, a class's fixture or a container: "
+                + "the one class exempt from sabotages holds no end-to-end test."));
 
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
 
@@ -369,10 +387,16 @@ public sealed partial class HarnessSelfTests
     /// mock any calls"): every container the harness starts joins the run's network one way, E2ENetwork.OnTheRunNetwork, which
     /// gives it its own loopback address as its only name server and no search domain, so no container of a run can resolve a
     /// real name. Read from the suite's own source: no file but Harness/E2ENetwork.cs joins a container to a network
-    /// (.WithNetwork, .WithNetworkMode), and a container the engine is asked to create directly (CreateContainerAsync) has no
-    /// network at all (NetworkMode "none") — ShippedImageContentsTests', which is created, read and never started. What the
-    /// engine then gave each container is checked where the containers run: at the environment's start ("environment: no real
-    /// names") and in T-6 (UpstreamNamesTests).
+    /// (.WithNetwork, .WithNetworkMode), and a container the engine is asked to create directly has no network at all
+    /// (NetworkMode "none") — ShippedImageContentsTests', which are created, read and never started. What the engine then gave
+    /// each container is checked where the containers run: at the environment's start ("environment: no real names") and in
+    /// T-6 (UpstreamNamesTests).
+    ///
+    /// contract-005 · G-17 round 2 (HAR-R2-08) — and as each starts: E2ENetwork.OnTheRunNetwork makes the builder, and has the
+    /// container's own record checked the moment the engine starts it. So no file but Harness/E2ENetwork.cs makes a container
+    /// builder (a builder given no network runs on the default bridge, with the host's resolver) or sets a startup callback
+    /// (a later one would replace the check), and no file but Harness/E2EEnvironment.cs joins a running container to a network
+    /// (its RejoinAsync, which moves a container already checked from name to name).
     /// </summary>
     [Fact]
     public void Every_container_joins_the_run_network_the_one_way_that_resolves_no_real_name()
@@ -381,18 +405,42 @@ public sealed partial class HarnessSelfTests
         var sources = Directory.EnumerateFiles(suite, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(d => d is "bin" or "obj"))
             .ToDictionary(f => Path.GetRelativePath(suite, f).Replace('\\', '/'), File.ReadAllText, StringComparer.Ordinal);
-        var joining = sources.Where(s => JoinsANetwork().IsMatch(s.Value)).Select(s => s.Key).Order(StringComparer.Ordinal).ToArray();
-        var creating = sources.Where(s => CreatesAContainer().IsMatch(s.Value)).Select(s => s.Key).Order(StringComparer.Ordinal).ToArray();
+        string[] Matching(Regex pattern) => [.. sources.Where(s => pattern.IsMatch(s.Value)).Select(s => s.Key).Order(StringComparer.Ordinal)];
+        var joining = Matching(JoinsANetwork());
+        var creating = Matching(CreatesAContainer());
+        var building = Matching(MakesABuilder());
+        var connecting = Matching(ConnectsARunningContainer());
+        var calling = Matching(SetsAStartupCallback());
 
-        // Positive controls: the reading sees the one way's own join, and the one container made through the engine directly.
+        // T-13's digest check (the fast suite's RepositoryInvariantsTests) reads every image a builder is given as a literal, and
+        // every *Image constant; a builder is made only by the one way now, so an image given it as a literal would pass that
+        // check unread. An image is a named constant, or one the run builds.
+        var literal = Matching(GivesTheOneWayALiteralImage());
+
+        // Positive controls: the reading sees the one way's own join, builder and callback, the one container made through the
+        // engine directly, and the one rejoin.
         Assert.Contains("Harness/E2ENetwork.cs", joining);
         Assert.Contains("ShippedImageContentsTests.cs", creating);
+        Assert.Contains("Harness/E2ENetwork.cs", building);
+        Assert.Contains("Harness/E2ENetwork.cs", calling);
+        Assert.Contains("Harness/E2EEnvironment.cs", connecting);
 
+        var theOneWay = $"{nameof(E2ENetwork)}.{nameof(E2ENetwork.OnTheRunNetwork)}";
         var problems = joining.Where(f => f != "Harness/E2ENetwork.cs")
-            .Select(f => $"{f} joins a container to a network itself; every container joins the run's network through "
-                + $"{nameof(E2ENetwork)}.{nameof(E2ENetwork.OnTheRunNetwork)}, which gives it no way to resolve a real name.")
+            .Select(f => $"{f} joins a container to a network itself; every container joins the run's network through {theOneWay}, which "
+                + "gives it no way to resolve a real name.")
             .Concat(creating.Where(f => !WithNoNetwork().IsMatch(sources[f]))
                 .Select(f => $"{f} has the engine create a container with a network; only one with none (NetworkMode \"none\") may be made that way."))
+            .Concat(building.Where(f => f != "Harness/E2ENetwork.cs")
+                .Select(f => $"{f} makes a container builder itself; every container of the run is made through {theOneWay}, which joins it "
+                    + "to the run's network and checks it as it starts."))
+            .Concat(calling.Where(f => f != "Harness/E2ENetwork.cs")
+                .Select(f => $"{f} sets a container's startup callback, which would replace the check {theOneWay} sets."))
+            .Concat(connecting.Where(f => f != "Harness/E2EEnvironment.cs")
+                .Select(f => $"{f} joins a running container to a network; only E2EEnvironment's RejoinAsync may, with a container {theOneWay} made."))
+            .Concat(literal
+                .Select(f => $"{f} gives {theOneWay} an image as a literal, which T-13's digest check does not read: name it as a const "
+                    + "string …Image, which the check reads, pinned by digest."))
             .ToList();
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
     }
@@ -451,6 +499,170 @@ public sealed partial class HarnessSelfTests
         Assert.Equal("x: redis", (await Assert.ThrowsAsync<EnvironmentFaultException>(() => timings.MeasureEnvironmentAsync<bool>("x: redis", () => throw wrapped))).Phase);
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 2 (FLA-R2-04) — a run directory this account cannot enter is judged live, however old: another
+    /// account's, in a temporary directory accounts share (Linux's /tmp), whose mark this account cannot read. Judged by its
+    /// unreadable mark as unmarked, and by its age as dead, its live run's containers and network were removed mid-run. Two
+    /// directories made alike, unmarked and judged as ten minutes old; one closed to this account (mode 000 on Unix, a deny on
+    /// Windows).
+    /// </summary>
+    [Fact]
+    public void A_run_directory_this_account_cannot_enter_is_judged_live()
+    {
+        var parent = Directory.CreateTempSubdirectory("e2e-liveness-").FullName;
+        var open = Directory.CreateDirectory(Path.Combine(parent, "mcp-e2e-open")).FullName;
+        var closed = Directory.CreateDirectory(Path.Combine(parent, "mcp-e2e-closed")).FullName;
+        var tenMinutesOn = DateTime.UtcNow.AddMinutes(10);
+        try
+        {
+            // Positive control: an unmarked directory ten minutes old, which this account can enter, is a dead run's.
+            Assert.False(E2EEnvironment.RunDirectories.OwnerIsAlive(open, tenMinutesOn), $"{open}, unmarked and ten minutes old, was judged live.");
+
+            Close(closed);
+
+            // Positive control: closed, it cannot be entered — this is not an account that enters everything.
+            Assert.False(E2EEnvironment.RunDirectories.CanEnter(closed), $"{closed} was closed to this account and could still be entered: run as an account that cannot enter what it closes.");
+            Assert.True(E2EEnvironment.RunDirectories.OwnerIsAlive(closed, tenMinutesOn), $"{closed}, which this account cannot enter, was judged dead at ten minutes old.");
+        }
+        finally
+        {
+            Reopen(closed);
+            Directory.Delete(parent, recursive: true);
+        }
+
+        static void Close(string directory)
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                var security = new DirectoryInfo(directory).GetAccessControl();
+                security.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                    System.Security.Principal.WindowsIdentity.GetCurrent().User!,
+                    System.Security.AccessControl.FileSystemRights.ListDirectory,
+                    System.Security.AccessControl.AccessControlType.Deny));
+                new DirectoryInfo(directory).SetAccessControl(security);
+            }
+            else
+            {
+                File.SetUnixFileMode(directory, UnixFileMode.None);
+            }
+        }
+
+        static void Reopen(string directory)
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                var security = new DirectoryInfo(directory).GetAccessControl();
+                security.RemoveAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                    System.Security.Principal.WindowsIdentity.GetCurrent().User!,
+                    System.Security.AccessControl.FileSystemRights.ListDirectory,
+                    System.Security.AccessControl.AccessControlType.Deny));
+                new DirectoryInfo(directory).SetAccessControl(security);
+            }
+            else
+            {
+                File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (CON-R2-06) — the next run's sweep removes a dead run of this owner (its machine, operating
+    /// system, account and temporary directory, on its owner label), and no other: a run of another owner, or of no owner, whose
+    /// directory is not here, may be alive where this process does not look. Judged on labels as the engine gives them, for runs
+    /// no directory here names.
+    /// </summary>
+    [Fact]
+    public void A_run_is_swept_as_dead_only_when_it_is_this_owners()
+    {
+        var thisRun = $"t0-this-{Guid.NewGuid():N}";
+        Dictionary<string, string> Labels(string run, string? owner) => owner is null
+            ? new() { [E2ENetwork.RunLabel] = run }
+            : new() { [E2ENetwork.RunLabel] = run, [E2ENetwork.OwnerLabel] = owner };
+
+        // Positive control: a run of this owner, whose directory is gone, is dead.
+        Assert.True(E2EEnvironment.IsDeadRun(Labels($"t0-gone-{Guid.NewGuid():N}", E2ENetwork.ThisOwner), thisRun, out _), "a run of this owner with no directory was not judged dead.");
+
+        Assert.False(E2EEnvironment.IsDeadRun(Labels(thisRun, E2ENetwork.ThisOwner), thisRun, out _), "this run was judged dead by itself.");
+        Assert.False(
+            E2EEnvironment.IsDeadRun(Labels($"t0-elsewhere-{Guid.NewGuid():N}", E2ENetwork.ThisOwner.Replace("temp=", "temp=/elsewhere", StringComparison.Ordinal)), thisRun, out _),
+            "a run of another temporary directory — another owner, whose run directory is not where this process looks — was judged dead.");
+        Assert.False(E2EEnvironment.IsDeadRun(Labels($"t0-unowned-{Guid.NewGuid():N}", owner: null), thisRun, out _), "a run of no owner, with no directory here, was judged dead.");
+        Assert.False(E2EEnvironment.IsDeadRun(new Dictionary<string, string>(), thisRun, out _), "a container of no run was judged a dead run's.");
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-03) — an OAuth flow's failure is the server's answer only if every name of the
+    /// environment it asked answered. The SDK's OAuth client throws an McpException of its own for a connection or TLS failure at
+    /// the authorization server, with no inner exception, and a claim took it for the server's; the name map's log tells the two
+    /// apart. Given as the log records requests: a mapped name that gave no answer is the environment's fault, naming the name; a
+    /// name the map refused is where the flow went, a claim's to judge; a flow whose every request was answered is the server's.
+    /// And every file that makes the SDK's OAuth client reads that log before it folds a failure into a claim.
+    /// </summary>
+    [Fact]
+    public void An_oauth_flows_failure_where_a_name_of_the_environment_gave_no_answer_is_the_environments_fault()
+    {
+        var failure = new ModelContextProtocol.McpException("Failed to find .well-known/openid-configuration or .well-known/oauth-authorization-server metadata");
+
+        // Positive controls: every request answered, or the one unanswered to a name the map refused, is no fault of the environment.
+        var answered = new NameMapLog();
+        answered.Request(HttpMethod.Post, new Uri("https://mcp.e2e.test/mcp"), 401);
+        answered.Request(HttpMethod.Get, new Uri("https://idp-a.e2e.test/.well-known/oauth-authorization-server"), 200);
+        answered.ThrowIfAMappedNameGaveNoAnswer("x: flow", failure);
+
+        var refused = new NameMapLog();
+        refused.Request(HttpMethod.Post, new Uri("https://mcp.e2e.test/mcp"), 401);
+        refused.Refuse(new System.Net.DnsEndPoint("idp-a.example.com", 443));
+        refused.Request(HttpMethod.Get, new Uri("https://idp-a.example.com/.well-known/oauth-authorization-server"), 0);
+        Assert.Empty(refused.Unanswered);
+        refused.ThrowIfAMappedNameGaveNoAnswer("x: flow", failure);
+
+        var unanswered = new NameMapLog();
+        unanswered.Request(HttpMethod.Post, new Uri("https://mcp.e2e.test/mcp"), 401);
+        unanswered.Request(HttpMethod.Get, new Uri("https://idp-a.e2e.test/.well-known/oauth-authorization-server"), 0);
+        var fault = Assert.Throws<EnvironmentFaultException>(() => unanswered.ThrowIfAMappedNameGaveNoAnswer("x: flow", failure));
+        Assert.Equal("x: flow", fault.Phase);
+        Assert.Contains("idp-a.e2e.test:443", fault.Message, StringComparison.Ordinal);
+        Assert.Same(failure, fault.InnerException);
+
+        // Wherever the SDK's OAuth client is made, the log is read.
+        var suite = Path.Combine(E2EEnvironment.FindRepositoryRoot(), "McpServerTemplate.E2E");
+        var making = Directory.EnumerateFiles(suite, "*.cs", SearchOption.TopDirectoryOnly)
+            .Select(f => (File: Path.GetFileName(f), Text: File.ReadAllText(f)))
+            .Where(s => MakesTheOAuthClient().IsMatch(s.Text))
+            .ToArray();
+        Assert.Contains(making, s => s.File == "StandardClientTests.cs");
+        var unread = making.Where(s => !ReadsTheNameMapLog().IsMatch(s.Text)).Select(s => s.File).ToArray();
+        Assert.True(
+            unread.Length == 0,
+            $"these files make the SDK's OAuth client and never read the name map's log before folding its failure into a claim: {string.Join(", ", unread)}.");
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-02) — every test reads a witness by address only through its server's
+    /// <see cref="RequestSource"/>, bounded by when the server started: no test file asks for its server's bare address or start.
+    /// Read by address alone, the fake's journal and the stand-in's record counted an earlier server's requests at the same
+    /// address as this one's.
+    /// </summary>
+    [Fact]
+    public void Every_witness_read_by_address_is_bounded_by_its_servers_start()
+    {
+        var suite = Path.Combine(E2EEnvironment.FindRepositoryRoot(), "McpServerTemplate.E2E");
+        var tests = Directory.EnumerateFiles(suite, "*.cs", SearchOption.TopDirectoryOnly)
+            .Select(f => (File: Path.GetFileName(f), Text: File.ReadAllText(f)))
+            .ToArray();
+        var harness = File.ReadAllText(Path.Combine(suite, "Harness", "ServerUnderTest.cs"));
+
+        // Positive controls: the reading sees the tests, and the harness's own use of what they may not use.
+        Assert.Contains(tests, t => t.File == "UpstreamTests.cs" && t.Text.Contains(nameof(ServerUnderTest.RequestSourceAsync), StringComparison.Ordinal));
+        Assert.Matches(BareAddressOrStart(), harness);
+
+        var bare = tests.Where(t => BareAddressOrStart().IsMatch(t.Text)).Select(t => t.File).ToArray();
+        Assert.True(
+            bare.Length == 0,
+            $"these test files ask for their server's bare address or start, and read a witness by it: {string.Join(", ", bare)}. Read one "
+            + $"through the server's {nameof(ServerUnderTest.RequestSourceAsync)}, which bounds it by when the server started.");
+    }
+
     /// <summary>McpServerTemplate.E2E/HELD.md as it stands, and the held decisions it lists.</summary>
     private static (string Text, IReadOnlyList<Sabotage.HeldDecision> Held) HeldFile()
     {
@@ -481,6 +693,11 @@ public sealed partial class HarnessSelfTests
     /// <summary>
     /// The runner's own list of this assembly's tests: `dotnet test --list-tests`, each fact and each theory row it lists, as
     /// Namespace.Class.Method, with a row's arguments after it. Run in English, which is how its lines are read.
+    ///
+    /// contract-005 · G-17 round 2 (HAR-R2-05) — every test it lists, in whatever namespace: each indented line after its "The
+    /// following Tests are available:" line. Only lines in the suite's own namespace were kept, so a static fact, or one a class
+    /// inherits from an abstract base, declared in any other namespace was listed and run, and neither this list nor the registry
+    /// saw it (a probe on a scratch clone ran one, and this check passed).
     /// </summary>
     private static async Task<IReadOnlyList<string>> RunnerListAsync()
     {
@@ -498,9 +715,16 @@ public sealed partial class HarnessSelfTests
         var output = dotnet.StandardOutput.ReadToEndAsync();
         var errors = dotnet.StandardError.ReadToEndAsync();
         await dotnet.WaitForExitAsync();
-        return dotnet.ExitCode == 0
-            ? [.. (await output).Split('\n').Where(l => l.StartsWith("    McpServerTemplate.E2E.", StringComparison.Ordinal)).Select(l => l.Trim())]
-            : throw new InvalidOperationException($"dotnet test --list-tests failed ({dotnet.ExitCode}): {await errors}{await output}");
+        if (dotnet.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"dotnet test --list-tests failed ({dotnet.ExitCode}): {await errors}{await output}");
+        }
+
+        var lines = (await output).Replace("\r", string.Empty, StringComparison.Ordinal).Split('\n');
+        var header = Array.FindIndex(lines, l => l.Trim() == "The following Tests are available:");
+        return header < 0
+            ? throw new InvalidOperationException($"dotnet test --list-tests printed no 'The following Tests are available:' line: {await output}")
+            : [.. lines.Skip(header + 1).Where(l => l.StartsWith("    ", StringComparison.Ordinal) && l.Trim().Length > 0).Select(l => l.Trim())];
     }
 
     /// <summary>
@@ -581,6 +805,47 @@ public sealed partial class HarnessSelfTests
     /// <summary>contract-005 · the pioneer's decision of 2026-09-29 — a container created with no network at all.</summary>
     [GeneratedRegex(@"NetworkMode\s*=\s*""none""")]
     private static partial Regex WithNoNetwork();
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-08) — a container builder made: a new-expression naming the type, or a target-typed new
+    /// given to one. Written with character classes, so the pattern's own text is not a match.
+    /// </summary>
+    [GeneratedRegex(@"\bnew\s+Container[B]uilder\s*[(<]|\bContainer[B]uilder\s+\w+\s*=\s*new\s*[(]")]
+    private static partial Regex MakesABuilder();
+
+    /// <summary>contract-005 · G-17 round 2 (HAR-R2-08) — a running container joined to a network through the engine.</summary>
+    [GeneratedRegex(@"\bConnect[N]etworkAsync\s*[(]")]
+    private static partial Regex ConnectsARunningContainer();
+
+    /// <summary>contract-005 · G-17 round 2 (HAR-R2-08) — a container's startup callback set.</summary>
+    [GeneratedRegex(@"[.]WithStartup[C]allback\s*[(]")]
+    private static partial Regex SetsAStartupCallback();
+
+    /// <summary>contract-005 · G-17 round 2 (HAR-R2-08) — the one way given its image as a string literal, of any form.</summary>
+    [GeneratedRegex(@"\bOnTheRun[N]etwork\s*[(]\s*[$@]*""")]
+    private static partial Regex GivesTheOneWayALiteralImage();
+
+    /// <summary>contract-005 · G-17 round 2 (HAR-R2-03) — the SDK's OAuth client made, as the harness makes it. Written so the pattern's own text is not a match.</summary>
+    [GeneratedRegex(@"\bStandardClient[.]Transport\s*[(]")]
+    private static partial Regex MakesTheOAuthClient();
+
+    /// <summary>contract-005 · G-17 round 2 (HAR-R2-03) — the name map's log read before an OAuth flow's failure is folded into a claim.</summary>
+    [GeneratedRegex(@"[.]ThrowIfAMapped[N]ameGaveNoAnswer\s*[(]")]
+    private static partial Regex ReadsTheNameMapLog();
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-02) — a server's bare address or start asked for, by the harness's names for them.
+    /// Written so the pattern's own text is not a match.
+    /// </summary>
+    [GeneratedRegex(@"\bNetwork[A]ddressAsync\b|\bStarted[A]tAsync\b")]
+    private static partial Regex BareAddressOrStart();
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-05) — what starts the environment, a server, a class's fixture or a container, by the
+    /// harness's and xUnit's names for it. Written so the pattern's own text is not a match.
+    /// </summary>
+    [GeneratedRegex(@"E2EEnvironment[.]GetAsync|\bStart(?:Server|up|DocsProfile|Redis)Async\b|\bServerFixture\b|\bI(?:Class|Collection)Fixture\b|\bContainerBuilder\b|\bCreateContainerAsync\b")]
+    private static partial Regex StartsAContainer();
 
     private static async Task<string> GitAsync(string repository, params string[] arguments)
     {

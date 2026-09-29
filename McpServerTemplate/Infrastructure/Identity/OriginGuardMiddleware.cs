@@ -45,9 +45,12 @@ public sealed class OriginGuardMiddleware
         {
             // OWASP logging vocabulary: this is the event a SIEM correlates when a browser is
             // being used to reach a server it was never meant to reach.
+            //
+            // contract-005 · G-17 round 2 (SEC-R2-03) — both are the caller's to write, before any sign-in: an Origin
+            // carrying escape sequences cleared the operator's terminal. Each is made safe for a log line and cut (LogSafe).
             _logger.LogWarning(
                 "malicious_cors: refused a request from origin {Origin} for {Path}",
-                origin, context.Request.Path);
+                LogSafe.Text(origin), LogSafe.Text(context.Request.Path.ToString()));
 
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;

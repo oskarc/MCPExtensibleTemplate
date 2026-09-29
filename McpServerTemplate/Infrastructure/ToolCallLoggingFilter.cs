@@ -31,7 +31,10 @@ public static class ToolCallLoggingFilter
         return next => async (context, cancellationToken) =>
         {
             var logger = context.Services?.GetService<ILogger<McpServer>>();
-            var toolName = context.Params?.Name ?? "unknown";
+
+            // contract-005 · G-17 round 2 (SEC-R2-03) — this filter runs before the gate, so the name is whatever the caller
+            // wrote, a tool or not: made safe for a log line and cut (LogSafe.Text), in every line below and in the log context.
+            var toolName = LogSafe.Text(context.Params?.Name ?? "unknown");
 
             var correlationId = Convert.ToHexString(RandomNumberGenerator.GetBytes(6));
 
@@ -70,8 +73,9 @@ public static class ToolCallLoggingFilter
         if (logger is null || !logger.IsEnabled(LogLevel.Information))
             return;
 
+        // contract-005 · G-17 round 2 (SEC-R2-03) — the names are the caller's to write, as many and as long as they like.
         var argNames = context.Params?.Arguments is { } a
-            ? string.Join(", ", a.Keys)
+            ? LogSafe.Text(string.Join(", ", a.Keys))
             : "(none)";
 
         logger.LogInformation(

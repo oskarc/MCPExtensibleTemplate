@@ -5,13 +5,18 @@ namespace McpServerTemplate.E2E;
 
 /// <summary>
 /// contract-005 · T-6 (G-7, G-8, G-11 · UC-6) — with one fake's alias removed, that tool's call fails at the name lookup, and
-/// nothing reaches the internet.
+/// no container of the run resolves a real name.
 ///
-/// The pioneer's decision of 2026-09-29 (contract-005's revision of that date, "2. yes, cut it and mock any calls") cut the
-/// run's network off from real names: every container is started with its own loopback address as its only name server and
-/// no search domain (<see cref="E2ENetwork.NameServer"/>), so Docker's embedded DNS answers the network's own names and fails
-/// every other at once. T-6's "that tool's call fails TLS" reads "fails at the name lookup", and "nothing reaches the
-/// internet" holds by name.
+/// The pioneer's decision of 2026-09-29 (contract-005's revision of that date, "2. yes, cut it and mock any calls"), as
+/// implemented, cut the run's network off from real names: every container is started with its own loopback address as its
+/// only name server and no search domain (<see cref="E2ENetwork.NameServer"/>), so Docker's embedded DNS answers the network's
+/// own names and fails every other at once. T-6's "that tool's call fails TLS" reads "fails at the name lookup".
+///
+/// contract-005 · G-17 round 2 (CON-R2-01) — what this proves is that no container of the run resolves a real name, and no more:
+/// the network itself is not cut, and a container of the run still reaches the internet by an address written as one, which
+/// no check here tries. This test was named for "nothing reaches the internet", which the agent had read "cut it" to mean by
+/// name; the pioneer never ruled on names versus a real cut, and the question is put back to them (contract-005's log, the
+/// correction of 2026-09-30). Until they rule, it is named for what it proves.
 ///
 /// The test takes a provider host of this server's whose owner publishes no port — the stand-in, in an ordinary run — and
 /// its witness first: with the name on the network, the owner records this server's call under it (G-11: an absence is
@@ -58,11 +63,13 @@ public sealed class UpstreamNamesTests(UpstreamNamesTests.Server fixture, ITestO
     [Sabotage(AliasLeftInPlace, SabotageActs.Network,
         "The host's name is not taken off the run's network: its owner keeps answering it, so the second call reaches the owner "
         + "and no name lookup fails.")]
-    public async Task T6_with_one_fakes_alias_removed_that_tools_call_fails_at_the_name_lookup_and_nothing_reaches_the_internet()
+    public async Task T6_with_one_fakes_alias_removed_that_tools_call_fails_at_the_name_lookup_and_no_container_resolves_a_real_name()
     {
         var environment = fixture.Environment;
         using var http = fixture.CreateClient();
-        var server = await fixture.Server.NetworkAddressAsync();
+
+        // contract-005 · G-17 round 2 (HAR-R2-02) — each owner's record read for this server: from its address since it started.
+        var server = await fixture.Server.RequestSourceAsync();
 
         // What the image serves, from its own startup line (G-11), and the first of its tools whose provider's host is answered by
         // an owner that publishes no port: the one kind of owner a name can be taken from and given back.
@@ -88,7 +95,7 @@ public sealed class UpstreamNamesTests(UpstreamNamesTests.Server fixture, ITestO
         var first = McpRequests.TextOf(await ProviderCalls.CallAsync(http, token, tool.Key, arguments));
         var witnessed = await ProviderCalls.SeenSinceAsync(owner, http, server, host, before);
         output.WriteLine($"{tool.Key}, with {host} on the network: {witnessed} request(s) at {owner.Container.Name.TrimStart('/')}; it answered '{first}'");
-        Assert.True(witnessed > 0, $"the witness recorded nothing: {owner.Container.Name.TrimStart('/')} recorded no request from this server ({server}) under {host} during {tool.Key}, which answered '{first}'.");
+        Assert.True(witnessed > 0, $"the witness recorded nothing: {owner.Container.Name.TrimStart('/')} recorded no request from this server, {server}, under {host} during {tool.Key}, which answered '{first}'.");
 
         // The name taken off the network — unless in a run of this test's sabotage — and given back whatever happens.
         await using var removal = Sabotage.Applies(AliasLeftInPlace) ? null : await environment.WithoutNameAsync(host);

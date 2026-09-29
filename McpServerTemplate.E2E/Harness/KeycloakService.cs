@@ -44,6 +44,17 @@ public sealed class KeycloakService : IAsyncDisposable
     /// <summary>The scopes the realm defines; the test classes' clients get the first four by default.</summary>
     public static readonly string[] Scopes = ["weather:read", "observations:read", "demo:read", "demo:write"];
 
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-04) — an optional scope every class's client may ask for, which adds a client_id claim
+    /// to its token and nothing else: not in the scope claim, and naming no scope a provider knows. A Keycloak token carries its
+    /// client in azp, and no client_id; asked for with this scope, the same client's token carries both, so T-11 (3) can show a
+    /// server told its client claim is client_id taking a Keycloak token that has one, beside refusing the one that has not.
+    /// </summary>
+    public const string ClientIdScope = "e2e-client-id";
+
+    /// <summary>contract-005 · G-17 round 2 (HAR-R2-04) — the client_id <see cref="ClientIdScope"/> puts in a token: the same for every client.</summary>
+    public const string ClientIdClaimValue = "e2e-keycloak-client";
+
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
 
     private readonly IDockerClient _docker;
@@ -85,8 +96,7 @@ public sealed class KeycloakService : IAsyncDisposable
         var realmPath = pki.WriteFile("keycloak-realm.json", RealmJson(resource, secrets));
 
         var tls = pki.LeafDirectory("keycloak");
-        var container = new ContainerBuilder(Image)
-            .OnTheRunNetwork(network, runId)
+        var container = E2ENetwork.OnTheRunNetwork(Image, docker, network, runId)
             .WithNetworkAliases(Host)
             .WithPortBinding(Port, true)
             .WithPortBinding(ManagementPort, true)
@@ -245,6 +255,31 @@ public sealed class KeycloakService : IAsyncDisposable
             },
         };
 
+        // contract-005 · G-17 round 2 (HAR-R2-04) — client_id, hard-coded, on request only: Keycloak's own client_id mapper sits
+        // in a built-in scope a realm that declares its scopes does not get, and its session note has changed name across
+        // Keycloak versions; a hard-coded claim is one mapper Keycloak has long had, and its value is all the check reads.
+        var clientIdScope = Scope(ClientIdScope, inToken: false);
+        clientIdScope["protocolMappers"] = new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["name"] = "client_id",
+                ["protocol"] = "openid-connect",
+                ["protocolMapper"] = "oidc-hardcoded-claim-mapper",
+                ["consentRequired"] = false,
+                ["config"] = new Dictionary<string, string>
+                {
+                    ["claim.name"] = "client_id",
+                    ["claim.value"] = ClientIdClaimValue,
+                    ["jsonType.label"] = "String",
+                    ["access.token.claim"] = "true",
+                    ["id.token.claim"] = "false",
+                    ["userinfo.token.claim"] = "false",
+                    ["introspection.token.claim"] = "true",
+                },
+            },
+        };
+
         var clients = secrets.Select(client => new Dictionary<string, object>
         {
             ["clientId"] = client.Key,
@@ -260,7 +295,7 @@ public sealed class KeycloakService : IAsyncDisposable
             ["fullScopeAllowed"] = false,
             ["attributes"] = new Dictionary<string, string> { ["access.token.signed.response.alg"] = "RS256" },
             ["defaultClientScopes"] = new[] { "basic", Scopes[0], Scopes[1], Scopes[2] },
-            ["optionalClientScopes"] = new[] { Scopes[3] },
+            ["optionalClientScopes"] = new[] { Scopes[3], ClientIdScope },
             ["protocolMappers"] = new[]
             {
                 new Dictionary<string, object>
@@ -288,7 +323,7 @@ public sealed class KeycloakService : IAsyncDisposable
                 ["enabled"] = true,
                 ["sslRequired"] = "all",
                 ["accessTokenLifespan"] = 600,
-                ["clientScopes"] = new[] { basic }.Concat(Scopes.Select(s => Scope(s, inToken: true))).ToArray(),
+                ["clientScopes"] = new[] { basic }.Concat(Scopes.Select(s => Scope(s, inToken: true))).Append(clientIdScope).ToArray(),
                 ["clients"] = clients,
             },
             Indented);

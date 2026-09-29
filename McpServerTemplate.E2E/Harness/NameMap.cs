@@ -178,6 +178,43 @@ public sealed class NameMapLog
     /// <summary>Names a request asked for that the map does not hold.</summary>
     public IReadOnlyList<string> Refused => [.. _refused];
 
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-03) — every request that got no answer from a name the map holds: a connection or TLS
+    /// failure at a container of the environment. A request to a name the map refused is not one: it went where it did, and
+    /// where a request may go is a claim's to judge.
+    /// </summary>
+    public IReadOnlyList<(HttpMethod Method, Uri Uri)> Unanswered =>
+        [.. Requests
+            .Where(r => r.Status == 0 && !Refused.Contains($"{r.Uri.Host}:{r.Uri.Port}", StringComparer.OrdinalIgnoreCase))
+            .Select(r => (r.Method, r.Uri))];
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (HAR-R2-03) — before a test folds a failed OAuth flow into its claim: the flow's failure is the
+    /// server's answer only if every request it sent to a name of the environment was answered. The MCP SDK's OAuth client
+    /// (ModelContextProtocol.Core 2.2.0) catches a connection or TLS failure at the authorization server and throws an
+    /// McpException of its own in its place — "Failed to find .well-known/openid-configuration or
+    /// .well-known/oauth-authorization-server metadata …", with no inner exception — which <see cref="Claim.IsTheServersAnswer"/>
+    /// takes for the server's answer; so a stopped or untrusted test issuer was reported as the standard client failing, its
+    /// cause unnamed. Throws an <see cref="EnvironmentFaultException"/> of <paramref name="phase"/> naming each request no mapped
+    /// name answered, with <paramref name="failure"/> inside it; returns when there is none.
+    /// </summary>
+    public void ThrowIfAMappedNameGaveNoAnswer(string phase, Exception failure)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+
+        var unanswered = Unanswered;
+        if (unanswered.Count > 0)
+        {
+            throw new EnvironmentFaultException(
+                phase,
+                $"{string.Join("; ", unanswered.Select(r => $"{r.Method} {r.Uri.GetLeftPart(UriPartial.Path)}"))} got no answer from "
+                + $"{string.Join(", ", unanswered.Select(r => $"{r.Uri.Host}:{r.Uri.Port}").Distinct(StringComparer.OrdinalIgnoreCase))}, a name "
+                + "of the environment: a container that did not answer, or whose certificate did not validate against the run's test "
+                + $"CA — not the server's answer. The client reported: {failure.GetType().Name}: {failure.Message.Split('\n')[0]}",
+                failure);
+        }
+    }
+
     internal void Connect(DnsEndPoint requested, DnsEndPoint target) =>
         _connections.Enqueue($"{requested.Host}:{requested.Port} -> {target.Host}:{target.Port}");
 

@@ -640,6 +640,31 @@ public class TransportAndPrincipalTests
     [InlineData("HttpTransport:KnownNetworks:0", "10.0.0.0/7", "whose prefix length, 7, is broader than /8")]
     [InlineData("HttpTransport:KnownNetworks:0", "fd00::/31", "whose prefix length, 31, is broader than /32")]
     [InlineData("HttpTransport:KnownNetworks:0", "fc00::/7", "whose prefix length, 7, is broader than /32")]
+    // contract-005 · G-17 round 2 (SEC-R2-01) — judged by the addresses it matches, not the family it is written in: on a
+    // dual-stack bind every IPv4 client arrives as an IPv4-mapped IPv6 address. The mapped /97 pair is 0.0.0.0/1 and
+    // 128.0.0.0/1, the pair the /8 limit refuses, and satisfied the guard while every IPv4 client chose its address and
+    // scheme. A network inside ::ffff:0:0/96 is refused naming the IPv4 network to write — always, even where that network
+    // meets the IPv4 rules — one holding the whole range as every IPv4 client, and a proxy in its mapped form for its IPv4 form.
+    [InlineData("HttpTransport:KnownNetworks:0", "::ffff:0:0/97", "an IPv4-mapped IPv6 network: the IPv4 network 0.0.0.0/1, in the form")]
+    [InlineData("HttpTransport:KnownNetworks:0", "::ffff:0:0/97", "though that is broader than /8, which no proxy needs, and is refused as well")]
+    [InlineData("HttpTransport:KnownNetworks:1", "::ffff:128.0.0.0/97", "an IPv4-mapped IPv6 network: the IPv4 network 128.0.0.0/1, in the form")]
+    [InlineData("HttpTransport:KnownNetworks:0", "::ffff:0:0/96", "which contains ::ffff:0:0/96, the IPv4-mapped IPv6 addresses")]
+    [InlineData("HttpTransport:KnownNetworks:0", "::/32", "which contains ::ffff:0:0/96, the IPv4-mapped IPv6 addresses")]
+    [InlineData("HttpTransport:KnownNetworks:0", "::ffff:10.0.0.0/104", "Write the IPv4 network itself, 10.0.0.0/8: the server matches a client arriving in either form against it.")]
+    [InlineData("HttpTransport:KnownNetworks:0", "::ffff:10.0.0.2", "Write the IPv4 network itself, 10.0.0.2/32:")]
+    [InlineData("HttpTransport:KnownProxies:0", "::ffff:10.0.0.2", "an IPv4-mapped IPv6 address: the IPv4 address 10.0.0.2, in the form an IPv4 client's address takes on a dual-stack bind. Write the IPv4 address itself, 10.0.0.2:")]
+    // contract-005 · G-17 round 2 (SEC-R2-04) — an entry no connection can come from names no proxy: it satisfied the
+    // Production guard while nothing was trusted. The bind address already refused the broadcast and multicast addresses.
+    [InlineData("HttpTransport:KnownProxies:0", "0.0.0.0", "'0.0.0.0', the unspecified address, which no connection comes from, so it names no proxy")]
+    [InlineData("HttpTransport:KnownProxies:0", "::", "'::', the unspecified address, which no connection comes from, so it names no proxy")]
+    [InlineData("HttpTransport:KnownProxies:0", "255.255.255.255", "the broadcast address, which no connection comes from, so it names no proxy")]
+    [InlineData("HttpTransport:KnownProxies:0", "224.0.0.1", "a multicast address, which no connection comes from, so it names no proxy")]
+    [InlineData("HttpTransport:KnownProxies:0", "ff02::1", "a multicast address, which no connection comes from, so it names no proxy")]
+    [InlineData("HttpTransport:KnownProxies:0", "::ffff:0.0.0.0", "0.0.0.0 is the unspecified address, which no connection comes from, so it names no proxy")]
+    [InlineData("HttpTransport:KnownNetworks:0", "224.0.0.0/8", "a network of multicast addresses, which no connection comes from")]
+    [InlineData("HttpTransport:KnownNetworks:0", "ff02::/32", "a network of multicast addresses, which no connection comes from")]
+    [InlineData("HttpTransport:KnownNetworks:0", "0.0.0.0/32", "the unspecified address, which no connection comes from")]
+    [InlineData("HttpTransport:KnownNetworks:0", "255.255.255.255", "the broadcast address, which no connection comes from")]
     public void G12_2_a_trusted_proxy_or_network_that_is_not_one_is_refused_naming_its_key(string key, string value, string says)
     {
         var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.TrustedProxies(Config(new() { [key] = value })));
@@ -656,6 +681,9 @@ public class TransportAndPrincipalTests
     [Theory]
     [InlineData("0.0.0.0/0")]
     [InlineData("::/0")]
+    // contract-005 · G-17 round 2 (SEC-R2-01) — every IPv4 client, on a dual-stack bind, in the IPv4-mapped spelling.
+    [InlineData("::ffff:0:0/96")]
+    [InlineData("::/32")]
     public void G12_2_a_network_of_every_address_does_not_satisfy_the_production_guard(string network)
     {
         // Positive control: a network that is a proxy's satisfies it.
@@ -665,6 +693,56 @@ public class TransportAndPrincipalTests
             () => TransportSecurityGuard.Validate(Config(new() { ["HttpTransport:KnownNetworks:0"] = network }), isProduction: true));
 
         Assert.StartsWith($"HttpTransport:KnownNetworks:0 is '{network}'", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-01) — the pair the finding started a Production server with, on a dual-stack bind:
+    /// ::ffff:0:0/97 and ::ffff:128.0.0.0/97, which is 0.0.0.0/1 and 128.0.0.0/1 written as IPv6, satisfied the guard, and
+    /// the server believed every IPv4 client's X-Forwarded-For and X-Forwarded-Proto. It satisfies nothing now: the first entry
+    /// is refused, naming the IPv4 network it stands for, as its IPv4 spelling was already refused.
+    /// </summary>
+    [Fact]
+    public void G12_2_the_ipv4_mapped_pair_that_spells_every_ipv4_address_does_not_satisfy_the_production_guard()
+    {
+        // Positive control: the same pair in its IPv4 spelling was refused before this round.
+        var ipv4 = Assert.Throws<ConfigurationException>(() => TransportSecurityGuard.Validate(Config(new()
+        {
+            ["HttpTransport:KnownNetworks:0"] = "0.0.0.0/1",
+            ["HttpTransport:KnownNetworks:1"] = "128.0.0.0/1",
+        }), isProduction: true));
+        Assert.StartsWith("HttpTransport:KnownNetworks:0 is '0.0.0.0/1'", ipv4.Message, StringComparison.Ordinal);
+
+        var ex = Assert.Throws<ConfigurationException>(() => TransportSecurityGuard.Validate(Config(new()
+        {
+            ["HttpTransport:KnownNetworks:0"] = "::ffff:0:0/97",
+            ["HttpTransport:KnownNetworks:1"] = "::ffff:128.0.0.0/97",
+        }), isProduction: true));
+
+        Assert.StartsWith("HttpTransport:KnownNetworks:0 is '::ffff:0:0/97', an IPv4-mapped IPv6 network: the IPv4 network 0.0.0.0/1", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-04) — a proxy address no connection can come from satisfied the Production guard as
+    /// if a proxy were named, while the server trusted nothing: every client behind the real proxy shared its address, and was
+    /// seen as http. It satisfies nothing now; each is refused, naming its key.
+    /// </summary>
+    [Theory]
+    [InlineData("0.0.0.0")]
+    [InlineData("::")]
+    [InlineData("255.255.255.255")]
+    [InlineData("224.0.0.1")]
+    [InlineData("ff02::1")]
+    [InlineData("::ffff:0.0.0.0")]
+    public void G12_2_a_proxy_address_no_connection_comes_from_does_not_satisfy_the_production_guard(string address)
+    {
+        // Positive control: a proxy's address satisfies it.
+        TransportSecurityGuard.Validate(Config(new() { ["HttpTransport:KnownProxies:0"] = "10.0.0.2" }), isProduction: true);
+
+        var ex = Assert.Throws<ConfigurationException>(
+            () => TransportSecurityGuard.Validate(Config(new() { ["HttpTransport:KnownProxies:0"] = address }), isProduction: true));
+
+        Assert.StartsWith($"HttpTransport:KnownProxies:0 is '{address}'", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("which no connection comes from, so it names no proxy", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>contract-005 · G-12 (2), review round 9 — the control: entries that are what they say are read as written.</summary>

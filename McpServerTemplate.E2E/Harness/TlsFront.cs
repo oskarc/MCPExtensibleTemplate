@@ -55,6 +55,7 @@ public sealed class TlsFront : IAsyncDisposable
     public DnsEndPoint Published => new(_container.Hostname, _container.GetMappedPublicPort(Port));
 
     internal static async Task<TlsFront> StartAsync(
+        Docker.DotNet.IDockerClient docker,
         INetwork network,
         TestPki pki,
         IPAddress address,
@@ -66,8 +67,7 @@ public sealed class TlsFront : IAsyncDisposable
         var configuration = pki.WriteFile($"front-{upstreamAlias}.conf", Configuration(upstreamAlias, upstreamPort));
 
         var tls = pki.LeafDirectory("front");
-        var container = new ContainerBuilder(Image)
-            .OnTheRunNetwork(network, runId)
+        var container = E2ENetwork.OnTheRunNetwork(Image, docker, network, runId)
             .WithPortBinding(Port, true)
             .WithLoopbackPortsOnly()
             .WithBindMount(configuration, "/etc/nginx/nginx.conf", AccessMode.ReadOnly)

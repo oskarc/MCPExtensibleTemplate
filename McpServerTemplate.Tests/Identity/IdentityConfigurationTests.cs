@@ -251,6 +251,58 @@ public class IdentityConfigurationTests
         Assert.Contains("'https://login.example.com/'", ex.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-05) — the https check read these with Uri.TryCreate, which trims the whitespace
+    /// around a value and escapes a space inside it, while the router, the duplicate check, the issuer's validation and the
+    /// metadata use the value as written: 'https://login.example.com/ ' was accepted beside 'https://login.example.com/' and
+    /// authenticated no one, the outcome the duplicate check refuses. Whitespace, a control character or an invisible format
+    /// character anywhere in the Resource, an Authority or an Issuer is refused, naming the setting and the character.
+    /// </summary>
+    [Theory]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://login.example.com/ ", "a space at its end")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", " https://login.example.com/", "a space at its start")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://login.example.com/\t", "a tab at its end")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://login.example.com/realms/co rp", "a space at character 36")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://login.example.com/\u200B", "U+200B at its end")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", " https://login.example.com", "a space at its start")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "https://login.example.com\n", "U+000A at its end")]
+    [InlineData("Authentication:Resource", " https://mcp.example.com/mcp", "a space at its start")]
+    [InlineData("Authentication:Resource", "https://mcp.example.com/mcp ", "a space at its end")]
+    public void T9_whitespace_in_the_resource_an_authority_or_an_issuer_is_refused_naming_it(string key, string value, string where)
+    {
+        var settings = Wellformed();
+        settings[key] = value;
+
+        var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
+
+        Assert.StartsWith($"{key} is '", ex.Message, StringComparison.Ordinal);
+        Assert.Contains($"which holds {where}.", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Write it without whitespace or control characters.", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 (SEC-R2-05) — the pair the finding found accepted, an Issuer beside the same Issuer with a
+    /// trailing space, is refused, naming the one with the space; the positive control is the same pair with issuers of their
+    /// own, which binds.
+    /// </summary>
+    [Fact]
+    public void T9_an_issuer_beside_the_same_issuer_with_a_trailing_space_is_refused()
+    {
+        var settings = Wellformed();
+        settings["Authentication:IdentityProviders:partner:Authority"] = "https://login.example.com";
+        settings["Authentication:IdentityProviders:partner:Issuer"] = "https://partner.example.com/";
+        settings["Authentication:IdentityProviders:partner:Algorithms:0"] = "RS256";
+        settings["Authentication:IdentityProviders:partner:ScopeClaim"] = "scope";
+        settings["Authentication:IdentityProviders:partner:ClientIdClaim"] = "client_id";
+        settings["Authentication:IdentityProviders:partner:ScopeCatalog:0"] = "weather:read";
+        Assert.Equal(2, IdentityConfigurationBinder.Bind(Config(settings)).IdentityProviders.Count);
+
+        settings["Authentication:IdentityProviders:partner:Issuer"] = "https://login.example.com/ ";
+        var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
+
+        Assert.StartsWith("Authentication:IdentityProviders:partner:Issuer is 'https://login.example.com/ '", ex.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void T9_a_resource_at_mcp_with_a_trailing_slash_binds()
     {

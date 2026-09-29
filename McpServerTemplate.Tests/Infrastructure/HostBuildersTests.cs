@@ -346,6 +346,90 @@ public class HostBuildersTests
         Assert.All(files, f => Assert.False(f.ReloadOnChange, $"{f.Path} is read again whenever it changes, and no check reads it then."));
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 2 — ASP.NET Core's own listening settings (urls, http_ports, https_ports) are ones the program
+    /// ignores: it listens where HttpTransport:BindAddress and :Port say. Each is refused, from the command line, naming the
+    /// route and the server's own settings. ServerProcessTests holds each route of the environment on the started program.
+    /// </summary>
+    [Theory]
+    [InlineData("urls", "http://0.0.0.0:9999")]
+    [InlineData("http_ports", "9999")]
+    [InlineData("https_ports", "9443")]
+    public void A_frameworks_listening_setting_on_the_command_line_is_refused_naming_the_route(string setting, string value)
+    {
+        // Positive control: the host as the program builds it, with none of them, passes.
+        using (var none = HostBuilders.ForHttp(AsTheTests).Configuration)
+        {
+            HostBuilders.RefuseListeningSettings(none);
+        }
+
+        using var configuration = HostBuilders.ForHttp([.. AsTheTests, $"--{setting}={value}"]).Configuration;
+        var ex = Assert.Throws<ConfigurationException>(() => HostBuilders.RefuseListeningSettings(configuration));
+
+        Assert.StartsWith($"{setting} is '{value}' from the command line: ", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("it listens where HttpTransport:BindAddress and HttpTransport:Port say", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>contract-005 · G-17 round 2 — from a settings file, as a template's appsettings.json writes it ("Urls").</summary>
+    [Fact]
+    public void A_frameworks_listening_setting_in_a_settings_file_is_refused_naming_the_file()
+    {
+        var root = Directory.CreateTempSubdirectory("mcp-listening-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "appsettings.json"), """{ "Urls": "http://0.0.0.0:9999" }""");
+            using var configuration = HostBuilders.ForHttp([.. AsTheTests, $"--contentRoot={root}", "--environment=Production"]).Configuration;
+
+            var ex = Assert.Throws<ConfigurationException>(() => HostBuilders.RefuseListeningSettings(configuration));
+
+            Assert.StartsWith("urls is 'http://0.0.0.0:9999' from the settings file appsettings.json: ", ex.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 — from the environment, named as the variable was written. A prefix of this test's own, so
+    /// no host built beside it reads the variable; the web host's own prefixes are held on the started program.
+    /// </summary>
+    [Fact]
+    public void A_frameworks_listening_setting_from_the_environment_is_refused_naming_the_variable()
+    {
+        var prefix = $"MCP_TEST_{Guid.NewGuid():N}_";
+        Environment.SetEnvironmentVariable($"{prefix}URLS", "http://0.0.0.0:9999");
+        try
+        {
+            var configuration = new ConfigurationBuilder().AddEnvironmentVariables(prefix).Build();
+
+            var ex = Assert.Throws<ConfigurationException>(() => HostBuilders.RefuseListeningSettings(configuration));
+
+            Assert.StartsWith($"urls is 'http://0.0.0.0:9999' from the environment, as {prefix}URLS: ", ex.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable($"{prefix}URLS", null);
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 2 — an empty value asks for nothing and is not refused: the image sets ASPNETCORE_HTTP_PORTS
+    /// empty (Dockerfile) to clear the base image's 8080, and must start.
+    /// </summary>
+    [Theory]
+    [InlineData("urls")]
+    [InlineData("http_ports")]
+    [InlineData("https_ports")]
+    public void An_empty_listening_setting_asks_for_nothing_and_is_not_refused(string setting)
+    {
+        HostBuilders.RefuseListeningSettings(
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { [setting] = string.Empty }).Build());
+
+        using var configuration = HostBuilders.ForHttp([.. AsTheTests, $"--{setting}="]).Configuration;
+        HostBuilders.RefuseListeningSettings(configuration);
+    }
+
     /// <summary>The shipped composition, in this process, from <paramref name="launch"/> — as Program.cs builds it, less logging.</summary>
     private static async Task<WebApplication> StartAsync(string[] launch, int port)
     {

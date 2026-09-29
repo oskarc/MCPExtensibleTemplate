@@ -16,6 +16,12 @@ namespace McpServerTemplate.E2E;
 /// URL, every header, its body (<see cref="IUpstreamService.WholeRecordsAsync"/>) — holds neither the caller's token nor its
 /// signature, nor any other JSON web token; that this server's calls were recorded, the first claim, is the witness.
 ///
+/// contract-005 · G-17 round 2 (HAR-R2-02) — this server's calls: each owner's record is read from this server's address since
+/// it started (<see cref="RequestSource"/>). contract-005 · G-17 round 2 (HAR-R2-06) — and the search's own positive control:
+/// before it, every owner is sent one request of the test's own, a marker in a header and another as its body
+/// (<see cref="IUpstreamService.SendWitnessAsync"/>), and its whole record must hold both. Nothing had ever seen the stand-in's
+/// record hold a header or a body: a record that kept neither would have passed the search on its URL and host alone.
+///
 /// The class's server serves every built-in provider — JsonPlaceholder too, which Production leaves out, so write tools'
 /// bodies are among what is searched — each bound to idp-a, which mints the caller's token with every scope it may. What it
 /// serves is read from its own startup line (G-11); where each provider calls, and each tool's arguments, are the suite's
@@ -54,7 +60,7 @@ public sealed partial class UpstreamTests(UpstreamTests.Server fixture, ITestOut
     {
         var environment = fixture.Environment;
         using var http = fixture.CreateClient();
-        var server = await fixture.Server.NetworkAddressAsync();
+        var server = await fixture.Server.RequestSourceAsync();
 
         // What the image serves, from its own startup line (G-11).
         var line = FrameLine.Parse(await fixture.Server.StartupLineAsync());
@@ -97,8 +103,17 @@ public sealed partial class UpstreamTests(UpstreamTests.Server fixture, ITestOut
 
         Claim.True(
             unseen.Count == 0,
-            $"these tools on the startup line were called, and their fake recorded no request from this server ({server}) during the "
+            $"these tools on the startup line were called, and their fake recorded no request from this server, {server}, during the "
             + $"call: {string.Join("; ", unseen)}.");
+
+        // contract-005 · G-17 round 2 (HAR-R2-06) — the search's positive control: every owner is sent a request of the test's own,
+        // a marker in a header and another as its body, before its records are read.
+        var marker = $"e2e-t6-witness-{Guid.NewGuid():N}";
+        var (inHeader, inBody) = ($"{marker}-header", $"{marker}-body");
+        foreach (var service in environment.UpstreamServices.Values)
+        {
+            await service.SendWitnessAsync(http, inHeader, inBody);
+        }
 
         if (Sabotage.Applies(TokenSentToTheFake))
         {
@@ -108,12 +123,41 @@ public sealed partial class UpstreamTests(UpstreamTests.Server fixture, ITestOut
         }
 
         // Every record of every upstream owner in the run, whole.
+        var (searched, carrying, blind) = await SearchAsync(environment, http, token, marker, inHeader, inBody);
+
+        // Positive control: each owner's record holds a request's header and its body, so a token in either would be found.
+        Assert.True(
+            blind.Count == 0,
+            $"a request sent with {UpstreamWitness.Header}: {inHeader} and the body {inBody} is not held whole in these owners' records, so a "
+            + $"token passed on in a header or a body would not be found there: {string.Join("; ", blind)}.");
+
+        output.WriteLine($"Searched {searched} records of {environment.UpstreamServices.Count} upstream owners for the caller's token and for any other.");
+        Claim.True(
+            carrying.Count == 0,
+            $"a fake's record carries a token — a server passed a caller's credential on to an upstream: {string.Join("; ", carrying)}.");
+    }
+
+    /// <summary>
+    /// Every record of every upstream owner in the run, whole: how many were searched, which carry the caller's token or any
+    /// other, and — contract-005 · G-17 round 2 (HAR-R2-06) — which owners hold no record with both the witness's header marker
+    /// (<paramref name="inHeader"/>) and its body marker (<paramref name="inBody"/>).
+    /// </summary>
+    private static async Task<(int Searched, List<string> Carrying, List<string> Blind)> SearchAsync(
+        E2EEnvironment environment, HttpClient http, string token, string marker, string inHeader, string inBody)
+    {
         var signature = token[(token.LastIndexOf('.') + 1)..];
         var carrying = new List<string>();
+        var blind = new List<string>();
         var searched = 0;
         foreach (var (owner, service) in environment.UpstreamServices.OrderBy(u => u.Key.Name, StringComparer.Ordinal))
         {
-            foreach (var record in await service.WholeRecordsAsync(http))
+            var records = await service.WholeRecordsAsync(http);
+            if (!records.Any(r => r.Contains(inHeader, StringComparison.Ordinal) && r.Contains(inBody, StringComparison.Ordinal)))
+            {
+                blind.Add($"{owner.Name} ({records.Count(r => r.Contains(marker, StringComparison.Ordinal))} of its records hold the marker, none both parts)");
+            }
+
+            foreach (var record in records)
             {
                 searched++;
                 if (record.Contains(token, StringComparison.Ordinal) || record.Contains(signature, StringComparison.Ordinal))
@@ -127,10 +171,7 @@ public sealed partial class UpstreamTests(UpstreamTests.Server fixture, ITestOut
             }
         }
 
-        output.WriteLine($"Searched {searched} records of {environment.UpstreamServices.Count} upstream owners for the caller's token and for any other.");
-        Claim.True(
-            carrying.Count == 0,
-            $"a fake's record carries a token — a server passed a caller's credential on to an upstream: {string.Join("; ", carrying)}.");
+        return (searched, carrying, blind);
     }
 
     /// <summary>A record, short, with every token in it replaced, and the caller's signature too, for a message the record keeps.</summary>
