@@ -560,7 +560,10 @@ public sealed partial class HarnessSelfTests
     [GeneratedRegex(@"\n~~~text\n(?<message>.*?)\n~~~", RegexOptions.Singleline)]
     private static partial Regex KeptMessage();
 
-    /// <summary>A ClaimException constructed: new ClaimException(…), or new(…) given to one.</summary>
+    /// <summary>
+    /// A ClaimException constructed: a new-expression naming the type, or a target-typed new given to one. Worded without
+    /// the construction itself, so this comment is not a match.
+    /// </summary>
     [GeneratedRegex(@"\bnew\s+ClaimException\s*\(|\bClaimException\s+\w+\s*=\s*new\s*\(")]
     private static partial Regex ConstructsClaimException();
 
