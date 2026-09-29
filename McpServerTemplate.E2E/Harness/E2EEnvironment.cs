@@ -98,12 +98,17 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// <summary>
     /// The upstream host names and the owner that answers each, for the whole run: registration is per
     /// run (see <see cref="UpstreamRegistry"/>). A later contract hands a host to another owner here.
+    ///
+    /// contract-005 · T-15 — and so does this one: SMHI's observations host is handed to a stand-in fake
+    /// (<see cref="StandInUpstream"/>), which is not WireMock, in place of the fake. No other test in the run
+    /// reaches that host, so the stand-in's record is T-15's alone.
     /// </summary>
     public static UpstreamRegistry Upstreams { get; } = new UpstreamRegistry()
         .Register("opendata-download-metfcst.smhi.se", WireMockService.Owner)
         .Register("opendata-download-metobs.smhi.se", WireMockService.Owner)
         .Register("jsonplaceholder.typicode.com", WireMockService.Owner)
-        .Register(WireMockService.Alias, WireMockService.Owner);
+        .Register(WireMockService.Alias, WireMockService.Owner)
+        .Replace("opendata-download-metobs.smhi.se", StandInUpstream.Owner);
 
     public string RunId { get; }
 
@@ -175,6 +180,33 @@ public sealed class E2EEnvironment : IAsyncDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(delta);
         return ServerUnderTest.StartupAsync(this, name, delta, build, cancellationToken);
+    }
+
+    /// <summary>
+    /// contract-005 · T-7 — a Redis of a test's own on the run's network, answering under <paramref name="host"/>, which
+    /// a test points its servers at through their settings delta (Limits:Redis=<see cref="RedisService.Endpoint"/>). A
+    /// test that stops its limit store stops this one; the environment's own is every other class's.
+    /// </summary>
+    public async Task<RedisService> StartRedisAsync(string host, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(host);
+        if (host.Equals(RedisService.Alias, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"'{host}' is the environment's own Redis; a test's own answers under another name.", nameof(host));
+        }
+
+        return await Timings.MeasureEnvironmentAsync($"container: redis {host}", () => RedisService.StartAsync(Network, RunId, host, cancellationToken));
+    }
+
+    /// <summary>
+    /// contract-005 · G-13 — the documented deployment: the compose file of the docs/04 at
+    /// <paramref name="documentPath"/>, run through the docs profile's declared table (<see cref="DocsProfile"/>) and
+    /// nothing else. Not a server of the base settings: the document is its configuration.
+    /// </summary>
+    public Task<DocsProfile> StartDocsProfileAsync(string documentPath, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentPath);
+        return DocsProfile.StartAsync(this, documentPath, cancellationToken);
     }
 
     /// <summary>The image a server of <paramref name="build"/> runs.</summary>

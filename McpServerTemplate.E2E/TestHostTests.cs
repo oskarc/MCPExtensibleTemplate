@@ -123,8 +123,8 @@ public sealed class TestHostTests(TestHostTests.Server fixture, ITestOutputHelpe
         output.WriteLine($"test host: {testHost.Text}");
 
         // Self-check: each line is exactly its parts, so comparing the parts is comparing the whole lines.
-        Assert.Equal(image.Text, Rebuilt(image.Limits, image.Providers, image.Filters, image.Manifest));
-        Assert.Equal(testHost.Text, Rebuilt(testHost.Limits, testHost.Providers, testHost.Filters, testHost.Manifest));
+        Assert.Equal(image.Text, Rebuilt(image.Limits, image.Providers, image.RequestKinds, image.Filters, image.Manifest));
+        Assert.Equal(testHost.Text, Rebuilt(testHost.Limits, testHost.Providers, testHost.RequestKinds, testHost.Filters, testHost.Manifest));
 
         bool IsTestModules(string entry) => TestHost.Modules.Any(m => entry.Contains($":{m}/", StringComparison.Ordinal));
         var addedProviders = testHost.Providers.Except(image.Providers, StringComparer.Ordinal).ToArray();
@@ -132,6 +132,7 @@ public sealed class TestHostTests(TestHostTests.Server fixture, ITestOutputHelpe
         var withoutTheModules = Rebuilt(
             testHost.Limits,
             [.. testHost.Providers.Where(p => !TestHost.Modules.Contains(p, StringComparer.Ordinal))],
+            testHost.RequestKinds,
             testHost.Filters,
             [.. testHost.Manifest.Where(e => !IsTestModules(e))]);
 
@@ -146,6 +147,12 @@ public sealed class TestHostTests(TestHostTests.Server fixture, ITestOutputHelpe
             + $"filters {(image.Filters == testHost.Filters ? "equal" : $"differ: '{image.Filters}' and '{testHost.Filters}'")}.");
     }
 
-    private static string Rebuilt(string limits, IEnumerable<string> providers, string filters, IEnumerable<string> manifest) =>
-        $"Frame installed: limits={limits} providers={string.Join(",", providers)} :: {filters} | {string.Join(";", manifest)}";
+    /// <summary>
+    /// A frame line from its parts. contract-005 · G-11 — with the governed request kinds after the providers, where the
+    /// line names them.
+    /// </summary>
+    private static string Rebuilt(string limits, IEnumerable<string> providers, IReadOnlyList<string> requests, string filters, IEnumerable<string> manifest) =>
+        $"Frame installed: limits={limits} providers={string.Join(",", providers)}"
+        + (requests.Count > 0 ? $" requests={string.Join(",", requests)}" : string.Empty)
+        + $" :: {filters} | {string.Join(";", manifest)}";
 }

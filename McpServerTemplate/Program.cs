@@ -189,6 +189,13 @@ static async Task<int> RunHttpAsync(string[] args)
     }
 
     await app.WaitForShutdownAsync();
+
+    // contract-005 · T-10 — the stop said aloud, as the start is ("Frame installed"). docker stop sends SIGTERM, the host
+    // stops accepting requests and finishes its work, and this line is the record, written only once the host has stopped:
+    // a server killed before it finished writes none. sys_shutdown is the roadmap's standard name for the event (LOG-01).
+    app.Services.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("McpServerTemplate.Lifetime")
+        .LogInformation("sys_shutdown: the server has stopped; it accepts no more requests and exits with code {ExitCode}", ExitCode.Ok);
     return ExitCode.Ok;
 }
 

@@ -102,7 +102,7 @@ public sealed class TestIssuerService : IAsyncDisposable
     /// </summary>
     /// <param name="http">A client made from the environment's name map.</param>
     /// <param name="host">The issuer name, e.g. idp-a.e2e.test.</param>
-    /// <param name="kind">valid, wrong-audience, expired, alg-none, hs256, cross-signed, missing-claim or stale-iat.</param>
+    /// <param name="kind">valid, wrong-audience, expired, alg-none, hs256, key-confusion, cross-signed, missing-claim or stale-iat.</param>
     /// <param name="audience">The audience; the server's resource for all but wrong-audience.</param>
     /// <param name="scopes">Scopes for the scope claim.</param>
     /// <param name="extra">Further request fields: subject, clientId, claim, issuedSecondsAgo, signedBy.</param>

@@ -14,8 +14,8 @@ namespace McpServerTemplate.E2E.Harness;
 ///
 /// contract-005 · G-7 — one WireMock.Net container answering, over HTTPS with a leaf of the run's test
 /// CA, under every host name the upstream registry gives it: the real provider hosts
-/// (opendata-download-metfcst.smhi.se, opendata-download-metobs.smhi.se, jsonplaceholder.typicode.com)
-/// and the neutral alias wiremock.e2e.test. Inside the network those names resolve to this container,
+/// (opendata-download-metfcst.smhi.se and jsonplaceholder.typicode.com; opendata-download-metobs.smhi.se
+/// is T-15's stand-in's) and the neutral alias wiremock.e2e.test. Inside the network those names resolve to this container,
 /// so the server under test calls its upstreams by their real names and reaches the fake; with its
 /// trust narrowed to the test CA, a name with no fake fails TLS instead of reaching the internet.
 ///
@@ -144,6 +144,14 @@ public sealed class WireMockService : IUpstreamService
             ? journal.EnumerateArray().Count(entry => entry.GetRawText().Contains(fragment, StringComparison.Ordinal))
             : 0;
     }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<UpstreamRequest>> RecordedAsync(HttpClient http, CancellationToken cancellationToken = default) =>
+        [.. (await EntriesAsync(http, cancellationToken)).Select(e => new UpstreamRequest(
+            e.Client,
+            e.Method,
+            Uri.TryCreate(e.Url, UriKind.Absolute, out var url) ? url.Host : string.Empty,
+            e.Path))];
 
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();
 

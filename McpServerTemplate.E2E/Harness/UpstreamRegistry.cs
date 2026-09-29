@@ -126,4 +126,19 @@ public interface IUpstreamService : IAsyncDisposable
 
     /// <summary>The name map entries for the host names it answers under.</summary>
     public NameMap Names { get; }
+
+    /// <summary>
+    /// contract-005 · G-16, T-15 — every request it has recorded, whatever kind of container it is: how a test reads what
+    /// reached the container answering a host (<see cref="E2EEnvironment.UpstreamFor"/>) without assuming it is WireMock.
+    /// </summary>
+    /// <param name="http">A client made from the environment's name map, for an owner whose record is read over HTTPS.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    public Task<IReadOnlyList<UpstreamRequest>> RecordedAsync(HttpClient http, CancellationToken cancellationToken = default);
 }
+
+/// <summary>One request an upstream container recorded.</summary>
+/// <param name="Client">The address it came from: on the run's network, the server that made it.</param>
+/// <param name="Method">The HTTP method.</param>
+/// <param name="Host">The host name it was sent to, as its Host header named it.</param>
+/// <param name="Path">The path, with its query.</param>
+public sealed record UpstreamRequest(System.Net.IPAddress? Client, string Method, string Host, string Path);

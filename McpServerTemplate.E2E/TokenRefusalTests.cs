@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using McpServerTemplate.E2E.Harness;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -118,6 +119,63 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
     }
 
     /// <summary>
+    /// contract-005 · T-3 (G-6), strengthened — the algorithm-confusion attack. The HS256 row above carries no key id and
+    /// is refused for that (IDX10517) before its algorithm is weighed. This token is HS256 signed with idp-a's own public
+    /// key — the PEM anyone can derive from idp-a's key set — as the HMAC secret, under the key id idp-a publishes, every
+    /// claim valid: a verifier that let the token's alg choose how to use the key its kid names would accept it. It is
+    /// refused with 401, the refusal is logged, and the token is not.
+    ///
+    /// Sabotage (G-11): mint it as kind "valid" instead. It is then idp-a's own token, accepted with 200, and the claim's
+    /// assertion goes red.
+    /// </summary>
+    [Fact]
+    public async Task T3_a_key_confusion_token_is_refused_and_its_refusal_logged()
+    {
+        using var http = fixture.CreateClient();
+
+        // Positive control: this issuer's good token is accepted, so a refusal below is the attack's.
+        var good = await TestIssuerService.MintAsync(http, IssuerA, "valid", ServerUnderTest.Resource, ["weather:read"]);
+        Assert.Equal(HttpStatusCode.OK, await StatusAsync(http, good));
+
+        var (token, status, logged) = await KeyConfusionAsync(http, "key-confusion");
+
+        Assert.True(
+            status == HttpStatusCode.Unauthorized && logged.Count > 0,
+            $"an HS256 token keyed with {IssuerA}'s own public key, under its real key id, got {(int)status}"
+            + (logged.Count == 0 ? $", and the server's log has no {AuthenticationFailed} line for it." : "."));
+
+        var stderr = await fixture.Server.StderrAsync();
+        Assert.False(
+            stderr.Contains(token, StringComparison.Ordinal) || stderr.Contains(token.Split('.')[1], StringComparison.Ordinal),
+            "the server's log holds the key-confusion token it refused.");
+    }
+
+    /// <summary>
+    /// The held half of the key-confusion row (2026-09-29), stopped and put to the pioneer, not met and not changed: the
+    /// brief asks that the log name the algorithm as the reason. The token library refuses it before any algorithm check
+    /// can speak — for an RSA key it treats HS256 as unsupported and says nothing — so the log reads "IDX10511: Signature
+    /// validation failed. Keys tried: '…RsaSecurityKey, KeyId: 'idp-a.e2e.test-key'…'. … kid: 'idp-a.e2e.test-key'.
+    /// Exceptions caught: '[PII … hidden]'", naming the key id and not HS256. Naming it needs a product change in the
+    /// authentication path — an explicit refusal of an algorithm outside the provider's list, before the signature is
+    /// checked — which no clause of the contract names, and which would also reword the alg-none and HS256 rows' reasons.
+    /// </summary>
+    private const string KeyConfusionReasonHeld =
+        "Stopped for the pioneer: the key-confusion token is refused (401) but logged as IDX10511, which does not name HS256; "
+        + "naming it needs an authentication-path product change the contract does not name. Resolve by decision, then remove this Skip.";
+
+    [Fact(Skip = KeyConfusionReasonHeld)]
+    public async Task T3_a_key_confusion_tokens_refusal_names_its_algorithm_in_the_log()
+    {
+        using var http = fixture.CreateClient();
+        var (_, status, logged) = await KeyConfusionAsync(http, "key-confusion");
+
+        Assert.True(
+            status == HttpStatusCode.Unauthorized && logged.Count > 0 && logged.All(line => line.Contains("HS256", StringComparison.Ordinal)),
+            $"a key-confusion token got {(int)status}, and the server's log says '{string.Join(" | ", logged)}', which does not name "
+            + "its algorithm, HS256, as the reason.");
+    }
+
+    /// <summary>
     /// Sabotage (G-11): mint the stale token issued 60 seconds ago instead of 360. It passes the write gate, and the
     /// claim's assertion goes red: the call is not refused with token-age.
     /// </summary>
@@ -218,6 +276,31 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
     {
         using var response = await http.SendAsync(McpRequests.Initialize(ServerUnderTest.Endpoint, token));
         return response.StatusCode;
+    }
+
+    /// <summary>
+    /// contract-005 · T-3 — a token of <paramref name="kind"/> from idp-a, sent once: the token, the status it got, and the
+    /// refusal lines the server logged for it. A self-check first holds the key-confusion token to what the attack is:
+    /// HS256, under the key id idp-a publishes in its key set.
+    /// </summary>
+    private async Task<(string Token, HttpStatusCode Status, IReadOnlyList<string> Logged)> KeyConfusionAsync(HttpClient http, string kind)
+    {
+        var token = await TestIssuerService.MintAsync(http, IssuerA, kind, ServerUnderTest.Resource, ["weather:read"]);
+        if (kind == "key-confusion")
+        {
+            var keys = await http.GetFromJsonAsync<JsonElement>(new Uri($"https://{IssuerA}/jwks"));
+            var published = keys.GetProperty("keys").EnumerateArray().Select(k => k.GetProperty("kid").GetString()).ToArray();
+            var header = new JsonWebToken(token);
+            Assert.True(
+                header.Alg == "HS256" && published.Contains(header.Kid),
+                $"the key-confusion token is not the attack's: alg {header.Alg}, kid {header.Kid}; {IssuerA} publishes [{string.Join(", ", published)}].");
+        }
+
+        var before = (await fixture.Server.StderrLinesAsync(AuthenticationFailed)).Count;
+        var status = await StatusAsync(http, token);
+        var logged = await fixture.Server.StderrLinesAfterAsync(AuthenticationFailed, before);
+        output.WriteLine($"{kind}: {(int)status}; logged: {string.Join(" | ", logged)}");
+        return (token, status, logged);
     }
 
     private static Task<JsonElement> CallAsync(HttpClient http, string token, IReadOnlyDictionary<string, object> arguments) =>

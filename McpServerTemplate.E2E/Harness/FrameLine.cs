@@ -7,7 +7,7 @@ namespace McpServerTemplate.E2E.Harness;
 /// line itself.
 ///
 /// Its shape is GovernedServer.ValidateAtStartup's and FrameManifest.Describe's:
-///   Frame installed: limits={store} providers={name,name} :: {list}=[frame,sdk] {list}=[…] | {entry};{entry};…
+///   Frame installed: limits={store} providers={name,name} requests={method,method} :: {list}=[frame,sdk] {list}=[…] | {entry};{entry};…
 /// where an entry is tool:{provider}/{name}:{scope}:{risk}, resource:{provider}/{uri}:{scope} or
 /// prompt:{provider}/{name}:{scope}. A scope and a resource URI may both hold colons, so an entry is split with the
 /// scopes the environment's identity providers can issue (<see cref="Entries"/>).
@@ -15,6 +15,12 @@ namespace McpServerTemplate.E2E.Harness;
 public sealed record FrameLine(string Text, string Limits, IReadOnlyList<string> Providers, string Filters, IReadOnlyList<string> Manifest)
 {
     private const string Marker = "Frame installed: ";
+
+    /// <summary>
+    /// contract-005 · G-11 — the request kinds the frame governs, as the line's requests= names them: every method it
+    /// lets past its request-kind gate. Empty when the line names none.
+    /// </summary>
+    public IReadOnlyList<string> RequestKinds { get; init; } = [];
 
     /// <summary>One governed primitive on the line.</summary>
     /// <param name="Kind">tool, resource or prompt.</param>
@@ -54,7 +60,10 @@ public sealed record FrameLine(string Text, string Limits, IReadOnlyList<string>
             limits,
             providers.Split(',', StringSplitOptions.RemoveEmptyEntries),
             body[(headEnd + 4)..manifestStart],
-            body[(manifestStart + 3)..].Split(';', StringSplitOptions.RemoveEmptyEntries));
+            body[(manifestStart + 3)..].Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            RequestKinds = head.TryGetValue("requests", out var requests) ? requests.Split(',', StringSplitOptions.RemoveEmptyEntries) : [],
+        };
     }
 
     /// <summary>

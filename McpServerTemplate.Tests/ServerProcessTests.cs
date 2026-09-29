@@ -17,13 +17,98 @@ namespace McpServerTemplate.Tests;
 /// tool names a client actually sees are all properties of the process, not of a class.
 /// </summary>
 [Collection("server-process")]
-public sealed class ServerProcessTests : IDisposable
+public sealed class ServerProcessTests(ServerProcessTests.SharedServers shared) : IDisposable
 {
     // contract-005 review round 5 — what this test's servers were given, and the servers, ended when the test ends
     // (SpawnedServer.Cleanup).
     private readonly SpawnedServer.Cleanup _cleanup = new();
 
     public void Dispose() => _cleanup.Dispose();
+
+    /// <summary>
+    /// contract-005 · T-14 — what this collection's tests only look at, started once for all of them: the program in
+    /// Production over HTTP, and the tools a Development stdio server lists. Six tests each started the first and two
+    /// the second, and none changes what it looks at — a status, a header, the startup line, the tool names — so one of
+    /// each serves them all. Started when the first test asks, and ended when the collection ends, with everything it was
+    /// given (SpawnedServer.Cleanup). Every other test here starts the server it needs, as before.
+    /// </summary>
+    public sealed class SharedServers : IAsyncLifetime, IDisposable
+    {
+        private readonly SpawnedServer.Cleanup _cleanup = new();
+        private readonly SemaphoreSlim _gate = new(1, 1);
+        private HttpServer? _server;
+        private string? _contentRoot;
+        private HashSet<string>? _tools;
+
+        /// <summary>
+        /// The program in Production over HTTP, as <see cref="StartHttpAsync"/> starts it: started once. Its content root is
+        /// a directory of its own holding copies of the shipped settings files, as the settings-read-once test has it, so
+        /// its configuration is the build's and its log file is its own: the Production file sink writes beneath the
+        /// working directory, and a server that outlives one test, run from the build output, held the log file every other
+        /// server started there writes to — on Windows each then refused to start for it.
+        /// </summary>
+        internal async Task<HttpServer> ServerAsync()
+        {
+            await _gate.WaitAsync();
+            try
+            {
+                if (_server is null)
+                {
+                    _contentRoot = Directory.CreateTempSubdirectory("mcp-tests-shared-server-").FullName;
+                    var bin = Path.GetDirectoryName(ServerExecutable())!;
+                    foreach (var file in new[] { "appsettings.json", "appsettings.Production.json" })
+                    {
+                        File.Copy(Path.Combine(bin, file), Path.Combine(_contentRoot, file));
+                    }
+
+                    _server = await StartHttpAsync(_cleanup, _contentRoot);
+                }
+
+                return _server;
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        /// <summary>The tool names a Development stdio server lists, as <see cref="ListToolNamesAsync"/> reads them: read once.</summary>
+        internal async Task<HashSet<string>> ToolNamesAsync()
+        {
+            await _gate.WaitAsync();
+            try
+            {
+                return _tools ??= await ListToolNamesAsync(_cleanup);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        public Task InitializeAsync() => Task.CompletedTask;
+
+        /// <summary>The server, stopped first; then (<see cref="Dispose"/>) everything it and the listing were given.</summary>
+        public async Task DisposeAsync()
+        {
+            if (_server is not null)
+            {
+                await _server.DisposeAsync();
+            }
+        }
+
+        public void Dispose()
+        {
+            _cleanup.Dispose();
+            _gate.Dispose();
+
+            // Once the server has exited: on Windows a file it held could not be removed before.
+            if (_contentRoot is not null && Directory.Exists(_contentRoot))
+            {
+                Directory.Delete(_contentRoot, recursive: true);
+            }
+        }
+    }
 
     private static string RepositoryRoot()
     {
@@ -65,7 +150,7 @@ public sealed class ServerProcessTests : IDisposable
     /// trace) crosses the buffer; anything quieter does not, so the same test passes or hangs
     /// depending on how much the server had to say.
     /// </summary>
-    private sealed class Spawned
+    internal sealed class Spawned
     {
         private readonly StringBuilder _stderr = new();
 
@@ -104,11 +189,23 @@ public sealed class ServerProcessTests : IDisposable
     /// <param name="arguments">The server's command line.</param>
     private Spawned Start(
         IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null, IReadOnlyList<string>? arguments = null) =>
-        new(_cleanup.Started(Process.Start(StartInfo(environment, redirectStdin, workingDirectory, arguments))!));
+        Start(_cleanup, environment, redirectStdin, workingDirectory, arguments);
 
-    /// <summary>How <see cref="Start"/> starts the server: the same parameters.</summary>
+    /// <summary>
+    /// <see cref="Start(IDictionary{string, string}, bool, string?, IReadOnlyList{string}?)"/>, for a server ended with
+    /// <paramref name="cleanup"/> rather than with this test: the collection's shared one (<see cref="SharedServers"/>).
+    /// </summary>
+    private static Spawned Start(
+        SpawnedServer.Cleanup cleanup, IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null, IReadOnlyList<string>? arguments = null) =>
+        new(cleanup.Started(Process.Start(StartInfo(cleanup, environment, redirectStdin, workingDirectory, arguments))!));
+
+    /// <summary>How <see cref="Start(IDictionary{string, string}, bool, string?, IReadOnlyList{string}?)"/> starts the server: the same parameters.</summary>
     private ProcessStartInfo StartInfo(
-        IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null, IReadOnlyList<string>? arguments = null)
+        IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null, IReadOnlyList<string>? arguments = null) =>
+        StartInfo(_cleanup, environment, redirectStdin, workingDirectory, arguments);
+
+    private static ProcessStartInfo StartInfo(
+        SpawnedServer.Cleanup cleanup, IDictionary<string, string> environment, bool redirectStdin = false, string? workingDirectory = null, IReadOnlyList<string>? arguments = null)
     {
         var exe = ServerExecutable();
         var info = new ProcessStartInfo(exe)
@@ -132,7 +229,7 @@ public sealed class ServerProcessTests : IDisposable
         // contract-005 review round 4 — nor the developer's own user secrets: a store nobody keeps, unless the
         // test names one; and, round 5 addendum 2, on Linux nobody's data-protection keys (SpawnedServer). Removed when
         // the test ends.
-        _cleanup.Isolate(info);
+        cleanup.Isolate(info);
         foreach (var (key, value) in environment)
         {
             info.Environment[key] = value;
@@ -226,7 +323,7 @@ public sealed class ServerProcessTests : IDisposable
     [Fact]
     public void T3_a_spawned_server_whose_handle_its_test_disposed_is_still_ended_when_the_test_ends()
     {
-        var test = new ServerProcessTests();
+        var test = new ServerProcessTests(shared);
         var spawned = test.Start(
             new Dictionary<string, string> { ["ASPNETCORE_ENVIRONMENT"] = "Development", ["Transport"] = "stdio" },
             redirectStdin: true);
@@ -283,7 +380,7 @@ public sealed class ServerProcessTests : IDisposable
     [Fact]
     public async Task T3_a_spawned_servers_own_location_is_removed_when_its_test_ends()
     {
-        var test = new ServerProcessTests();
+        var test = new ServerProcessTests(shared);
         Spawned spawned;
         string location;
         bool wrote;
@@ -771,7 +868,7 @@ public sealed class ServerProcessTests : IDisposable
 
     // ── G-3 / G-7: the HTTP pipeline ──────────────────────────────────────────
 
-    private sealed class HttpServer : IAsyncDisposable
+    internal sealed class HttpServer : IAsyncDisposable
     {
         public required Process Process { get; init; }
         public required HttpClient Client { get; init; }
@@ -814,7 +911,12 @@ public sealed class ServerProcessTests : IDisposable
         ["HttpTransport__KnownNetworks__0"] = "127.0.0.0/8",
     };
 
-    private async Task<HttpServer> StartHttpAsync()
+    /// <summary>
+    /// The program in Production over HTTP, as a deployment runs it, ended with <paramref name="cleanup"/>, its content
+    /// root <paramref name="workingDirectory"/> or, when none is given, the build output. contract-005 · T-14 — the tests
+    /// that only look at it share one (<see cref="SharedServers.ServerAsync"/>).
+    /// </summary>
+    private static async Task<HttpServer> StartHttpAsync(SpawnedServer.Cleanup cleanup, string? workingDirectory = null)
     {
         var port = FreePort();
         var environment = IdentityEnvironment();
@@ -826,7 +928,7 @@ public sealed class ServerProcessTests : IDisposable
         // contract-003 · G-8 — Production refuses to start without Redis.
         environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
 
-        var spawned = Start(environment);
+        var spawned = Start(cleanup, environment, workingDirectory: workingDirectory);
         var process = spawned.Process;
 
         var client = new HttpClient
@@ -861,7 +963,8 @@ public sealed class ServerProcessTests : IDisposable
     [Fact]
     public async Task T8_liveness_and_readiness_answer_without_a_credential()
     {
-        await using var server = await StartHttpAsync();
+        // contract-005 · T-14 — the collection's one started program (SharedServers), which nothing here changes.
+        var server = await shared.ServerAsync();
 
         using var liveness = await server.Client.GetAsync("/healthz");
         using var readiness = await server.Client.GetAsync("/readyz");
@@ -875,7 +978,8 @@ public sealed class ServerProcessTests : IDisposable
     [Fact]
     public async Task T4_a_foreign_host_header_is_rejected_before_anything_else()
     {
-        await using var server = await StartHttpAsync();
+        // contract-005 · T-14 — the collection's one started program (SharedServers), which nothing here changes.
+        var server = await shared.ServerAsync();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "/healthz");
         request.Headers.Host = "attacker.example.com";
@@ -1164,7 +1268,8 @@ public sealed class ServerProcessTests : IDisposable
     {
         // Replaces the shared-key gate. A key everyone copies could not say who was calling; a
         // token can, and an unreadable one is refused exactly like an absent one.
-        await using var server = await StartHttpAsync();
+        // contract-005 · T-14 — the collection's one started program (SharedServers), which nothing here changes.
+        var server = await shared.ServerAsync();
 
         using var missing = await Post(server, token: null);
         Assert.Equal(HttpStatusCode.Unauthorized, missing.StatusCode);
@@ -1294,7 +1399,8 @@ public sealed class ServerProcessTests : IDisposable
         // contract-002 · G-7. The C# SDK does not validate Origin and the specification requires
         // it: without this a page in a browser drives this server using a session the browser
         // already holds, and every downstream control sees a valid principal.
-        await using var server = await StartHttpAsync();
+        // contract-005 · T-14 — the collection's one started program (SharedServers), which nothing here changes.
+        var server = await shared.ServerAsync();
 
         using var foreign = new HttpRequestMessage(HttpMethod.Post, "/mcp");
         foreign.Headers.Add("Origin", "https://evil.example");
@@ -1315,7 +1421,8 @@ public sealed class ServerProcessTests : IDisposable
     [Fact]
     public async Task T12_every_documented_tool_name_is_one_the_server_exposes()
     {
-        var exposed = await ListToolNamesAsync();
+        // contract-005 · T-14 — the collection's one reading of the tools (SharedServers).
+        var exposed = await shared.ToolNamesAsync();
         Assert.NotEmpty(exposed);
 
         var root = RepositoryRoot();
@@ -1437,7 +1544,8 @@ public sealed class ServerProcessTests : IDisposable
     [Fact]
     public async Task T12_every_exposed_tool_is_documented()
     {
-        var exposed = await ListToolNamesAsync();
+        // contract-005 · T-14 — the collection's one reading of the tools (SharedServers).
+        var exposed = await shared.ToolNamesAsync();
 
         var root = RepositoryRoot();
         var text = new StringBuilder();
@@ -1451,9 +1559,14 @@ public sealed class ServerProcessTests : IDisposable
         Assert.True(missing.Count == 0, "tools the server exposes but the docs never name: " + string.Join(", ", missing));
     }
 
-    private async Task<HashSet<string>> ListToolNamesAsync()
+    /// <summary>
+    /// The tool names a Development stdio server lists, the server ended with <paramref name="cleanup"/>. contract-005 ·
+    /// T-14 — read once for the tests that need them (<see cref="SharedServers.ToolNamesAsync"/>).
+    /// </summary>
+    private static async Task<HashSet<string>> ListToolNamesAsync(SpawnedServer.Cleanup cleanup)
     {
         using var process = Start(
+            cleanup,
             new Dictionary<string, string>
             {
                 ["ASPNETCORE_ENVIRONMENT"] = "Development",
@@ -1526,7 +1639,8 @@ public sealed class ServerProcessTests : IDisposable
     public async Task T10_the_shipped_process_installs_exactly_the_frame_the_tests_exercise()
     {
         // The real program, in Production, as a deployment runs it.
-        await using var shipped = await StartHttpAsync();
+        // contract-005 · T-14 — the collection's one started program (SharedServers), which nothing here changes.
+        var shipped = await shared.ServerAsync();
         await WaitForManifestAsync(shipped.Spawned!);
         var shippedManifest = FrameManifestIn(shipped.StderrSnapshot());
 
@@ -1560,7 +1674,8 @@ public sealed class ServerProcessTests : IDisposable
     [Fact]
     public async Task T11_production_serves_no_demo_tools()
     {
-        await using var shipped = await StartHttpAsync();
+        // contract-005 · T-14 — the collection's one started program (SharedServers), which nothing here changes.
+        var shipped = await shared.ServerAsync();
         await WaitForManifestAsync(shipped.Spawned!);
         var log = shipped.StderrSnapshot();
 
@@ -1647,3 +1762,10 @@ public sealed class ServerProcessTests : IDisposable
         }
     }
 }
+
+/// <summary>
+/// contract-005 · T-14 — the collection ServerProcessTests runs in, one test at a time, and what its tests share
+/// (<see cref="ServerProcessTests.SharedServers"/>): started for the first test that asks, ended when the collection ends.
+/// </summary>
+[CollectionDefinition("server-process")]
+public sealed class ServerProcessDefinition : ICollectionFixture<ServerProcessTests.SharedServers>;

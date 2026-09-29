@@ -75,10 +75,13 @@ public abstract partial class ServerFixture : IAsyncLifetime
     /// <summary>The Keycloak client id for a fixture type.</summary>
     internal static string ClientIdFor(Type fixture) => $"e2e-{Kebab(fixture.DeclaringType?.Name ?? fixture.Name)}";
 
-    /// <summary>Every fixture type's client id: the clients the realm is imported with.</summary>
+    /// <summary>
+    /// Every fixture type's client id, and every <see cref="KeycloakClientAttribute"/> class's: the clients the realm is
+    /// imported with.
+    /// </summary>
     internal static IReadOnlyList<string> AllClientIds() =>
         [.. typeof(ServerFixture).Assembly.GetTypes()
-            .Where(t => !t.IsAbstract && t.IsSubclassOf(typeof(ServerFixture)))
+            .Where(t => !t.IsAbstract && (t.IsSubclassOf(typeof(ServerFixture)) || t.IsDefined(typeof(KeycloakClientAttribute), inherit: false)))
             .Select(ClientIdFor)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)];
@@ -88,6 +91,15 @@ public abstract partial class ServerFixture : IAsyncLifetime
     [GeneratedRegex("([a-z0-9])([A-Z])")]
     private static partial Regex UpperCaseBoundary();
 }
+
+/// <summary>
+/// contract-005 · G-5, T-9 — a test class that starts no <see cref="ServerFixture"/> of its own and still needs a
+/// Keycloak client of its own: the realm is imported with one for it, named as a fixture's would be
+/// (<see cref="ServerFixture.ClientIdFor"/> of the class). The docs profile is one: its server is started from docs/04,
+/// not from the environment's base settings.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+public sealed class KeycloakClientAttribute : Attribute;
 
 /// <summary>
 /// Client addresses for the front's test-only header: RFC 5737 TEST-NET-3, which no real client has.

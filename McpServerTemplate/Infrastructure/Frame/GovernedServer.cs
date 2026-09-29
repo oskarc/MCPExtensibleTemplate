@@ -130,10 +130,14 @@ public static class GovernedServer
         var logger = services.GetRequiredService<ILogger<RequestGate>>();
         if (logger.IsEnabled(LogLevel.Information))
         {
+            // contract-005 · G-11 — the request kinds the frame governs are on the line too: every method its request-kind
+            // gate lets through, so the end-to-end suite takes that set from the image's own account, as it takes the
+            // tools, resources and prompts. The fast suite's rule matrices remain the independent check on it.
             logger.LogInformation(
-                "Frame installed: limits={Limits} providers={Providers} :: {Manifest}",
+                "Frame installed: limits={Limits} providers={Providers} requests={Requests} :: {Manifest}",
                 services.GetRequiredService<ILimitStore>().Description,
                 string.Join(",", enabled.Modules.Select(m => m.Name)),
+                string.Join(",", RequestGate.GovernedMethods.Order(StringComparer.Ordinal)),
                 description);
         }
 

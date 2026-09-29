@@ -346,7 +346,7 @@ public sealed class ServerUnderTest : IAsyncDisposable
     /// The status /readyz answered on the server's published port, once it is one of
     /// <paramref name="answers"/>, or the server's exit code if it stopped first.
     /// </summary>
-    private static async Task<(long? ExitCode, HttpStatusCode? Answered)> WaitForStartupAsync(
+    internal static async Task<(long? ExitCode, HttpStatusCode? Answered)> WaitForStartupAsync(
         Docker.DotNet.IDockerClient docker, IContainer container, HttpStatusCode[] answers, CancellationToken cancellationToken)
     {
         // Directly on the published port, with the one Host the server allows: host filtering runs
@@ -403,7 +403,7 @@ public sealed class ServerUnderTest : IAsyncDisposable
     /// exit codes. A self-check may read back its own mounted inputs, as this one reads back the CA the
     /// harness mounted; it never reads the product's state.
     /// </summary>
-    private static async Task CheckTrustAsync(E2EEnvironment environment, IContainer container, CancellationToken cancellationToken)
+    internal static async Task CheckTrustAsync(E2EEnvironment environment, IContainer container, CancellationToken cancellationToken)
     {
         var started = await environment.Docker.Containers.InspectContainerAsync(container.Id, cancellationToken);
         var variables = (started.Config?.Env ?? [])

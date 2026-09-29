@@ -159,6 +159,25 @@ public sealed class TestIdentityProvider : IDisposable
             signingCredentials: new SigningCredentials(secret, SecurityAlgorithms.HmacSha256));
     }
 
+    /// <summary>
+    /// contract-005 · T-3 (G-6) — the algorithm-confusion attack. An HS256 token whose HMAC secret is this provider's own
+    /// public key, in the PEM form anyone can derive from its key set, and whose header carries this provider's real key
+    /// id. A verifier that looks the key up by kid and then lets the token's alg choose how to use it verifies the HMAC
+    /// with the public key's bytes as the shared secret — and accepts a token anyone holding the public key can mint.
+    /// Every claim is valid; only the algorithm and its key are the attack.
+    /// </summary>
+    public string MintKeyConfusionToken(string audience, string? subject, string? clientId, string? jti, string[]? scopes)
+    {
+        var secret = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_rsa.ExportSubjectPublicKeyInfoPem())) { KeyId = _key.KeyId };
+        return MintToken(
+            audience,
+            subject: subject,
+            clientId: clientId,
+            jti: jti,
+            scopes: scopes,
+            signingCredentials: new SigningCredentials(secret, SecurityAlgorithms.HmacSha256));
+    }
+
     public void Dispose() => _rsa.Dispose();
 
     /// <summary>

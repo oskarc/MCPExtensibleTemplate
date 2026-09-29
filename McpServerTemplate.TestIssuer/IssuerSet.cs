@@ -126,7 +126,7 @@ public sealed class IssuerSet : IDisposable
             : _issuers.Values.FirstOrDefault(i => !ReferenceEquals(i, issuer));
 
     /// <summary>What the test asks the admin endpoint for.</summary>
-    /// <param name="Kind">valid, wrong-audience, expired, alg-none, hs256, cross-signed, missing-claim or stale-iat.</param>
+    /// <param name="Kind">valid, wrong-audience, expired, alg-none, hs256, key-confusion, cross-signed, missing-claim or stale-iat.</param>
     /// <param name="Audience">The audience; the server's resource for every kind but wrong-audience.</param>
     /// <param name="Scopes">Scopes to put in the scope claim.</param>
     /// <param name="Subject">The sub claim.</param>
@@ -373,6 +373,11 @@ public sealed class IssuerSet : IDisposable
 
                 case "hs256":
                     token = Provider.MintHmacToken(audience);
+                    break;
+
+                case "key-confusion":
+                    // contract-005 · T-3 — HS256 keyed with this issuer's own public key, under its real key id.
+                    token = Provider.MintKeyConfusionToken(audience, subject, clientId, jti, request.Scopes);
                     break;
 
                 case "cross-signed":

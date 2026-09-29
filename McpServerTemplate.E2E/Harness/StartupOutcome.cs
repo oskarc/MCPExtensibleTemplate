@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.RegularExpressions;
+using Docker.DotNet.Models;
 using DotNet.Testcontainers.Containers;
 
 namespace McpServerTemplate.E2E.Harness;
@@ -118,6 +119,49 @@ public sealed partial class StartupOutcome : IAsyncDisposable
             await Task.Delay(TimeSpan.FromMilliseconds(100));
         }
     }
+
+    /// <summary>
+    /// contract-005 · T-10 — docker stop, as an operator or an orchestrator stops the server: a signal — the image's stop
+    /// signal, or <paramref name="signal"/> as docker stop --signal sends it — then SIGKILL once <paramref name="grace"/>
+    /// has passed. Returns how it ended — its exit code, how long the stop took, the signal and the grace it was given —
+    /// and its standard error as it stood once it had stopped.
+    /// </summary>
+    /// <param name="grace">Whole seconds, at least one: the client drops a wait of zero, and the engine then waits its default.</param>
+    /// <param name="signal">The signal to send first; the image's own stop signal when null.</param>
+    public async Task<Stopped> StopAsync(TimeSpan grace, string? signal = null)
+    {
+        if (!Started)
+        {
+            throw new InvalidOperationException($"The server exited with code {ExitCode}; there is nothing to stop. {Describe()}");
+        }
+
+        if (grace < TimeSpan.FromSeconds(1) || grace.Ticks % TimeSpan.TicksPerSecond != 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(grace), grace, "docker stop waits whole seconds, and a wait of zero is dropped by the client, so the engine would wait its own default.");
+        }
+
+        var docker = _environment.Docker;
+        var imageSignal = (await docker.Containers.InspectContainerAsync(_container.Id)).Config?.StopSignal;
+        var sent = signal ?? (string.IsNullOrEmpty(imageSignal) ? "SIGTERM" : imageSignal);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        await docker.Containers.StopContainerAsync(
+            _container.Id, new ContainerStopParameters { WaitBeforeKillSeconds = (uint)grace.TotalSeconds, Signal = signal });
+        var took = clock.Elapsed;
+
+        var state = (await docker.Containers.InspectContainerAsync(_container.Id)).State
+            ?? throw new InvalidOperationException($"The engine reports no state for the stopped server {_name}.");
+        var (_, stderr) = await _container.GetLogsAsync();
+        return new Stopped(state.ExitCode, took, sent, grace, stderr);
+    }
+
+    /// <summary>How a stopped server ended.</summary>
+    /// <param name="ExitCode">Its exit code: 0 when it shut down on its own, 137 when it was killed.</param>
+    /// <param name="Took">How long docker stop took, from the signal to the exit.</param>
+    /// <param name="Signal">The signal it was sent first: the image's stop signal, SIGTERM when it names none, unless another was given.</param>
+    /// <param name="Grace">How long Docker waited, after that signal, before SIGKILL.</param>
+    /// <param name="Stderr">Its standard error, as Docker captured it.</param>
+    public sealed record Stopped(long ExitCode, TimeSpan Took, string Signal, TimeSpan Grace, string Stderr);
 
     /// <summary>What happened, in one line, for a failure message.</summary>
     public string Describe() =>
