@@ -130,11 +130,13 @@ public class IdentityConfigurationTests
 
         // contract-005 · G-17 round 1 — echoed as written, but for its user information, a credential, which is written
         // as *** (T9_a_refusal_never_writes_the_credential_a_url_carries), and, follow-up, its query, which can carry one
-        // (T9_a_refusal_never_writes_the_query_a_url_carries). This row used to require the password itself.
+        // (T9_a_refusal_never_writes_the_query_a_url_carries), and, batch B, its fragment, which can carry one too
+        // (T9_a_refusal_never_writes_the_fragment_a_url_carries): whichever of ? and # comes first, the rest is ***.
+        // This row used to require the password itself.
         var at = resource.LastIndexOf('@');
         var echoed = at < 0 ? resource : "https://***" + resource[at..];
-        var query = echoed.IndexOf('?', StringComparison.Ordinal);
-        Assert.Contains($"'{(query < 0 ? echoed : echoed[..(query + 1)] + "***")}'", ex.Message, StringComparison.Ordinal);
+        var rest = echoed.IndexOfAny(['?', '#']);
+        Assert.Contains($"'{(rest < 0 ? echoed : echoed[..(rest + 1)] + "***")}'", ex.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("secret", ex.Message, StringComparison.Ordinal);
     }
 
@@ -193,6 +195,33 @@ public class IdentityConfigurationTests
         Assert.DoesNotContain(secret, ex.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("client_secret", ex.Message, StringComparison.Ordinal);
         Assert.Contains("?***", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1, batch B — a fragment can carry a credential as well: a browser's implicit-flow URL
+    /// carries the access token there (…#access_token=…), and the refusals of a URL with one wrote it whole. Whichever
+    /// check refuses it — the fragment itself, a scheme that is not https — the echo writes the fragment as #***, after
+    /// user information and a query are written as theirs; a ? inside the fragment is part of it, not a query.
+    /// </summary>
+    [Theory]
+    [InlineData("Authentication:Resource", "https://mcp.example.com/mcp#access_token=S3cr3t-mcp", "S3cr3t-mcp")]
+    [InlineData("Authentication:Resource", "http://mcp.example.com/mcp#access_token=S3cr3t-mcp", "S3cr3t-mcp")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "https://login.example.com/realms/corp#access_token=S3cr3t-idp", "S3cr3t-idp")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "http://login.example.com/realms/corp#access_token=S3cr3t-idp", "S3cr3t-idp")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "https://login.example.com/#access_token=S3cr3t-idp?state=1", "S3cr3t-idp")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://login.example.com/#access_token=S3cr3t-iss", "S3cr3t-iss")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "http://login.example.com/#access_token=S3cr3t-iss", "S3cr3t-iss")]
+    public void T9_a_refusal_never_writes_the_fragment_a_url_carries(string key, string value, string secret)
+    {
+        var settings = Wellformed();
+        settings[key] = value;
+
+        var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
+
+        Assert.StartsWith(key, ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("access_token", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("#***", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

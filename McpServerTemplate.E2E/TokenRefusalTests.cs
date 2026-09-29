@@ -289,8 +289,13 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
         var address = await server.NetworkAddressAsync();
         var names = E2EEnvironment.Issuers.HostsServedBy(IssuerRegistry.Owner.TestIssuer);
 
+        // contract-005 · G-17 round 1 (FLA-R1-05) — counted from this server's address since it started, and only since: Docker
+        // gives a freed address to the next container at once, so an earlier server that held this address, and asked the
+        // issuers for their keys, left counts there. Every one of its requests was made before this server started.
+        var since = await server.StartedAtAsync();
+
         // Cold: nothing this server has done so far asked any issuer for anything.
-        var cold = await TestIssuerService.CountsAsync(http, IssuerA, address);
+        var cold = await TestIssuerService.CountsAsync(http, IssuerA, address, since);
         Assert.True(
             names.All(name => Lookups(cold, name) == 0),
             $"the server was not fresh: it had asked the issuers for {JsonSerializer.Serialize(cold)} before any token arrived.");
@@ -305,7 +310,7 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
             status = refused.StatusCode;
         }
 
-        var after = await TestIssuerService.CountsAsync(http, IssuerA, address);
+        var after = await TestIssuerService.CountsAsync(http, IssuerA, address, since);
         output.WriteLine($"After the stranger's token ({(int)status}), from {address}: {JsonSerializer.Serialize(after)}");
         Claim.True(
             names.All(name => after.ContainsKey(name) && Lookups(after, name) == 0),
@@ -332,7 +337,7 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
             Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
         }
 
-        var raised = await TestIssuerService.CountsAsync(http, IssuerA, address);
+        var raised = await TestIssuerService.CountsAsync(http, IssuerA, address, since);
         output.WriteLine($"After {IssuerA}'s token: {JsonSerializer.Serialize(raised)}");
         Assert.True(
             Count(raised, IssuerA, "/.well-known/openid-configuration") > 0 && Count(raised, IssuerA, "/jwks") > 0,

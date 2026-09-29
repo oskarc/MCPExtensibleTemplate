@@ -37,6 +37,28 @@ public sealed class LogSafeTests
         Assert.Equal("https://idp.exämple.se/tenant/Ω", LogSafe.Text("https://idp.exämple.se/tenant/Ω"));
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 1 — a URL an operator configured is echoed in a refusal as written, but for the parts that
+    /// can carry a credential: user information, the query, and (batch B) the fragment, where a browser's implicit-flow URL
+    /// carries the access token. Read from the text: user information first, then whichever of ? and # comes first, so a ?
+    /// or # inside a password, or a ? inside a fragment, is never taken for where a later part starts.
+    /// </summary>
+    [Theory]
+    [InlineData("nothing to hide", "https://login.example.com/realms/corp", "https://login.example.com/realms/corp")]
+    [InlineData("user information", "https://ops:S3cr3t@login.example.com/realms/corp", "https://***@login.example.com/realms/corp")]
+    [InlineData("a query", "https://login.example.com/?client_secret=S3cr3t", "https://login.example.com/?***")]
+    [InlineData("a query, then a fragment", "https://login.example.com/cb?state=1#access_token=S3cr3t", "https://login.example.com/cb?***")]
+    [InlineData("a fragment", "https://login.example.com/cb#access_token=S3cr3t", "https://login.example.com/cb#***")]
+    [InlineData("a fragment holding a ?", "https://login.example.com/cb#access_token=S3cr3t?state=1", "https://login.example.com/cb#***")]
+    [InlineData("a password holding a #, and a fragment", "https://ops:S3#cr3t@login.example.com/#access_token=S3cr3t", "https://***@login.example.com/#***")]
+    [InlineData("no scheme, and a fragment", "login.example.com#access_token=S3cr3t", "login.example.com#***")]
+    public void A_urls_user_information_query_and_fragment_are_written_as_stars(string what, string url, string written)
+    {
+        var safe = LogSafe.Url(url);
+        Assert.True(safe == written, $"{what}: '{url}' was written '{safe}', not '{written}'.");
+        Assert.DoesNotContain("S3cr3t", safe, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void A_long_value_is_cut_and_the_cut_marked()
     {

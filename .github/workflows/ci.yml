@@ -92,14 +92,18 @@ jobs:
         run: dotnet build McpServerTemplate.sln --no-restore --configuration Release -warnaserror
 
       # contract-005 · G-11, T-12 — a sabotage weakens the environment on purpose, to see one test go red on its claim;
-      # it is run locally (scripts/e2e-sabotage.sh), never here. The harness refuses to start with MCP_E2E_SABOTAGE set
-      # in CI; this step says so first, before anything runs.
+      # it is run by scripts/e2e-sabotage.sh, locally or in the scheduled retake (sabotage-retake.yml), never here. The
+      # harness refuses to start with MCP_E2E_SABOTAGE set in a push or pull-request run; this step says so first, before
+      # anything runs. contract-005 · G-17 round 1 (HAR-R1-07) — and a control run's MCP_E2E_CONTROL, which would run a
+      # handful of tests where the suite must run whole.
       - name: No sabotage
         run: |
-          if [ -n "${MCP_E2E_SABOTAGE+set}" ]; then
-            echo "::error::MCP_E2E_SABOTAGE is set ('${MCP_E2E_SABOTAGE}'). Sabotages run locally, with scripts/e2e-sabotage.sh, and never in CI."
-            exit 1
-          fi
+          for variable in MCP_E2E_SABOTAGE MCP_E2E_CONTROL; do
+            if [ -n "${!variable+set}" ]; then
+              echo "::error::$variable is set ('${!variable}'). Sabotages and control runs are run by scripts/e2e-sabotage.sh, locally or in the scheduled retake, and never in this job."
+              exit 1
+            fi
+          done
 
       # The first test starts the shared environment, cold: image builds, pulls and Keycloak (about a
       # minute here). The hang timeout is per test, so it must cover that start and sit well inside the

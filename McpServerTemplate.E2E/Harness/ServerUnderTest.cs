@@ -38,7 +38,7 @@ public enum ServerBuild
 ///              front, so a broken front is not mistaken for a server that never started.
 /// There is one per test class, so counts in Redis and at the fakes never leak between classes.
 /// </summary>
-public sealed class ServerUnderTest : IAsyncDisposable
+public sealed partial class ServerUnderTest : IAsyncDisposable
 {
     /// <summary>HttpTransport:Port — the product's default, and what the Dockerfile exposes.</summary>
     public const int Port = 3001;
@@ -277,6 +277,40 @@ public sealed class ServerUnderTest : IAsyncDisposable
             : throw new EnvironmentFaultException("server address", $"the server container {Name} has no address on the run's network {_environment.Network.Name}.");
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 1 (FLA-R1-05) — when this server's container started, by the Docker engine's clock, which the
+    /// test issuer's clock is (every container of the run shares the engine's kernel): the moment from which what a witness
+    /// records at this server's address is this server's alone. Docker hands a freed address to the next container at once,
+    /// so an earlier server at the same address may have left requests at a witness that counts by address; every one of
+    /// them was made before that server stopped, and so before this one started.
+    /// </summary>
+    public async Task<DateTimeOffset> StartedAtAsync()
+    {
+        var inspected = await _environment.Docker.Containers.InspectContainerAsync(Container.Id);
+        return EngineTime(inspected.State?.StartedAt)
+            ?? throw new EnvironmentFaultException("server start time", $"the engine reports no start time for the server container {Name} ('{inspected.State?.StartedAt}').");
+    }
+
+    /// <summary>
+    /// A time as the Docker engine writes one (RFC 3339, to the nanosecond), or null when there is none: .NET reads seven
+    /// fractional digits, so the rest are cut, which moves it earlier by less than a tenth of a microsecond.
+    /// </summary>
+    internal static DateTimeOffset? EngineTime(string? written)
+    {
+        if (string.IsNullOrEmpty(written) || written.StartsWith("0001-01-01", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var cut = BeyondSevenFractionalDigits().Replace(written, "$1");
+        return DateTimeOffset.TryParse(cut, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var time)
+            ? time
+            : null;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"(\.\d{7})\d+")]
+    private static partial System.Text.RegularExpressions.Regex BeyondSevenFractionalDigits();
+
     /// <summary>An HTTP client through this server's name map, forwarding <paramref name="clientAddress"/>.</summary>
     public HttpClient CreateClient(string clientAddress, NameMapLog? log = null, DelegatingHandler? outermost = null) =>
         Names.CreateClient(log, clientAddress, outermost);
@@ -506,73 +540,103 @@ public sealed class ServerUnderTest : IAsyncDisposable
     }
 
     /// <summary>
-    /// contract-005 · G-11 — forwarded headers ignored. An unauthenticated request through the front
-    /// is challenged with a metadata URL the server builds from the request's scheme and Host; it is
-    /// https only if the server honoured the front's X-Forwarded-Proto, which it does only when the
-    /// front's address is the one KnownProxies names. No token is sent, so no issuer is consulted.
-    /// When it is not https, the front's access-log line for the request says which side dropped the
-    /// header: the front, which then did not send it, or the server, which did not trust it.
+    /// contract-005 · G-11, UC-1 edge — forwarded headers, the environment's part. The server trusts X-Forwarded-Proto and
+    /// X-Forwarded-For only from a proxy it was started trusting, and the front must send them to it; both are the
+    /// environment's, and both are checked here from the environment's own records, never from the server's answer. First,
+    /// the address Docker gave the front on the run's network is one the server container was started trusting, among its
+    /// HttpTransport:KnownProxies or inside its HttpTransport:KnownNetworks, as Docker records its environment. Then a request
+    /// sent through the front — a GET of the resource's metadata document, whose answer is not judged here — went upstream to
+    /// this server's address, with forwarded-proto=https, by the front's own access-log line.
+    ///
+    /// contract-005 · G-17 round 1 (HAR-R1-05) — what the server does with the headers it is sent is the product's, and is read
+    /// only by the claims. This check used to send T-3's own request (no token, through the front) and require the product's
+    /// 401 with an https metadata URL, so a server that stopped challenging, or stopped honouring the forwarded scheme, failed
+    /// every class here as an environment fault that said the product was fine, and T-3's claim could never be the assertion
+    /// that went red. T-3 (TokenRefusalTests.T3_no_token_is_challenged_with_the_metadata_on_the_front) and T-11 (1) hold the
+    /// challenge and its scheme; T-1 holds the forwarded address.
     /// </summary>
     private async Task CheckForwardedHeadersAsync(CancellationToken cancellationToken)
     {
-        using var http = CreateClient(ClientAddresses.SelfCheck);
-        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint)
-        {
-            Content = new StringContent(
-                """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"e2e-self-check","version":"1"}}}""",
-                System.Text.Encoding.UTF8,
-                "application/json"),
-        };
-        request.Headers.Accept.ParseAdd("application/json, text/event-stream");
+        var docker = _environment.Docker;
+        var network = _environment.Network.Name;
+        var front = await AddressOnRunNetworkAsync(docker, network, Front.Container.Id, cancellationToken)
+            ?? throw new EnvironmentFaultException("front", $"the front of {Name} has no address on the run's network {network}.");
+        var server = await AddressOnRunNetworkAsync(docker, network, Container.Id, cancellationToken)
+            ?? throw new EnvironmentFaultException("front", $"the server container {Name} has no address on the run's network {network}.");
 
-        HttpResponseMessage response;
+        // The front is a proxy the server was started trusting.
+        var started = await docker.Containers.InspectContainerAsync(Container.Id, cancellationToken);
+        var trusted = (started.Config?.Env ?? [])
+            .Select(v => v.Split('=', 2))
+            .Where(v => v.Length == 2 && TrustedProxySetting().IsMatch(v[0]))
+            .Select(v => (Name: v[0], Value: v[1]))
+            .ToList();
+        if (!trusted.Any(t => Trusts(t.Name, t.Value, front)))
+        {
+            throw new EnvironmentFaultException(
+                "front",
+                $"forwarded headers ignored: the front's address on the run's network is {front} (allocated {Front.Address}), and the "
+                + $"server container was started trusting [{string.Join(", ", trusted.Select(t => $"{t.Name}={t.Value}"))}] as proxies, so "
+                + "it would take nothing the front forwards.");
+        }
+
+        // The front sends the headers to this server.
+        using var http = CreateClient(ClientAddresses.SelfCheck);
+        HttpStatusCode answered;
         try
         {
-            response = await http.SendAsync(request, cancellationToken);
+            using var response = await http.GetAsync(MetadataDocument, cancellationToken);
+            answered = response.StatusCode;
         }
         catch (HttpRequestException ex) when (ex.InnerException is System.Security.Authentication.AuthenticationException)
         {
             throw new EnvironmentFaultException("front", $"CA trust missing: the front's certificate did not validate against the run's test CA ({ex.InnerException.Message}).", ex);
         }
 
-        using (response)
+        var line = await Front.AccessLogLineAsync(ClientAddresses.SelfCheck, cancellationToken);
+        var fault = line switch
         {
-            var challenge = string.Join(" ", response.Headers.WwwAuthenticate.Select(h => h.ToString()));
-            if (response.StatusCode != HttpStatusCode.Unauthorized)
-            {
-                throw new EnvironmentFaultException(
-                    "front",
-                    $"an unauthenticated request through the front got {(int)response.StatusCode}, not 401 with a challenge. "
-                    + "The front did not reach the server, or did not keep the Host header.");
-            }
+            null => $"the front's access log has no line forwarded for {ClientAddresses.SelfCheck}: a GET of {MetadataDocument} "
+                + $"(answered {(int)answered}) never passed through it.",
+            _ when !line.Contains(" forwarded-proto=https ", StringComparison.Ordinal) =>
+                $"the front did not send X-Forwarded-Proto: https to the server: its access log line is '{line}'.",
+            _ when !line.Contains($" upstream={server}:{Port} ", StringComparison.Ordinal) =>
+                $"the front did not send the request to this server, at {server}:{Port}: its access log line is '{line}'.",
+            _ when answered is HttpStatusCode.BadGateway or HttpStatusCode.GatewayTimeout =>
+                $"the front got no answer from the server at {server}:{Port} ({(int)answered}): its access log line is '{line}'.",
+            _ => null,
+        };
 
-            if (!challenge.Contains($"resource_metadata=\"https://{TlsFront.Host}/", StringComparison.Ordinal))
-            {
-                // Which side dropped it, from the front's own record of what it sent upstream.
-                var line = await Front.AccessLogLineAsync(ClientAddresses.SelfCheck, cancellationToken);
-                string which;
-                if (line is null)
-                {
-                    which = $"The front did not send it: its access log has no line forwarded for {ClientAddresses.SelfCheck}, so the request never passed through it.";
-                }
-                else if (!line.Contains(" forwarded-proto=https ", StringComparison.Ordinal) || line.Contains(" upstream=- ", StringComparison.Ordinal))
-                {
-                    which = $"The front did not send it: its access log line is '{line}'.";
-                }
-                else
-                {
-                    var knownProxies = Settings.Where(s => s.Key.StartsWith("HttpTransport__KnownProxies__", StringComparison.OrdinalIgnoreCase)).Select(s => s.Value);
-                    which = $"The front sent it (its access log line is '{line}'), so the server did not trust it: the front's address on the "
-                        + $"run's network is {Front.Container.IpAddress} (allocated {Front.Address}), and the server's KnownProxies are [{string.Join(", ", knownProxies)}].";
-                }
-
-                throw new EnvironmentFaultException(
-                    "front",
-                    $"forwarded headers ignored: the server's challenge is '{challenge}', not an https URL on {TlsFront.Host}. "
-                    + $"The front did not send X-Forwarded-Proto, or the server did not trust it. {which}");
-            }
+        if (fault is not null)
+        {
+            throw new EnvironmentFaultException("front", $"forwarded headers not delivered: {fault}");
         }
     }
+
+    /// <summary>contract-005 · G-17 round 1 (HAR-R1-05) — the resource's metadata document, through the front: what the forwarded-headers self-check sends.</summary>
+    private static readonly Uri MetadataDocument = new($"https://{TlsFront.Host}/.well-known/oauth-protected-resource/mcp");
+
+    /// <summary>Whether the setting <paramref name="name"/>=<paramref name="value"/> (a KnownProxies or KnownNetworks entry) names <paramref name="address"/>.</summary>
+    private static bool Trusts(string name, string value, IPAddress address) =>
+        name.Contains("KnownNetworks", StringComparison.OrdinalIgnoreCase)
+            ? IPNetwork.TryParse(value.Trim(), out var trusted) && trusted.Contains(address)
+            : IPAddress.TryParse(value.Trim(), out var proxy) && proxy.Equals(address);
+
+    /// <summary>A container's address on the run's network <paramref name="network"/>, as the engine gave it, or null when it has none.</summary>
+    private static async Task<IPAddress?> AddressOnRunNetworkAsync(
+        Docker.DotNet.IDockerClient docker, string network, string containerId, CancellationToken cancellationToken)
+    {
+        var inspected = await docker.Containers.InspectContainerAsync(containerId, cancellationToken);
+        return inspected.NetworkSettings?.Networks is { } networks
+            && networks.TryGetValue(network, out var endpoint)
+            && IPAddress.TryParse(endpoint.IPAddress, out var address)
+            ? address
+            : null;
+    }
+
+    /// <summary>The environment variables that name the proxies a server trusts forwarded headers from.</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"^HttpTransport__Known(Proxies|Networks)__\d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex TrustedProxySetting();
 
     internal static async Task WriteLogsAsync(E2EEnvironment environment, string name, IContainer container, TlsFront? front)
     {

@@ -91,17 +91,37 @@ public sealed class IssuerSet : IDisposable
         });
         // contract-005 · T-3 — ?from={address}: the requests one client made, by the address it connected from. Every
         // server in a run shares this container, so "no lookup at any issuer" is a statement about one server's requests.
+        // contract-005 · G-17 round 1 (FLA-R1-05) — &since={time}: only those made at or after it. Docker hands a freed
+        // address to the next container at once, so a server's requests are told from an earlier holder's of its address
+        // only by when they were made: since that server started (a time of the engine's clock, which is this one's).
         app.MapGet("/admin/counts", (HttpContext context, CancellationToken _) =>
         {
             string? from = context.Request.Query["from"];
+            string? since = context.Request.Query["since"];
             if (from is null)
             {
-                return Results.Json(_issuers.ToDictionary(i => i.Key, i => i.Value.Counts()));
+                return since is null
+                    ? Results.Json(_issuers.ToDictionary(i => i.Key, i => i.Value.Counts()))
+                    : Results.BadRequest("since counts one client's requests: give from as well.");
             }
 
-            return System.Net.IPAddress.TryParse(from, out var address)
-                ? Results.Json(_issuers.ToDictionary(i => i.Key, i => i.Value.Counts(address)))
-                : Results.BadRequest("from must be an IP address.");
+            if (!System.Net.IPAddress.TryParse(from, out var address))
+            {
+                return Results.BadRequest("from must be an IP address.");
+            }
+
+            DateTimeOffset? after = null;
+            if (since is not null)
+            {
+                if (!DateTimeOffset.TryParse(since, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var time))
+                {
+                    return Results.BadRequest("since must be a time, as ISO 8601 writes one.");
+                }
+
+                after = time;
+            }
+
+            return Results.Json(_issuers.ToDictionary(i => i.Key, i => i.Value.Counts(address, after)));
         });
         app.MapGet("/admin/authorizations", () => Results.Json(_issuers.ToDictionary(i => i.Key, i => i.Value.Authorizations())));
         app.MapGet("/admin/clock", () => Results.Json(new Dictionary<string, object> { ["utc"] = DateTimeOffset.UtcNow }));
@@ -163,7 +183,10 @@ public sealed class IssuerSet : IDisposable
     private sealed class Issuer : IDisposable
     {
         private readonly ConcurrentDictionary<string, int> _counts = new(StringComparer.Ordinal);
-        private readonly ConcurrentDictionary<(string Client, string Path), int> _countsByClient = new();
+
+        // contract-005 · G-17 round 1 (FLA-R1-05) — each request, with who made it and when, so a count can be asked for since
+        // a moment: a run makes a few hundred.
+        private readonly ConcurrentQueue<(string Client, string Path, DateTimeOffset At)> _requestsByClient = new();
         private readonly ConcurrentDictionary<string, PendingCode> _codes = new(StringComparer.Ordinal);
         private readonly ConcurrentQueue<AuthorizationRecord> _authorizations = new();
 
@@ -181,17 +204,20 @@ public sealed class IssuerSet : IDisposable
         public void Count(string path, System.Net.IPAddress? client)
         {
             _counts.AddOrUpdate(path, 1, (_, n) => n + 1);
-            _countsByClient.AddOrUpdate((ClientKey(client), path), 1, (_, n) => n + 1);
+            _requestsByClient.Enqueue((ClientKey(client), path, DateTimeOffset.UtcNow));
         }
 
         public SortedDictionary<string, int> Counts() => new(_counts, StringComparer.Ordinal);
 
-        /// <summary>What <paramref name="client"/> asked for, by path.</summary>
-        public SortedDictionary<string, int> Counts(System.Net.IPAddress client)
+        /// <summary>What <paramref name="client"/> asked for, by path: every request, or those made at or after <paramref name="since"/>.</summary>
+        public SortedDictionary<string, int> Counts(System.Net.IPAddress client, DateTimeOffset? since)
         {
             var key = ClientKey(client);
             return new(
-                _countsByClient.Where(c => c.Key.Client == key).ToDictionary(c => c.Key.Path, c => c.Value, StringComparer.Ordinal),
+                _requestsByClient
+                    .Where(r => r.Client == key && (since is null || r.At >= since))
+                    .GroupBy(r => r.Path, StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal),
                 StringComparer.Ordinal);
         }
 

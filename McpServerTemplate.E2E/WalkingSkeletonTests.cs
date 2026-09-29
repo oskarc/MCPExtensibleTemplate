@@ -18,12 +18,13 @@ namespace McpServerTemplate.E2E;
 /// is written, and it proves the mechanics the later tests stand on: the test issuer is the same
 /// issuer by the same name from the server and from the test; the client's HTTP traffic, OAuth
 /// discovery included, goes through the test's name map and nowhere else; and the front's forwarded
-/// client address is honoured by the server (the forwarded scheme is the fixture's own self-check,
-/// which runs before any test). Its negative control shows the same forwarded headers sent from
-/// anywhere but the front change nothing (G-9).
+/// client address is honoured by the server (the forwarded scheme is T-3's claim,
+/// TokenRefusalTests.T3_no_token_is_challenged_with_the_metadata_on_the_front). Its negative control shows the same
+/// forwarded headers sent from anywhere but the front change nothing (G-9).
 ///
 /// A fault in the environment rather than the product fails with an <see cref="EnvironmentFaultException"/>
-/// naming its phase and cause, never as one of these assertions.
+/// naming its phase and cause, never as one of these assertions: contract-005 · G-17 round 1 (HAR-R1-04) — a call's
+/// failure is folded into a claim only when it is the server's answer (<see cref="Claim.IsTheServersAnswer"/>).
 /// </summary>
 public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<WalkingSkeletonTests.Server>
@@ -58,24 +59,30 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
             var token = await timings.MeasureAsync("t1: keycloak client-credentials token", () => fixture.KeycloakTokenAsync());
 
             var log = new NameMapLog();
-            IList<McpClientTool> tools;
+            IList<McpClientTool>? listed = null;
+            string? failed = null;
             try
             {
-                tools = await timings.MeasureAsync("t1: tools/list through the front", async () =>
+                listed = await timings.MeasureAsync("t1: tools/list through the front", async () =>
                 {
                     using var http = fixture.CreateClient(log);
                     return await ListToolsAsync(http, token);
                 });
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (Claim.IsTheServersAnswer(ex))
             {
-                // contract-005 · G-11 — a red here carries its reason, not only the status: the server
-                // logs why it refused a token (authn_login_fail), and that line goes into the failure.
-                var refusal = await fixture.Server.LatestStderrLineAsync("authn_login_fail");
-                throw new ClaimException(
-                    $"tools/list with a Keycloak token failed: {ex.GetType().Name}: {ex.Message} "
-                    + $"The server's latest authn_login_fail line: {refusal ?? "(none on its stderr)"}");
+                // contract-005 · G-17 round 1 (HAR-R1-04) — the server's answer is the claim's, and only that: a connection
+                // or TLS failure, or an environment fault, propagates as what it is.
+                failed = $"{ex.GetType().Name}: {ex.Message}";
             }
+
+            // contract-005 · G-11 — a red here carries its reason, not only the status: the server logs why it refused a
+            // token (authn_login_fail), and that line goes into the failure.
+            var refusal = failed is null ? null : await fixture.Server.LatestStderrLineAsync("authn_login_fail");
+            Claim.True(
+                failed is null,
+                $"tools/list with a Keycloak token failed: {failed} The server's latest authn_login_fail line: {refusal ?? "(none on its stderr)"}");
+            var tools = listed!;
 
             // The token came from the real identity provider, for this server's resource.
             var claims = new JsonWebToken(token);
@@ -130,13 +137,14 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
         });
 
         // From the server: it can accept that token only by fetching idp-a.e2e.test's discovery
-        // document and key set itself, under the same name, from inside the network.
+        // document and key set itself, under the same name, from inside the network. contract-005 · G-17 round 1
+        // (HAR-R1-04) — a refusal is the server's answer, and the claim's; any other failure propagates as what it is.
         string? refused = null;
         try
         {
             await ListToolsAsync(http, token);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (Claim.IsTheServersAnswer(ex))
         {
             refused = $"{ex.GetType().Name}: {ex.Message.Split('\n')[0]}";
         }
@@ -219,9 +227,11 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
     }
 
     /// <summary>
-    /// contract-005 · UC-1 — the front's forwarded address is honoured. The forwarded scheme is not
-    /// asserted here: the fixture's forwarded-headers self-check proves it before any test runs, so an
-    /// assertion here could never be the one that goes red.
+    /// contract-005 · UC-1 — the front's forwarded address is honoured. The forwarded scheme is not asserted here: it is
+    /// T-3's claim (TokenRefusalTests.T3_no_token_is_challenged_with_the_metadata_on_the_front). contract-005 · G-17 round 1
+    /// (HAR-R1-05) — the fixture's forwarded-headers self-check proves only the environment's part, that the front sends
+    /// both headers to this server and is a proxy the server was started trusting, and reads nothing of what the server does
+    /// with them, so this claim and T-3's are the ones that go red when the server stops honouring them.
     /// </summary>
     [Fact]
     [Sabotage(SecondAsFirst, SabotageActs.Inputs,

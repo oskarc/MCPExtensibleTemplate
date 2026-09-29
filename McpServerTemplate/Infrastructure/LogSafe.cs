@@ -45,16 +45,19 @@ public static class LogSafe
 
     /// <summary>
     /// contract-005 · G-17 round 1 — <paramref name="url"/>, a URL an operator configured, as written, but with the parts that
-    /// can carry a credential written as ***: its user information (scheme://***@host/path) and, follow-up, its query
-    /// (…/path?***, which ?client_secret=… would otherwise print). The refusals of such a URL echoed it whole, and put the
+    /// can carry a credential written as ***: its user information (scheme://***@host/path), follow-up, its query
+    /// (…/path?***, which ?client_secret=… would otherwise print), and, batch B, its fragment (…/path#***, where a browser's
+    /// implicit-flow URL carries the access token, #access_token=…). The refusals of such a URL echoed it whole, and put the
     /// secret in the log the server stops with; each echo goes through this now.
     ///
     /// Read from the text, as the refusals echo it, and never from a parse: a password can hold / ? # : or @ unescaped, and
     /// one that leaves the URL unparseable was refused as not a URL and echoed all the same. So user information goes first:
-    /// everything from after the scheme's :// (from the start, where there is none before it) to the last @ — an @ in a path
-    /// or a query is taken for it too, which hides more than the credential, never less. Then the query: everything after the
-    /// first ? that is left. A ? inside a password is gone with the user information by then, so it is never taken for the
-    /// query's start.
+    /// everything from after the scheme's :// (from the start, where there is none before it) to the last @ — an @ in a path,
+    /// a query or a fragment is taken for it too, which hides more than the credential, never less. Then the query: everything
+    /// after the first ? that is left. Then the fragment: everything after the first # that is left. A ? or # inside a password
+    /// is gone with the user information by then, so it is never taken for where a later part starts; a # after the query's ?
+    /// is gone with the query; and a ? inside a fragment — the query's mark, written by the step before — goes with the
+    /// fragment, so whichever of the two comes first hides everything after it.
     /// </summary>
     public static string Url(string? url)
     {
@@ -72,6 +75,12 @@ public static class LogSafe
         }
 
         var query = url.IndexOf('?', StringComparison.Ordinal);
-        return query < 0 ? url : string.Concat(url.AsSpan(0, query + 1), "***");
+        if (query >= 0)
+        {
+            url = string.Concat(url.AsSpan(0, query + 1), "***");
+        }
+
+        var fragment = url.IndexOf('#', StringComparison.Ordinal);
+        return fragment < 0 ? url : string.Concat(url.AsSpan(0, fragment + 1), "***");
     }
 }

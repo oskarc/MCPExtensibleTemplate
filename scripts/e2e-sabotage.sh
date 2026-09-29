@@ -9,29 +9,47 @@
 # harness runs the one test it targets and nothing else, and writes how that test ended under TestResults/sabotage/. A red
 # counts only when the sabotage acted and the test failed on the assertion that carries its claim: its exception is a
 # ClaimException, which only Claim throws. A red at a self-check, a positive control or startup fails with some other
-# exception, and does not count. A test skipped by decision is held, and not run.
+# exception, and does not count. A test skipped by decision is held, and not run: its Skip names a decision
+# McpServerTemplate.E2E/HELD.md holds.
+#
+# contract-005 · G-17 round 1 (HAR-R1-07) — and a red counts only when the same test passed without its sabotage, in the
+# same run of this script: before the sabotages, one control run (MCP_E2E_CONTROL) runs every test to be retaken with no
+# sabotage applied, and the record keeps both, the control beside the red. A test that did not pass there is not retaken,
+# and its entry says why.
 #
 # The record, McpServerTemplate.E2E/SABOTAGE-RECORD.md, holds one entry per sabotage: its test, where it acts and what it
-# weakens, its red and the failure message, and when, at which commit and on which version of its test's file the red was
-# taken. By default this script retakes only the entries that are no longer true, and keeps every other as it is:
+# weakens, its control, its red and the failure message, and when, at which commit and on which version of its test's file
+# the red was taken. By default this script retakes only the entries that are no longer true, and keeps every other as it
+# is:
 #   - missing: a new or renamed test or sabotage;
 #   - stale: the test's own file, McpServerTemplate.E2E/{Class}.cs, has changed since the red was taken — each entry keeps
 #     the first 12 hex digits of that file's SHA-256, line endings aside, and the harness computes it the same way;
 #   - not red: it did not go red on its claim when it was last taken.
-# An entry whose sabotage no longer exists is dropped. A change to the harness or the product marks no entry stale: after
-# one that could change what a sabotage does, retake them all (--all). The suite's HarnessSelfTests fail while any entry
-# is missing, stale or not red, so CI holds the record to the tests on every push; and CI refuses MCP_E2E_SABOTAGE.
+# An entry whose sabotage no longer exists is dropped.
 #
-#   bash scripts/e2e-sabotage.sh             retake what is missing, stale or not red, and keep the rest: about 35 s each
-#   bash scripts/e2e-sabotage.sh --all       retake every sabotage: most of an hour
-#   bash scripts/e2e-sabotage.sh NAME ...    retake these, whatever their state, and keep the rest
-#   bash scripts/e2e-sabotage.sh --dry-run   say what would be retaken, and why; run nothing
+# contract-005 · G-17 round 1 (HAR-R1-01, HAR-R1-02) — two checks hold the record, and they prove different things. The
+# per-push check, HarnessSelfTests, proves coverage and freshness of each test file: every test the runner lists has a
+# sabotage, every sabotage an entry, and each entry's red was taken on its test's file as that file is now, with its result
+# and its message kept. It cannot prove a red was taken — a fingerprint anyone can compute is no proof of a run, and CI's
+# push and pull-request runs refuse sabotages — and a change to the harness or the product marks no entry stale. The
+# scheduled retake, .github/workflows/sabotage-retake.yml (weekly, and by hand), proves the reds: it runs this script with
+# --all --same-verdicts on a clean checkout, which fails when any sabotage does not go red on its claim or when a verdict
+# differs from the committed record's, and keeps the record it wrote as the run's artifact. It pushes nothing.
 #
-# Local only: the harness refuses MCP_E2E_SABOTAGE in CI, and so does this script. It needs Docker: every sabotage starts
-# the environment afresh.
+#   bash scripts/e2e-sabotage.sh               retake what is missing, stale or not red, and keep the rest: each red took
+#                                              49 s here (23 in 18 min 45 s, 2026-09-29), and the control run is one run of
+#                                              those tests beside them
+#   bash scripts/e2e-sabotage.sh --all         retake every sabotage: 99 reds at that rate, and the control run
+#   bash scripts/e2e-sabotage.sh NAME ...      retake these, whatever their state, and keep the rest
+#   bash scripts/e2e-sabotage.sh --dry-run     say what would be retaken, and why; run nothing
+#   ... --same-verdicts                        and fail when any verdict differs from the record as it stood before the run
+#                                              (in the scheduled retake, a clean checkout: the committed record's)
 #
-# Exit 0: every entry of the record is red on its claim, or held, and nothing was left behind. Exit 1: an entry is not
-# (named above), or the run could not be made.
+# Local, or the scheduled retake: CI's push and pull-request runs refuse MCP_E2E_SABOTAGE and MCP_E2E_CONTROL, the harness
+# does, and so does this script. It needs Docker: every sabotage starts the environment afresh.
+#
+# Exit 0: every entry of the record is red on its claim, or held, nothing was left behind, and with --same-verdicts no
+# verdict changed. Exit 1: one of those is not so (named above), or the run could not be made.
 
 set -uo pipefail
 
@@ -39,12 +57,14 @@ cd "$(dirname "$0")/.." || exit 1
 
 all=0
 dry=0
+same=0
 names=()
 for arg in "$@"; do
   case "$arg" in
     --all) all=1 ;;
     --dry-run) dry=1 ;;
-    -h|--help) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --same-verdicts) same=1 ;;
+    -h|--help) sed -n '2,52p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "Unknown option '$arg'; see --help." >&2; exit 1 ;;
     *) names+=("$arg") ;;
   esac
@@ -55,15 +75,27 @@ if [ "$all" -eq 1 ] && [ "${#names[@]}" -gt 0 ]; then
   exit 1
 fi
 
+# contract-005 · G-17 round 1 (HAR-R1-01) — in CI, only the scheduled retake: its own workflow, on its schedule or by hand. The
+# harness admits the same run and no other (Sabotage.Run.IsScheduledRetake).
+retake=.github/workflows/sabotage-retake.yml
 if [ -n "${CI+set}" ]; then
-  echo "Refused: CI is set. A sabotage weakens the environment on purpose; it is run locally, never in CI (contract-005 · G-11)." >&2
-  exit 1
+  case "${GITHUB_EVENT_NAME:-}:${GITHUB_WORKFLOW_REF:-}" in
+    schedule:*/"$retake"@*|workflow_dispatch:*/"$retake"@*) ;;
+    *)
+      echo "Refused: CI is set, and this is not the scheduled retake ($retake, on its schedule or by hand; this is" \
+        "'${GITHUB_EVENT_NAME:-no event}' of '${GITHUB_WORKFLOW_REF:-no workflow}'). A sabotage weakens the environment on purpose;" \
+        "CI's push and pull-request runs never run one (contract-005 · G-11)." >&2
+      exit 1
+      ;;
+  esac
 fi
 
-if [ -n "${MCP_E2E_SABOTAGE+set}" ]; then
-  echo "Refused: MCP_E2E_SABOTAGE is already set ('${MCP_E2E_SABOTAGE}'). This script names each sabotage itself." >&2
-  exit 1
-fi
+for variable in MCP_E2E_SABOTAGE MCP_E2E_CONTROL; do
+  if [ -n "${!variable+set}" ]; then
+    echo "Refused: $variable is already set ('${!variable}'). This script names each sabotage, and each control, itself." >&2
+    exit 1
+  fi
+done
 
 project=McpServerTemplate.E2E/McpServerTemplate.E2E.csproj
 out=TestResults/sabotage
@@ -91,25 +123,15 @@ if ! dotnet build McpServerTemplate.sln -c Release -warnaserror > "$out/build.lo
   exit 1
 fi
 
-# ── The registry, as the harness reads it, checked against every end-to-end test ────────────────────────────────────
+# ── The registry, as the harness reads it, checked against every end-to-end test the runner lists ─────────────────────
+# contract-005 · G-17 round 1 (HAR-R1-03) — the check compares the runner's own list (dotnet test --list-tests) with the
+# registry, test method by test method, and refuses [NotEndToEnd] on any class but HarnessSelfTests; CI runs it on every push.
 echo "Reading the registry..."
 if ! dotnet test "$project" --no-build -c Release \
     --filter "FullyQualifiedName=McpServerTemplate.E2E.HarnessSelfTests.Every_end_to_end_test_has_a_named_sabotage" \
     > "$out/registry.log" 2>&1; then
-  echo "Not every end-to-end test has a named sabotage; see $out/registry.log:" >&2
+  echo "Not every end-to-end test the runner lists has a named sabotage; see $out/registry.log:" >&2
   grep -A20 "Error Message" "$out/registry.log" >&2
-  exit 1
-fi
-
-# The runner's own list, theory rows included, less the classes that are not end-to-end: the same tests the registry
-# covers, counted the way the runner counts them.
-not_end_to_end=$(cut -f1 "$out/not-end-to-end.tsv" | paste -sd'|' -)
-listed=$(dotnet test "$project" --no-build -c Release --list-tests 2>/dev/null \
-  | grep -E '^    McpServerTemplate\.E2E\.' \
-  | grep -vcE "^    McpServerTemplate\.E2E\.(${not_end_to_end:-^})\.")
-covered=$(tail -n +2 "$out/registry.tsv" | cut -f7 | sort -u | wc -l | tr -d ' ')
-if [ "$listed" != "$covered" ]; then
-  echo "The runner lists $listed end-to-end tests, and the registry covers $covered: they must be the same." >&2
   exit 1
 fi
 
@@ -219,9 +241,36 @@ done
 
 declare -A now_fingerprint=() now_result=()
 engine_lost=""
+
+# contract-005 · G-17 round 1 (HAR-R1-07) — the control run: every test to be retaken, once, with no sabotage applied, in one
+# run of the suite. A red counts only for a test that passed here.
+if [ "${#plan[@]}" -gt 0 ]; then
+  filter=$(for name in "${plan[@]}"; do
+      IFS=$'\t' read -r _ class method _ <<< "${entry_of[$name]}"
+      echo "FullyQualifiedName=$class.$method"
+    done | sort -u | paste -sd'|' -)
+  controlled=$(IFS=,; echo "${plan[*]}")
+  echo
+  echo "The control run: the ${#plan[@]} tests to retake, with no sabotage..."
+  control_taken=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  MCP_E2E_CONTROL="$controlled" dotnet test "$project" --no-build -c Release \
+    --filter "$filter" \
+    --logger "console;verbosity=normal" \
+    --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type none \
+    > "$out/control.log" 2>&1
+  if ! ls "$out"/*.control.outcome > /dev/null 2>&1; then
+    echo "The control run recorded no outcome for any test (see $out/control.log): nothing was retaken, and the record is as it was." >&2
+    exit 1
+  fi
+  if ! engine_answers; then
+    engine_lost="the control run"
+  fi
+fi
+
 i=0
 for name in "${plan[@]}"; do
   i=$((i + 1))
+  [ -n "$engine_lost" ] && break
   IFS=$'\t' read -r _ class method acts hold fingerprint test weakens <<< "${entry_of[$name]}"
 
   # An engine that has stopped answering fails every run that follows at the environment, which is no verdict on any
@@ -232,42 +281,58 @@ for name in "${plan[@]}"; do
     break
   fi
 
+  control=$(field "$name.control" outcome)
+  control_line="- Control: $([ -n "$control" ] && echo "$control" || echo "no outcome recorded") without the sabotage, in the control run of $control_taken$([ -n "$control" ] && echo " after $(field "$name.control" seconds) s")"
   taken=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  MCP_E2E_SABOTAGE="$name" dotnet test "$project" --no-build -c Release \
-    --filter "FullyQualifiedName=$class.$method" \
-    --logger "console;verbosity=normal" \
-    --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type none \
-    > "$out/$name.log" 2>&1
-
-  outcome=$(field "$name" outcome)
-  acted=$(field "$name" acted)
-  exception=$(field "$name" exception)
-  if [ ! -f "$out/$name.outcome" ]; then
-    verdict="NOT RED: no outcome was recorded (see $out/$name.log)"
-  elif [ "$acted" != yes ]; then
-    verdict="NOT RED: the sabotage never acted, and the test $outcome"
-  elif [ "$outcome" != failed ]; then
-    verdict="NOT RED: the test $outcome"
-  elif [ "$exception" != "$claim" ]; then
-    verdict="NOT RED on its claim: it failed with $exception"
+  if [ "$control" != passed ]; then
+    # Not shown to be the sabotage's: its test does not pass without it. No sabotage is run; the control's message is kept.
+    verdict="NOT RED: without the sabotage its test ${control:-recorded no outcome}$([ "$control" = failed ] && echo ", with $(field "$name.control" exception)")"
+    exception=$(field "$name.control" exception)
+    seconds=$(field "$name.control" seconds)
+    message="$out/$name.control.message"
   else
-    verdict="red on its claim"
+    MCP_E2E_SABOTAGE="$name" dotnet test "$project" --no-build -c Release \
+      --filter "FullyQualifiedName=$class.$method" \
+      --logger "console;verbosity=normal" \
+      --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type none \
+      > "$out/$name.log" 2>&1
+
+    outcome=$(field "$name" outcome)
+    acted=$(field "$name" acted)
+    exception=$(field "$name" exception)
+    seconds=$(field "$name" seconds)
+    message="$out/$name.message"
+    if [ ! -f "$out/$name.outcome" ]; then
+      verdict="NOT RED: no outcome was recorded (see $out/$name.log)"
+    elif [ "$acted" != yes ]; then
+      verdict="NOT RED: the sabotage never acted, and the test $outcome"
+    elif [ "$outcome" != failed ]; then
+      verdict="NOT RED: the test $outcome"
+    elif [ "$exception" != "$claim" ]; then
+      verdict="NOT RED on its claim: it failed with $exception"
+    else
+      verdict="red on its claim"
+    fi
   fi
 
   now_fingerprint["$name"]=$fingerprint
   now_result["$name"]=$verdict
+  ran=$(field "$name" test)
+  [ -z "$ran" ] && ran=$(field "$name.control" test)
+  [ -z "$ran" ] && ran=$test
   {
     printf '### `%s`\n\n' "$name"
-    printf -- '- Test: `%s`\n' "$(field "$name" test)"
+    printf -- '- Test: `%s`\n' "$ran"
     printf -- '- Acts on %s: %s\n' "$acts" "$weakens"
-    printf -- '- Result: %s, with `%s` after %s s\n' "$verdict" "$exception" "$(field "$name" seconds)"
+    printf -- '%s\n' "$control_line"
+    printf -- '- Result: %s, with `%s` after %s s\n' "$verdict" "${exception:--}" "${seconds:-0.0}"
     printf -- '- Taken %s at %s, %s, on %s with Docker %s; test file `%s`\n\n' "$taken" "$commit" "$tree" "$platform" "$docker_version" "$fingerprint"
     printf '~~~text\n'
-    if [ -f "$out/$name.message" ]; then cat "$out/$name.message"; else printf 'No message: the run recorded no outcome.\n'; fi
+    if [ -f "$message" ]; then cat "$message"; else printf 'No message: the run recorded no outcome.\n'; fi
     printf '~~~\n\n'
   } > "$out/new/$name.block"
 
-  printf '%3d/%d  %-66s %s (%s s)\n' "$i" "${#plan[@]}" "$name" "$verdict" "$(field "$name" seconds)"
+  printf '%3d/%d  %-66s %s (%s s)\n' "$i" "${#plan[@]}" "$name" "$verdict" "${seconds:-0.0}"
 done
 
 # ── Nothing a run created is left (contract-005 · T-13) ──────────────────────────────────────────────────────────────
@@ -284,6 +349,7 @@ fi
 rows=()
 blocks=()
 red=0 held=0 not_red=0
+declare -A final_result=()
 for entry in "${entries[@]}"; do
   IFS=$'\t' read -r name class method acts hold fingerprint test weakens <<< "$entry"
   if [ "$hold" != "-" ]; then
@@ -312,6 +378,7 @@ for entry in "${entries[@]}"; do
     *) not_red=$((not_red + 1)) ;;
   esac
 
+  final_result["$name"]=$result
   rows+=("| \`$name\` | \`${class##*.}.$method\` | $acts | $fingerprint_cell | $result |")
   blocks+=("$out/new/$name.block")
 done
@@ -336,11 +403,20 @@ mapfile -t span < <(grep -h '^- Taken ' "${blocks[@]}" | awk '{print $3}' | sort
   echo "the product refused none of them, and was given none of them. Each entry's \"Acts on\" line says what its sabotage did."
   echo
   echo "Each entry says when, at which commit and on which version of its test's file (the first 12 hex digits of the SHA-256"
-  echo "of \`McpServerTemplate.E2E/{Class}.cs\`, line endings aside) its red was taken. An entry is retaken when it is missing,"
-  echo "when its test's file has changed since, or when it was not red; the others are kept as they stand. A change to the"
-  echo "harness or the product marks no entry stale: after one, \`--all\` retakes every red. Written by"
-  echo "\`scripts/e2e-sabotage.sh\`, and held to by \`HarnessSelfTests\`: the suite fails while an entry is missing, stale or"
-  echo "not red. CI refuses \`MCP_E2E_SABOTAGE\`."
+  echo "of \`McpServerTemplate.E2E/{Class}.cs\`, line endings aside) its red was taken. An entry taken since contract-005 · G-17"
+  echo "round 1 also says how its test ended in the control run taken beside it — the same test, in the same run of"
+  echo "\`scripts/e2e-sabotage.sh\`, with no sabotage applied — and its red counts only when that passed. An entry is retaken"
+  echo "when it is missing, when its test's file has changed since, or when it was not red; the others are kept as they stand."
+  echo "A test skipped by decision is held, and its Skip names the decision \`McpServerTemplate.E2E/HELD.md\` holds."
+  echo
+  echo "Two checks hold this record, and prove different things. On every push, \`HarnessSelfTests\` proves coverage and"
+  echo "freshness of each test file: every end-to-end test the runner lists has a sabotage, every sabotage has an entry here,"
+  echo "and each entry's red was taken on its test's file as that file is now, with its result and its message kept. It cannot"
+  echo "prove that a red was taken — a fingerprint anyone can compute is no proof of a run — and CI's push and pull-request"
+  echo "runs refuse \`MCP_E2E_SABOTAGE\`. The scheduled retake (\`.github/workflows/sabotage-retake.yml\`, weekly and by hand)"
+  echo "proves the reds: it takes every one afresh on a clean checkout, and fails when any sabotage does not go red on its claim"
+  echo "or when a verdict differs from the one committed here. A change to the harness or the product marks no entry stale;"
+  echo "the scheduled retake takes it again. Written by \`scripts/e2e-sabotage.sh\`."
   echo
   echo "- ${#entries[@]} sabotages over the $tests end-to-end tests the runner lists, theory rows included: $red red on their test's claim, $not_red not, $held held"
   if [ "${#span[@]}" -gt 0 ]; then
@@ -371,4 +447,20 @@ if [ -n "$engine_lost" ]; then
   exit 1
 fi
 
-[ "$not_red" -eq 0 ] && [ "${#left[@]}" -eq 0 ]
+# contract-005 · G-17 round 1 (HAR-R1-01) — --same-verdicts: every entry's verdict is the one the record held before this run.
+changed_verdicts=()
+if [ "$same" -eq 1 ]; then
+  for name in $(printf '%s\n' "${!final_result[@]}" "${!was_result[@]}" | sort -u); do
+    if [ "${was_result[$name]:-(no entry)}" != "${final_result[$name]:-(no entry)}" ]; then
+      changed_verdicts+=("$name: '${was_result[$name]:-(no entry)}' before, '${final_result[$name]:-(no entry)}' now")
+    fi
+  done
+  if [ "${#changed_verdicts[@]}" -gt 0 ]; then
+    echo "The verdicts differ from the record's before this run, in ${#changed_verdicts[@]} entries:" >&2
+    printf '  %s\n' "${changed_verdicts[@]}" >&2
+  else
+    echo "Every verdict is the record's before this run."
+  fi
+fi
+
+[ "$not_red" -eq 0 ] && [ "${#left[@]}" -eq 0 ] && [ "${#changed_verdicts[@]}" -eq 0 ]

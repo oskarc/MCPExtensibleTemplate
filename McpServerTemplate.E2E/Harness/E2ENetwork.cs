@@ -52,6 +52,44 @@ public static class E2ENetwork
     public static string DynamicRange => $"{Offset(Size / 2)}/{PrefixLength + 1}";
 
     /// <summary>
+    /// How many containers the dynamic range can hold at once: its addresses less the subnet's broadcast address, its last.
+    ///
+    /// contract-005 · G-17 round 1 (FLA-R1-02) — 31 for 198.51.100.0/26. What a run holds at once is the five shared services
+    /// (Keycloak, the test issuer, the upstream fake, the stand-in and Redis) and, for each test class running, its server and
+    /// what its test starts beside it: two at most for most classes, five for LimitsTests (two servers, a Redis of its own,
+    /// and, in its outage test, another of each). Each front has a static address, and does not count. xUnit ran as many
+    /// classes at once as the machine has cores, 32 on the development machine, where the range was seen full; the E2E
+    /// project's xunit.runner.json caps it at 4 — the runner's own core count, the one configuration CI's budget was measured
+    /// on — so the most a run holds at once is 5 + 5 + 2 + 2 + 2 = 16 of 31, whatever the machine.
+    /// </summary>
+    public static int DynamicAddresses => (Size / 2) - 1;
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 (FLA-R1-02) — Docker's refusal to start a container because the run's network has no
+    /// address left to give it, as the environment fault it is, naming the pool and the phase it met; null when
+    /// <paramref name="exception"/> is anything else. Met as it was, it reached a test as the engine's own error, in a server's
+    /// phase, where a failure reads as the product's.
+    /// </summary>
+    internal static EnvironmentFaultException? AddressPoolExhausted(string phase, Exception exception)
+    {
+        for (var inner = exception; inner is not null; inner = inner.InnerException)
+        {
+            if (inner is DockerApiException docker && docker.Message.Contains("no available IPv4 addresses", StringComparison.OrdinalIgnoreCase))
+            {
+                return new EnvironmentFaultException(
+                    phase,
+                    $"address pool exhausted: the run's network has no address left to give this container. Its dynamic range, "
+                    + $"{DynamicRange}, holds {DynamicAddresses} containers at once; more were running (the shared services, and each "
+                    + "test class's server and what its test starts). McpServerTemplate.E2E/xunit.runner.json bounds how many classes "
+                    + $"run at once, and {nameof(E2ENetwork)}.{nameof(DynamicAddresses)} says what that allows. The engine said: {docker.Message}",
+                    exception);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// A static address in the lower half, unique for this run. The front is given one before the
     /// server starts, so the server's KnownProxies can name it.
     /// </summary>
@@ -110,8 +148,9 @@ public static class E2ENetwork
                 {
                     null => $"the run's network on {Subnet} could not be created: {ex.Message}",
                     { Labels: { } labels } when labels.TryGetValue(RunLabel, out var run) =>
-                        $"subnet taken: {Subnet} is held by network '{holder.Name}' of run {run}, which is still alive on this "
-                        + "machine (a dead run's would have been swept). Wait for it to finish; two runs cannot share the subnet.",
+                        $"subnet taken: {Subnet} is held by network '{holder.Name}' of run {run}, whose owner "
+                        + $"({E2EEnvironment.RunOwner(run) ?? "unrecorded"}, process id @ start time) is still running on this machine (a dead "
+                        + "run's would have been swept). Wait for it to finish; two runs cannot share the subnet.",
                     _ => $"subnet taken: {Subnet} overlaps network '{holder.Name}', which is not a run's. Remove it or move it "
                         + "off the subnet (docker network rm " + holder.Name + ").",
                 },

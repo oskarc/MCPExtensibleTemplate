@@ -26,6 +26,12 @@ public sealed class Timings
 
     public IReadOnlyList<Phase> Phases => [.. _phases.OrderBy(p => p.StartSeconds)];
 
+    /// <summary>
+    /// Measures a phase, and rethrows its failure as it is: a test's own phases (a server's start, its readiness), where a
+    /// failure can be the product's. contract-005 · G-17 round 1 (FLA-R1-02) — but for one that cannot be: Docker refusing to
+    /// start a container because the run's network has no address left, which is thrown as the environment fault naming the
+    /// pool (<see cref="E2ENetwork.AddressPoolExhausted"/>), whichever phase it met.
+    /// </summary>
     public async Task<T> MeasureAsync<T>(string name, Func<Task<T>> body)
     {
         ArgumentNullException.ThrowIfNull(body);
@@ -40,6 +46,11 @@ public sealed class Timings
         catch (Exception ex)
         {
             Record(name, start, $"failed: {ex.GetType().Name}");
+            if (E2ENetwork.AddressPoolExhausted(name, ex) is { } exhausted)
+            {
+                throw exhausted;
+            }
+
             throw;
         }
     }

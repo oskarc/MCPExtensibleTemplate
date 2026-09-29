@@ -159,6 +159,29 @@ public class StartupRefusalTests
         Assert.DoesNotContain("S3cr3t-up", message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 1, batch B — a fragment can carry a credential too (an implicit-flow URL carries the access
+    /// token there, #access_token=…): the refusal of a BaseUrl writes its fragment as #***, the frame's and each built-in
+    /// provider's.
+    /// </summary>
+    [Theory]
+    [InlineData("TestAct")]
+    [InlineData("Smhi")]
+    [InlineData("SmhiObs")]
+    [InlineData("JsonPlaceholder")]
+    public void T1_a_refused_base_url_never_writes_its_fragment(string provider)
+    {
+        IProviderModule module = provider == "TestAct" ? new TestModule() : BuiltInProviders.Create().Single(m => m.Name == provider);
+        var settings = FrameHarness.Settings([module]);
+        settings[$"Providers:{provider}:BaseUrl"] = "http://upstream.example.org/#access_token=S3cr3t-up";
+
+        var message = FrameHarness.Refusal([module], settings);
+
+        Assert.Contains($"Providers:{provider}:BaseUrl", message, StringComparison.Ordinal);
+        Assert.Contains("'http://upstream.example.org/#***'", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("S3cr3t-up", message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void T1_an_unknown_enabled_provider_refuses_to_start()
     {

@@ -16,7 +16,7 @@ namespace McpServerTemplate.Tests;
 /// pinned by digest, that the suite's own switches and the identity test hook stay where they belong, that no workflow
 /// pushes an image, and that no key or certificate is tracked.
 /// </summary>
-public class RepositoryInvariantsTests
+public partial class RepositoryInvariantsTests
 {
     private static string RepositoryRoot()
     {
@@ -527,24 +527,216 @@ public class RepositoryInvariantsTests
         // G-10, G-14 — the test images are never pushed anywhere, and nor is the product's from here. A push is any step that
         // sends an image to a registry: docker push (or image push, or compose push), a build with --push or push: true, and
         // the other tools' push and copy.
-        var workflows = Path.Combine(RepositoryRoot(), ".github", "workflows");
-        var pushes = new Regex(
-            @"\bdocker\s+(image\s+|compose\s+|-compose\s+)?push\b|\bdocker-compose\s+push\b|--push\b|^\s*push\s*:\s*['""]?true\b|\b(podman|buildah)\s+push\b|\b(crane|oras)\s+(push|copy|cp)\b|\bskopeo\s+copy\b",
-            RegexOptions.Multiline | RegexOptions.IgnoreCase);
-
-        var files = Directory.EnumerateFiles(workflows).Where(f => f.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)).ToArray();
-
-        // Positive control: there are workflows, and they were read as such.
-        Assert.NotEmpty(files);
-        Assert.All(files, f => Assert.Contains("jobs:", File.ReadAllText(f), StringComparison.Ordinal));
-
-        var offenders = files.SelectMany(f => File.ReadAllLines(f)
-                .Select((line, i) => (Line: Regex.Replace(line, @"(^|\s)#.*$", string.Empty), Number: i + 1))
-                .Where(l => pushes.IsMatch(l.Line))
-                .Select(l => $"{Relative(f)}:{l.Number}: {l.Line.Trim()}"))
+        //
+        // contract-005 · G-17 round 1 (CON-R1-02) — read as YAML, as GitHub reads it (WorkflowPushes), not line by line: every
+        // .yml and .yaml under .github, and every local action or reusable workflow a step uses, wherever it is. The line
+        // regex passed a build-push-action whose push was an expression, buildx's --output type=registry and push=true,
+        // imagetools create, a registry login, packages: write, and a docker push inside a local composite action.
+        var root = RepositoryRoot();
+        var files = Directory.EnumerateFiles(Path.Combine(root, ".github"), "*", SearchOption.AllDirectories)
+            .Where(f => f.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+            .Select(Relative)
+            .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.True(offenders.Length == 0, "A workflow pushes an image: " + string.Join("; ", offenders));
+
+        // Positive control: the workflows were found, and read as workflows.
+        Assert.Contains(".github/workflows/ci.yml", files);
+        Assert.Contains(".github/workflows/sabotage-retake.yml", files);
+        Assert.All(files.Where(f => f.StartsWith(".github/workflows/", StringComparison.Ordinal)), f => Assert.Contains("jobs:", File.ReadAllText(Path.Combine(root, f)), StringComparison.Ordinal));
+
+        string? Read(string relative) => File.Exists(Path.Combine(root, relative)) ? File.ReadAllText(Path.Combine(root, relative)) : null;
+        var offenders = files.SelectMany(f => WorkflowPushes(f, Read)).ToArray();
+        Assert.True(offenders.Length == 0, "A workflow pushes an image, or could: " + string.Join("; ", offenders));
     }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 (CON-R1-02) — each way a workflow can send an image to a registry, or be let to, that the
+    /// line regex passed: the check must see it. The first file is the workflow; a second, when there is one, is a local
+    /// action or reusable workflow it uses.
+    /// </summary>
+    public static TheoryData<string, string, string?> WaysToPushAnImage()
+    {
+        const string Head = "on:\n  push:\npermissions:\n  contents: read\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n";
+        const string Step = "      - uses: actions/checkout@v4\n";
+        return new()
+        {
+            { "docker push in a run block", Head + Step + "      - run: |\n          docker build -t ghcr.io/o/r:1 .\n          docker push ghcr.io/o/r:1\n", null },
+            { "build-push-action, push an expression", Head + Step + "      - uses: docker/build-push-action@v6\n        with:\n          file: McpServerTemplate.E2EHost/Dockerfile\n          push: ${{ github.event_name != 'pull_request' }}\n", null },
+            { "build-push-action, push true", Head + Step + "      - uses: docker/build-push-action@v6\n        with:\n          push: true\n", null },
+            { "build-push-action, registry outputs", Head + Step + "      - uses: docker/build-push-action@v6\n        with:\n          outputs: type=registry\n", null },
+            { "buildx, --output type=registry", Head + Step + "      - run: docker buildx build --output type=registry -t ghcr.io/o/r:1 -f McpServerTemplate.TestIssuer/Dockerfile .\n", null },
+            { "buildx, -o push=true", Head + Step + "      - run: docker buildx build -o type=image,name=ghcr.io/o/r:1,push=true .\n", null },
+            { "buildx, --push", Head + Step + "      - run: docker buildx build --push -t ghcr.io/o/r:1 .\n", null },
+            { "imagetools create", Head + Step + "      - run: docker buildx imagetools create -t ghcr.io/o/r:1 ghcr.io/o/r:0\n", null },
+            { "docker login", Head + Step + "      - run: echo \"$T\" | docker login ghcr.io -u o --password-stdin\n", null },
+            { "a registry login action", Head + Step + "      - uses: docker/login-action@v3\n        with:\n          registry: ghcr.io\n", null },
+            { "a push action", Head + Step + "      - uses: redhat-actions/push-to-registry@v2\n", null },
+            { "packages: write for the workflow", Head.Replace("  contents: read\n", "  contents: read\n  packages: write\n", StringComparison.Ordinal) + Step, null },
+            { "packages: write for a job", Head.Replace("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    permissions:\n      packages: write\n", StringComparison.Ordinal) + Step, null },
+            { "write-all", Head.Replace("permissions:\n  contents: read\n", "permissions: write-all\n", StringComparison.Ordinal) + Step, null },
+            { "no permissions stated", Head.Replace("permissions:\n  contents: read\n", string.Empty, StringComparison.Ordinal) + Step, null },
+            { "a local composite action that pushes", Head + Step + "      - uses: ./.github/actions/publish\n",
+                "name: publish\nruns:\n  using: composite\n  steps:\n    - run: docker push ghcr.io/o/r:1\n      shell: bash\n" },
+            { "a local reusable workflow that logs in", "on:\n  push:\npermissions:\n  contents: read\njobs:\n  publish:\n    uses: ./.github/workflows/publish.yml\n",
+                "on:\n  workflow_call:\npermissions:\n  contents: read\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: docker/login-action@v3\n" },
+        };
+    }
+
+    [Theory]
+    [MemberData(nameof(WaysToPushAnImage))]
+    public void T13_the_workflow_check_sees_every_way_to_push_an_image(string way, string workflow, string? used)
+    {
+        const string Probe = ".github/workflows/publish-probe.yml";
+        var usedPath = workflow.Contains("./.github/actions/publish", StringComparison.Ordinal) ? ".github/actions/publish/action.yml" : ".github/workflows/publish.yml";
+        string? Read(string relative) => relative == Probe ? workflow : relative == usedPath ? used : null;
+
+        // Positive control: the same shape with nothing that pushes, or could, is not refused — a trigger named push among it.
+        const string Clean = "on:\n  push:\n  pull_request:\npermissions:\n  contents: read\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n"
+            + "      - uses: actions/checkout@v4\n      - uses: docker/build-push-action@v6\n        with:\n          push: false\n"
+            + "      - run: |\n          dotnet build McpServerTemplate.sln -c Release\n          docker build -t mcp-server:latest .\n";
+        Assert.Empty(WorkflowPushes(Probe, relative => relative == Probe ? Clean : null));
+
+        var found = WorkflowPushes(Probe, Read);
+        Assert.True(found.Count > 0, $"{way}: the workflow check found nothing in{Environment.NewLine}{workflow}{used}");
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 (CON-R1-02) — what the workflow or action at <paramref name="relative"/> (a path under the
+    /// repository, / between names) does that sends an image to a registry, or lets one be sent, read as YAML, one line each:
+    /// - a command in any value that pushes (docker, podman or buildah push, --push, an --output or -o of type=registry or
+    ///   push=true, imagetools create, crane, oras or skopeo copying to a registry) or logs in to a registry;
+    /// - an action that logs in to a registry or pushes (docker/login-action and the like), and any action's push input that is
+    ///   not false (docker/build-push-action pushes on push: true, or an expression);
+    /// - packages: write, or write-all, as a workflow's or a job's permissions; and a workflow that states no permissions,
+    ///   whose token then has the repository's default ones, which can include packages: write;
+    /// - a local action or reusable workflow it uses (uses: ./…) that does any of these, read the same way, wherever it is.
+    /// <paramref name="read"/> gives a file's text by its path, or null when there is none.
+    /// </summary>
+    private static List<string> WorkflowPushes(string relative, Func<string, string?> read, HashSet<string>? seen = null)
+    {
+        seen ??= new HashSet<string>(StringComparer.Ordinal);
+        var found = new List<string>();
+        if (!seen.Add(relative))
+        {
+            return found;
+        }
+
+        if (read(relative) is not { } text)
+        {
+            found.Add($"{relative} is used, and is not in the repository");
+            return found;
+        }
+
+        var stream = new YamlDotNet.RepresentationModel.YamlStream();
+        try
+        {
+            stream.Load(new StringReader(text));
+        }
+        catch (YamlDotNet.Core.YamlException ex)
+        {
+            found.Add($"{relative} could not be read as YAML, so what it does is unknown: {ex.Message}");
+            return found;
+        }
+
+        foreach (var document in stream.Documents)
+        {
+            if (relative.StartsWith(".github/workflows/", StringComparison.Ordinal)
+                && (document.RootNode is not YamlDotNet.RepresentationModel.YamlMappingNode top || ValueOf(top, "permissions") is null))
+            {
+                found.Add($"{relative}: states no permissions, so its token has the repository's default ones, which can include packages: write");
+            }
+
+            Walk(document.RootNode, null);
+        }
+
+        return found;
+
+        void Walk(YamlDotNet.RepresentationModel.YamlNode node, string? key)
+        {
+            var at = $"{relative}:{node.Start.Line}";
+            switch (node)
+            {
+                case YamlDotNet.RepresentationModel.YamlScalarNode { Value: { } value }:
+                    if (PushOrRegistryLogin().Match(value) is { Success: true } command)
+                    {
+                        found.Add($"{at}: '{command.Value}'");
+                    }
+
+                    break;
+
+                case YamlDotNet.RepresentationModel.YamlSequenceNode sequence:
+                    foreach (var item in sequence)
+                    {
+                        Walk(item, key);
+                    }
+
+                    break;
+
+                case YamlDotNet.RepresentationModel.YamlMappingNode mapping:
+                    foreach (var (name, value) in mapping.Children.Select(c => ((c.Key as YamlDotNet.RepresentationModel.YamlScalarNode)?.Value, c.Value)))
+                    {
+                        var scalar = (value as YamlDotNet.RepresentationModel.YamlScalarNode)?.Value;
+                        if (name == "uses" && scalar is not null)
+                        {
+                            Uses(scalar, $"{relative}:{value.Start.Line}");
+                        }
+
+                        if (key == "with" && name == "push" && scalar != "false")
+                        {
+                            found.Add($"{relative}:{value.Start.Line}: push: {scalar ?? "(not a plain value)"}, an input that pushes unless it is false");
+                        }
+
+                        if (name == "permissions" && (scalar == "write-all"
+                            || (value is YamlDotNet.RepresentationModel.YamlMappingNode granted
+                                && (ValueOf(granted, "packages") as YamlDotNet.RepresentationModel.YamlScalarNode)?.Value == "write")))
+                        {
+                            found.Add($"{relative}:{value.Start.Line}: permissions {(scalar ?? "packages: write")}, which lets its token push to the repository's registry");
+                        }
+
+                        Walk(value, name);
+                    }
+
+                    break;
+            }
+        }
+
+        void Uses(string uses, string at)
+        {
+            var action = uses.Split('@')[0];
+            if (RegistryActions.Any(a => action.Equals(a, StringComparison.OrdinalIgnoreCase)))
+            {
+                found.Add($"{at}: uses {uses}, which logs in to a registry or pushes to one");
+            }
+            else if (uses.StartsWith("./", StringComparison.Ordinal))
+            {
+                // A local action is a directory holding action.yml (or .yaml); a local reusable workflow is the file itself.
+                var target = uses[2..].TrimEnd('/');
+                var file = target.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) || target.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)
+                    ? target
+                    : read($"{target}/action.yml") is not null ? $"{target}/action.yml" : $"{target}/action.yaml";
+                found.AddRange(WorkflowPushes(file, read, seen).Select(f => $"{at}: uses {uses}, and {f}"));
+            }
+        }
+    }
+
+    /// <summary>The value <paramref name="mapping"/> holds under the plain key <paramref name="key"/>, or null.</summary>
+    private static YamlDotNet.RepresentationModel.YamlNode? ValueOf(YamlDotNet.RepresentationModel.YamlMappingNode mapping, string key) =>
+        mapping.Children.FirstOrDefault(c => (c.Key as YamlDotNet.RepresentationModel.YamlScalarNode)?.Value == key).Value;
+
+    /// <summary>The actions that log in to a registry or push to one, by owner/name, whatever version.</summary>
+    private static readonly string[] RegistryActions =
+    [
+        "docker/login-action", "aws-actions/amazon-ecr-login", "azure/docker-login", "redhat-actions/podman-login",
+        "redhat-actions/push-to-registry",
+    ];
+
+    /// <summary>A command that sends an image to a registry, or logs in to one.</summary>
+    [GeneratedRegex(
+        @"\bdocker\s+(image\s+|compose\s+|manifest\s+)?push\b|\bdocker-compose\s+push\b|--push\b|\btype=registry\b|\bpush=true\b|\bimagetools\s+create\b"
+        + @"|\b(podman|buildah)\s+(manifest\s+)?push\b|\b(crane|oras)\s+(push|copy|cp)\b|\bskopeo\s+copy\b|\bhelm\s+push\b"
+        + @"|\b(docker|podman|buildah|nerdctl|oras|skopeo)\s+login\b|\bcrane\s+auth\s+login\b|\bhelm\s+registry\s+login\b",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex PushOrRegistryLogin();
 
     [Fact]
     public void T13_no_key_or_certificate_is_tracked_by_git()

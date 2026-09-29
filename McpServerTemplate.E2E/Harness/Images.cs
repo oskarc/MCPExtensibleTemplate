@@ -56,21 +56,27 @@ internal static class Images
     public static string ContextHash(string contextDirectory)
     {
         var root = ContextRoot(contextDirectory);
-        var ignore = ContextRules(root);
-
-        var files = FilesBeneath(root, root)
-            .Where(ignore.Accepts)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
 
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (var file in files)
+        foreach (var file in ContextFiles(root))
         {
             hash.AppendData(Encoding.UTF8.GetBytes(file + "\0"));
             hash.AppendData(SHA256.HashData(File.ReadAllBytes(Path.Combine(root, file))));
         }
 
         return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    /// <summary>
+    /// Every file the build context sends, relative to its root with / between names, in ordinal order: the files
+    /// <see cref="ContextHash"/> hashes. contract-005 · G-17 round 1 (CON-R1-01) — what an image's build is given, so the
+    /// product can be published from exactly that, as the image's build publishes it.
+    /// </summary>
+    public static IReadOnlyList<string> ContextFiles(string contextDirectory)
+    {
+        var root = ContextRoot(contextDirectory);
+        var ignore = ContextRules(root);
+        return [.. FilesBeneath(root, root).Where(ignore.Accepts).Order(StringComparer.Ordinal)];
     }
 
     /// <summary>

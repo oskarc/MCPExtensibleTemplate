@@ -46,7 +46,7 @@ public static class SmhiServiceRegistration
         if (!Uri.TryCreate(config.BaseUrl, UriKind.Absolute, out var baseUri) ||
             baseUri.Scheme != "https")
         {
-            // contract-005 · G-17 round 1 — echoed without its user information or its query, either of which can carry a credential (LogSafe.Url).
+            // contract-005 · G-17 round 1 — echoed without its user information, its query or its fragment, any of which can carry a credential (LogSafe.Url).
             throw new ConfigurationException(
                 $"Providers:Smhi:BaseUrl must be an absolute HTTPS URL, got: '{LogSafe.Url(config.BaseUrl)}'");
         }

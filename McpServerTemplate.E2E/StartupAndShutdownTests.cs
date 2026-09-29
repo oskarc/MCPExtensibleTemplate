@@ -98,6 +98,11 @@ public sealed class StartupAndShutdownTests(StartupAndShutdownTests.Server fixtu
         // contract-005 · G-17 round 1, follow-up — a credential in a query, refused with the query, or with the URL's scheme.
         { "authority-query", $"Authentication:IdentityProviders:{E2EEnvironment.IdpA}:Authority", $"https://{IssuerA}/?client_secret={Password}" },
         { "base-url-query", "Providers:Smhi:BaseUrl", $"http://opendata-download-metfcst.smhi.se/?api_key={Password}" },
+
+        // contract-005 · G-17 round 1, batch B — and in a fragment, where a browser's implicit-flow URL carries the access
+        // token: refused with the fragment, or with the URL's scheme.
+        { "authority-fragment", $"Authentication:IdentityProviders:{E2EEnvironment.IdpA}:Authority", $"https://{IssuerA}/#access_token={Password}" },
+        { "base-url-fragment", "Providers:Smhi:BaseUrl", $"http://opendata-download-metfcst.smhi.se/#access_token={Password}" },
     };
 
     /// <summary>

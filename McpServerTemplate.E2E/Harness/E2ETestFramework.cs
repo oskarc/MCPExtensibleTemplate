@@ -18,9 +18,13 @@ namespace McpServerTemplate.E2E.Harness;
 ///
 /// contract-005 · G-11, T-12 — a sabotage weakens one thing for one test, so a run of it (MCP_E2E_SABOTAGE) runs that
 /// test and no other, whatever the runner's filter let through, and its result is written for scripts/e2e-sabotage.sh
-/// (<see cref="SabotageRecorder"/>). A run the sabotage variable refuses — set in CI, or naming no sabotage — does not
-/// start: every test it was given fails with the refusal, before any fixture's server can start
+/// (<see cref="SabotageRecorder"/>). A run the sabotage variable refuses — set in CI but for the scheduled retake, or naming
+/// no sabotage — does not start: every test it was given fails with the refusal, before any fixture's server can start
 /// (<see cref="E2EEnvironment"/> refuses too).
+///
+/// contract-005 · G-17 round 1 (HAR-R1-07) — a control run (MCP_E2E_CONTROL) runs the tests of the sabotages it names and no
+/// other, with no sabotage applied, and writes how each ended, so the script counts a red only when the same test, in the
+/// same run of the script, passed without its sabotage.
 /// </summary>
 public sealed class E2ETestFramework(IMessageSink messageSink) : XunitTestFramework(messageSink)
 {
@@ -35,11 +39,16 @@ public sealed class E2ETestFramework(IMessageSink messageSink) : XunitTestFramew
             IMessageSink executionMessageSink,
             ITestFrameworkExecutionOptions executionOptions)
         {
+            var recorded = Path.Combine(E2EEnvironment.FindRepositoryRoot(), "TestResults", "sabotage");
             if (Sabotage.Refusal is null && Sabotage.Active is { } sabotage)
             {
                 testCases = [.. testCases.Where(t => sabotage.Targets(t.TestMethod.TestClass.Class.Name, t.TestMethod.Method.Name, t.TestMethodArguments))];
-                executionMessageSink = new SabotageRecorder(
-                    sabotage, Path.Combine(E2EEnvironment.FindRepositoryRoot(), "TestResults", "sabotage"), executionMessageSink);
+                executionMessageSink = new SabotageRecorder([sabotage], control: false, recorded, executionMessageSink);
+            }
+            else if (Sabotage.Refusal is null && Sabotage.Controlled is { Count: > 0 } controlled)
+            {
+                testCases = [.. testCases.Where(t => controlled.Any(e => e.Targets(t.TestMethod.TestClass.Class.Name, t.TestMethod.Method.Name, t.TestMethodArguments)))];
+                executionMessageSink = new SabotageRecorder(controlled, control: true, recorded, executionMessageSink);
             }
 
             using var runner = new AssemblyRunner(TestAssembly, testCases, DiagnosticMessageSink, executionMessageSink, executionOptions);

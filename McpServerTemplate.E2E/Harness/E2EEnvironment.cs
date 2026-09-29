@@ -371,9 +371,11 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 await Images.VerifyRevisionAsync(docker, testHostImage.Result, contextHash, revision, cancellationToken);
             });
 
+            // contract-005 · G-17 round 1 (CON-R1-03) — the environment's client writes down every image name the run gives, in
+            // the run's directory, so a run killed before its teardown has each put back by the next run's sweep.
             var environment = new E2EEnvironment(
-                runId, root, docker, pki, network, serverImage.Result, issuerImage.Result, testHostImage.Result,
-                keycloak.Result, testIssuer.Result, started, redis.Result);
+                runId, root, new RecordingDockerClient(docker, pki.Directory), pki, network, serverImage.Result, issuerImage.Result,
+                testHostImage.Result, keycloak.Result, testIssuer.Result, started, redis.Result);
 
             await Timings.MeasureEnvironmentAsync("environment: clock self-check", () => environment.CheckClockAsync(cancellationToken));
             return environment;
@@ -476,6 +478,11 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// machine — is left alone: its network then holds the subnet, and this run stops with a fault
     /// naming it rather than pulling a live run's environment out from under it. What was removed is
     /// listed in this run's bundle as swept.txt.
+    ///
+    /// contract-005 · G-17 round 1 (CON-R1-03) — and it puts back every image name such a run gave an image, as the name stood
+    /// before that run (<see cref="RecordingDockerClient.TakeBackAsync"/>): a run killed during the docs profile left
+    /// mcp-server:latest, the name docs/04 deploys, on its own build. The run directory, which holds the record, is removed
+    /// after this, with the rest of the dead run's key material (<see cref="RunDirectories.RemoveStale"/>).
     /// </summary>
     private static async Task<bool> SweepDeadRunsAsync(IDockerClient docker, string repositoryRoot, string runId, CancellationToken cancellationToken)
     {
@@ -507,6 +514,12 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 await IgnoringGoneAsync(docker.Networks.DeleteNetworkAsync(network.ID, cancellationToken));
                 swept.Add($"network {network.Name} of run {run}");
             }
+        }
+
+        // The image names a dead run gave, as its directory records them.
+        foreach (var directory in RunDirectories.Dead())
+        {
+            swept.AddRange(await RecordingDockerClient.TakeBackAsync(docker, directory, cancellationToken));
         }
 
         if (swept.Count > 0)
@@ -665,9 +678,30 @@ public sealed class E2EEnvironment : IAsyncDisposable
     }
 
     /// <summary>
+    /// contract-005 · G-17 round 1 (FLA-R1-04) — who owns the run <paramref name="runId"/>, as its directory records it
+    /// ("pid@start"), or null when its directory or its mark is gone: what a fault naming a live run says.
+    /// </summary>
+    internal static string? RunOwner(string runId)
+    {
+        try
+        {
+            return RunDirectories.OwnerOf(RunDirectories.For(runId));
+        }
+        catch (EnvironmentFaultException ex)
+        {
+            return $"unreadable: {ex.Cause}";
+        }
+    }
+
+    /// <summary>
     /// The run directories under the machine's temporary directory, one per run, each marked with the
     /// process that owns it. A run killed before its teardown leaves one behind; the next run removes
     /// every directory whose owner is gone, so key material never outlives a run by more than one.
+    ///
+    /// contract-005 · G-17 round 1 (CON-R1-04, FLA-R1-04) — an owner is its process id and that process's start time, as
+    /// the fast suite's TestRedis names a run ("pid@start"), so a dead run's id handed to another process is not taken for
+    /// the run: judged by the id alone, such a run was live for as long as the other process lived — its key material kept,
+    /// its network holding the subnet, and every later run told to wait for it.
     /// </summary>
     private static class RunDirectories
     {
@@ -688,47 +722,95 @@ public sealed class E2EEnvironment : IAsyncDisposable
         }
 
         public static void MarkOwned(string directory) =>
-            File.WriteAllText(Path.Combine(directory, OwnerFile), Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+            File.WriteAllText(Path.Combine(directory, OwnerFile), Owner(Environment.ProcessId));
+
+        /// <summary>Every run directory whose owner is gone: the runs the next run's sweep takes back.</summary>
+        public static IReadOnlyList<string> Dead() =>
+            [.. Directory.EnumerateDirectories(Path.GetTempPath(), Prefix + "*").Where(d => !OwnerIsAlive(d))];
 
         public static void RemoveStale()
         {
-            foreach (var directory in Directory.EnumerateDirectories(Path.GetTempPath(), Prefix + "*"))
+            foreach (var directory in Dead())
             {
-                if (!OwnerIsAlive(directory))
+                try
                 {
-                    try
-                    {
-                        Directory.Delete(directory, recursive: true);
-                    }
-                    catch (IOException)
-                    {
-                        // Still in use by something; the next run tries again.
-                    }
-                    catch (UnauthorizedAccessException)
-                    {
-                        // Another user's run on a shared machine; not this run's to remove.
-                    }
+                    Directory.Delete(directory, recursive: true);
+                }
+                catch (IOException)
+                {
+                    // Still in use by something; the next run tries again.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Another user's run on a shared machine; not this run's to remove.
                 }
             }
         }
 
-        private static bool OwnerIsAlive(string directory)
+        /// <summary>The owner <paramref name="directory"/> is marked with, as written, or null when it has no mark.</summary>
+        public static string? OwnerOf(string directory)
         {
             var owner = Path.Combine(directory, OwnerFile);
-            if (!File.Exists(owner) || !int.TryParse(File.ReadAllText(owner), CultureInfo.InvariantCulture, out var pid))
+            try
             {
-                // Unmarked: a run that died between creating the directory and marking it, unless it is new.
+                return File.Exists(owner) ? File.ReadAllText(owner).Trim() : null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new EnvironmentFaultException(
+                    "environment: run directories", $"the owner of the run directory {directory} could not be read ({ex.GetType().Name}: {ex.Message}).", ex);
+            }
+        }
+
+        /// <summary>"pid@start": a process by its id and its start, in whole seconds since the Unix epoch.</summary>
+        private static string Owner(int processId)
+        {
+            using var process = Process.GetProcessById(processId);
+            return string.Create(CultureInfo.InvariantCulture, $"{processId}@{new DateTimeOffset(process.StartTime.ToUniversalTime()).ToUnixTimeSeconds()}");
+        }
+
+        /// <summary>
+        /// Whether the process that owns <paramref name="directory"/> is still running: its id names a process, and that
+        /// process's start time matches the mark within two seconds, since a start time read from another process can differ
+        /// by rounding. As TestRedis does, a process that exited while being asked is gone.
+        ///
+        /// Where TestRedis takes a process whose start time cannot be read to be alive — its runs are containers, which another
+        /// account's run on the same engine may own — a run directory is always this account's own: it is made in this
+        /// account's temporary directory, by a test process of this account. A process this account may not even query
+        /// (access denied: the system's, a service's, another account's) is not that test process, so the id has been handed
+        /// on and the run is dead. Taken for alive, as before, every later run failed at its sweep with an access-denied
+        /// error that named no directory, for as long as that process lived.
+        /// </summary>
+        private static bool OwnerIsAlive(string directory)
+        {
+            var owner = OwnerOf(directory);
+            var parts = owner?.Split('@');
+            if (parts is not [var id, var start]
+                || !int.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var processId)
+                || !long.TryParse(start, NumberStyles.None, CultureInfo.InvariantCulture, out var started))
+            {
+                // Unmarked, or marked in a form no run of this harness writes (a process id alone, as before contract-005 ·
+                // G-17 round 1): a run that died between creating the directory and marking it, unless it is new.
                 return Directory.GetCreationTimeUtc(directory) > DateTime.UtcNow.AddMinutes(-5);
             }
 
             try
             {
-                using var process = Process.GetProcessById(pid);
-                return !process.HasExited;
+                using var process = Process.GetProcessById(processId);
+                return !process.HasExited
+                    && Math.Abs(new DateTimeOffset(process.StartTime.ToUniversalTime()).ToUnixTimeSeconds() - started) <= 2;
             }
             catch (ArgumentException)
             {
-                return false;
+                return false; // no such process
+            }
+            catch (InvalidOperationException)
+            {
+                return false; // exited while being asked
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                return false; // another account's process: not this account's test run
             }
         }
     }

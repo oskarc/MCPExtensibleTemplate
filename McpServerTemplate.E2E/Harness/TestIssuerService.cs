@@ -160,14 +160,24 @@ public sealed class TestIssuerService : IAsyncDisposable
     /// <summary>
     /// Requests counted per issuer name and path — discovery and JWKS among them. contract-005 · T-3 — with
     /// <paramref name="from"/>, only the requests made from that address: one server's, where every server in
-    /// the run asks the same issuers.
+    /// the run asks the same issuers. contract-005 · G-17 round 1 (FLA-R1-05) — and with <paramref name="since"/>, only
+    /// those made at or after it (<see cref="ServerUnderTest.StartedAtAsync"/>): an address Docker gave an earlier server
+    /// counts that server's requests too, all made before this one started.
     /// </summary>
     public static async Task<IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>>> CountsAsync(
-        HttpClient http, string anyHost, System.Net.IPAddress? from = null, CancellationToken cancellationToken = default)
+        HttpClient http, string anyHost, System.Net.IPAddress? from = null, DateTimeOffset? since = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(http);
+        if (since is not null && from is null)
+        {
+            throw new ArgumentException("A count since a time is one client's: give the address it is made from as well.", nameof(since));
+        }
 
         var query = from is null ? string.Empty : $"?from={Uri.EscapeDataString(from.ToString())}";
+        if (since is { } time)
+        {
+            query += $"&since={Uri.EscapeDataString(time.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture))}";
+        }
         var counts = await http.GetFromJsonAsync<Dictionary<string, Dictionary<string, int>>>(new Uri($"https://{anyHost}/admin/counts{query}"), cancellationToken);
         return counts!.ToDictionary(
             c => c.Key,

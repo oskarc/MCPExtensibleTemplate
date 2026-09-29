@@ -41,7 +41,9 @@ public sealed class SabotageAttribute(string name, SabotageActs acts, string wea
 
 /// <summary>
 /// contract-005 · T-12 — a test class whose tests are not end-to-end tests of the contract's claims, with the reason:
-/// they have no sabotage, and the record names them as such.
+/// they have no sabotage, and the record names them as such. contract-005 · G-17 round 1 (HAR-R1-03) — allowed on the
+/// harness's own self-tests alone (HarnessSelfTests, which start no container); HarnessSelfTests fails on any other class
+/// that carries it, and on any test the runner lists that the registry does not cover.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class NotEndToEndAttribute(string reason) : Attribute
@@ -59,17 +61,42 @@ public sealed class NotEndToEndAttribute(string reason) : Attribute
 /// nothing else, and records how it ended (<see cref="E2ETestFramework"/>); scripts/e2e-sabotage.sh runs every
 /// sabotage in turn, checks each red is a <see cref="ClaimException"/>, and writes the record, SABOTAGE-RECORD.md.
 ///
-/// CI refuses it: with CI set, a run that names a sabotage does not start (<see cref="Refusal"/>), and the e2e job
-/// checks the variable is unset before it runs anything. The variable is the suite's own, and no product or test-host
-/// file reads it (T-13).
+/// CI's push and pull-request runs refuse it: with CI set, a run that names a sabotage does not start (<see cref="Refusal"/>),
+/// and the e2e job checks the variable is unset before it runs anything. The variable is the suite's own, and no product or
+/// test-host file reads it (T-13). contract-005 · G-17 round 1 (HAR-R1-01, HAR-R1-02) — one run in CI is a sabotage run by
+/// design: the scheduled retake (<see cref="RetakeWorkflow"/>), which takes every red afresh on a clean checkout, weekly or by
+/// hand, and fails when one is not red on its claim. The per-push check proves that every test has a sabotage and that each
+/// recorded red was taken on its test's file as it is; the scheduled retake proves the reds.
+///
+/// contract-005 · G-17 round 1 (HAR-R1-07) — and a control run: <see cref="ControlVariable"/> names sabotages whose tests are
+/// run with no sabotage at all, so scripts/e2e-sabotage.sh can require each test it retakes to pass without its sabotage
+/// before a red with it counts, and record both.
 /// </summary>
 public static partial class Sabotage
 {
     /// <summary>The variable that names the one sabotage a run applies.</summary>
     public const string Variable = "MCP_E2E_SABOTAGE";
 
+    /// <summary>
+    /// contract-005 · G-17 round 1 (HAR-R1-07) — the variable that names, comma-separated, the sabotages whose tests a control
+    /// run runs: each with no sabotage applied, and no other test.
+    /// </summary>
+    public const string ControlVariable = "MCP_E2E_CONTROL";
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 (HAR-R1-01) — the one workflow that runs sabotages in CI: the scheduled retake, on its
+    /// schedule or by hand (GITHUB_EVENT_NAME schedule or workflow_dispatch). CI's push and pull-request runs refuse them.
+    /// </summary>
+    public const string RetakeWorkflow = ".github/workflows/sabotage-retake.yml";
+
     /// <summary>The record the sabotages' reds are kept in, under the end-to-end project.</summary>
     public const string RecordFile = "SABOTAGE-RECORD.md";
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 (HAR-R1-03) — the held decisions, under the end-to-end project: a test skipped by decision
+    /// counts as held only when its Skip reason names one of them ("held: {id}").
+    /// </summary>
+    public const string HeldFile = "HELD.md";
 
     /// <summary>
     /// What every startup refusal's sabotage does: the server the test starts is started without the misconfiguration it
@@ -80,8 +107,14 @@ public static partial class Sabotage
 
     private static readonly Lazy<IReadOnlyList<Entry>> Registry = new(() => Build(EndToEndTests(typeof(Sabotage).Assembly)));
 
-    private static readonly Lazy<(Entry? Active, string? Refusal)> State = new(() => Decide(
-        Environment.GetEnvironmentVariable(Variable), Environment.GetEnvironmentVariable("CI"), () => All));
+    private static readonly Lazy<Decision> State = new(() => Decide(
+        new Run(
+            Environment.GetEnvironmentVariable(Variable),
+            Environment.GetEnvironmentVariable(ControlVariable),
+            Environment.GetEnvironmentVariable("CI"),
+            Environment.GetEnvironmentVariable("GITHUB_EVENT_NAME"),
+            Environment.GetEnvironmentVariable("GITHUB_WORKFLOW_REF")),
+        () => All));
 
     private static int _applied;
 
@@ -90,6 +123,9 @@ public static partial class Sabotage
 
     /// <summary>The sabotage this run applies, or null in an ordinary run.</summary>
     public static Entry? Active => State.Value.Active;
+
+    /// <summary>contract-005 · G-17 round 1 (HAR-R1-07) — the sabotages whose tests this control run runs, unsabotaged; empty in every other run.</summary>
+    public static IReadOnlyList<Entry> Controlled => State.Value.Controlled;
 
     /// <summary>Why this run must not start, or null when it may.</summary>
     public static string? Refusal => State.Value.Refusal;
@@ -117,32 +153,95 @@ public static partial class Sabotage
     public static T Choose<T>(string name, T value, T sabotaged) => Applies(name) ? sabotaged : value;
 
     /// <summary>
-    /// What a run does, given the variable (<paramref name="named"/>), CI's variable (<paramref name="ci"/>) and the
-    /// registry: no sabotage, the one named, or a refusal to start. Set at all in CI, even empty, the variable is refused;
-    /// outside CI, a name no sabotage has is refused rather than run as an ordinary run.
+    /// What a run is given: the sabotage variable, the control variable, CI's variable, and, in GitHub's runs, the event that
+    /// started the workflow and the workflow's own reference (owner/repo/{path}@{ref}).
     /// </summary>
-    internal static (Entry? Active, string? Refusal) Decide(string? named, string? ci, Func<IReadOnlyList<Entry>> registry)
+    internal sealed record Run(string? Sabotage, string? Control, string? Ci, string? GitHubEvent = null, string? GitHubWorkflowRef = null)
     {
+        /// <summary>
+        /// Whether this is the scheduled retake: CI, the workflow <see cref="RetakeWorkflow"/>, started on its schedule or by
+        /// hand. A push or a pull request never is, whichever workflow it starts.
+        /// </summary>
+        public bool IsScheduledRetake =>
+            Ci is not null
+            && GitHubEvent is "schedule" or "workflow_dispatch"
+            && GitHubWorkflowRef?.Contains($"/{RetakeWorkflow}@", StringComparison.Ordinal) == true;
+    }
+
+    /// <summary>What a run does: apply one sabotage, run some tests as a control, run as it is, or not start (and why).</summary>
+    internal sealed record Decision(Entry? Active, IReadOnlyList<Entry> Controlled, string? Refusal);
+
+    /// <summary>
+    /// What a run does, given what it is given (<paramref name="run"/>) and the registry: no sabotage, the one named, a
+    /// control run of the named sabotages' tests, or a refusal to start. Set at all in CI, even empty, either variable is
+    /// refused — contract-005 · G-17 round 1 (HAR-R1-01) — but in the scheduled retake. Outside CI, a name no sabotage has is
+    /// refused rather than run as an ordinary run, and so is a run given both variables.
+    /// </summary>
+    internal static Decision Decide(Run run, Func<IReadOnlyList<Entry>> registry)
+    {
+        ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(registry);
 
-        if (named is not null && ci is not null)
+        static Decision Refused(string why) => new(null, [], why);
+
+        if (run.Sabotage is not null && run.Control is not null)
         {
-            return (null,
-                $"{Variable} is set ('{named}'), and so is CI. A sabotage weakens the environment on purpose, to see one test go red; "
-                + "it is run locally (scripts/e2e-sabotage.sh) and never in CI, so this run does not start.");
+            return Refused(
+                $"{Variable} ('{run.Sabotage}') and {ControlVariable} ('{run.Control}') are both set. A run applies one sabotage, or runs "
+                + "tests as a control with none, not both, so this run does not start.");
+        }
+
+        var (variable, named) = run.Sabotage is not null ? (Variable, run.Sabotage) : (ControlVariable, run.Control);
+        if (named is not null && run.Ci is not null && !run.IsScheduledRetake)
+        {
+            return Refused(
+                $"{variable} is set ('{named}'), and so is CI. A sabotage weakens the environment on purpose, to see one test go red, and "
+                + "a control run runs a handful of tests; either is run by scripts/e2e-sabotage.sh, locally or in the scheduled retake "
+                + $"({RetakeWorkflow}, on its schedule or by hand), and never in CI's push or pull-request runs, where a run of one test "
+                + "must never stand for the suite. So this run does not start.");
         }
 
         if (string.IsNullOrEmpty(named))
         {
-            return (null, null);
+            return new(null, [], null);
         }
 
-        var entry = registry().FirstOrDefault(e => e.Name == named);
-        return entry is not null
-            ? (entry, null)
-            : (null,
-                $"{Variable} names '{named}', which is no sabotage of this suite, so this run does not start. The sabotages are "
-                + $"declared on the tests they target ([Sabotage]); {RecordFile} lists them.");
+        var entries = registry();
+        if (run.Sabotage is not null)
+        {
+            var entry = entries.FirstOrDefault(e => e.Name == named);
+            return entry is not null
+                ? new(entry, [], null)
+                : Refused(
+                    $"{Variable} names '{named}', which is no sabotage of this suite, so this run does not start. The sabotages are "
+                    + $"declared on the tests they target ([Sabotage]); {RecordFile} lists them.");
+        }
+
+        var names = named.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var unknown = names.Where(n => entries.All(e => e.Name != n || e.Held is not null)).ToArray();
+        return unknown.Length == 0
+            ? new(null, [.. entries.Where(e => names.Contains(e.Name, StringComparer.Ordinal))], null)
+            : Refused(
+                $"{ControlVariable} names {string.Join(", ", unknown.Select(n => $"'{n}'"))}, which {(unknown.Length == 1 ? "is" : "are")} no "
+                + "sabotage of this suite whose test runs, so this run does not start.");
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 (HAR-R1-03) — the held decisions <see cref="HeldFile"/> lists: each one's id, the test it
+    /// holds, the decision it waits on, and since when. A table row: | `id` | test | waits on | yyyy-mm-dd |.
+    /// </summary>
+    public static IReadOnlyList<HeldDecision> HeldDecisions(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return [.. HeldRow().Matches(text).Select(m => new HeldDecision(
+            m.Groups["id"].Value, m.Groups["test"].Value.Trim(), m.Groups["waits"].Value.Trim(), m.Groups["since"].Value))];
+    }
+
+    /// <summary>The held decision a Skip reason names ("held: {id}"), or null when it names none.</summary>
+    public static string? HeldIdIn(string skip)
+    {
+        ArgumentNullException.ThrowIfNull(skip);
+        return HeldName().Match(skip) is { Success: true } named ? named.Groups["id"].Value : null;
     }
 
     /// <summary>
@@ -241,7 +340,10 @@ public static partial class Sabotage
     /// contract-005 · T-12 — what a recorded red was taken on: the first 12 hex digits of the SHA-256 of the test's own file
     /// (<see cref="EndToEndTest.SourceFile"/>), read as text with its line endings made \n, so a checkout's line endings
     /// change nothing. A red taken on another version of the file is stale: the test may no longer make the claim it made.
-    /// A change to the harness or the product changes no fingerprint; scripts/e2e-sabotage.sh --all retakes every red.
+    /// contract-005 · G-17 round 1 (HAR-R1-01) — this is what the per-push check holds the record to, and all it can: that each
+    /// test file's reds were taken on it as it is. A change to the harness or the product changes no fingerprint, and a
+    /// fingerprint anyone can compute is no proof that a red was taken; the scheduled retake (<see cref="RetakeWorkflow"/>),
+    /// which runs scripts/e2e-sabotage.sh --all on a clean checkout, proves the reds.
     /// </summary>
     public static string Fingerprint(EndToEndTest test)
     {
@@ -328,6 +430,15 @@ public static partial class Sabotage
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhiteSpace();
+
+    [GeneratedRegex(@"^\| `(?<id>[a-z0-9]+(-[a-z0-9]+)*)` \| (?<test>[^|\n]+) \| (?<waits>[^|\n]+) \| (?<since>\d{4}-\d{2}-\d{2}) \|[ \t]*\r?$", RegexOptions.Multiline)]
+    private static partial Regex HeldRow();
+
+    [GeneratedRegex(@"\bheld: (?<id>[a-z0-9]+(-[a-z0-9]+)*)")]
+    private static partial Regex HeldName();
+
+    /// <summary>contract-005 · G-17 round 1 (HAR-R1-03) — one held decision: its id, the test it holds, the decision it waits on, and since when.</summary>
+    public sealed record HeldDecision(string Id, string Test, string WaitsOn, string Since);
 
     /// <summary>One sabotage: its name, the declaration it comes from, where it acts, what it weakens, and its test.</summary>
     /// <param name="Name">The name MCP_E2E_SABOTAGE gives it: the declared name, and on a theory its row's.</param>

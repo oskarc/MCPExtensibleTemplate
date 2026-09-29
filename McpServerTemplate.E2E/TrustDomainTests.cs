@@ -37,8 +37,9 @@ public sealed class TrustDomainTests(TrustDomainTests.Server fixture, ITestOutpu
     /// not-permitted). You may not use the tool '…', or it does not exist.' Meeting one breaks the other.
     /// </summary>
     private const string ToolsStopped =
-        "Stopped for the pioneer: contract-005 T-5 (the words for a tool that does not exist) conflicts with contract-002 T-6 "
-        + "and the roadmap (rule idp-binding). Red recorded; resolve by decision, then remove this Skip.";
+        "held: t5-tool-refusal-words (McpServerTemplate.E2E/HELD.md). Stopped for the pioneer: contract-005 T-5 (the words for a "
+        + "tool that does not exist) conflicts with contract-002 T-6 and the roadmap (rule idp-binding). Red recorded; resolve by "
+        + "decision, then remove this Skip and its entry.";
 
     private const string OtherCallerMintedAtIdpA = "t5-other-caller-minted-at-idp-a";
     private const string CallerMintedAtIdpA = "t5-caller-minted-at-idp-a";

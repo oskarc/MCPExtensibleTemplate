@@ -26,4 +26,15 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- contract-005 · G-17 round 1 (FLA-R1-02) — at most 4 test classes at once, whatever the machine. xUnit ran as many as
+       the machine has cores (32 on the development machine), and every class running holds its server and what its test
+       starts beside it on the run's network, whose dynamic range holds 31 containers (E2ENetwork.DynamicAddresses): there
+       the range was seen full. 4 is CI's runner's own core count, the one configuration the job's budget was measured on,
+       and with it a run holds at most 16 of the 31 (the five shared services, LimitsTests' five, and two for each of three
+       other classes). "conservative" is xUnit 2.9's default, named because the bound rests on it: a class counts against
+       the limit from its start to its end, awaits included. -->
+  <ItemGroup>
+    <None Update="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

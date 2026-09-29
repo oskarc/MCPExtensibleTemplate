@@ -56,8 +56,11 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
             await using var client = await McpClient.CreateAsync(StandardClient.Transport(http, endpoint, clientId));
             result = await client.CallToolAsync(Tool);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (Claim.IsTheServersAnswer(ex))
         {
+            // contract-005 · G-17 round 1 (HAR-R1-04) — the claim's failures only: a status the server answered, or an MCP
+            // error (the SDK's own, when the flow the server's metadata sent it on could not be completed). A connection or
+            // TLS failure, or an environment fault, propagates as what it is.
             failure = ex;
         }
 
