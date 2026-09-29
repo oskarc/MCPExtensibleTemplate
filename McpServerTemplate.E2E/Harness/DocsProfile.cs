@@ -272,7 +272,7 @@ public sealed partial class DocsProfile : IAsyncDisposable
         var applied = new List<string>();
         foreach (var row in Table.Where(r => r.Where == Scope.Text))
         {
-            var count = Regex.Matches(compose, Regex.Escape(row.Document)).Count;
+            var count = Regex.Count(compose, Regex.Escape(row.Document));
             if (count > 0)
             {
                 compose = compose.Replace(row.Document, row.Run, StringComparison.Ordinal);

@@ -23,9 +23,12 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
-      # Reads global.json, so CI builds on the SDK band the repository declares. Without this
+      # Reads global.json, so CI builds on the SDK the repository declares. Without this
       # the runner took whatever 10.0.x was newest and its analyser set differed from a
       # developer's, which UC-7 ("the same runs on every machine") does not allow.
+      # contract-005 — global.json pins the exact version (rollForward: disable): with
+      # latestPatch the runner rolled forward to a newer SDK it already had, whose analysers
+      # failed a build that passed on 10.0.101 locally and in the image's build stage.
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
