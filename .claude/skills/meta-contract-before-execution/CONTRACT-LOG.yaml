@@ -439,6 +439,22 @@ contracts:
           are their check; the loop ends when a round finds nothing new, after which the one verification
           pass (build, suites, E2E from cold, the full sabotage retake, T-9, the documentation pass, CI)
           closes the contract.
+      - date: 2026-09-29
+        pioneer_decisions: |
+          "1: A / 2. yes, cut it and mock any calls. / 3. B / 4. wont rule on it yet. / 5. yes"
+        applied_as: |
+          1 (T-5, the tool row): a caller from another trust domain calling a bound provider's tool is
+          refused in the same words as a tool that does not exist; the server's log keeps the real rule
+          (idp-binding). This changes contract-002's verified test T6 (refused "by a different rule") to
+          assert the log line instead of the reply, and docs/06 gains a dated amendment to its Phase 1 exit
+          criterion (a direct call -> authz_fail with rule idp-binding, now in the log, not the reply).
+          2 (T-6 / G-8): the test network is cut off from the internet - containers cannot resolve real
+          names - and every outbound call a test makes is answered by a fake; T-6's "that tool's call fails
+          TLS" reads "fails at the name lookup", and "nothing reaches the internet" holds by name.
+          3 (T-12): no scheduled CI retake of the sabotage record; the full retake is run by hand;
+          CI refuses MCP_E2E_SABOTAGE on every run, as the contract words it.
+          4 (review B-004, the card): not ruled yet; the batch stays open.
+          5 (settings read once at startup, built in phase 2 round 2-3): approved.
     progress: |
       Paused 2026-09-27 at the pioneer's instruction, to preserve capacity. Status stays approved.
       Built: phase 1 (G-1..G-9, G-11 self-checks, G-16 shapes, G-14 with the budget, T-1) and phase 2

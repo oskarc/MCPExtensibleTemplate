@@ -1171,6 +1171,31 @@ corrections:
     clerked: false
     precedent: null
     clerk_note: null
+  - corr_id: C-037
+    date: 2026-09-29
+    contract_id: contract-005
+    moment: M-08
+    grade: option-override
+    intervention: redirected
+    agent_offered: |
+      3. The weekly re-proof run. A: keep it, and revise the contract's wording to "push and pull-request CI
+      refuses the breakage switch; a scheduled run re-proves the record". B: drop it, and re-prove only by hand.
+      I recommend A.
+    pioneer_said: |
+      3. B
+    reason_given: |
+      none given
+    noticed: |
+      not asked - the questions for C-034 and C-035 are still awaiting answer
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
 
 trajectory:
   updated: 2026-09-26
