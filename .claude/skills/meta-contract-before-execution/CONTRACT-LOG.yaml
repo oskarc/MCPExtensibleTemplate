@@ -430,6 +430,15 @@ contracts:
           full sabotage-record retake (T-12), the red run of record, the docs profile (T-9) and one
           documentation pass bringing every document in line; then CI. Findings of that pass are fixed and
           only the affected checks re-run.
+      - date: 2026-09-29
+        process_change_by_pioneer: |
+          "the attackers can run the containers, when all is done." (C-036)
+        applied_as: |
+          The G-17 adversarial rounds run only once the implementation is complete, and then may run
+          containers and the suites. Each round's fixes are implemented as code; the next round's runs
+          are their check; the loop ends when a round finds nothing new, after which the one verification
+          pass (build, suites, E2E from cold, the full sabotage retake, T-9, the documentation pass, CI)
+          closes the contract.
     progress: |
       Paused 2026-09-27 at the pioneer's instruction, to preserve capacity. Status stays approved.
       Built: phase 1 (G-1..G-9, G-11 self-checks, G-16 shapes, G-14 with the budget, T-1) and phase 2

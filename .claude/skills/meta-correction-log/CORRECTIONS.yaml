@@ -1146,6 +1146,31 @@ corrections:
     clerked: false
     precedent: null
     clerk_note: null
+  - corr_id: C-036
+    date: 2026-09-29
+    contract_id: contract-005
+    moment: M-04
+    grade: option-override
+    intervention: redirected
+    agent_offered: |
+      Under your instruction I'd run them as reading only: attackers reading the code and the contract, fixes
+      written as code, repeated until a round finds nothing new. ... 1. The attack rounds: reading only, now,
+      with one verification run at the end; or wait until after that verification run. I suggest reading only now.
+    pioneer_said: |
+      the attackers can run the containers, when all is done.
+    reason_given: |
+      none given
+    noticed: |
+      not asked - the three questions were asked for C-035 minutes earlier and are still awaiting answer
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
 
 trajectory:
   updated: 2026-09-26
