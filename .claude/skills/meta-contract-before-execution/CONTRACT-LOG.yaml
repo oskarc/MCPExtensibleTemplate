@@ -448,9 +448,11 @@ contracts:
           (idp-binding). This changes contract-002's verified test T6 (refused "by a different rule") to
           assert the log line instead of the reply, and docs/06 gains a dated amendment to its Phase 1 exit
           criterion (a direct call -> authz_fail with rule idp-binding, now in the log, not the reply).
-          2 (T-6 / G-8): the test network is cut off from the internet - containers cannot resolve real
-          names - and every outbound call a test makes is answered by a fake; T-6's "that tool's call fails
-          TLS" reads "fails at the name lookup", and "nothing reaches the internet" holds by name.
+          2 (T-6 / G-8): as implemented in batch D, the run's containers resolve no real name and every
+          outbound call a test makes is answered by a fake; T-6's "that tool's call fails TLS" reads "fails
+          at the name lookup". Correction 2026-09-30 (G-17 round 2, CON-R2-01): the agent narrowed "cut it"
+          to "by name" when recording it; the network itself is not cut - a run container still reaches the
+          internet by address. Put back to the pioneer: names only, or a real cut.
           3 (T-12): no scheduled CI retake of the sabotage record; the full retake is run by hand;
           CI refuses MCP_E2E_SABOTAGE on every run, as the contract words it.
           4 (review B-004, the card): not ruled yet; the batch stays open.
