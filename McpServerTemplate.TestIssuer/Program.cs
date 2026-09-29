@@ -5,15 +5,16 @@ using McpServerTemplate.TestIssuer;
 // McpServerTemplate.TestIssuer — test only (contract-005 · G-6)
 //
 // An identity provider the end-to-end environment controls completely. One container answers
-// under several issuer names (idp-a.e2e.test and idp-b.e2e.test), and each name is a separate
-// issuer with its own signing key, generated when the container starts and never sent anywhere.
+// under several issuer names (idp-a.e2e.test and idp-b.e2e.test, and stranger.e2e.test, which no
+// server is configured with), and each name is a separate issuer with its own signing key,
+// generated when the container starts and never sent anywhere.
 // It is told the issuer identifier each name answers as (TestIssuer:Issuers), which is usually
 // https://{name} but may carry a trailing slash, as Auth0's and Entra v1's do: an identity provider
 // whose issuer is not its authority, for contract-005 · G-12 (4).
 //
 // Per name it serves:
-//   /.well-known/openid-configuration and /jwks — what a bearer handler fetches, counted per name,
-//     so a test can see a key lookup that did not happen
+//   /.well-known/openid-configuration and /jwks — what a bearer handler fetches, counted per name
+//     and per client address, so a test can see a key lookup one server did not make
 //   /.well-known/oauth-authorization-server — RFC 8414 metadata advertising S256
 //   /authorize — approves at once and redirects with code, state and iss
 //   /token — checks PKCE and mints a token whose audience is the resource parameter

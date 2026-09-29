@@ -13,8 +13,9 @@ using McpServerTemplate.Testing;
 namespace McpServerTemplate.E2E.Harness;
 
 /// <summary>
-/// The environment a run's tests share: the test PKI, the network, the two images, Keycloak, the test
-/// issuer, the upstream fake and Redis. Each test class starts its own server into it.
+/// The environment a run's tests share: the test PKI, the network, the three images (the server, the
+/// test issuer and the test host), Keycloak, the test issuer, the upstream fake and Redis. Each test
+/// class starts its own server into it.
 ///
 /// contract-005 · UC-1 — the environment starts once per run. xUnit 2 has no assembly fixtures, so it
 /// is a shared, lazily started instance: the first test class to need it starts it, the rest wait on
@@ -39,6 +40,9 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// <inheritdoc cref="IdpA"/>
     public const string IdpB = "idp-b";
 
+    /// <summary>contract-005 · T-3 — the issuer no server is configured with (<see cref="IssuerRegistry.Stranger"/>).</summary>
+    public const string Stranger = "stranger";
+
     private static readonly Lazy<Task<E2EEnvironment>> Shared = new(() => StartAsync(CancellationToken.None));
 
     private readonly List<IAsyncDisposable> _services;
@@ -51,6 +55,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
         INetwork network,
         string serverImage,
         string issuerImage,
+        string testHostImage,
         KeycloakService keycloak,
         TestIssuerService testIssuer,
         IReadOnlyDictionary<UpstreamOwner, IUpstreamService> upstreams,
@@ -63,6 +68,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
         Network = network;
         ServerImage = serverImage;
         IssuerImage = issuerImage;
+        TestHostImage = testHostImage;
         Keycloak = keycloak;
         TestIssuer = testIssuer;
         UpstreamServices = upstreams;
@@ -86,7 +92,8 @@ public sealed class E2EEnvironment : IAsyncDisposable
     public static IssuerRegistry Issuers { get; } = new IssuerRegistry()
         .Register(new(KeycloakIssuer, new Uri(KeycloakService.Issuer), KeycloakService.Issuer, IssuerRegistry.Owner.Keycloak, "azp", KeycloakService.Scopes))
         .Register(new(IdpA, new Uri("https://idp-a.e2e.test"), "https://idp-a.e2e.test", IssuerRegistry.Owner.TestIssuer, "client_id", KeycloakService.Scopes))
-        .Register(new(IdpB, new Uri("https://idp-b.e2e.test"), "https://idp-b.e2e.test/", IssuerRegistry.Owner.TestIssuer, "client_id", KeycloakService.Scopes));
+        .Register(new(IdpB, new Uri("https://idp-b.e2e.test"), "https://idp-b.e2e.test/", IssuerRegistry.Owner.TestIssuer, "client_id", KeycloakService.Scopes))
+        .WithStranger(new(Stranger, new Uri("https://stranger.e2e.test"), IssuerRegistry.Owner.TestIssuer));
 
     /// <summary>
     /// The upstream host names and the owner that answers each, for the whole run: registration is per
@@ -116,6 +123,9 @@ public sealed class E2EEnvironment : IAsyncDisposable
 
     public string IssuerImage { get; }
 
+    /// <summary>contract-005 · G-10 — the test host image, tagged with the build context's hash like the others.</summary>
+    public string TestHostImage { get; }
+
     public KeycloakService Keycloak { get; }
 
     public TestIssuerService TestIssuer { get; }
@@ -142,13 +152,15 @@ public sealed class E2EEnvironment : IAsyncDisposable
 
     /// <summary>
     /// contract-005 · G-8 — the one entry point for a server under test: the environment's base
-    /// settings with <paramref name="delta"/> on top, and nothing else.
+    /// settings with <paramref name="delta"/> on top, and nothing else. contract-005 · G-10 — the same
+    /// for the test host: <paramref name="build"/> chooses the image, never the configuration.
     /// </summary>
-    public Task<ServerUnderTest> StartServerAsync(string name, SettingsDelta delta, CancellationToken cancellationToken = default)
+    public Task<ServerUnderTest> StartServerAsync(
+        string name, SettingsDelta delta, ServerBuild build = ServerBuild.Shipped, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(delta);
-        return ServerUnderTest.StartAsync(this, name, delta, cancellationToken);
+        return ServerUnderTest.StartAsync(this, name, delta, build, cancellationToken);
     }
 
     /// <summary>
@@ -157,12 +169,21 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// comes up. <paramref name="name"/> must be unique in the run; it names the server's alias and
     /// its diagnostics.
     /// </summary>
-    public Task<StartupOutcome> StartupAsync(string name, SettingsDelta delta, CancellationToken cancellationToken = default)
+    public Task<StartupOutcome> StartupAsync(
+        string name, SettingsDelta delta, ServerBuild build = ServerBuild.Shipped, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(delta);
-        return ServerUnderTest.StartupAsync(this, name, delta, cancellationToken);
+        return ServerUnderTest.StartupAsync(this, name, delta, build, cancellationToken);
     }
+
+    /// <summary>The image a server of <paramref name="build"/> runs.</summary>
+    public string ImageOf(ServerBuild build) => build switch
+    {
+        ServerBuild.Shipped => ServerImage,
+        ServerBuild.TestHost => TestHostImage,
+        _ => throw new ArgumentOutOfRangeException(nameof(build), build, "No image is built for this."),
+    };
 
     /// <summary>Called once, when the test assembly finishes.</summary>
     internal static async Task ShutdownAsync()
@@ -246,6 +267,10 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 isProductFailure: ex => ex is InvalidOperationException { InnerException: ImageBuildFailedException });
             var issuerImage = Timings.MeasureEnvironmentAsync("image: test issuer", () =>
                 Images.BuildAsync(Images.IssuerRepository, "McpServerTemplate.TestIssuer/Dockerfile", root, contextHash, revision, cancellationToken));
+
+            // contract-005 · G-10 — the test host, built like the others from the same context and tagged by its hash.
+            var testHostImage = Timings.MeasureEnvironmentAsync("image: test host", () =>
+                Images.BuildAsync(Images.TestHostRepository, "McpServerTemplate.E2EHost/Dockerfile", root, contextHash, revision, cancellationToken));
             var redis = Timings.MeasureEnvironmentAsync("container: redis", () => RedisService.StartAsync(network, runId, cancellationToken));
             var keycloak = Timings.MeasureEnvironmentAsync("container: keycloak", () =>
                 KeycloakService.StartAsync(docker, network, pki, names, ServerUnderTest.Resource, ServerFixture.AllClientIds(), runId, cancellationToken));
@@ -261,7 +286,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
 
             try
             {
-                await Task.WhenAll([serverImage, issuerImage, redis, keycloak, testIssuer, .. upstreams.Values]);
+                await Task.WhenAll([serverImage, issuerImage, testHostImage, redis, keycloak, testIssuer, .. upstreams.Values]);
             }
             finally
             {
@@ -290,16 +315,17 @@ public sealed class E2EEnvironment : IAsyncDisposable
             var started = upstreams.ToDictionary(u => u.Key, u => u.Value.Result);
             await Timings.MeasureEnvironmentAsync("environment: upstreams", () => CheckUpstreamsAsync(docker, network, pki, started, cancellationToken));
 
-            // contract-005 · G-8 — before any test runs: both images carry this checkout's revision
+            // contract-005 · G-8 — before any test runs: every image carries this checkout's revision
             // and its build context's hash.
             await Timings.MeasureEnvironmentAsync("environment: revision labels", async () =>
             {
                 await Images.VerifyRevisionAsync(docker, serverImage.Result, contextHash, revision, cancellationToken);
                 await Images.VerifyRevisionAsync(docker, issuerImage.Result, contextHash, revision, cancellationToken);
+                await Images.VerifyRevisionAsync(docker, testHostImage.Result, contextHash, revision, cancellationToken);
             });
 
             var environment = new E2EEnvironment(
-                runId, root, docker, pki, network, serverImage.Result, issuerImage.Result,
+                runId, root, docker, pki, network, serverImage.Result, issuerImage.Result, testHostImage.Result,
                 keycloak.Result, testIssuer.Result, started, redis.Result);
 
             await Timings.MeasureEnvironmentAsync("environment: clock self-check", () => environment.CheckClockAsync(cancellationToken));

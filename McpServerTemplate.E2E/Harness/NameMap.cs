@@ -62,7 +62,11 @@ public sealed class NameMap
     /// The client address the TLS front forwards for requests to the front, through its test-only
     /// header (G-9): the front stands in for many clients behind one proxy.
     /// </param>
-    public HttpClient CreateClient(NameMapLog? log = null, string? clientAddress = null)
+    /// <param name="outermost">
+    /// contract-005 · T-8 — a handler every request passes first, before the map sees it: how a test keeps
+    /// a copy of what a client sent, to send it again. It cannot route around the map, which is beneath it.
+    /// </param>
+    public HttpClient CreateClient(NameMapLog? log = null, string? clientAddress = null, DelegatingHandler? outermost = null)
     {
         var sockets = new SocketsHttpHandler
         {
@@ -79,7 +83,14 @@ public sealed class NameMap
         };
 
         var recording = new RecordingHandler(log, clientAddress) { InnerHandler = sockets };
-        return new HttpClient(recording, disposeHandler: true) { Timeout = TimeSpan.FromSeconds(100) };
+        HttpMessageHandler handler = recording;
+        if (outermost is not null)
+        {
+            outermost.InnerHandler = recording;
+            handler = outermost;
+        }
+
+        return new HttpClient(handler, disposeHandler: true) { Timeout = TimeSpan.FromSeconds(100) };
     }
 
     private X509ChainPolicy TrustOnlyTheTestCa()

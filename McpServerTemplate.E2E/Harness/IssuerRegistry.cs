@@ -10,6 +10,10 @@ namespace McpServerTemplate.E2E.Harness;
 /// under exactly the host names registered to it, so a later contract adds an identity provider by
 /// registering it here — Phase 4's second Keycloak realm, say — and the server, the name map and the
 /// certificates follow.
+///
+/// contract-005 · T-3 — it also holds strangers (<see cref="WithStranger"/>): issuers a container
+/// answers as, under their own names and keys and counted like any other, that no server is
+/// configured with. A stranger's token is a real token from an issuer nobody registered.
 /// </summary>
 public sealed class IssuerRegistry
 {
@@ -48,16 +52,42 @@ public sealed class IssuerRegistry
         public string Host => Authority.Host;
     }
 
+    /// <summary>
+    /// contract-005 · T-3 — an issuer no server is configured with: its container answers as it at
+    /// https://{host}, with a key of its own, and counts every request made to it, so "no key lookup at
+    /// any issuer" includes the stranger's own.
+    /// </summary>
+    /// <param name="Name">What the tests call it.</param>
+    /// <param name="Authority">https://{host}: where it answers, and the iss its tokens carry.</param>
+    /// <param name="ServedBy">The container that answers for it.</param>
+    public sealed record Stranger(string Name, Uri Authority, Owner ServedBy)
+    {
+        /// <summary>The iss value its tokens carry.</summary>
+        public string Issuer => Authority.ToString().TrimEnd('/');
+
+        /// <summary>The host name the test reaches it under; no server is told of it.</summary>
+        public string Host => Authority.Host;
+    }
+
     private readonly ImmutableList<Entry> _entries;
+    private readonly ImmutableList<Stranger> _strangers;
 
     public IssuerRegistry()
-        : this(ImmutableList<Entry>.Empty)
+        : this(ImmutableList<Entry>.Empty, ImmutableList<Stranger>.Empty)
     {
     }
 
-    private IssuerRegistry(ImmutableList<Entry> entries) => _entries = entries;
+    private IssuerRegistry(ImmutableList<Entry> entries, ImmutableList<Stranger> strangers)
+    {
+        _entries = entries;
+        _strangers = strangers;
+    }
 
+    /// <summary>The identity providers every server is configured with.</summary>
     public IReadOnlyList<Entry> Entries => _entries;
+
+    /// <summary>The issuers no server is configured with.</summary>
+    public IReadOnlyList<Stranger> Strangers => _strangers;
 
     public Entry this[string name] =>
         _entries.FirstOrDefault(e => e.Name == name)
@@ -67,23 +97,47 @@ public sealed class IssuerRegistry
     public IssuerRegistry Register(Entry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        if (_entries.Any(e => e.Name == entry.Name))
+        if (_entries.Any(e => e.Name == entry.Name) || _strangers.Any(s => s.Name == entry.Name))
         {
             throw new InvalidOperationException($"An identity provider named '{entry.Name}' is already registered.");
         }
 
-        return new IssuerRegistry(_entries.Add(entry));
+        return new IssuerRegistry(_entries.Add(entry), _strangers);
     }
 
-    /// <summary>The host names a container answers issuers under.</summary>
+    /// <summary>
+    /// Adds an issuer no server is configured with. Its host may be no registered provider's: a
+    /// stranger that answered under a trusted name would be that provider, not a stranger.
+    /// </summary>
+    public IssuerRegistry WithStranger(Stranger stranger)
+    {
+        ArgumentNullException.ThrowIfNull(stranger);
+        if (_entries.Any(e => e.Name == stranger.Name || e.Host.Equals(stranger.Host, StringComparison.OrdinalIgnoreCase))
+            || _strangers.Any(s => s.Name == stranger.Name || s.Host.Equals(stranger.Host, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"'{stranger.Name}' ({stranger.Host}) is already registered, as a provider or a stranger.");
+        }
+
+        return new IssuerRegistry(_entries, _strangers.Add(stranger));
+    }
+
+    /// <summary>The stranger named <paramref name="name"/>.</summary>
+    public Stranger StrangerNamed(string name) =>
+        _strangers.FirstOrDefault(s => s.Name == name)
+        ?? throw new KeyNotFoundException($"No stranger named '{name}' is registered.");
+
+    /// <summary>The host names a container answers issuers under, strangers' included.</summary>
     public IReadOnlyList<string> HostsServedBy(Owner owner) =>
-        [.. _entries.Where(e => e.ServedBy == owner).Select(e => e.Host).Distinct(StringComparer.OrdinalIgnoreCase)];
+        [.. _entries.Where(e => e.ServedBy == owner).Select(e => e.Host)
+            .Concat(_strangers.Where(s => s.ServedBy == owner).Select(s => s.Host))
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
 
-    /// <summary>The issuer identifiers a container answers as, one per host, in registration order.</summary>
+    /// <summary>The issuer identifiers a container answers as, one per host, in registration order, strangers' last.</summary>
     public IReadOnlyList<string> IssuersServedBy(Owner owner) =>
-        [.. _entries.Where(e => e.ServedBy == owner).DistinctBy(e => e.Host, StringComparer.OrdinalIgnoreCase).Select(e => e.Issuer)];
+        [.. _entries.Where(e => e.ServedBy == owner).DistinctBy(e => e.Host, StringComparer.OrdinalIgnoreCase).Select(e => e.Issuer)
+            .Concat(_strangers.Where(s => s.ServedBy == owner).Select(s => s.Issuer))];
 
-    /// <summary>The server's Authentication:IdentityProviders settings for every registered provider.</summary>
+    /// <summary>The server's Authentication:IdentityProviders settings for every registered provider; strangers have none.</summary>
     public IEnumerable<KeyValuePair<string, string>> ToSettings()
     {
         foreach (var entry in _entries)

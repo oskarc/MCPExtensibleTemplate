@@ -10,7 +10,7 @@ namespace McpServerTemplate.E2E.Harness;
 
 /// <summary>
 /// The images the environment builds from this checkout: the server, from the repository's own
-/// Dockerfile, and the test issuer.
+/// Dockerfile, the test issuer, and the test host (contract-005 · G-10).
 ///
 /// contract-005 · G-8 — both are built with the Testcontainers Dockerfile builder from the repository
 /// root, and tagged with a hash of the whole build context as .dockerignore filters it. An image is
@@ -32,6 +32,9 @@ internal static class Images
 
     /// <summary>The test issuer image's repository name; test-only, never pushed.</summary>
     public const string IssuerRepository = "mcp-e2e-testissuer";
+
+    /// <summary>contract-005 · G-10 — the test host image's repository name; test-only, never pushed.</summary>
+    public const string TestHostRepository = "mcp-e2e-testhost";
 
     /// <summary>The label that carries the commit of the checkout an image was built from.</summary>
     public const string RevisionLabel = "org.opencontainers.image.revision";

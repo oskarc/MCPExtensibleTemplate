@@ -13,7 +13,8 @@ namespace McpServerTemplate.E2E.Harness;
 /// The test issuer container, and the test's door into it.
 ///
 /// contract-005 · G-6 — a container built from McpServerTemplate.TestIssuer, on the network under every
-/// host name the issuer registry gives it (idp-a.e2e.test and idp-b.e2e.test). It is its own container
+/// host name the issuer registry gives it (idp-a.e2e.test and idp-b.e2e.test, and T-3's stranger,
+/// stranger.e2e.test, which no server is configured with). It is its own container
 /// rather than a port on the test machine exposed into the network, so Windows with Docker Desktop and
 /// the Linux runner reach it by the same mechanism, with no SSH sidecar. Its signing keys are made
 /// when it starts and never leave it; the test asks it for tokens through its admin endpoint, under
@@ -156,13 +157,18 @@ public sealed class TestIssuerService : IAsyncDisposable
     /// <summary>One /authorize or /token request as the test issuer recorded it.</summary>
     public sealed record AuthorizationRecord(string Path, string? ClientId, string? Resource, string? ChallengeMethod, string Outcome);
 
-    /// <summary>Requests counted per issuer name and path — discovery and JWKS among them.</summary>
+    /// <summary>
+    /// Requests counted per issuer name and path — discovery and JWKS among them. contract-005 · T-3 — with
+    /// <paramref name="from"/>, only the requests made from that address: one server's, where every server in
+    /// the run asks the same issuers.
+    /// </summary>
     public static async Task<IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>>> CountsAsync(
-        HttpClient http, string anyHost, CancellationToken cancellationToken = default)
+        HttpClient http, string anyHost, System.Net.IPAddress? from = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(http);
 
-        var counts = await http.GetFromJsonAsync<Dictionary<string, Dictionary<string, int>>>(new Uri($"https://{anyHost}/admin/counts"), cancellationToken);
+        var query = from is null ? string.Empty : $"?from={Uri.EscapeDataString(from.ToString())}";
+        var counts = await http.GetFromJsonAsync<Dictionary<string, Dictionary<string, int>>>(new Uri($"https://{anyHost}/admin/counts{query}"), cancellationToken);
         return counts!.ToDictionary(
             c => c.Key,
             c => (IReadOnlyDictionary<string, int>)c.Value,

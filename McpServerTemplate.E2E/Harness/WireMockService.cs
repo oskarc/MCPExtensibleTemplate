@@ -98,6 +98,40 @@ public sealed class WireMockService : IUpstreamService
         return await http.GetFromJsonAsync<JsonElement>(new Uri($"https://{Alias}/__admin/requests"), cancellationToken);
     }
 
+    /// <summary>One request the fake recorded: the address it came from, and what it asked for.</summary>
+    /// <param name="Id">WireMock's own id for the entry.</param>
+    /// <param name="Client">The address the request came from: on the run's network, the server that made it.</param>
+    /// <param name="Method">The HTTP method.</param>
+    /// <param name="Url">The URL as the fake received it, host included.</param>
+    /// <param name="Path">The path.</param>
+    public sealed record JournalEntry(string Id, System.Net.IPAddress? Client, string Method, string Url, string Path);
+
+    /// <summary>
+    /// contract-005 · T-2, T-8 — every request the fake has recorded, read from its admin API. A request is attributed
+    /// to the server that made it by its client address, which WireMock records for each: every server in a run shares
+    /// the fake, and a test reads what its own server sent.
+    /// </summary>
+    public static async Task<IReadOnlyList<JournalEntry>> EntriesAsync(HttpClient http, CancellationToken cancellationToken = default)
+    {
+        var journal = await JournalAsync(http, cancellationToken);
+        if (journal.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidOperationException($"WireMock's journal is not a list of requests: {journal}");
+        }
+
+        static string Read(JsonElement request, string name) =>
+            request.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()! : string.Empty;
+
+        return [.. journal.EnumerateArray().Select(entry =>
+        {
+            var request = entry.GetProperty("Request");
+            var client = System.Net.IPAddress.TryParse(Read(request, "ClientIP"), out var address)
+                ? (address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address)
+                : null;
+            return new JournalEntry(Read(entry, "Guid"), client, Read(request, "Method"), Read(request, "Url"), Read(request, "Path"));
+        })];
+    }
+
     /// <summary>
     /// How many recorded requests mention <paramref name="fragment"/> anywhere in their record — a
     /// path, a host, a header. A count, so a test compares it before and after its own call.

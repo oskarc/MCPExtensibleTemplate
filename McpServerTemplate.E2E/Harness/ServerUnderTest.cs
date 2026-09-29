@@ -11,6 +11,20 @@ using McpServerTemplate.Testing;
 namespace McpServerTemplate.E2E.Harness;
 
 /// <summary>
+/// contract-005 · G-8, G-10 — which image a server under test runs: the one that ships, built from the
+/// repository's Dockerfile, or the test host, built from McpServerTemplate.E2EHost's. Both are
+/// configured the same way, by the environment's base settings and a delta, and nothing else.
+/// </summary>
+public enum ServerBuild
+{
+    /// <summary>The shipped image (G-8).</summary>
+    Shipped,
+
+    /// <summary>The test host (G-10): the shipped composition, with test modules only it has.</summary>
+    TestHost,
+}
+
+/// <summary>
 /// One running server image, with the TLS front in front of it.
 ///
 /// contract-005 · G-8 — the image built from the repository's Dockerfile, configured through its
@@ -49,12 +63,14 @@ public sealed class ServerUnderTest : IAsyncDisposable
     private ServerUnderTest(
         E2EEnvironment environment,
         string name,
+        ServerBuild build,
         IContainer container,
         TlsFront front,
         IReadOnlyDictionary<string, string> settings)
     {
         _environment = environment;
         Name = name;
+        Build = build;
         Container = container;
         Front = front;
         Settings = settings;
@@ -63,6 +79,9 @@ public sealed class ServerUnderTest : IAsyncDisposable
 
     /// <summary>The name this server was started under; also its network alias's suffix.</summary>
     public string Name { get; }
+
+    /// <summary>Which image it runs.</summary>
+    public ServerBuild Build { get; }
 
     public IContainer Container { get; }
 
@@ -123,13 +142,13 @@ public sealed class ServerUnderTest : IAsyncDisposable
     }
 
     internal static async Task<ServerUnderTest> StartAsync(
-        E2EEnvironment environment, string name, SettingsDelta delta, CancellationToken cancellationToken)
+        E2EEnvironment environment, string name, SettingsDelta delta, ServerBuild build, CancellationToken cancellationToken)
     {
         var alias = $"server-{name}";
         var frontAddress = E2ENetwork.AllocateStatic();
         var settings = delta.ApplyTo(BaseSettings(E2EEnvironment.Issuers, frontAddress));
 
-        var container = new ContainerBuilder(environment.ServerImage)
+        var container = new ContainerBuilder(environment.ImageOf(build))
             .WithNetwork(environment.Network)
             .WithNetworkAliases(alias)
             .WithLabel(E2ENetwork.RunLabel, environment.RunId)
@@ -158,7 +177,7 @@ public sealed class ServerUnderTest : IAsyncDisposable
             front = await E2EEnvironment.Timings.MeasureEnvironmentAsync($"{name}: front", () =>
                 TlsFront.StartAsync(environment.Network, environment.Pki, frontAddress, alias, Port, environment.RunId, cancellationToken));
 
-            var server = new ServerUnderTest(environment, name, container, front, settings);
+            var server = new ServerUnderTest(environment, name, build, container, front, settings);
             await E2EEnvironment.Timings.MeasureEnvironmentAsync($"{name}: forwarded-headers self-check", () =>
                 server.CheckForwardedHeadersAsync(cancellationToken));
 
@@ -213,8 +232,54 @@ public sealed class ServerUnderTest : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// contract-005 · T-3 — the lines on the server's standard error that contain <paramref name="marker"/>, after
+    /// the first <paramref name="skip"/> of them: what it logged since a test last looked. Waits up to five seconds
+    /// for at least one (Docker's log follows the server a moment later, and further under load); returns as soon
+    /// as one is there, and empty when none has appeared.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> StderrLinesAfterAsync(string marker, int skip)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(marker);
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (true)
+        {
+            var lines = await StderrLinesAsync(marker);
+            if (lines.Count > skip || DateTime.UtcNow >= deadline)
+            {
+                return [.. lines.Skip(skip)];
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+    }
+
+    /// <summary>Every line on the server's standard error that contains <paramref name="marker"/>, trimmed.</summary>
+    public async Task<IReadOnlyList<string>> StderrLinesAsync(string marker)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(marker);
+        return [.. (await StderrAsync()).Split('\n').Where(l => l.Contains(marker, StringComparison.Ordinal)).Select(l => l.Trim())];
+    }
+
+    /// <summary>
+    /// contract-005 · T-2, T-3, T-8 — this server's address on the run's network, as Docker gave it: where its
+    /// requests to the issuers and the upstream fakes come from, so a witness's record can be read for this server
+    /// alone while every server in the run shares the witness.
+    /// </summary>
+    public async Task<IPAddress> NetworkAddressAsync()
+    {
+        var inspected = await _environment.Docker.Containers.InspectContainerAsync(Container.Id);
+        return inspected.NetworkSettings?.Networks is { } networks
+            && networks.TryGetValue(_environment.Network.Name, out var endpoint)
+            && IPAddress.TryParse(endpoint.IPAddress, out var address)
+            ? address
+            : throw new EnvironmentFaultException("server address", $"the server container {Name} has no address on the run's network {_environment.Network.Name}.");
+    }
+
     /// <summary>An HTTP client through this server's name map, forwarding <paramref name="clientAddress"/>.</summary>
-    public HttpClient CreateClient(string clientAddress, NameMapLog? log = null) => Names.CreateClient(log, clientAddress);
+    public HttpClient CreateClient(string clientAddress, NameMapLog? log = null, DelegatingHandler? outermost = null) =>
+        Names.CreateClient(log, clientAddress, outermost);
 
     public async ValueTask DisposeAsync()
     {
@@ -232,10 +297,10 @@ public sealed class ServerUnderTest : IAsyncDisposable
     /// (<see cref="E2ENetwork.NoFront"/>), so these servers take nothing from the static half.
     /// </summary>
     internal static async Task<StartupOutcome> StartupAsync(
-        E2EEnvironment environment, string name, SettingsDelta delta, CancellationToken cancellationToken)
+        E2EEnvironment environment, string name, SettingsDelta delta, ServerBuild build, CancellationToken cancellationToken)
     {
         var settings = delta.ApplyTo(BaseSettings(E2EEnvironment.Issuers, E2ENetwork.NoFront));
-        var container = new ContainerBuilder(environment.ServerImage)
+        var container = new ContainerBuilder(environment.ImageOf(build))
             .WithNetwork(environment.Network)
             .WithNetworkAliases($"server-{name}")
             .WithLabel(E2ENetwork.RunLabel, environment.RunId)

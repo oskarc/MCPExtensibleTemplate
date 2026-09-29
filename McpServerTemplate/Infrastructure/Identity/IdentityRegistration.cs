@@ -170,9 +170,15 @@ public static class IdentityRegistration
 
                         if (missing.Count > 0)
                         {
-                            context.Fail(
-                                "The token is missing " + string.Join(", ", missing)
-                                + ", so it cannot be attributed, revoked or aged.");
+                            var reason = "The token is missing " + string.Join(", ", missing)
+                                + ", so it cannot be attributed, revoked or aged.";
+
+                            // contract-005 · T-3 — logged with its reason, as every other refused token is. A failure
+                            // set here is returned as it is, so OnAuthenticationFailed never runs for it, and the
+                            // framework's own line is an Information event Production filters out: the token was
+                            // refused and nothing said why. The reason names the claims, never the token.
+                            LogRefusal(context.HttpContext, scheme, reason);
+                            context.Fail(reason);
                             return Task.CompletedTask;
                         }
 
@@ -204,13 +210,7 @@ public static class IdentityRegistration
                     // credential in a log (roadmap I8).
                     OnAuthenticationFailed = context =>
                     {
-                        context.HttpContext.RequestServices
-                            .GetRequiredService<ILoggerFactory>()
-                            .CreateLogger("McpServerTemplate.Identity")
-                            .LogWarning(
-                                "authn_login_fail: {Scheme} refused a token for {Path} — {Reason}",
-                                scheme, context.HttpContext.Request.Path, context.Exception.Message);
-
+                        LogRefusal(context.HttpContext, scheme, context.Exception.Message);
                         return Task.CompletedTask;
                     },
                 };
@@ -251,6 +251,20 @@ public static class IdentityRegistration
 
         return services;
     }
+
+    /// <summary>
+    /// contract-002 revision, 2026-09-20; contract-005 · T-3 — one refused token, as the event a SIEM correlates for
+    /// credential attacks (roadmap P1.1): which scheme refused it, for which path, and why. The reason is the
+    /// validator's message or the claims a token lacks, never the token: a token in a log is a credential in a log
+    /// (roadmap I8).
+    /// </summary>
+    private static void LogRefusal(HttpContext context, string scheme, string reason) =>
+        context.RequestServices
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("McpServerTemplate.Identity")
+            .LogWarning(
+                "authn_login_fail: {Scheme} refused a token for {Path} — {Reason}",
+                scheme, context.Request.Path, reason);
 
     /// <summary>
     /// Picks the scheme for a presented token by reading its issuer without validating anything.

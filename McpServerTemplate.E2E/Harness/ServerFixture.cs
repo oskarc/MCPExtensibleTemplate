@@ -16,14 +16,20 @@ namespace McpServerTemplate.E2E.Harness;
 /// </summary>
 public abstract partial class ServerFixture : IAsyncLifetime
 {
-    protected ServerFixture(SettingsDelta delta)
+    /// <param name="delta">What the class changes about the server's configuration.</param>
+    /// <param name="build">contract-005 · G-10 — which image the class's server runs: the shipped one unless it says otherwise.</param>
+    protected ServerFixture(SettingsDelta delta, ServerBuild build = ServerBuild.Shipped)
     {
         Delta = delta;
+        Build = build;
         ClientAddress = ClientAddresses.Next();
     }
 
     /// <summary>What this class changes about the server's configuration.</summary>
     public SettingsDelta Delta { get; }
+
+    /// <summary>Which image this class's server runs.</summary>
+    public ServerBuild Build { get; }
 
     /// <summary>
     /// The client address the front forwards for this class's requests (G-9), unique to the class, so
@@ -44,7 +50,7 @@ public abstract partial class ServerFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         Environment = await E2EEnvironment.GetAsync();
-        Server = await Environment.StartServerAsync(Name, Delta);
+        Server = await Environment.StartServerAsync(Name, Delta, Build);
     }
 
     public async Task DisposeAsync()
@@ -56,8 +62,8 @@ public abstract partial class ServerFixture : IAsyncLifetime
     }
 
     /// <summary>An HTTP client through the name map; requests to the front carry this class's client address.</summary>
-    public HttpClient CreateClient(NameMapLog? log = null, string? clientAddress = null) =>
-        Server.CreateClient(clientAddress ?? ClientAddress, log);
+    public HttpClient CreateClient(NameMapLog? log = null, string? clientAddress = null, DelegatingHandler? outermost = null) =>
+        Server.CreateClient(clientAddress ?? ClientAddress, log, outermost);
 
     /// <summary>A fresh client-credentials token from Keycloak for this class's client.</summary>
     public async Task<string> KeycloakTokenAsync(string? scope = null)

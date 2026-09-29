@@ -90,6 +90,35 @@ public sealed partial class StartupOutcome : IAsyncDisposable
         return response.StatusCode;
     }
 
+    /// <summary>
+    /// contract-005 · T-8 — the "Frame installed:" line of a server that came up, read from its log as it stands now,
+    /// waiting up to five seconds for it: Docker's log follows the server a moment later.
+    /// </summary>
+    public async Task<string> FrameLineAsync()
+    {
+        if (!Started)
+        {
+            throw new InvalidOperationException($"The server exited with code {ExitCode}; it installed no frame. {Describe()}");
+        }
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (true)
+        {
+            var (_, stderr) = await _container.GetLogsAsync();
+            if (stderr.Split('\n').FirstOrDefault(l => l.Contains("Frame installed:", StringComparison.Ordinal)) is { } line)
+            {
+                return line.Trim();
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new InvalidOperationException($"The server came up and logged no 'Frame installed:' line. Its stderr:{Environment.NewLine}{stderr}");
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+    }
+
     /// <summary>What happened, in one line, for a failure message.</summary>
     public string Describe() =>
         Started

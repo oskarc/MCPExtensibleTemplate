@@ -14,6 +14,8 @@ namespace McpServerTemplate.TestIssuer;
 /// contract-005 · G-6 — which issuer a request is for is decided by the name it was sent to, so the
 /// server under test and the test process reach the same issuer by the same name, and a count is
 /// kept per name: "zero key lookups at every issuer" is a statement about each name, not the sum.
+/// contract-005 · T-3 — and per client address within each name, since every server in a run asks
+/// the same issuers: it is also a statement about one server, not every server in the run.
 /// </summary>
 public sealed class IssuerSet : IDisposable
 {
@@ -59,7 +61,7 @@ public sealed class IssuerSet : IDisposable
             // counted: counts are what the server under test and OAuth clients asked for.
             if (!context.Request.Path.StartsWithSegments("/admin", StringComparison.Ordinal))
             {
-                issuer.Count(context.Request.Path.Value ?? "/");
+                issuer.Count(context.Request.Path.Value ?? "/", context.Connection.RemoteIpAddress);
             }
 
             await next(context);
@@ -87,7 +89,20 @@ public sealed class IssuerSet : IDisposable
                 ? Results.BadRequest("A mint request needs a JSON body naming its kind.")
                 : Get(context).Mint(request, this);
         });
-        app.MapGet("/admin/counts", () => Results.Json(_issuers.ToDictionary(i => i.Key, i => i.Value.Counts())));
+        // contract-005 · T-3 — ?from={address}: the requests one client made, by the address it connected from. Every
+        // server in a run shares this container, so "no lookup at any issuer" is a statement about one server's requests.
+        app.MapGet("/admin/counts", (HttpContext context, CancellationToken _) =>
+        {
+            string? from = context.Request.Query["from"];
+            if (from is null)
+            {
+                return Results.Json(_issuers.ToDictionary(i => i.Key, i => i.Value.Counts()));
+            }
+
+            return System.Net.IPAddress.TryParse(from, out var address)
+                ? Results.Json(_issuers.ToDictionary(i => i.Key, i => i.Value.Counts(address)))
+                : Results.BadRequest("from must be an IP address.");
+        });
         app.MapGet("/admin/authorizations", () => Results.Json(_issuers.ToDictionary(i => i.Key, i => i.Value.Authorizations())));
         app.MapGet("/admin/clock", () => Results.Json(new Dictionary<string, object> { ["utc"] = DateTimeOffset.UtcNow }));
     }
@@ -148,6 +163,7 @@ public sealed class IssuerSet : IDisposable
     private sealed class Issuer : IDisposable
     {
         private readonly ConcurrentDictionary<string, int> _counts = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<(string Client, string Path), int> _countsByClient = new();
         private readonly ConcurrentDictionary<string, PendingCode> _codes = new(StringComparer.Ordinal);
         private readonly ConcurrentQueue<AuthorizationRecord> _authorizations = new();
 
@@ -162,9 +178,26 @@ public sealed class IssuerSet : IDisposable
         /// <summary>The Testing library's provider: its key was generated when this container started.</summary>
         public TestIdentityProvider Provider { get; }
 
-        public void Count(string path) => _counts.AddOrUpdate(path, 1, (_, n) => n + 1);
+        public void Count(string path, System.Net.IPAddress? client)
+        {
+            _counts.AddOrUpdate(path, 1, (_, n) => n + 1);
+            _countsByClient.AddOrUpdate((ClientKey(client), path), 1, (_, n) => n + 1);
+        }
 
         public SortedDictionary<string, int> Counts() => new(_counts, StringComparer.Ordinal);
+
+        /// <summary>What <paramref name="client"/> asked for, by path.</summary>
+        public SortedDictionary<string, int> Counts(System.Net.IPAddress client)
+        {
+            var key = ClientKey(client);
+            return new(
+                _countsByClient.Where(c => c.Key.Client == key).ToDictionary(c => c.Key.Path, c => c.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal);
+        }
+
+        /// <summary>A client address as one form: Kestrel listening on both families reports an IPv4 client as ::ffff:a.b.c.d.</summary>
+        private static string ClientKey(System.Net.IPAddress? client) =>
+            client is null ? "unknown" : (client.IsIPv4MappedToIPv6 ? client.MapToIPv4() : client).ToString();
 
         public AuthorizationRecord[] Authorizations() => [.. _authorizations];
 
