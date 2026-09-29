@@ -1092,7 +1092,60 @@ corrections:
     clerked: true
     precedent: "P-033"
     clerk_note: null
-
+  - corr_id: C-034
+    date: 2026-09-29
+    contract_id: contract-005
+    moment: M-25
+    grade: detail
+    intervention: reviewed-after
+    agent_offered: |
+      | **Batch C**, documentation (the documented deployment rewritten around a TLS front, plus about 11
+      smaller document fixes) | - | 2-3 h |
+    pioneer_said: |
+      To me it sounds insane that batch c that checks documentation is estimated to 2-3 hours. How can it
+      take that long? what defends that?
+    reason_given: |
+      none given
+    noticed: |
+      asked 2026-09-29, awaiting answer
+    would_have_been_right: |
+      asked 2026-09-29, awaiting answer
+    seen_before: |
+      asked 2026-09-29, awaiting answer
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
+  - corr_id: C-035
+    date: 2026-09-29
+    contract_id: contract-005
+    moment: M-25
+    grade: option-override
+    intervention: redirected
+    agent_offered: |
+      A change that would save real time: during the attack rounds, pause the documentation attacker, and
+      have no documentation batches. Do one documentation pass at the end, once the product has stopped
+      changing, and run the deployment test then. ... Shall I switch to documentation-once-at-the-end?
+    pioneer_said: |
+      dont test anything until the implementation work is complete, i cant defent the cost of doing test and
+      documentation runs that takes hours and hundreds of thousands of tokens that must be rerun after a few
+      hours because we implemented something new. this is a really inefficient way, and we cant be doing it.
+    reason_given: |
+      i cant defent the cost of doing test and documentation runs that takes hours and hundreds of thousands
+      of tokens that must be rerun after a few hours because we implemented something new. this is a really
+      inefficient way, and we cant be doing it.
+    noticed: |
+      asked 2026-09-29, awaiting answer
+    would_have_been_right: |
+      asked 2026-09-29, awaiting answer
+    seen_before: |
+      asked 2026-09-29, awaiting answer
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
 
 trajectory:
   updated: 2026-09-26
