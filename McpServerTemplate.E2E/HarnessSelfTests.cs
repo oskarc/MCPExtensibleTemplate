@@ -160,8 +160,10 @@ public sealed partial class HarnessSelfTests
 
     /// <summary>
     /// contract-005 · T-12 — and each has its recorded red, kept with its message in SABOTAGE-RECORD.md: a red on the
-    /// assertion that carries the test's claim, or, for a test skipped by decision, held. A sabotage added without its red,
-    /// or a record naming one the suite no longer has, fails here until scripts/e2e-sabotage.sh is run again.
+    /// assertion that carries the test's claim, taken on the test's file as it is now (<see cref="Sabotage.Fingerprint"/>),
+    /// or, for a test skipped by decision, held. A sabotage added without its red, one whose test changed since its red was
+    /// taken, or a record naming one the suite no longer has, fails here until scripts/e2e-sabotage.sh is run again — which
+    /// retakes those, and only those.
     /// </summary>
     [Fact]
     public void Every_named_sabotage_has_a_recorded_red_on_its_claim()
@@ -169,20 +171,44 @@ public sealed partial class HarnessSelfTests
         var path = Path.Combine(E2EEnvironment.FindRepositoryRoot(), "McpServerTemplate.E2E", Sabotage.RecordFile);
         Assert.True(File.Exists(path), $"{path} is missing: run scripts/e2e-sabotage.sh, which writes it.");
         var recorded = RecordRow().Matches(File.ReadAllText(path))
-            .ToDictionary(m => m.Groups["name"].Value, m => m.Groups["result"].Value.Trim(), StringComparer.Ordinal);
+            .ToDictionary(
+                m => m.Groups["name"].Value,
+                m => (Fingerprint: m.Groups["fingerprint"].Success ? m.Groups["fingerprint"].Value : null, Result: m.Groups["result"].Value.Trim()),
+                StringComparer.Ordinal);
 
         // Positive control: the record was read as one.
         Assert.NotEmpty(recorded);
 
-        var problems = Sabotage.All
-            .Select(e => (Entry: e, Result: recorded.GetValueOrDefault(e.Name)))
-            .Where(r => r.Entry.Held is null ? r.Result != "red on its claim" : r.Result?.StartsWith("held", StringComparison.Ordinal) != true)
-            .Select(r => $"{r.Entry.Name} ({r.Entry.Test.Name}): {(r.Result is null ? "not in the record" : $"recorded as '{r.Result}'")}")
-            .Concat(recorded.Keys.Where(n => Sabotage.All.All(e => e.Name != n)).Select(n => $"{n}: in the record, but no sabotage of the suite"))
-            .ToList();
+        var problems = new List<string>();
+        foreach (var entry in Sabotage.All)
+        {
+            if (!recorded.TryGetValue(entry.Name, out var row))
+            {
+                problems.Add($"{entry.Name} ({entry.Test.Name}): not in the record");
+            }
+            else if (entry.Held is not null)
+            {
+                if (!row.Result.StartsWith("held", StringComparison.Ordinal))
+                {
+                    problems.Add($"{entry.Name} ({entry.Test.Name}): held, and recorded as '{row.Result}'");
+                }
+            }
+            else if (row.Result != "red on its claim")
+            {
+                problems.Add($"{entry.Name} ({entry.Test.Name}): recorded as '{row.Result}'");
+            }
+            else if (row.Fingerprint != Sabotage.Fingerprint(entry.Test))
+            {
+                problems.Add($"{entry.Name} ({entry.Test.Name}): its red was taken on {entry.Test.SourceFile} as {row.Fingerprint ?? "(none)"}, "
+                    + $"and the file is {Sabotage.Fingerprint(entry.Test)} now");
+            }
+        }
+
+        problems.AddRange(recorded.Keys.Where(n => Sabotage.All.All(e => e.Name != n)).Select(n => $"{n}: in the record, but no sabotage of the suite"));
         Assert.True(
             problems.Count == 0,
-            $"{Sabotage.RecordFile} does not hold a red on its claim for every sabotage; run scripts/e2e-sabotage.sh. {string.Join("; ", problems)}");
+            $"{Sabotage.RecordFile} does not hold a red on its claim, taken on its test as it is, for every sabotage; run "
+            + $"scripts/e2e-sabotage.sh, which retakes these. {string.Join("; ", problems)}");
     }
 
     /// <summary>
@@ -213,8 +239,11 @@ public sealed partial class HarnessSelfTests
         Assert.Contains("'t0-no-such-sabotage', which is no sabotage of this suite", unknown.Refusal, StringComparison.Ordinal);
     }
 
-    /// <summary>A row of the record's index: the sabotage, its test, where it acts, and its result.</summary>
-    [GeneratedRegex(@"^\| `(?<name>[a-z0-9.-]+)` \|[^\n]*\| (?<result>[^|\n]+) \|[ \t]*\r?$", RegexOptions.Multiline)]
+    /// <summary>
+    /// A row of the record's index: the sabotage, its test, where it acts, the fingerprint of the test file its red was
+    /// taken on (- for a held one), and its result.
+    /// </summary>
+    [GeneratedRegex(@"^\| `(?<name>[a-z0-9.-]+)` \| [^|\n]* \| [^|\n]* \| (?:`(?<fingerprint>[0-9a-f]{12})`|-) \| (?<result>[^|\n]+) \|[ \t]*\r?$", RegexOptions.Multiline)]
     private static partial Regex RecordRow();
 
     private static async Task<string> GitAsync(string repository, params string[] arguments)

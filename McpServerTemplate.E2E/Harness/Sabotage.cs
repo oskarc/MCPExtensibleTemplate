@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Xunit.Sdk;
@@ -209,6 +210,14 @@ public static partial class Sabotage
             .Where(e => string.IsNullOrWhiteSpace(e.Weakens) || e.Weakens.IndexOfAny(['\t', '\r', '\n']) >= 0)
             .Select(e => $"'{e.Name}' says what it weakens in no words, or in more than one line."));
 
+        // A red is taken on its test's own file (Fingerprint), which is found by the class's name.
+        var root = E2EEnvironment.FindRepositoryRoot();
+        problems.AddRange(tests
+            .Select(t => t.Class).Distinct()
+            .Where(c => !File.Exists(Path.Combine(root, $"McpServerTemplate.E2E/{c.Name}.cs"))
+                || !File.ReadAllText(Path.Combine(root, $"McpServerTemplate.E2E/{c.Name}.cs")).Contains($"class {c.Name}", StringComparison.Ordinal))
+            .Select(c => $"{c.Name} is not declared in McpServerTemplate.E2E/{c.Name}.cs, the file its reds are taken on."));
+
         return problems;
     }
 
@@ -218,14 +227,28 @@ public static partial class Sabotage
         ArgumentNullException.ThrowIfNull(entries);
 
         // Appended, not passed to the constructor: T-13 reads a string given to a new …Builder as an image reference.
-        var text = new StringBuilder().Append("name\tclass\tmethod\tacts\theld\ttest\tweakens\n");
+        var text = new StringBuilder().Append("name\tclass\tmethod\tacts\theld\tfingerprint\ttest\tweakens\n");
         foreach (var entry in entries)
         {
             text.Append(CultureInfo.InvariantCulture, $"{entry.Name}\t{entry.Test.Class.FullName}\t{entry.Test.Method.Name}\t{ActsIn(entry.Acts)}\t")
-                .Append(CultureInfo.InvariantCulture, $"{OneLine(entry.Held ?? "-")}\t{OneLine(entry.Test.Name)}\t{entry.Weakens}\n");
+                .Append(CultureInfo.InvariantCulture, $"{OneLine(entry.Held ?? "-")}\t{Fingerprint(entry.Test)}\t{OneLine(entry.Test.Name)}\t{entry.Weakens}\n");
         }
 
         return text.ToString();
+    }
+
+    /// <summary>
+    /// contract-005 · T-12 — what a recorded red was taken on: the first 12 hex digits of the SHA-256 of the test's own file
+    /// (<see cref="EndToEndTest.SourceFile"/>), read as text with its line endings made \n, so a checkout's line endings
+    /// change nothing. A red taken on another version of the file is stale: the test may no longer make the claim it made.
+    /// A change to the harness or the product changes no fingerprint; scripts/e2e-sabotage.sh --all retakes every red.
+    /// </summary>
+    public static string Fingerprint(EndToEndTest test)
+    {
+        ArgumentNullException.ThrowIfNull(test);
+
+        var text = File.ReadAllText(Path.Combine(E2EEnvironment.FindRepositoryRoot(), test.SourceFile)).Replace("\r\n", "\n", StringComparison.Ordinal);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..12];
     }
 
     /// <summary>Where a sabotage acts, in the record's words.</summary>
@@ -336,6 +359,9 @@ public sealed record EndToEndTest(Type Class, MethodInfo Method, object?[]? Row,
     public string Name => Row is null
         ? $"{Class.Name}.{Method.Name}"
         : $"{Class.Name}.{Method.Name}({string.Join(", ", Row.Select(a => a is null ? "null" : $"\"{a}\""))})";
+
+    /// <summary>contract-005 · T-12 — the test's own file, under the repository: every test class is in a file named after it.</summary>
+    public string SourceFile => $"McpServerTemplate.E2E/{Class.Name}.cs";
 
     /// <summary>Whether it is the test case <paramref name="className"/>.<paramref name="methodName"/>(<paramref name="arguments"/>).</summary>
     public bool Is(string className, string methodName, IReadOnlyList<object?>? arguments) =>

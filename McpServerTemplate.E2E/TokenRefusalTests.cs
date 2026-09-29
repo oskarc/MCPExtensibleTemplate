@@ -229,6 +229,7 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
         // The stranger's token is the first token the server sees.
         var token = await TestIssuerService.MintAsync(http, stranger.Host, "valid", ServerUnderTest.Resource, ["weather:read"]);
         Assert.Equal(stranger.Issuer, new JsonWebToken(token).Issuer);
+        var before = (await server.StderrLinesAsync(AuthenticationFailed)).Count;
         HttpStatusCode status;
         using (var refused = await http.SendAsync(McpRequests.Initialize(ServerUnderTest.Endpoint, token)))
         {
@@ -242,6 +243,18 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
             $"a token from {stranger.Issuer}, which no server is configured with, made this server ask the issuers for "
             + $"{JsonSerializer.Serialize(after)}; every issuer name ({string.Join(", ", names)}) should show no discovery and no key-set request.");
         Claim.Holds(() => Assert.Equal(HttpStatusCode.Unauthorized, status));
+
+        // contract-005 · T-3 — refused, and said so, as every other refused token is: the reason on the server's log, naming
+        // the issuer, and never the token.
+        var logged = await server.StderrLinesAfterAsync(AuthenticationFailed, before);
+        var reason = $"no identity provider is configured for issuer '{stranger.Issuer}'";
+        var stderr = await server.StderrAsync();
+        Claim.True(
+            logged.Count == 1 && logged[0].Contains(reason, StringComparison.Ordinal)
+                && !stderr.Contains(token, StringComparison.Ordinal) && !stderr.Contains(token.Split('.')[1], StringComparison.Ordinal),
+            $"the token from {stranger.Issuer} was refused with {(int)status}, and the server's log "
+            + $"{(logged.Count == 0 ? $"has no {AuthenticationFailed} line for it" : $"says '{string.Join(" | ", logged)}'")}"
+            + $"{(stderr.Contains(token.Split('.')[1], StringComparison.Ordinal) ? ", and holds the token" : string.Empty)}, not one line giving its reason ('{reason}').");
 
         // The witness is live: a registered issuer's token makes that issuer's counts rise from zero.
         var registered = await TestIssuerService.MintAsync(http, IssuerA, "valid", ServerUnderTest.Resource, ["weather:read"]);

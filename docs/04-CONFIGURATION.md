@@ -22,6 +22,8 @@ One rule shapes everything below: **in the sections the frame governs — `Authe
 
 **Settings are read once, at startup, where they are checked.** No settings file is watched: editing one while the server runs changes nothing until the server restarts, and the restart checks the change like any other setting — a key it does not read stops it from starting. A running server's behaviour cannot be changed by a file it was not started with. No launch can switch this back on: every settings file is read once whatever the command line or the environment says. A request to read them again stops the server at startup, naming where it came from, since the server would otherwise ignore it: `hostBuilder:reloadConfigOnChange=true` on the command line or as `DOTNET_hostBuilder__reloadConfigOnChange` in the environment, under either transport, and as `ASPNETCORE_hostBuilder__reloadConfigOnChange` under HTTP. The stdio host does not read `ASPNETCORE_` variables, so there that one has no effect.
 
+**The HTTP server stops within 8 seconds.** Told to stop (SIGTERM, which `docker stop` and Kubernetes send), it takes no new requests, gives those in flight up to 8 seconds, closes any still running, and exits 0 with a `sys_shutdown` line: inside a container's stop grace, which is 10 seconds under Docker. Give a container at least that grace, so a stop is never a kill. The framework's own setting for the time, `shutdownTimeoutSeconds`, is one the server would ignore, so it stops the HTTP server at startup, naming where it came from: `--shutdownTimeoutSeconds` on the command line, `DOTNET_shutdownTimeoutSeconds`, `ASPNETCORE_shutdownTimeoutSeconds` or `shutdownTimeoutSeconds` in the environment, or a settings file. The stdio host keeps the framework's timeout, and honours the setting.
+
 **Which settings sources the server accepts.** Every source its settings come from must be one that cannot read them again: settings in memory, environment variables, the command line, a settings file that is not watched, or a chained configuration made only of those. Any other kind of source stops the server at startup, naming it — a key-per-file source (`AddKeyPerFile`, the usual way mounted Docker or Kubernetes secrets are read) included, even with `reloadOnChange: false`, because the check goes by kind: a source cannot be asked whether it will read again. To bring mounted or vault secrets in today, pass them as environment variables (Kubernetes `secretKeyRef` or `envFrom`, Docker `--env-file` or Compose `env_file`), or read them in code at startup into an in-memory source (`AddInMemoryCollection`) before the server is composed. Teaching the check a new kind of source is a code change to `SettingsReadOnce`, with a test proving that kind cannot read its settings again.
 
 ```
@@ -589,6 +591,7 @@ Every one of these stops the server at startup, with a message saying what to fi
 | A `BaseUrl` that is not `https`, or whose host the policy does not allow | Keeps upstream calls to the declared hosts |
 | `Limits:Redis` missing outside Development | Limits must hold on every instance |
 | An irreversible tool without `Confirmation:Key` | It could never run safely |
+| `shutdownTimeoutSeconds` set for the HTTP server, by any route | The server stops within its own 8 seconds, inside a container's stop grace, and would ignore it |
 
 ---
 

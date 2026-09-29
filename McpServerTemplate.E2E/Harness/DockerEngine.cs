@@ -30,11 +30,13 @@ internal static class DockerEngine
 
     /// <summary>
     /// Starts a server's container, which may refuse to start. Testcontainers returns from a start once its readiness check
-    /// (its default wait, UntilContainerIsRunning) passes, and a container that has exited passes it; but on a busy engine
-    /// that check has timed out instead, on a server that had already refused — seen 2026-09-29, the full suite running: the
-    /// test host given a non-.test authority (T-8) exited 78 a fifth of a second after it started, and the start threw
-    /// "TimeoutException: The operation has timed out" 18 s later, so the refusal read as a harness failure. A container
-    /// found stopped when the check gives up is returned as it is: its exit is the outcome, which the caller reads.
+    /// (its default wait, UntilContainerIsRunning, which its public API neither removes nor configures) passes; on a busy
+    /// engine that check has instead waited out its own timeout, about 20 s, on servers that had already refused — seen
+    /// 2026-09-29 with the full suite running: the test host given a non-.test authority (T-8) exited 78 a fifth of a second
+    /// after it started, and the start threw "TimeoutException: The operation has timed out" 18 s later; in one cold run, three
+    /// startup rows (T-10, T-11 (1), T-11 (4)) the same. A container found stopped when the check gives up is returned as it
+    /// is: its exit is the outcome, which the caller reads, before it asks for any port (ServerUnderTest.WaitForStartupAsync).
+    /// Such a refusal still costs that timeout; it no longer reads as a harness failure.
     /// </summary>
     public static async Task StartServerAsync(this DotNet.Testcontainers.Containers.IContainer container, IDockerClient docker, CancellationToken cancellationToken)
     {

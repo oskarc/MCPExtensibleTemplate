@@ -42,17 +42,44 @@ public static class HostBuilders
     /// </summary>
     public static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(8);
 
+    /// <summary>The framework's own host setting for that time, in whole seconds (HostOptions reads it from the host's settings).</summary>
+    private const string ShutdownTimeoutSetting = "shutdownTimeoutSeconds";
+
     /// <summary>The web host for Transport=http.</summary>
+    /// <exception cref="ConfigurationException">A route the host reads its settings from sets <c>shutdownTimeoutSeconds</c>.</exception>
     public static WebApplicationBuilder ForHttp(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
 
         var builder = WebApplication.CreateBuilder([StartNoWatcher, .. args]);
         ReadOnce(builder.Configuration);
+        RefuseShutdownTimeoutSetting(builder.Configuration);
 
         // contract-005 · T-10 — registered after the host's own reading of its settings, so this is the timeout it stops with.
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = ShutdownTimeout);
         return builder;
+    }
+
+    /// <summary>
+    /// contract-005 · T-10 — the framework's own shutdownTimeoutSeconds is a setting this server would ignore: whatever it
+    /// says, the web host stops within <see cref="ShutdownTimeout"/>, so it finishes inside a container's stop grace. A
+    /// setting the server would ignore is refused everywhere else in the frame, and this one is too, from every route the
+    /// host reads it by — the command line, the environment as DOTNET_, ASPNETCORE_ or unprefixed, a settings file — naming
+    /// the route, as SettingsReadOnce names a request to read the settings again. The stdio host keeps the framework's
+    /// timeout, and the setting, as they are: it runs no container.
+    /// </summary>
+    private static void RefuseShutdownTimeoutSetting(ConfigurationManager configuration)
+    {
+        foreach (var provider in ((IConfigurationRoot)configuration).Providers)
+        {
+            if (provider.TryGet(ShutdownTimeoutSetting, out var value) && !string.IsNullOrEmpty(value))
+            {
+                throw new ConfigurationException(
+                    $"{ShutdownTimeoutSetting} is '{value}' from {Frame.SettingsReadOnce.Route(provider, ShutdownTimeoutSetting)}: this "
+                    + $"server stops within {ShutdownTimeout.TotalSeconds:0} seconds of being told to, so that it finishes inside a "
+                    + "container's stop grace (Docker waits 10 seconds before it kills), and would ignore the setting. Remove it.");
+            }
+        }
     }
 
     /// <summary>The plain generic host for Transport=stdio: no Kestrel, no port, no middleware.</summary>

@@ -76,6 +76,10 @@ public sealed partial class SettingsDelta
         // these. The harness's trust is set through them (G-8), and a test that changes trust sets them.
         "SSL_CERT_FILE",
         "SSL_CERT_DIR",
+
+        // HostBuilders.cs — the framework's shutdown timeout, read by the web host only to be refused (contract-005 · T-10):
+        // the server stops within its own 8 seconds. The route a container is given it by.
+        "DOTNET_shutdownTimeoutSeconds",
     ];
 
     private static readonly (string Key, Regex Pattern)[] Declared =

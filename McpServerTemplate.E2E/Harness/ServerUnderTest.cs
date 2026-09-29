@@ -352,7 +352,7 @@ public sealed class ServerUnderTest : IAsyncDisposable
         // Directly on the published port, with the one Host the server allows: host filtering runs
         // before the health endpoints.
         using var http = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
-        var readyz = new Uri($"http://{container.Hostname}:{container.GetMappedPublicPort(Port)}/readyz");
+        Uri? readyz = null;
         var deadline = DateTime.UtcNow.AddMinutes(1);
 
         while (DateTime.UtcNow < deadline)
@@ -361,6 +361,11 @@ public sealed class ServerUnderTest : IAsyncDisposable
             {
                 return (exitCode, null);
             }
+
+            // Asked of a container not seen to have stopped: one that has exited has no port mapped, and a refusal at once
+            // is an outcome, not a missing port (seen 2026-09-29: "Exposed port 3001/tcp is not mapped" where three servers
+            // had refused, exit 78, and Testcontainers' start had given up on them — DockerEngine.StartServerAsync).
+            readyz ??= new Uri($"http://{container.Hostname}:{container.GetMappedPublicPort(Port)}/readyz");
 
             try
             {

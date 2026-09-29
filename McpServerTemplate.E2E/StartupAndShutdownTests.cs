@@ -46,6 +46,9 @@ public sealed class StartupAndShutdownTests(StartupAndShutdownTests.Server fixtu
 
         // The environment binds 0.0.0.0 (G-8); with no allowed host, any Host would be answered.
         { "missing-allowed-hosts", "HttpTransport:AllowedHosts", null, "HttpTransport:AllowedHosts must name the host names clients reach this server by" },
+
+        // The framework's own shutdown timeout, which the server would ignore: it stops within its own 8 seconds.
+        { "shutdown-timeout-set", "DOTNET_shutdownTimeoutSeconds", "30", "shutdownTimeoutSeconds is '30' from the environment, as DOTNET_shutdownTimeoutSeconds" },
     };
 
     [Theory]

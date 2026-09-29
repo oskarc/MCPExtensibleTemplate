@@ -38,11 +38,22 @@ public static class IdentityRegistration
     /// </summary>
     public const string UnattributableScheme = "unattributable";
 
+    /// <summary>
+    /// contract-005 · T-3 — where the router leaves the issuer of a token it refused to route because no identity provider
+    /// is configured for it, for <see cref="UnattributableHandler"/> to log.
+    /// </summary>
+    private const string UnregisteredIssuerItem = "McpServerTemplate.Identity.UnregisteredIssuer";
+
     public static string SchemeFor(string identityProvider) => $"idp:{identityProvider}";
 
     /// <summary>
     /// Returns "no credential I can act on". The challenge that follows is issued by the MCP
     /// scheme, which is what tells the caller where to go.
+    ///
+    /// contract-005 · T-3 — a token whose issuer no identity provider is configured for is refused here, and was refused
+    /// with nothing said: the one refused token the log never showed. It is logged as authn_login_fail with its reason,
+    /// once per request (the framework runs a handler's authentication once per request), naming the issuer made safe for
+    /// a log line (<see cref="LogSafe"/>), never the token. Nothing is looked up to say it: no key, no document.
     /// </summary>
     private sealed class UnattributableHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
@@ -54,8 +65,15 @@ public static class IdentityRegistration
         {
         }
 
-        protected override Task<AuthenticateResult> HandleAuthenticateAsync() =>
-            Task.FromResult(AuthenticateResult.NoResult());
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            if (Context.Items.TryGetValue(UnregisteredIssuerItem, out var issuer) && issuer is string unregistered)
+            {
+                LogRefusal(Context, UnattributableScheme, $"no identity provider is configured for issuer '{LogSafe.Text(unregistered)}'");
+            }
+
+            return Task.FromResult(AuthenticateResult.NoResult());
+        }
     }
 
     public static IServiceCollection AddIdentity(
@@ -309,8 +327,13 @@ public static class IdentityRegistration
         var match = config.IdentityProviders.Values
             .FirstOrDefault(p => string.Equals(p.Issuer, issuer, StringComparison.Ordinal));
 
-        return match is null
-            ? UnattributableScheme
-            : SchemeFor(match.Name);
+        if (match is null)
+        {
+            // contract-005 · T-3 — refused here, and logged by the scheme it is sent to (UnattributableHandler).
+            context.Items[UnregisteredIssuerItem] = issuer;
+            return UnattributableScheme;
+        }
+
+        return SchemeFor(match.Name);
     }
 }

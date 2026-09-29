@@ -52,7 +52,7 @@ public static class SettingsReadOnce
             if (provider.TryGet(ReloadSwitch, out var value) && bool.TryParse(value, out var reload) && reload)
             {
                 throw new ConfigurationException(
-                    $"{ReloadSwitch} is '{value}' from {Route(provider)}: it asks for the settings files to be read again "
+                    $"{ReloadSwitch} is '{value}' from {Route(provider, ReloadSwitch)}: it asks for the settings files to be read again "
                     + "whenever they change, and this server reads its settings once, at startup, where they are checked, so it "
                     + "would ignore the request. A changed setting takes effect when the server restarts; remove the request.");
             }
@@ -70,11 +70,14 @@ public static class SettingsReadOnce
         }
     }
 
-    /// <summary>Where a setting <paramref name="provider"/> holds came from, as an operator would look for it.</summary>
-    private static string Route(IConfigurationProvider provider) => provider switch
+    /// <summary>
+    /// Where the setting <paramref name="key"/>, which <paramref name="provider"/> holds, came from, as an operator would look
+    /// for it. contract-005 · T-10 — HostBuilders names the route of the shutdown timeout it refuses the same way.
+    /// </summary>
+    internal static string Route(IConfigurationProvider provider, string key) => provider switch
     {
         CommandLineConfigurationProvider => "the command line",
-        EnvironmentVariablesConfigurationProvider => $"the environment, as {EnvironmentPrefix(provider)}{ReloadSwitch.Replace(":", "__", StringComparison.Ordinal)}",
+        EnvironmentVariablesConfigurationProvider => $"the environment, as {EnvironmentPrefix(provider)}{key.Replace(":", "__", StringComparison.Ordinal)}",
         FileConfigurationProvider file => $"the settings file {file.Source.Path}",
         _ => provider.ToString() ?? provider.GetType().Name,
     };

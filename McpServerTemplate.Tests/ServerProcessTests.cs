@@ -825,6 +825,68 @@ public sealed class ServerProcessTests(ServerProcessTests.SharedServers shared) 
         }
     }
 
+    /// <summary>
+    /// contract-005 · T-10 — the HTTP server stops within its own 8 seconds of being told to, so it finishes inside a
+    /// container's stop grace (HostBuilders.ShutdownTimeout). The framework's own host setting for that time,
+    /// shutdownTimeoutSeconds, is one it would ignore, so it is refused like every other such setting, by any route the
+    /// host reads it from, naming where it came from.
+    /// </summary>
+    [Theory]
+    [InlineData("the command line")]
+    [InlineData("DOTNET_")]
+    [InlineData("ASPNETCORE_")]
+    [InlineData("no prefix")]
+    public async Task T10_a_shutdown_timeout_setting_exits_78_naming_where_it_came_from(string route)
+    {
+        const string setting = "shutdownTimeoutSeconds";
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "127.0.0.1";
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        string[] arguments = [];
+        var variable = route == "no prefix" ? setting : $"{route}{setting}";
+        if (route == "the command line")
+        {
+            arguments = [$"--{setting}=30"];
+        }
+        else
+        {
+            environment[variable] = "30";
+        }
+
+        var spawned = Start(environment, arguments: arguments);
+        using var process = spawned.Process;
+        try
+        {
+            // Started means the frame installed itself; refused means it exited first.
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            while (!process.HasExited && !spawned.Stderr.Contains("Frame installed:", StringComparison.Ordinal) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(100);
+            }
+
+            Assert.True(
+                process.HasExited,
+                $"given {setting}=30 from {route}, the http server started and installed its frame: a setting it ignores, as it stops "
+                + "within its own 8 seconds.");
+
+            await process.WaitForExitAsync();
+            Assert.Equal(78, process.ExitCode);
+            var from = route == "the command line" ? route : $"the environment, as {variable}";
+            Assert.Contains($"{setting} is '30' from {from}", spawned.Stderr, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
     /// <summary>What /healthz on 127.0.0.1:<paramref name="port"/> answered within <paramref name="window"/>, or null when nothing did.</summary>
     private static async Task<HttpStatusCode?> AnswerWithinAsync(HttpClient http, int port, TimeSpan window, string host = "127.0.0.1")
     {
