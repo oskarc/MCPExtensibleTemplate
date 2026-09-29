@@ -78,8 +78,13 @@ public sealed partial class SettingsDelta
         "SSL_CERT_DIR",
 
         // HostBuilders.cs — the framework's shutdown timeout, read by the web host only to be refused (contract-005 · T-10):
-        // the server stops within its own 8 seconds. The route a container is given it by.
+        // the server stops within its own 6 seconds. The route a container is given it by.
         "DOTNET_shutdownTimeoutSeconds",
+
+        // HttpServerComposition.cs — ASP.NET Core's own forwarded-headers switch, read by the web host only to be refused
+        // (contract-005 · G-17 round 1): the server sets whom it trusts forwarded headers from itself. The route container
+        // guidance gives it by.
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED",
     ];
 
     private static readonly (string Key, Regex Pattern)[] Declared =

@@ -826,7 +826,7 @@ public sealed class ServerProcessTests(ServerProcessTests.SharedServers shared) 
     }
 
     /// <summary>
-    /// contract-005 · T-10 — the HTTP server stops within its own 8 seconds of being told to, so it finishes inside a
+    /// contract-005 · T-10 — the HTTP server stops within its own 6 seconds of being told to, so it finishes inside a
     /// container's stop grace (HostBuilders.ShutdownTimeout). The framework's own host setting for that time,
     /// shutdownTimeoutSeconds, is one it would ignore, so it is refused like every other such setting, by any route the
     /// host reads it from, naming where it came from.
@@ -871,7 +871,7 @@ public sealed class ServerProcessTests(ServerProcessTests.SharedServers shared) 
             Assert.True(
                 process.HasExited,
                 $"given {setting}=30 from {route}, the http server started and installed its frame: a setting it ignores, as it stops "
-                + "within its own 8 seconds.");
+                + "within its own 6 seconds.");
 
             await process.WaitForExitAsync();
             Assert.Equal(78, process.ExitCode);
@@ -885,6 +885,158 @@ public sealed class ServerProcessTests(ServerProcessTests.SharedServers shared) 
                 process.Kill(entireProcessTree: true);
             }
         }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1, on G-9 — ASP.NET Core reads a forwarded-headers switch of its own, ForwardedHeaders_Enabled,
+    /// outside every section the server governs: set to true, its options setup empties the lists of proxies the server trusts
+    /// forwarded headers from, and its startup filter runs the forwarded-headers step a second time, ahead of the pipeline.
+    /// With no proxy declared the server then believed every client's X-Forwarded-For and X-Forwarded-Proto: each client
+    /// chose the address the per-address limit counts it by, and the scheme. The server sets those lists itself and leaves
+    /// the framework's step out, so it would ignore the switch; and a setting it would ignore is refused, from every route the
+    /// web host reads it by, naming where it came from — as shutdownTimeoutSeconds is.
+    /// </summary>
+    [Theory]
+    [InlineData("the command line")]
+    [InlineData("DOTNET_")]
+    [InlineData("ASPNETCORE_")]
+    [InlineData("no prefix")]
+    [InlineData("a settings file")]
+    public async Task G9_the_frameworks_forwarded_headers_switch_exits_78_naming_where_it_came_from(string route)
+    {
+        const string setting = "ForwardedHeaders_Enabled";
+        var environment = IdentityEnvironment();
+        environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        environment["Transport"] = "http";
+        environment["HttpTransport__Port"] = FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment["HttpTransport__BindAddress"] = "127.0.0.1";
+        environment["Limits__Redis"] = await TestRedis.ConnectionStringAsync();
+
+        // The variable in the form container guidance writes it: upper case.
+        string[] arguments = [];
+        string? root = null;
+        var variable = route == "no prefix" ? setting.ToUpperInvariant() : $"{route}{setting.ToUpperInvariant()}";
+        string from;
+        switch (route)
+        {
+            case "the command line":
+                arguments = [$"--{setting}=true"];
+                from = route;
+                break;
+            case "a settings file":
+                // A content root of this test's own, holding the shipped settings files, one of them with the switch in it.
+                root = Directory.CreateTempSubdirectory("mcp-forwarded-headers-switch-").FullName;
+                var bin = Path.GetDirectoryName(ServerExecutable())!;
+                File.Copy(Path.Combine(bin, "appsettings.Production.json"), Path.Combine(root, "appsettings.Production.json"));
+                var settings = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(bin, "appsettings.json")))!.AsObject();
+                settings[setting] = "true";
+                await File.WriteAllTextAsync(Path.Combine(root, "appsettings.json"), settings.ToJsonString());
+                from = "the settings file appsettings.json";
+                break;
+            default:
+                environment[variable] = "true";
+                from = $"the environment, as {variable}";
+                break;
+        }
+
+        try
+        {
+            var spawned = Start(environment, workingDirectory: root, arguments: arguments);
+            using var process = spawned.Process;
+            try
+            {
+                // Started means the frame installed itself; refused means it exited first.
+                var deadline = DateTime.UtcNow.AddSeconds(30);
+                while (!process.HasExited && !spawned.Stderr.Contains("Frame installed:", StringComparison.Ordinal) && DateTime.UtcNow < deadline)
+                {
+                    await Task.Delay(100);
+                }
+
+                Assert.True(
+                    process.HasExited,
+                    $"given {setting}=true from {route}, the http server started and installed its frame: a switch that would have it "
+                    + "believe forwarded headers from any client, or one it ignores.");
+
+                await process.WaitForExitAsync();
+                Assert.Equal(78, process.ExitCode);
+                Assert.Contains($"{setting} is 'true' from {from}", spawned.Stderr, StringComparison.Ordinal);
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            if (root is not null)
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1, on T-3 — a token the router cannot attribute to any identity provider is refused before
+    /// it is validated: one it cannot read as a JSON web token, one over the size it reads at all, and one that names no
+    /// issuer. Each was refused with 401 and nothing in the log, so an operator saw every such token refused and never why.
+    /// Each is logged as authn_login_fail with its reason, as every other refused token is, and never with the token.
+    /// The collection's one started program (SharedServers), in Production, as a deployment runs it.
+    /// </summary>
+    [Theory]
+    [InlineData("unreadable", "the token cannot be read as a JSON web token")]
+    [InlineData("oversized", "the token is 9249 characters long, more than the 8192 this server reads")]
+    [InlineData("no-issuer", "the token names no issuer")]
+    public async Task T3_a_token_the_router_cannot_attribute_is_refused_with_its_reason_in_the_log(string kind, string reason)
+    {
+        var server = await shared.ServerAsync();
+        var marker = Guid.NewGuid().ToString("N");
+        var token = kind switch
+        {
+            "unreadable" => $"not-a-token-{marker}",
+            "oversized" => $"{new string('a', 9 * 1024)}{marker}{new string('b', 9249 - (9 * 1024) - marker.Length)}",
+            "no-issuer" => string.Join('.',
+                Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode("""{"alg":"RS256","typ":"JWT"}"""),
+                Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode($$"""{"sub":"user-1","jti":"{{marker}}","aud":"https://mcp.example.com/mcp"}"""),
+                "c2lnbmF0dXJl"),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unreadable, oversized or no-issuer"),
+        };
+
+        static string[] Refusals(string stderr) =>
+            [.. stderr.Split('\n').Where(l => l.Contains("authn_login_fail", StringComparison.Ordinal)).Select(l => l.Trim())];
+
+        var before = Refusals(server.StderrSnapshot()).Length;
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+        {
+            Content = new StringContent(
+                """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}""",
+                Encoding.UTF8,
+                "application/json"),
+        };
+        request.Headers.Accept.ParseAdd("application/json, text/event-stream");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+        using var response = await server.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        // The server's stderr is read as it is written; give the line a moment.
+        string[] logged = [];
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while ((logged = [.. Refusals(server.StderrSnapshot()).Skip(before)]).Length == 0 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(100);
+        }
+
+        Assert.True(
+            logged.Length > 0 && logged.All(l => l.Contains(reason, StringComparison.Ordinal)),
+            $"{(kind == "no-issuer" ? "a" : "an")} {kind} token was refused with 401, and the server's log "
+            + (logged.Length == 0 ? "has no authn_login_fail line for it" : $"says '{string.Join(" | ", logged)}'") + $", not its reason ('{reason}').");
+
+        // Never the token: the no-issuer token's claims, or the others' text.
+        var written = kind == "no-issuer" ? token.Split('.')[1] : token[..Math.Min(token.Length, 64)];
+        Assert.DoesNotContain(written, server.StderrSnapshot(), StringComparison.Ordinal);
     }
 
     /// <summary>What /healthz on 127.0.0.1:<paramref name="port"/> answered within <paramref name="window"/>, or null when nothing did.</summary>

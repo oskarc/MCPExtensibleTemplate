@@ -20,8 +20,8 @@ harness or the product marks no entry stale: after one, `--all` retakes every re
 `scripts/e2e-sabotage.sh`, and held to by `HarnessSelfTests`: the suite fails while an entry is missing, stale or
 not red. CI refuses `MCP_E2E_SABOTAGE`.
 
-- 84 sabotages over the 83 end-to-end tests the runner lists, theory rows included: 83 red on their test's claim, 0 not, 1 held
-- Reds taken from 2026-09-29T04:06:23Z to 2026-09-29T11:08:17Z
+- 100 sabotages over the 99 end-to-end tests the runner lists, theory rows included: 99 red on their test's claim, 0 not, 1 held
+- Reds taken from 2026-09-29T04:06:23Z to 2026-09-29T15:09:56Z
 - Not end-to-end, so no sabotage: `HarnessSelfTests` (11 tests). In-process checks of the harness's own code — the settings delta, the revision label, the sabotage registry and its record: they start no container and send nothing to the image, so there is no fixture input, container environment or network for a sabotage to act on, and no claim about the image for it to break.
 
 | Sabotage | Test | Acts on | Test file | Result |
@@ -72,34 +72,50 @@ not red. CI refuses `MCP_E2E_SABOTAGE`.
 | `settings-read-once-idp-b-keys-from-idp-a` | `SettingsReadOnceTests.A_settings_file_changed_while_the_server_runs_changes_nothing_until_it_restarts` | container environment | `9bdfdd724cf1` | red on its claim |
 | `t2-hidden-tool-and-unscoped-prompt-callers-given-weather-read` | `ShippedImageRefusalTests.T2_contract_003s_refusals_each_carry_their_rule_return_nothing_and_reach_no_upstream` | inputs | `17a81a500256` | red on its claim |
 | `t4-weather-left-bound-to-keycloak` | `StandardClientTests.T4_the_sdk_client_given_only_the_resource_url_discovers_authorizes_and_calls_a_tool` | container environment | `acd2efee5b48` | red on its claim |
-| `t10-misconfiguration-left-out.unknown-setting` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `da2d771e142c` | red on its claim |
-| `t10-misconfiguration-left-out.production-without-redis` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `da2d771e142c` | red on its claim |
-| `t10-misconfiguration-left-out.http-authority` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `da2d771e142c` | red on its claim |
-| `t10-misconfiguration-left-out.missing-allowed-hosts` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `da2d771e142c` | red on its claim |
-| `t10-misconfiguration-left-out.shutdown-timeout-set` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `da2d771e142c` | red on its claim |
-| `t10-stop-signal-swallowed` | `StartupAndShutdownTests.T10_docker_stop_ends_the_server_cleanly_within_the_grace_with_a_shutdown_line` | inputs | `da2d771e142c` | red on its claim |
-| `t10-busy-stop-signal-swallowed` | `StartupAndShutdownTests.T10_docker_stop_with_a_request_in_flight_ends_the_server_cleanly_within_the_grace` | inputs | `da2d771e142c` | red on its claim |
-| `t10-request-kind-sent-as-ping.resources-subscribe` | `StartupAndShutdownTests.T10_a_request_kind_nobody_governs_is_refused_request_kind` | inputs | `da2d771e142c` | red on its claim |
-| `t10-request-kind-sent-as-ping.logging-setlevel` | `StartupAndShutdownTests.T10_a_request_kind_nobody_governs_is_refused_request_kind` | inputs | `da2d771e142c` | red on its claim |
-| `t10-request-kind-sent-as-ping.e2e-no-such-method` | `StartupAndShutdownTests.T10_a_request_kind_nobody_governs_is_refused_request_kind` | inputs | `da2d771e142c` | red on its claim |
+| `t10-credential-left-out.resource` | `StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential` | container environment | `545dca84e634` | red on its claim |
+| `t10-credential-left-out.authority` | `StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential` | container environment | `545dca84e634` | red on its claim |
+| `t10-credential-left-out.issuer` | `StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential` | container environment | `545dca84e634` | red on its claim |
+| `t10-credential-left-out.base-url` | `StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential` | container environment | `545dca84e634` | red on its claim |
+| `t10-credential-left-out.authority-query` | `StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential` | container environment | `545dca84e634` | red on its claim |
+| `t10-credential-left-out.base-url-query` | `StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential` | container environment | `545dca84e634` | red on its claim |
+| `t10-forwarded-headers-switch-left-out` | `StartupAndShutdownTests.T10_the_frameworks_forwarded_headers_switch_exits_78_naming_where_it_came_from` | container environment | `545dca84e634` | red on its claim |
+| `t10-staging-with-no-proxy-left-out` | `StartupAndShutdownTests.T10_outside_development_a_server_with_no_proxy_it_trusts_exits_78` | container environment | `545dca84e634` | red on its claim |
+| `t10-misconfiguration-left-out.unknown-setting` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `545dca84e634` | red on its claim |
+| `t10-misconfiguration-left-out.production-without-redis` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `545dca84e634` | red on its claim |
+| `t10-misconfiguration-left-out.http-authority` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `545dca84e634` | red on its claim |
+| `t10-misconfiguration-left-out.missing-allowed-hosts` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `545dca84e634` | red on its claim |
+| `t10-misconfiguration-left-out.shutdown-timeout-set` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `545dca84e634` | red on its claim |
+| `t10-misconfiguration-left-out.known-network-of-every-address` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `545dca84e634` | red on its claim |
+| `t10-misconfiguration-left-out.known-network-of-every-ipv6-address` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `545dca84e634` | red on its claim |
+| `t10-misconfiguration-left-out.known-network-past-its-prefix` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `545dca84e634` | red on its claim |
+| `t10-misconfiguration-left-out.known-network-broader-than-a-slash-8` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `545dca84e634` | red on its claim |
+| `t10-misconfiguration-left-out.two-identity-providers-one-issuer` | `StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause` | container environment | `545dca84e634` | red on its claim |
+| `t10-stop-signal-swallowed` | `StartupAndShutdownTests.T10_docker_stop_ends_the_server_cleanly_within_the_grace_with_a_shutdown_line` | inputs | `545dca84e634` | red on its claim |
+| `t10-busy-stop-signal-swallowed` | `StartupAndShutdownTests.T10_docker_stop_with_a_request_in_flight_ends_the_server_cleanly_within_the_grace` | inputs | `545dca84e634` | red on its claim |
+| `t10-request-kind-sent-as-ping.resources-subscribe` | `StartupAndShutdownTests.T10_a_request_kind_nobody_governs_is_refused_request_kind` | inputs | `545dca84e634` | red on its claim |
+| `t10-request-kind-sent-as-ping.logging-setlevel` | `StartupAndShutdownTests.T10_a_request_kind_nobody_governs_is_refused_request_kind` | inputs | `545dca84e634` | red on its claim |
+| `t10-request-kind-sent-as-ping.e2e-no-such-method` | `StartupAndShutdownTests.T10_a_request_kind_nobody_governs_is_refused_request_kind` | inputs | `545dca84e634` | red on its claim |
 | `t8-expired-attempt-sent-before-it-expires` | `TestHostConfirmationTests.T8_five_tampering_attempts_are_each_refused_for_their_own_reason_and_the_tool_ran_once` | inputs | `601b1c7d72b1` | red on its claim |
 | `t8-unscoped-caller-given-demo-read` | `TestHostTests.T8_an_unscoped_completion_is_refused_not_permitted_with_no_result_and_its_refusal_is_on_stderr` | inputs | `1f45580db716` | red on its claim |
 | `t8-authority-under-test.production` | `TestHostTests.T8_the_test_host_exits_78_given_an_identity_provider_outside_test` | container environment | `1f45580db716` | red on its claim |
 | `t8-authority-under-test.staging` | `TestHostTests.T8_the_test_host_exits_78_given_an_identity_provider_outside_test` | container environment | `1f45580db716` | red on its claim |
 | `t8-test-host-also-serves-jsonplaceholder` | `TestHostTests.T8_the_test_hosts_frame_line_is_the_shipped_images_but_for_the_test_modules` | container environment | `1f45580db716` | red on its claim |
-| `t3-no-token-sent-straight-to-the-server` | `TokenRefusalTests.T3_no_token_is_challenged_with_the_metadata_on_the_front` | network | `d4b55c18c637` | red on its claim |
-| `t3-bad-token-minted-valid.wrong-audience` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `d4b55c18c637` | red on its claim |
-| `t3-bad-token-minted-valid.expired` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `d4b55c18c637` | red on its claim |
-| `t3-bad-token-minted-valid.alg-none` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `d4b55c18c637` | red on its claim |
-| `t3-bad-token-minted-valid.hs256` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `d4b55c18c637` | red on its claim |
-| `t3-bad-token-minted-valid.cross-signed` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `d4b55c18c637` | red on its claim |
-| `t3-bad-token-minted-valid.missing-claim-sub` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `d4b55c18c637` | red on its claim |
-| `t3-bad-token-minted-valid.missing-claim-jti` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `d4b55c18c637` | red on its claim |
-| `t3-bad-token-minted-valid.missing-claim-client-id` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `d4b55c18c637` | red on its claim |
-| `t3-bad-token-minted-valid.missing-claim-iat` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `d4b55c18c637` | red on its claim |
-| `t3-key-confusion-token-minted-valid` | `TokenRefusalTests.T3_a_key_confusion_token_is_refused_and_its_refusal_logged` | inputs | `d4b55c18c637` | red on its claim |
-| `t3-stale-token-issued-a-minute-ago` | `TokenRefusalTests.T3_a_write_tool_called_with_a_token_issued_six_minutes_ago_is_refused_for_its_age` | inputs | `d4b55c18c637` | red on its claim |
-| `t3-stranger-registered-on-the-server` | `TokenRefusalTests.T3_an_unregistered_issuers_token_costs_no_key_lookup_at_any_issuer` | container environment | `d4b55c18c637` | red on its claim |
+| `t3-no-token-sent-straight-to-the-server` | `TokenRefusalTests.T3_no_token_is_challenged_with_the_metadata_on_the_front` | network | `33fbb5bb5932` | red on its claim |
+| `t3-bad-token-minted-valid.wrong-audience` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-bad-token-minted-valid.expired` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-bad-token-minted-valid.alg-none` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-bad-token-minted-valid.hs256` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-bad-token-minted-valid.cross-signed` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-bad-token-minted-valid.missing-claim-sub` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-bad-token-minted-valid.missing-claim-jti` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-bad-token-minted-valid.missing-claim-client-id` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-bad-token-minted-valid.missing-claim-iat` | `TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-unattributable-token-sent-valid.unreadable` | `TokenRefusalTests.T3_a_token_the_server_cannot_attribute_is_refused_with_its_reason_in_its_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-unattributable-token-sent-valid.oversized` | `TokenRefusalTests.T3_a_token_the_server_cannot_attribute_is_refused_with_its_reason_in_its_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-unattributable-token-sent-valid.no-issuer` | `TokenRefusalTests.T3_a_token_the_server_cannot_attribute_is_refused_with_its_reason_in_its_log` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-key-confusion-token-minted-valid` | `TokenRefusalTests.T3_a_key_confusion_token_is_refused_and_its_refusal_logged` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-stale-token-issued-a-minute-ago` | `TokenRefusalTests.T3_a_write_tool_called_with_a_token_issued_six_minutes_ago_is_refused_for_its_age` | inputs | `33fbb5bb5932` | red on its claim |
+| `t3-stranger-registered-on-the-server` | `TokenRefusalTests.T3_an_unregistered_issuers_token_costs_no_key_lookup_at_any_issuer` | container environment | `33fbb5bb5932` | red on its claim |
 | `t5-other-caller-minted-at-idp-a` | `TrustDomainTests.T5_a_caller_from_the_other_issuer_sees_none_of_the_bound_providers_items_in_the_lists` | inputs | `67939ef2a0b6` | red on its claim |
 | `t5-caller-minted-at-idp-a.resource` | `TrustDomainTests.T5_using_a_bound_providers_item_from_the_other_issuer_is_refused_in_the_words_for_one_that_does_not_exist` | inputs | `67939ef2a0b6` | red on its claim |
 | `t5-caller-minted-at-idp-a.prompt` | `TrustDomainTests.T5_using_a_bound_providers_item_from_the_other_issuer_is_refused_in_the_words_for_one_that_does_not_exist` | inputs | `67939ef2a0b6` | red on its claim |
@@ -622,12 +638,100 @@ String: ···"_info': authz_fail (rule: idp-binding). T"···
 Found:  "rule:"
 ~~~
 
+### `t10-credential-left-out.resource`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential(row: "resource", key: "Authentication:Resource", value: "https://ops:Pa55w0rd-e2e@mcp.e2e.test/mcp")`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.7 s
+- Taken 2026-09-29T14:52:10Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : resource, Authentication:Resource set to a URL carrying a password: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal. The refusal must name the key, with exit 78, and never write the credential.
+~~~
+
+### `t10-credential-left-out.authority`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential(row: "authority", key: "Authentication:IdentityProviders:idp-a:Authority", value: "https://svc-reader:Pa55w0rd-e2e@idp-a.e2e.test")`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 2.2 s
+- Taken 2026-09-29T14:52:59Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : authority, Authentication:IdentityProviders:idp-a:Authority set to a URL carrying a password: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal. The refusal must name the key, with exit 78, and never write the credential.
+~~~
+
+### `t10-credential-left-out.issuer`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential(row: "issuer", key: "Authentication:IdentityProviders:idp-a:Issuer", value: "https://svc-reader:Pa55w0rd-e2e@idp-a.e2e.test")`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.9 s
+- Taken 2026-09-29T14:54:01Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : issuer, Authentication:IdentityProviders:idp-a:Issuer set to a URL carrying a password: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal. The refusal must name the key, with exit 78, and never write the credential.
+~~~
+
+### `t10-credential-left-out.base-url`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential(row: "base-url", key: "Providers:Smhi:BaseUrl", value: "http://svc-reader:Pa55w0rd-e2e@opendata-download-m"···)`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.8 s
+- Taken 2026-09-29T14:54:53Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : base-url, Providers:Smhi:BaseUrl set to a URL carrying a password: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal. The refusal must name the key, with exit 78, and never write the credential.
+~~~
+
+### `t10-credential-left-out.authority-query`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential(row: "authority-query", key: "Authentication:IdentityProviders:idp-a:Authority", value: "https://idp-a.e2e.test/?client_secret=Pa55w0rd-e2e")`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.8 s
+- Taken 2026-09-29T14:55:43Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : authority-query, Authentication:IdentityProviders:idp-a:Authority set to a URL carrying a password: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal. The refusal must name the key, with exit 78, and never write the credential.
+~~~
+
+### `t10-credential-left-out.base-url-query`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_url_carrying_a_credential_exits_78_without_writing_the_credential(row: "base-url-query", key: "Providers:Smhi:BaseUrl", value: "http://opendata-download-metfcst.smhi.se/?api_key="···)`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.8 s
+- Taken 2026-09-29T14:56:29Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : base-url-query, Providers:Smhi:BaseUrl set to a URL carrying a password: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal. The refusal must name the key, with exit 78, and never write the credential.
+~~~
+
+### `t10-forwarded-headers-switch-left-out`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_the_frameworks_forwarded_headers_switch_exits_78_naming_where_it_came_from`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.8 s
+- Taken 2026-09-29T14:57:14Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : under Staging with no proxy declared and ASPNETCORE_FORWARDEDHEADERS_ENABLED=true: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; 65 GET /healthz sent straight to it, each forwarded as an address of its own, got 59×200 and 6×429; the cause, 'ForwardedHeaders_Enabled is 'true' from the environment, as ASPNETCORE_FORWARDEDHEADERS_ENABLED', is not named with exit 78.
+~~~
+
+### `t10-staging-with-no-proxy-left-out`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_outside_development_a_server_with_no_proxy_it_trusts_exits_78`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 2.3 s
+- Taken 2026-09-29T14:58:00Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : under Staging with no proxy declared: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; a valid bearer token sent to it over plain http got 200; the cause, 'must sit behind a proxy it trusts explicitly', is not named with exit 78.
+~~~
+
 ### `t10-misconfiguration-left-out.unknown-setting`
 
 - Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause(row: "unknown-setting", key: "Limits:PerPrincipalPerMinit", value: "10", cause: "'Limits:PerPrincipalPerMinit' is not a setting thi"···)`
 - Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.9 s
-- Taken 2026-09-29T10:48:22Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `da2d771e142c`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.8 s
+- Taken 2026-09-29T14:58:51Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : unknown-setting, Limits:PerPrincipalPerMinit=10: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; the cause, ''Limits:PerPrincipalPerMinit' is not a setting this server reads', is not named with exit 78.
@@ -637,8 +741,8 @@ McpServerTemplate.E2E.Harness.ClaimException : unknown-setting, Limits:PerPrinci
 
 - Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause(row: "production-without-redis", key: "Limits:Redis", value: null, cause: "Limits:Redis is required outside Development")`
 - Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 2.2 s
-- Taken 2026-09-29T10:49:39Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `da2d771e142c`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.8 s
+- Taken 2026-09-29T14:59:37Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : production-without-redis, without Limits:Redis: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; the cause, 'Limits:Redis is required outside Development', is not named with exit 78.
@@ -648,8 +752,8 @@ McpServerTemplate.E2E.Harness.ClaimException : production-without-redis, without
 
 - Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause(row: "http-authority", key: "Authentication:IdentityProviders:idp-a:Authority", value: "http://idp-a.e2e.test", cause: "Authentication:IdentityProviders:idp-a:Authority m"···)`
 - Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.7 s
-- Taken 2026-09-29T10:50:32Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `da2d771e142c`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.8 s
+- Taken 2026-09-29T15:00:25Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : http-authority, Authentication:IdentityProviders:idp-a:Authority=http://idp-a.e2e.test: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; the cause, 'Authentication:IdentityProviders:idp-a:Authority must be an absolute https URI', is not named with exit 78.
@@ -659,8 +763,8 @@ McpServerTemplate.E2E.Harness.ClaimException : http-authority, Authentication:Id
 
 - Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause(row: "missing-allowed-hosts", key: "HttpTransport:AllowedHosts", value: null, cause: "HttpTransport:AllowedHosts must name the host name"···)`
 - Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.7 s
-- Taken 2026-09-29T10:51:23Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `da2d771e142c`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.6 s
+- Taken 2026-09-29T15:01:09Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : missing-allowed-hosts, without HttpTransport:AllowedHosts: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; the cause, 'HttpTransport:AllowedHosts must name the host names clients reach this server by', is not named with exit 78.
@@ -670,41 +774,96 @@ McpServerTemplate.E2E.Harness.ClaimException : missing-allowed-hosts, without Ht
 
 - Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause(row: "shutdown-timeout-set", key: "DOTNET_shutdownTimeoutSeconds", value: "30", cause: "shutdownTimeoutSeconds is '30' from the environmen"···)`
 - Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 2.0 s
-- Taken 2026-09-29T10:52:14Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `da2d771e142c`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.6 s
+- Taken 2026-09-29T15:01:56Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : shutdown-timeout-set, DOTNET_shutdownTimeoutSeconds=30: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; the cause, 'shutdownTimeoutSeconds is '30' from the environment, as DOTNET_shutdownTimeoutSeconds', is not named with exit 78.
+~~~
+
+### `t10-misconfiguration-left-out.known-network-of-every-address`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause(row: "known-network-of-every-address", key: "HttpTransport:KnownNetworks:0", value: "0.0.0.0/0", cause: "HttpTransport:KnownNetworks:0 is '0.0.0.0/0', whos"···)`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.6 s
+- Taken 2026-09-29T15:02:41Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : known-network-of-every-address, HttpTransport:KnownNetworks:0=0.0.0.0/0: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; the cause, 'HttpTransport:KnownNetworks:0 is '0.0.0.0/0', whose prefix length is 0', is not named with exit 78.
+~~~
+
+### `t10-misconfiguration-left-out.known-network-of-every-ipv6-address`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause(row: "known-network-of-every-ipv6-address", key: "HttpTransport:KnownNetworks:0", value: "::/0", cause: "HttpTransport:KnownNetworks:0 is '::/0', whose pre"···)`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.6 s
+- Taken 2026-09-29T15:03:26Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : known-network-of-every-ipv6-address, HttpTransport:KnownNetworks:0=::/0: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; the cause, 'HttpTransport:KnownNetworks:0 is '::/0', whose prefix length is 0', is not named with exit 78.
+~~~
+
+### `t10-misconfiguration-left-out.known-network-past-its-prefix`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause(row: "known-network-past-its-prefix", key: "HttpTransport:KnownNetworks:0", value: "10.213.99.250/2", cause: "HttpTransport:KnownNetworks:0 is '10.213.99.250/2'"···)`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.6 s
+- Taken 2026-09-29T15:04:13Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : known-network-past-its-prefix, HttpTransport:KnownNetworks:0=10.213.99.250/2: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; the cause, 'HttpTransport:KnownNetworks:0 is '10.213.99.250/2', whose address has bits set past its prefix length, so it would be read as 0.0.0.0/2', is not named with exit 78.
+~~~
+
+### `t10-misconfiguration-left-out.known-network-broader-than-a-slash-8`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause(row: "known-network-broader-than-a-slash-8", key: "HttpTransport:KnownNetworks:0", value: "128.0.0.0/1", cause: "HttpTransport:KnownNetworks:0 is '128.0.0.0/1', wh"···)`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.6 s
+- Taken 2026-09-29T15:04:59Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : known-network-broader-than-a-slash-8, HttpTransport:KnownNetworks:0=128.0.0.0/1: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; the cause, 'HttpTransport:KnownNetworks:0 is '128.0.0.0/1', whose prefix length, 1, is broader than /8', is not named with exit 78.
+~~~
+
+### `t10-misconfiguration-left-out.two-identity-providers-one-issuer`
+
+- Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_misconfiguration_exits_78_naming_its_cause(row: "two-identity-providers-one-issuer", key: "Authentication:IdentityProviders:idp-b:Issuer", value: "https://idp-a.e2e.test", cause: "Authentication:IdentityProviders:idp-a:Issuer and "···)`
+- Acts on container environment: The server is started without the misconfiguration it must refuse, on the environment's settings alone, and comes up.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.6 s
+- Taken 2026-09-29T15:05:46Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : two-identity-providers-one-issuer, Authentication:IdentityProviders:idp-b:Issuer=https://idp-a.e2e.test: the server started, and /readyz answered 200 under Host mcp.e2e.test; its stderr names no refusal; the cause, 'Authentication:IdentityProviders:idp-a:Issuer and Authentication:IdentityProviders:idp-b:Issuer are both 'https://idp-a.e2e.test'', is not named with exit 78.
 ~~~
 
 ### `t10-stop-signal-swallowed`
 
 - Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_docker_stop_ends_the_server_cleanly_within_the_grace_with_a_shutdown_line`
 - Acts on inputs: docker stop sends SIGWINCH, which the server does not handle, instead of the image's own stop signal, as an entrypoint that swallows SIGTERM would leave it: the server never begins to stop, and Docker kills it once the grace has passed.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 11.9 s
-- Taken 2026-09-29T10:53:04Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `da2d771e142c`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 11.5 s
+- Taken 2026-09-29T15:06:29Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
 
 ~~~text
-McpServerTemplate.E2E.Harness.ClaimException : docker stop sent SIGWINCH and the server exited 137 after 10,3 s (grace 10 s), with no shutdown line; a clean stop is SIGTERM, exit 0 within Docker's 10-second grace, and a shutdown line. Its stderr ends: 2026-09-29T10:53:52.723756400Z [10:53:52 INF] : Starting MCP server with HTTP transport on 0.0.0.0:3001 | 2026-09-29T10:53:53.064500436Z [10:53:53 INF] McpServerTemplate.Infrastructure.Frame.RequestGate : Frame installed: limits=Redis providers=Smhi,SmhiObs requests=completion/complete,initialize,notifications/cancelled,notifications/initialized,ping,prompts/get,prompts/list,resources/list,resources/read,resources/templates/list,server/discover,tools/call,tools/list :: McpRequestFilters.CallToolFilters=[frame,frame,sdk] McpRequestFilters.CallToolWithAlternateFilters=[sdk] McpRequestFilters.CompleteFilters=[frame] McpRequestFilters.GetPromptFilters=[frame,sdk,sdk] McpRequestFilters.ListPromptsFilters=[frame,sdk,sdk] McpRequestFilters.ListResourceTemplatesFilters=[frame,sdk,sdk] McpRequestFilters.ListResourcesFilters=[frame,sdk,sdk] McpRequestFilters.ListToolsFilters=[frame,sdk,sdk] McpRequestFilters.ReadResourceFilters=[frame,sdk,sdk] McpMessageFilters.IncomingFilters=[frame] | prompt:Smhi/forecast_briefing:weather:read;resource:Smhi/smhi://coverage-area:weather:read;resource:Smhi/smhi://weather-symbols:weather:read;tool:Smhi/get_current_weather:weather:read:Read;tool:Smhi/get_forecast:weather:read:Read;tool:Smhi/get_forecast_model_info:weather:read:Read;tool:SmhiObs/get_monthly_climate:observations:read:Read;tool:SmhiObs/get_precipitation_history:observations:read:Read;tool:SmhiObs/get_recent_temperature:observations:read:Read;tool:SmhiObs/get_temperature_history:observations:read:Read | 2026-09-29T10:53:53.102414878Z [10:53:53 WRN] Microsoft.AspNetCore.Hosting.Diagnostics : Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:3001'. | 2026-09-29T10:53:53.424252706Z [10:53:53 WRN] Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware : Failed to determine the https port for redirect.
+McpServerTemplate.E2E.Harness.ClaimException : docker stop sent SIGWINCH and the server exited 137 after 10,3 s (grace 10 s), with no shutdown line; a clean stop is SIGTERM, exit 0 within Docker's 10-second grace, and a shutdown line. Its stderr ends: 2026-09-29T15:07:09.662209281Z [15:07:09 INF] : Starting MCP server with HTTP transport on 0.0.0.0:3001 | 2026-09-29T15:07:09.935622524Z [15:07:09 INF] McpServerTemplate.Infrastructure.Frame.RequestGate : Frame installed: limits=Redis providers=Smhi,SmhiObs requests=completion/complete,initialize,notifications/cancelled,notifications/initialized,ping,prompts/get,prompts/list,resources/list,resources/read,resources/templates/list,server/discover,tools/call,tools/list :: McpRequestFilters.CallToolFilters=[frame,frame,sdk] McpRequestFilters.CallToolWithAlternateFilters=[sdk] McpRequestFilters.CompleteFilters=[frame] McpRequestFilters.GetPromptFilters=[frame,sdk,sdk] McpRequestFilters.ListPromptsFilters=[frame,sdk,sdk] McpRequestFilters.ListResourceTemplatesFilters=[frame,sdk,sdk] McpRequestFilters.ListResourcesFilters=[frame,sdk,sdk] McpRequestFilters.ListToolsFilters=[frame,sdk,sdk] McpRequestFilters.ReadResourceFilters=[frame,sdk,sdk] McpMessageFilters.IncomingFilters=[frame] | prompt:Smhi/forecast_briefing:weather:read;resource:Smhi/smhi://coverage-area:weather:read;resource:Smhi/smhi://weather-symbols:weather:read;tool:Smhi/get_current_weather:weather:read:Read;tool:Smhi/get_forecast:weather:read:Read;tool:Smhi/get_forecast_model_info:weather:read:Read;tool:SmhiObs/get_monthly_climate:observations:read:Read;tool:SmhiObs/get_precipitation_history:observations:read:Read;tool:SmhiObs/get_recent_temperature:observations:read:Read;tool:SmhiObs/get_temperature_history:observations:read:Read | 2026-09-29T15:07:09.965832769Z [15:07:09 WRN] Microsoft.AspNetCore.Hosting.Diagnostics : Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:3001'. | 2026-09-29T15:07:10.090331648Z [15:07:10 WRN] Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware : Failed to determine the https port for redirect.
 ~~~
 
 ### `t10-busy-stop-signal-swallowed`
 
 - Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_docker_stop_with_a_request_in_flight_ends_the_server_cleanly_within_the_grace`
 - Acts on inputs: docker stop sends SIGWINCH, which the server does not handle, instead of the image's own stop signal, while the call is in flight: the busy server never begins to stop, and Docker kills it once the grace has passed.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 12.2 s
-- Taken 2026-09-29T10:54:08Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `da2d771e142c`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 12.8 s
+- Taken 2026-09-29T15:07:24Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
 
 ~~~text
-McpServerTemplate.E2E.Harness.ClaimException : with a call in flight (the fake holding its upstream answer for 30 s), docker stop sent SIGWINCH and the server exited 137 after 10,3 s (grace 10 s), with no shutdown line; the call: no answer: HttpRequestException: Error while copying content to a stream.. A clean stop is SIGTERM, exit 0 within Docker's 10-second grace, and a shutdown line. Its stderr ends: 2026-09-29T10:54:53.272477729Z [10:54:53 INF] McpServerTemplate.Infrastructure.Frame.RequestGate : Frame installed: limits=Redis providers=Smhi,SmhiObs requests=completion/complete,initialize,notifications/cancelled,notifications/initialized,ping,prompts/get,prompts/list,resources/list,resources/read,resources/templates/list,server/discover,tools/call,tools/list :: McpRequestFilters.CallToolFilters=[frame,frame,sdk] McpRequestFilters.CallToolWithAlternateFilters=[sdk] McpRequestFilters.CompleteFilters=[frame] McpRequestFilters.GetPromptFilters=[frame,sdk,sdk] McpRequestFilters.ListPromptsFilters=[frame,sdk,sdk] McpRequestFilters.ListResourceTemplatesFilters=[frame,sdk,sdk] McpRequestFilters.ListResourcesFilters=[frame,sdk,sdk] McpRequestFilters.ListToolsFilters=[frame,sdk,sdk] McpRequestFilters.ReadResourceFilters=[frame,sdk,sdk] McpMessageFilters.IncomingFilters=[frame] | prompt:Smhi/forecast_briefing:weather:read;resource:Smhi/smhi://coverage-area:weather:read;resource:Smhi/smhi://weather-symbols:weather:read;tool:Smhi/get_current_weather:weather:read:Read;tool:Smhi/get_forecast:weather:read:Read;tool:Smhi/get_forecast_model_info:weather:read:Read;tool:SmhiObs/get_monthly_climate:observations:read:Read;tool:SmhiObs/get_precipitation_history:observations:read:Read;tool:SmhiObs/get_recent_temperature:observations:read:Read;tool:SmhiObs/get_temperature_history:observations:read:Read | 2026-09-29T10:54:53.308513858Z [10:54:53 WRN] Microsoft.AspNetCore.Hosting.Diagnostics : Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:3001'. | 2026-09-29T10:54:53.409431756Z [10:54:53 WRN] Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware : Failed to determine the https port for redirect. | 2026-09-29T10:54:53.920318362Z [10:54:53 INF] ModelContextProtocol.Server.McpServer : Server (McpServerTemplate 1.0.0) method 'tools/call' request handler called. | 2026-09-29T10:54:53.940244612Z [10:54:53 INF] ModelContextProtocol.Server.McpServer 23694FA9ADAA: [23694FA9ADAA] Tool call: get_forecast with args: [latitude, longitude]
+McpServerTemplate.E2E.Harness.ClaimException : with a call in flight (the fake holding its upstream answer for 30 s), docker stop sent SIGWINCH and the server exited 137 after 10,3 s (grace 10 s), with no shutdown line; the call: no answer: HttpRequestException: Error while copying content to a stream.. A clean stop is SIGTERM, exit 0 within 8 seconds — the 6-second shutdown timeout and a 2-second margin, inside Docker's 10-second grace — and a shutdown line. Its stderr ends: 2026-09-29T15:08:19.839874859Z    at System.Net.Sockets.SocketAsyncEventArgs.TransferCompletionCallbackCore(Int32 bytesTransferred, Memory`1 socketAddress, SocketFlags receivedFlags, SocketError socketError) | 2026-09-29T15:08:19.839875640Z    at System.Threading.ThreadPoolWorkQueue.Dispatch() | 2026-09-29T15:08:19.839876308Z    at System.Threading.PortableThreadPool.WorkerThread.WorkerThreadStart() | 2026-09-29T15:08:19.839877025Z    at System.Threading.Thread.StartCallback() | 2026-09-29T15:08:19.839877712Z --- End of stack trace from previous location ---
 ~~~
 
 ### `t10-request-kind-sent-as-ping.resources-subscribe`
 
 - Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_request_kind_nobody_governs_is_refused_request_kind(method: "resources/subscribe")`
 - Acts on inputs: The request whose answer the claim reads is sent as ping, a kind the image's startup line names, instead of the row's method; it is answered.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 0.6 s
-- Taken 2026-09-29T10:55:09Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `da2d771e142c`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 0.7 s
+- Taken 2026-09-29T15:08:24Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : resources/subscribe, a kind the image's startup line does not govern ([completion/complete, initialize, notifications/cancelled, notifications/initialized, ping, prompts/get, prompts/list, resources/list, resources/read, resources/templates/list, server/discover, tools/call, tools/list]), got {"result":{},"id":1,"jsonrpc":"2.0"}, not a request-kind refusal with no result.
@@ -714,8 +873,8 @@ McpServerTemplate.E2E.Harness.ClaimException : resources/subscribe, a kind the i
 
 - Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_request_kind_nobody_governs_is_refused_request_kind(method: "logging/setLevel")`
 - Acts on inputs: The request whose answer the claim reads is sent as ping, a kind the image's startup line names, instead of the row's method; it is answered.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 0.6 s
-- Taken 2026-09-29T10:55:57Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `da2d771e142c`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 0.5 s
+- Taken 2026-09-29T15:09:12Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : logging/setLevel, a kind the image's startup line does not govern ([completion/complete, initialize, notifications/cancelled, notifications/initialized, ping, prompts/get, prompts/list, resources/list, resources/read, resources/templates/list, server/discover, tools/call, tools/list]), got {"result":{},"id":1,"jsonrpc":"2.0"}, not a request-kind refusal with no result.
@@ -726,7 +885,7 @@ McpServerTemplate.E2E.Harness.ClaimException : logging/setLevel, a kind the imag
 - Test: `McpServerTemplate.E2E.StartupAndShutdownTests.T10_a_request_kind_nobody_governs_is_refused_request_kind(method: "e2e/no-such-method")`
 - Acts on inputs: The request whose answer the claim reads is sent as ping, a kind the image's startup line names, instead of the row's method; it is answered.
 - Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 0.5 s
-- Taken 2026-09-29T10:56:45Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `da2d771e142c`
+- Taken 2026-09-29T15:09:56Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `545dca84e634`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : e2e/no-such-method, a kind the image's startup line does not govern ([completion/complete, initialize, notifications/cancelled, notifications/initialized, ping, prompts/get, prompts/list, resources/list, resources/read, resources/templates/list, server/discover, tools/call, tools/list]), got {"result":{},"id":1,"jsonrpc":"2.0"}, not a request-kind refusal with no result.
@@ -792,7 +951,7 @@ McpServerTemplate.E2E.Harness.ClaimException : the test host's frame line is not
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_no_token_is_challenged_with_the_metadata_on_the_front`
 - Acts on network: The request goes straight to the server's published port instead of through the front, so no forwarded scheme reaches the server from a proxy it trusts.
 - Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 0.0 s
-- Taken 2026-09-29T10:57:33Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Taken 2026-09-29T13:55:54Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : a request with no token got 401 with resource_metadata=http://mcp.e2e.test/.well-known/oauth-protected-resource/mcp, not a 401 naming metadata on https://mcp.e2e.test/.
@@ -802,8 +961,8 @@ McpServerTemplate.E2E.Harness.ClaimException : a request with no token got 401 w
 
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log(kind: "wrong-audience", claim: null, reason: "IDX10214")`
 - Acts on inputs: The row's token is minted as kind valid instead of its own, wrong in no way.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.8 s
-- Taken 2026-09-29T10:58:20Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 6.5 s
+- Taken 2026-09-29T13:57:08Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : a wrong-audience token from idp-a.e2e.test got 200, not 401.
@@ -813,8 +972,8 @@ McpServerTemplate.E2E.Harness.ClaimException : a wrong-audience token from idp-a
 
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log(kind: "expired", claim: null, reason: "IDX10223")`
 - Acts on inputs: The row's token is minted as kind valid instead of its own, wrong in no way.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.7 s
-- Taken 2026-09-29T10:59:18Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.8 s
+- Taken 2026-09-29T13:58:20Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : a expired token from idp-a.e2e.test got 200, not 401.
@@ -824,8 +983,8 @@ McpServerTemplate.E2E.Harness.ClaimException : a expired token from idp-a.e2e.te
 
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log(kind: "alg-none", claim: null, reason: "IDX10504")`
 - Acts on inputs: The row's token is minted as kind valid instead of its own, wrong in no way.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.7 s
-- Taken 2026-09-29T11:00:13Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 6.5 s
+- Taken 2026-09-29T13:59:32Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : a alg-none token from idp-a.e2e.test got 200, not 401.
@@ -835,8 +994,8 @@ McpServerTemplate.E2E.Harness.ClaimException : a alg-none token from idp-a.e2e.t
 
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log(kind: "hs256", claim: null, reason: "IDX10517")`
 - Acts on inputs: The row's token is minted as kind valid instead of its own, wrong in no way.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 6.0 s
-- Taken 2026-09-29T11:01:08Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 6.1 s
+- Taken 2026-09-29T14:00:45Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : a hs256 token from idp-a.e2e.test got 200, not 401.
@@ -846,8 +1005,8 @@ McpServerTemplate.E2E.Harness.ClaimException : a hs256 token from idp-a.e2e.test
 
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log(kind: "cross-signed", claim: null, reason: "IDX10503")`
 - Acts on inputs: The row's token is minted as kind valid instead of its own, wrong in no way.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.6 s
-- Taken 2026-09-29T11:02:02Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 6.5 s
+- Taken 2026-09-29T14:01:54Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : a cross-signed token from idp-a.e2e.test got 200, not 401.
@@ -857,8 +1016,8 @@ McpServerTemplate.E2E.Harness.ClaimException : a cross-signed token from idp-a.e
 
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log(kind: "missing-claim", claim: "sub", reason: "missing sub,")`
 - Acts on inputs: The row's token is minted as kind valid instead of its own, wrong in no way.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.5 s
-- Taken 2026-09-29T11:02:57Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.9 s
+- Taken 2026-09-29T14:03:05Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : a missing-claim sub token from idp-a.e2e.test got 200, not 401.
@@ -868,8 +1027,8 @@ McpServerTemplate.E2E.Harness.ClaimException : a missing-claim sub token from id
 
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log(kind: "missing-claim", claim: "jti", reason: "missing jti,")`
 - Acts on inputs: The row's token is minted as kind valid instead of its own, wrong in no way.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.7 s
-- Taken 2026-09-29T11:03:54Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 6.4 s
+- Taken 2026-09-29T14:04:16Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : a missing-claim jti token from idp-a.e2e.test got 200, not 401.
@@ -879,8 +1038,8 @@ McpServerTemplate.E2E.Harness.ClaimException : a missing-claim jti token from id
 
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log(kind: "missing-claim", claim: "client_id", reason: "missing client_id (the client claim)")`
 - Acts on inputs: The row's token is minted as kind valid instead of its own, wrong in no way.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.7 s
-- Taken 2026-09-29T11:04:48Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.9 s
+- Taken 2026-09-29T14:05:29Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : a missing-claim client_id token from idp-a.e2e.test got 200, not 401.
@@ -890,19 +1049,52 @@ McpServerTemplate.E2E.Harness.ClaimException : a missing-claim client_id token f
 
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log(kind: "missing-claim", claim: "iat", reason: "missing iat,")`
 - Acts on inputs: The row's token is minted as kind valid instead of its own, wrong in no way.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.6 s
-- Taken 2026-09-29T11:05:43Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.7 s
+- Taken 2026-09-29T14:06:40Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : a missing-claim iat token from idp-a.e2e.test got 200, not 401.
+~~~
+
+### `t3-unattributable-token-sent-valid.unreadable`
+
+- Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_token_the_server_cannot_attribute_is_refused_with_its_reason_in_its_log(kind: "unreadable", reason: "the token cannot be read as a JSON web token")`
+- Acts on inputs: The row's token is idp-a's valid token instead, which the server attributes and accepts.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 6.0 s
+- Taken 2026-09-29T14:07:46Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : an unreadable token got 200, and the server's log has no authn_login_fail line for it; a refusal with 401 and its reason ('the token cannot be read as a JSON web token') is what it should be.
+~~~
+
+### `t3-unattributable-token-sent-valid.oversized`
+
+- Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_token_the_server_cannot_attribute_is_refused_with_its_reason_in_its_log(kind: "oversized", reason: "the token is 9249 characters long, more than the 8"···)`
+- Acts on inputs: The row's token is idp-a's valid token instead, which the server attributes and accepts.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 6.1 s
+- Taken 2026-09-29T14:08:57Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : an oversized token got 200, and the server's log has no authn_login_fail line for it; a refusal with 401 and its reason ('the token is 9249 characters long, more than the 8192 this server reads') is what it should be.
+~~~
+
+### `t3-unattributable-token-sent-valid.no-issuer`
+
+- Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_token_the_server_cannot_attribute_is_refused_with_its_reason_in_its_log(kind: "no-issuer", reason: "the token names no issuer")`
+- Acts on inputs: The row's token is idp-a's valid token instead, which the server attributes and accepts.
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 6.0 s
+- Taken 2026-09-29T14:10:05Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
+
+~~~text
+McpServerTemplate.E2E.Harness.ClaimException : a no-issuer token got 200, and the server's log has no authn_login_fail line for it; a refusal with 401 and its reason ('the token names no issuer') is what it should be.
 ~~~
 
 ### `t3-key-confusion-token-minted-valid`
 
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_key_confusion_token_is_refused_and_its_refusal_logged`
 - Acts on inputs: The token is minted as kind valid instead: idp-a's own token, RS256, every claim valid.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 5.5 s
-- Taken 2026-09-29T11:06:36Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 6.0 s
+- Taken 2026-09-29T14:11:13Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : an HS256 token keyed with idp-a.e2e.test's own public key, under its real key id, got 200, and the server's log has no authn_login_fail line for it.
@@ -913,7 +1105,7 @@ McpServerTemplate.E2E.Harness.ClaimException : an HS256 token keyed with idp-a.e
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_a_write_tool_called_with_a_token_issued_six_minutes_ago_is_refused_for_its_age`
 - Acts on inputs: The stale token is minted as issued 60 seconds ago instead of 360, inside the write gate's five minutes.
 - Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 1.2 s
-- Taken 2026-09-29T11:07:29Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Taken 2026-09-29T14:12:23Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : create_user_todo called with a token issued 61 s ago answered 'An error occurred invoking 'create_user_todo': the new todo does not exist upstream. Do not retry; check the id. JSONPlaceholder serves posts 1-100 and users 1-10.', not a token-age refusal with no content.
@@ -923,8 +1115,8 @@ McpServerTemplate.E2E.Harness.ClaimException : create_user_todo called with a to
 
 - Test: `McpServerTemplate.E2E.TokenRefusalTests.T3_an_unregistered_issuers_token_costs_no_key_lookup_at_any_issuer`
 - Acts on container environment: The test's server also registers the stranger as an identity provider (Authentication:IdentityProviders:stranger, Authority and Issuer https://stranger.e2e.test, as the issuer registry registers every provider), so its token is routed to a scheme of its own, which fetches keys.
-- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 4.4 s
-- Taken 2026-09-29T11:08:17Z at 08d86e250e80, with uncommitted changes, on Windows with Docker 29.5.3; test file `d4b55c18c637`
+- Result: red on its claim, with `McpServerTemplate.E2E.Harness.ClaimException` after 4.7 s
+- Taken 2026-09-29T14:13:28Z at f40d8318afed, with uncommitted changes, on Windows with Docker 29.5.3; test file `33fbb5bb5932`
 
 ~~~text
 McpServerTemplate.E2E.Harness.ClaimException : a token from https://stranger.e2e.test, which no server is configured with, made this server ask the issuers for {"idp-a.e2e.test":{},"idp-b.e2e.test":{},"stranger.e2e.test":{"/.well-known/openid-configuration":1,"/jwks":1}}; every issuer name (idp-a.e2e.test, idp-b.e2e.test, stranger.e2e.test) should show no discovery and no key-set request.

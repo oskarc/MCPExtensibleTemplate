@@ -45,8 +45,9 @@ public static class JsonPlaceholderServiceRegistration
         if (!Uri.TryCreate(config.BaseUrl, UriKind.Absolute, out var baseUri) ||
             baseUri.Scheme != "https")
         {
+            // contract-005 · G-17 round 1 — echoed without its user information or its query, either of which can carry a credential (LogSafe.Url).
             throw new ConfigurationException(
-                $"Providers:JsonPlaceholder:BaseUrl must be an absolute HTTPS URL, got: '{config.BaseUrl}'");
+                $"Providers:JsonPlaceholder:BaseUrl must be an absolute HTTPS URL, got: '{LogSafe.Url(config.BaseUrl)}'");
         }
 
         // Declared here, not in the options callback: the callback runs lazily when the

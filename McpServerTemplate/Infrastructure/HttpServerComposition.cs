@@ -73,8 +73,12 @@ public static class HttpServerComposition
             // contract-002 · G-4 — the SDK's own [Authorize] filters, beneath the frame's gate.
             .AddAuthorizationFilters();
 
-        // contract-002 · G-12 — refuse plaintext in Production before anything binds.
-        TransportSecurityGuard.Validate(configuration, builder.Environment.IsProduction());
+        // contract-005 · G-17 round 1 — the framework's own forwarded-headers switch, which the server would ignore.
+        RefuseForwardedHeadersSwitch(configuration);
+
+        // contract-002 · G-12 — refuse plaintext before anything binds; contract-005 · G-17 round 1 — in every environment
+        // but Development, where the frame's other deployment rules apply, not only in one named Production.
+        TransportSecurityGuard.Validate(configuration, builder.Environment);
 
         builder.Services.AddIdentity(identity, configureIdentityForTests);
         builder.Services.AddAuthorization();
@@ -93,11 +97,18 @@ public static class HttpServerComposition
         });
 
         // ── Trust proxy headers only from a proxy ──
-        // Known networks and proxies default to loopback, so a forwarded header from anywhere
-        // else is ignored. Without that, any caller could set X-Forwarded-For and choose which
-        // bucket of the per-client rate limiter to spend.
+        // Forwarded headers are trusted from the declared proxies, or from loopback alone when none
+        // is declared, so a forwarded header from anywhere else is ignored. Without that, any caller
+        // could set X-Forwarded-For and choose which bucket of the per-client rate limiter to spend.
+        //
+        // contract-005 · G-17 round 1 — set here in every case, after every other setup: this used to
+        // leave the lists as it found them when no proxy was declared, trusting the framework's
+        // defaults to be loopback, and the framework's own switch (ForwardedHeaders_Enabled) empties
+        // them first — every client's headers were then believed. That switch is refused above, and
+        // its setup and its startup step are left out (LeaveOutTheFrameworksForwardedHeaders).
         var trusted = TrustedProxies(configuration);
-        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        LeaveOutTheFrameworksForwardedHeaders(builder.Services);
+        builder.Services.PostConfigure<ForwardedHeadersOptions>(options =>
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
             options.ForwardLimit = 1;
@@ -107,20 +118,21 @@ public static class HttpServerComposition
             // by nothing else: declaring a trusted proxy satisfied the startup check and left the
             // middleware trusting only its defaults. A setting that is checked but never applied
             // is worse than an absent one, because it answers a question falsely.
-            if (trusted.Proxies.Count > 0 || trusted.Networks.Count > 0)
-            {
-                // Defaults trust loopback. An operator who names their proxies means those, so the
-                // defaults are replaced rather than added to.
-                options.KnownProxies.Clear();
-                options.KnownIPNetworks.Clear();
-            }
+            //
+            // An operator who names their proxies means those, so loopback is replaced rather than
+            // added to; with none named, loopback alone, as the framework's own defaults have it.
+            options.KnownProxies.Clear();
+            options.KnownIPNetworks.Clear();
+            var declared = trusted.Proxies.Count > 0 || trusted.Networks.Count > 0;
+            IReadOnlyList<System.Net.IPAddress> proxies = declared ? trusted.Proxies : [System.Net.IPAddress.IPv6Loopback];
+            IReadOnlyList<System.Net.IPNetwork> networks = declared ? trusted.Networks : [System.Net.IPNetwork.Parse("127.0.0.0/8")];
 
-            foreach (var proxy in trusted.Proxies)
+            foreach (var proxy in proxies)
             {
                 options.KnownProxies.Add(proxy);
             }
 
-            foreach (var network in trusted.Networks)
+            foreach (var network in networks)
             {
                 options.KnownIPNetworks.Add(network);
             }
@@ -186,6 +198,62 @@ public static class HttpServerComposition
         }
     }
 
+    /// <summary>ASP.NET Core's own forwarded-headers switch, which its web host reads from the app's settings.</summary>
+    private const string ForwardedHeadersSwitch = "ForwardedHeaders_Enabled";
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 — ASP.NET Core reads a forwarded-headers switch of its own, <c>ForwardedHeaders_Enabled</c>
+    /// (ASPNETCORE_FORWARDEDHEADERS_ENABLED=true in container guidance), outside every section the settings allowlist governs.
+    /// Set to true, its options setup emptied the lists of proxies forwarded headers are trusted from, and its startup filter
+    /// ran the forwarded-headers step a second time, ahead of the whole pipeline: with no proxy declared every client's
+    /// X-Forwarded-For and X-Forwarded-Proto were believed, so each chose the address the per-address limit counts it by, and
+    /// its scheme. Both are left out of the composition now (<see cref="LeaveOutTheFrameworksForwardedHeaders"/>), and the
+    /// lists are set in every case, so the server would ignore the switch; a setting it would ignore is refused, from every
+    /// route the web host reads it by — the command line, the environment as DOTNET_, ASPNETCORE_ or unprefixed, a settings
+    /// file — naming the route, as HostBuilders refuses shutdownTimeoutSeconds. Any value: whatever it says, it is ignored.
+    /// </summary>
+    private static void RefuseForwardedHeadersSwitch(IConfigurationRoot configuration)
+    {
+        foreach (var provider in configuration.Providers)
+        {
+            if (provider.TryGet(ForwardedHeadersSwitch, out var value) && !string.IsNullOrEmpty(value))
+            {
+                // The key as the source holds it, so an environment variable is named as it was written:
+                // ASPNETCORE_FORWARDEDHEADERS_ENABLED, not the spelling this server looks it up by.
+                var written = provider.GetChildKeys([], parentPath: null)
+                    .FirstOrDefault(k => k.Equals(ForwardedHeadersSwitch, StringComparison.OrdinalIgnoreCase)) ?? ForwardedHeadersSwitch;
+                throw new ConfigurationException(
+                    $"{ForwardedHeadersSwitch} is '{value}' from {SettingsReadOnce.Route(provider, written)}: it is ASP.NET Core's own "
+                    + "forwarded-headers switch, which trusts every client's X-Forwarded-For and X-Forwarded-Proto when no proxy is "
+                    + "declared. This server takes forwarded headers from the proxies named in HttpTransport:KnownProxies and "
+                    + ":KnownNetworks alone, or from loopback when none is, and would ignore the switch. Remove it, and name the "
+                    + "proxy in front of this server there.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 — the web host's defaults register a forwarded-headers step of their own (a startup filter
+    /// that runs the middleware ahead of the whole pipeline) and an options setup that empties the trusted lists, both acting
+    /// on <see cref="ForwardedHeadersSwitch"/>. The switch is refused (<see cref="RefuseForwardedHeadersSwitch"/>); these
+    /// two are left out as well, as <see cref="KeepNoKeyRing"/> leaves out the key ring's loader, so nothing but this
+    /// composition's own step, in its place in the pipeline and with its own lists, reads forwarded headers. Host filtering's
+    /// startup filter, registered beside them, stays.
+    /// </summary>
+    private static void LeaveOutTheFrameworksForwardedHeaders(IServiceCollection services)
+    {
+        foreach (var frameworks in services
+            .Where(d => !d.IsKeyedService
+                && (d.ServiceType == typeof(IStartupFilter) || d.ServiceType == typeof(IConfigureOptions<ForwardedHeadersOptions>))
+                && d.ImplementationType is { } type
+                && type.Assembly == typeof(WebApplication).Assembly
+                && type.FullName is "Microsoft.AspNetCore.ForwardedHeadersStartupFilter" or "Microsoft.AspNetCore.ForwardedHeadersOptionsSetup")
+            .ToArray())
+        {
+            services.Remove(frameworks);
+        }
+    }
+
     /// <summary>
     /// contract-002 · G-12 — the proxies and networks forwarded headers are trusted from, HttpTransport:KnownProxies and
     /// HttpTransport:KnownNetworks, read once, at composition.
@@ -197,6 +265,12 @@ public static class HttpServerComposition
     /// IPv4 address alone is that one address, as before; an IPv6 address alone was read with the IPv4 default, /32, and
     /// IPNetwork clears the bits past a prefix without a word, so fd00::1 stood for all of fd00::/32 — it is refused, and
     /// asked for its prefix length.
+    ///
+    /// contract-005 · G-17 round 1 — and a prefix length of 0 is refused: it is every address, not a proxy's. Follow-up — a
+    /// network is written in its exact form: an address with bits set past its prefix was read, without a word, as the network
+    /// it falls in (10.213.99.250/2, a digit short of /24, trusted a quarter of every address), so it is refused, naming that
+    /// network. And none is broader than <see cref="BroadestIPv4Network"/> or <see cref="BroadestIPv6Network"/>: no proxy
+    /// needs more, and two /1 entries would trust every address, walking round the refusal of /0.
     /// </summary>
     /// <exception cref="ConfigurationException">An entry is not an IP address, or a network, as its key says.</exception>
     public static (IReadOnlyList<System.Net.IPAddress> Proxies, IReadOnlyList<System.Net.IPNetwork> Networks) TrustedProxies(IConfiguration configuration)
@@ -249,7 +323,7 @@ public static class HttpServerComposition
                     throw new ConfigurationException(
                         $"{entry.Path} is '{value}', an IPv6 address with no prefix length, which a network needs: read with "
                         + $"the IPv4 default, /32, it stood for far more than this address. Write {value}/128 for the one "
-                        + "address, or its network, as fd00::/8.");
+                        + "address, or its network, as fd00::/64.");
                 }
 
                 prefix = 32;
@@ -259,14 +333,60 @@ public static class HttpServerComposition
             {
                 throw new ConfigurationException(
                     $"{entry.Path} is '{value}', whose prefix length is outside 0-{bits}. Write a network in CIDR form, as "
-                    + $"{(bits == 32 ? "10.0.0.0/8" : "fd00::/8")}.");
+                    + $"{(bits == 32 ? "10.0.0.0/8" : "fd00::/64")}.");
+            }
+            else if (prefix == 0)
+            {
+                // contract-005 · G-17 round 1 — a network of every address, whatever the address before its / says: it names
+                // no proxy, satisfied the transport guard as if it did, and trusted every client's forwarded headers — the
+                // proxy-list counterpart of the wildcard allowed host G-12 (2) refuses.
+                throw new ConfigurationException(
+                    $"{entry.Path} is '{value}', whose prefix length is 0: every {(bits == 32 ? "IPv4" : "IPv6")} address, which names "
+                    + "no proxy. Every client's X-Forwarded-For and X-Forwarded-Proto would be believed, so each would choose the "
+                    + "address the per-address limit counts it by, and its scheme. Name the proxy in front of this server, as "
+                    + $"{(bits == 32 ? "10.0.0.2" : "fd00::2")} in HttpTransport:KnownProxies, or its network here, as "
+                    + $"{(bits == 32 ? "10.0.0.0/8" : "fd00::/64")}.");
             }
 
-            networks.Add(new System.Net.IPNetwork(address, prefix));
+            var network = new System.Net.IPNetwork(address, prefix);
+            var broadest = bits == 32 ? BroadestIPv4Network : BroadestIPv6Network;
+
+            // contract-005 · G-17 round 1, follow-up — in its exact form: IPNetwork clears the bits past the prefix without a
+            // word, so the network trusted was another than the one written. Refused, naming it — and, where it is broader
+            // than any proxy needs as well, saying so, since writing it would be refused next.
+            if (!network.BaseAddress.Equals(address))
+            {
+                throw new ConfigurationException(
+                    $"{entry.Path} is '{value}', whose address has bits set past its prefix length, so it would be read as {network}, "
+                    + $"trusting every address in it; write {network} if that is what you mean"
+                    + (prefix < broadest
+                        ? $" — though that is broader than /{broadest}, which no proxy needs, and is refused as well. Name the proxy "
+                            + $"itself, as {address}/{bits}, or the network it is in, no broader than /{broadest}."
+                        : $", or {address}/{bits} for that one address."));
+            }
+
+            // contract-005 · G-17 round 1, follow-up — no network broader than a proxy needs.
+            if (prefix < broadest)
+            {
+                throw new ConfigurationException(
+                    $"{entry.Path} is '{value}', whose prefix length, {prefix}, is broader than /{broadest}, the broadest network "
+                    + "this server takes forwarded headers from: no proxy needs more, and a few such entries would trust every "
+                    + "address, as a prefix length of 0 does. Name the proxy in front of this server, as "
+                    + $"{(bits == 32 ? "10.0.0.2" : "fd00::2")} in HttpTransport:KnownProxies, or the network it is in here, as "
+                    + $"{(bits == 32 ? "10.0.0.0/8" : "fd00::/64")}.");
+            }
+
+            networks.Add(network);
         }
 
         return (proxies, networks);
     }
+
+    /// <summary>contract-005 · G-17 round 1, follow-up — the broadest IPv4 network forwarded headers are trusted from: /8.</summary>
+    private const int BroadestIPv4Network = 8;
+
+    /// <summary>contract-005 · G-17 round 1, follow-up — the broadest IPv6 network forwarded headers are trusted from: /32.</summary>
+    private const int BroadestIPv6Network = 32;
 
     /// <summary>What <see cref="NotInStandardForm"/> is followed by in a refusal.</summary>
     private const string StandardIPv4 = "An IPv4 address is written in its standard form: four decimal parts, without leading zeros.";

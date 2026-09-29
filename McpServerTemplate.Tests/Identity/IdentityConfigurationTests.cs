@@ -127,7 +127,99 @@ public class IdentityConfigurationTests
         var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
 
         Assert.StartsWith("Authentication:Resource", ex.Message, StringComparison.Ordinal);
-        Assert.Contains($"'{resource}'", ex.Message, StringComparison.Ordinal);
+
+        // contract-005 · G-17 round 1 — echoed as written, but for its user information, a credential, which is written
+        // as *** (T9_a_refusal_never_writes_the_credential_a_url_carries), and, follow-up, its query, which can carry one
+        // (T9_a_refusal_never_writes_the_query_a_url_carries). This row used to require the password itself.
+        var at = resource.LastIndexOf('@');
+        var echoed = at < 0 ? resource : "https://***" + resource[at..];
+        var query = echoed.IndexOf('?', StringComparison.Ordinal);
+        Assert.Contains($"'{(query < 0 ? echoed : echoed[..(query + 1)] + "***")}'", ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 — user information is refused in the Resource, an Authority and an Issuer because it is
+    /// a credential written into a URL, and the refusal printed the whole value, credential and all, into the log it
+    /// stops the server with (on the image: docker logs, and whatever collects them). Every refusal that echoes one of
+    /// these values now writes its user information as ***, whichever check refuses it: user information itself, a
+    /// scheme that is not https, or a value that is not an absolute URI at all — a password holding a / leaves the URL
+    /// unparseable, and one with no :// before it reads as a scheme of its own.
+    /// </summary>
+    [Theory]
+    [InlineData("Authentication:Resource", "https://ops:Pa55w0rd-mcp@mcp.example.com/mcp", "Pa55w0rd-mcp")]
+    [InlineData("Authentication:Resource", "http://ops:Pa55w0rd-mcp@mcp.example.com/mcp", "Pa55w0rd-mcp")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "https://svc-reader:Pa55w0rd-idp@login.example.com", "Pa55w0rd-idp")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "http://svc-reader:Pa55w0rd-idp@login.example.com", "Pa55w0rd-idp")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "https://svc-reader:Pa55/w0rd-idp@login.example.com", "w0rd-idp")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://svc-reader:Pa55w0rd-iss@login.example.com/", "Pa55w0rd-iss")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "http://svc-reader:Pa55w0rd-iss@login.example.com/", "Pa55w0rd-iss")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "svc-reader:Pa55w0rd-iss@login.example.com", "Pa55w0rd-iss")]
+    public void T9_a_refusal_never_writes_the_credential_a_url_carries(string key, string value, string password)
+    {
+        var settings = Wellformed();
+        settings[key] = value;
+
+        var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
+
+        Assert.StartsWith(key, ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(password, ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("svc-reader", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("***@", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1, follow-up — a query can carry a credential as well (?client_secret=…), and the refusals
+    /// of a URL with one wrote it whole: whichever check refuses it — the query itself, a scheme that is not https — the
+    /// echo writes the query as ?***. User information in the same URL is written as *** first, so a ? inside a password
+    /// is not taken for the query's start.
+    /// </summary>
+    [Theory]
+    [InlineData("Authentication:Resource", "https://mcp.example.com/mcp?client_secret=S3cr3t-mcp", "S3cr3t-mcp")]
+    [InlineData("Authentication:Resource", "http://mcp.example.com/mcp?client_secret=S3cr3t-mcp", "S3cr3t-mcp")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "https://login.example.com/realms/corp?client_secret=S3cr3t-idp", "S3cr3t-idp")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "http://login.example.com/realms/corp?client_secret=S3cr3t-idp", "S3cr3t-idp")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "https://svc-reader:Pa55?w0rd@login.example.com/?client_secret=S3cr3t-idp", "w0rd")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://login.example.com/?client_secret=S3cr3t-iss", "S3cr3t-iss")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "http://login.example.com/?client_secret=S3cr3t-iss", "S3cr3t-iss")]
+    public void T9_a_refusal_never_writes_the_query_a_url_carries(string key, string value, string secret)
+    {
+        var settings = Wellformed();
+        settings[key] = value;
+
+        var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
+
+        Assert.StartsWith(key, ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("client_secret", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("?***", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 — a token is routed to the identity provider whose Issuer its iss names, the first
+    /// that does, so a second provider with the same Issuer authenticates no caller, and every provider bound to it refuses
+    /// every one: a setting the server would never act on, which startup refuses, naming both.
+    /// </summary>
+    [Fact]
+    public void T9_two_identity_providers_with_one_issuer_are_refused_naming_both()
+    {
+        var settings = Wellformed();
+        settings["Authentication:IdentityProviders:partner:Authority"] = "https://partner.example.com";
+        settings["Authentication:IdentityProviders:partner:Issuer"] = "https://login.example.com/";
+        settings["Authentication:IdentityProviders:partner:Algorithms:0"] = "RS256";
+        settings["Authentication:IdentityProviders:partner:ScopeClaim"] = "scope";
+        settings["Authentication:IdentityProviders:partner:ClientIdClaim"] = "client_id";
+        settings["Authentication:IdentityProviders:partner:ScopeCatalog:0"] = "weather:read";
+
+        // Positive control: the same two, each with an issuer of its own, bind.
+        var own = new Dictionary<string, string?>(settings) { ["Authentication:IdentityProviders:partner:Issuer"] = "https://partner.example.com/" };
+        Assert.Equal(2, IdentityConfigurationBinder.Bind(Config(own)).IdentityProviders.Count);
+
+        var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
+
+        Assert.Contains("Authentication:IdentityProviders:corp:Issuer", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Authentication:IdentityProviders:partner:Issuer", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("'https://login.example.com/'", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

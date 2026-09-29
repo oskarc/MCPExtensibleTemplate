@@ -52,12 +52,28 @@ public sealed class InProcessServer : IAsyncDisposable
     /// <summary>A base64 key for signing confirmations, the same in every test run.</summary>
     public const string ConfirmationKey = "dGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXk=";
 
+    /// <param name="identityProviders">The identity providers the server trusts, each answered in-process.</param>
+    /// <param name="resource">Authentication:Resource.</param>
+    /// <param name="configure">Changes to the settings before the server is composed.</param>
+    /// <param name="modules">The provider modules; the built-in ones when none are given.</param>
+    /// <param name="redis">The limit store; the test run's Redis when none is given.</param>
+    /// <param name="logs">
+    /// contract-005 · G-17 round 1 — where the server's log goes, for a test that reads what a refusal logged; nowhere when
+    /// none is given.
+    /// </param>
+    /// <param name="identityClock">
+    /// contract-005 · G-17 round 1 — the clock each identity provider's bearer handler validates tokens by, for a test that
+    /// takes authentication's own check of a token's times out of the way to reach the gate's; the system clock when none
+    /// is given.
+    /// </param>
     public static async Task<InProcessServer> StartAsync(
         IEnumerable<TestIdentityProvider> identityProviders,
         string resource = "https://mcp.example.com/mcp",
         Action<Dictionary<string, string?>>? configure = null,
         IReadOnlyList<IProviderModule>? modules = null,
-        string? redis = null)
+        string? redis = null,
+        ILoggerProvider? logs = null,
+        TimeProvider? identityClock = null)
     {
         var providers = identityProviders.ToArray();
         modules ??= BuiltInProviders.Create();
@@ -130,6 +146,11 @@ public sealed class InProcessServer : IAsyncDisposable
         builder.Configuration.AddInMemoryCollection(settings);
         builder.Environment.EnvironmentName = Environments.Production;
         builder.Logging.ClearProviders();
+        if (logs is not null)
+        {
+            builder.Logging.AddProvider(logs);
+        }
+
         builder.WebHost.UseUrls("http://127.0.0.1:0");
 
         var byName = providers.ToDictionary(p => p.Name, StringComparer.Ordinal);
@@ -142,6 +163,10 @@ public sealed class InProcessServer : IAsyncDisposable
                 // The one seam. Discovery and JWKS are answered in-process, and counted.
                 options.BackchannelHttpHandler = byName[name].Handler;
                 options.RequireHttpsMetadata = false;
+                if (identityClock is not null)
+                {
+                    options.TimeProvider = identityClock;
+                }
             });
 
         var app = builder.Build().UseHttpServer();

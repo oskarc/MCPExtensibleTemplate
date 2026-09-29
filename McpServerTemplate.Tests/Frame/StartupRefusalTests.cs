@@ -112,6 +112,53 @@ public class StartupRefusalTests
         Assert.Contains("does not allow", message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 1 — a BaseUrl refused for not being https was echoed whole, and a URL can carry a
+    /// credential as its user information: the refusal wrote it into the log the server stops with. Each refusal of a
+    /// BaseUrl now writes that part as ***: the frame's own (PolicyRegistry, for a provider whose registration reads no
+    /// BaseUrl, as the test module's) and each built-in provider's, at its registration, which comes first.
+    /// </summary>
+    [Theory]
+    [InlineData("TestAct")]
+    [InlineData("Smhi")]
+    [InlineData("SmhiObs")]
+    [InlineData("JsonPlaceholder")]
+    public void T1_a_refused_base_url_never_writes_its_credential(string provider)
+    {
+        IProviderModule module = provider == "TestAct" ? new TestModule() : BuiltInProviders.Create().Single(m => m.Name == provider);
+        var settings = FrameHarness.Settings([module]);
+        settings[$"Providers:{provider}:BaseUrl"] = "http://svc-reader:Pa55w0rd-up@upstream.example.org";
+
+        var message = FrameHarness.Refusal([module], settings);
+
+        Assert.Contains($"Providers:{provider}:BaseUrl", message, StringComparison.Ordinal);
+        Assert.Contains("'http://***@upstream.example.org'", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Pa55w0rd-up", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("svc-reader", message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1, follow-up — a query can carry a credential too (?api_key=…): the refusal of a BaseUrl
+    /// writes its query as ?***, the frame's and each built-in provider's.
+    /// </summary>
+    [Theory]
+    [InlineData("TestAct")]
+    [InlineData("Smhi")]
+    [InlineData("SmhiObs")]
+    [InlineData("JsonPlaceholder")]
+    public void T1_a_refused_base_url_never_writes_its_query(string provider)
+    {
+        IProviderModule module = provider == "TestAct" ? new TestModule() : BuiltInProviders.Create().Single(m => m.Name == provider);
+        var settings = FrameHarness.Settings([module]);
+        settings[$"Providers:{provider}:BaseUrl"] = "http://upstream.example.org/?api_key=S3cr3t-up";
+
+        var message = FrameHarness.Refusal([module], settings);
+
+        Assert.Contains($"Providers:{provider}:BaseUrl", message, StringComparison.Ordinal);
+        Assert.Contains("'http://upstream.example.org/?***'", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("S3cr3t-up", message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void T1_an_unknown_enabled_provider_refuses_to_start()
     {

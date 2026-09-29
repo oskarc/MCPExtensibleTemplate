@@ -620,12 +620,51 @@ public class TransportAndPrincipalTests
     [InlineData("HttpTransport:KnownNetworks:0", "not-an-ip/8", "whose address, 'not-an-ip', is not an IP address")]
     [InlineData("HttpTransport:KnownNetworks:0", "010.0.0.0/8", "whose address would be read as 8.0.0.0; write 8.0.0.0/8, or 10.0.0.0/8 if that is what you meant")]
     [InlineData("HttpTransport:KnownNetworks:0", "fd00::1", "an IPv6 address with no prefix length")]
+    // contract-005 · G-17 round 1 — a prefix length of 0 is every address, however the address before it is written: it
+    // names no proxy, and would trust every client's forwarded headers.
+    [InlineData("HttpTransport:KnownNetworks:0", "0.0.0.0/0", "whose prefix length is 0: every IPv4 address")]
+    [InlineData("HttpTransport:KnownNetworks:0", "::/0", "whose prefix length is 0: every IPv6 address")]
+    [InlineData("HttpTransport:KnownNetworks:0", "10.213.77.250/0", "whose prefix length is 0: every IPv4 address")]
+    // contract-005 · G-17 round 1, follow-up — a network is written in its exact form: an address with bits set past its
+    // prefix was read as the network it falls in without a word, and 10.213.99.250/2 — a digit short of /24 — trusted a
+    // quarter of every address. The refusal names the network it would have been, and when that network is itself too
+    // broad, says so too.
+    [InlineData("HttpTransport:KnownNetworks:0", "10.213.99.250/2", "so it would be read as 0.0.0.0/2, trusting every address in it; write 0.0.0.0/2 if that is what you mean — though that is broader than /8")]
+    [InlineData("HttpTransport:KnownNetworks:1", "10.0.0.5/8", "so it would be read as 10.0.0.0/8, trusting every address in it; write 10.0.0.0/8 if that is what you mean, or 10.0.0.5/32 for that one address")]
+    [InlineData("HttpTransport:KnownNetworks:0", "10.213.99.250/24", "so it would be read as 10.213.99.0/24")]
+    [InlineData("HttpTransport:KnownNetworks:0", "fd00::1/64", "so it would be read as fd00::/64, trusting every address in it; write fd00::/64 if that is what you mean, or fd00::1/128 for that one address")]
+    // contract-005 · G-17 round 1, follow-up — and no network broader than /8 (IPv4) or /32 (IPv6): no proxy needs more,
+    // and two /1 entries would trust every address, walking round the refusal of /0.
+    [InlineData("HttpTransport:KnownNetworks:0", "0.0.0.0/1", "whose prefix length, 1, is broader than /8")]
+    [InlineData("HttpTransport:KnownNetworks:1", "128.0.0.0/1", "whose prefix length, 1, is broader than /8")]
+    [InlineData("HttpTransport:KnownNetworks:0", "10.0.0.0/7", "whose prefix length, 7, is broader than /8")]
+    [InlineData("HttpTransport:KnownNetworks:0", "fd00::/31", "whose prefix length, 31, is broader than /32")]
+    [InlineData("HttpTransport:KnownNetworks:0", "fc00::/7", "whose prefix length, 7, is broader than /32")]
     public void G12_2_a_trusted_proxy_or_network_that_is_not_one_is_refused_naming_its_key(string key, string value, string says)
     {
         var ex = Assert.Throws<ConfigurationException>(() => HttpServerComposition.TrustedProxies(Config(new() { [key] = value })));
 
         Assert.StartsWith($"{key} is '{value}'", ex.Message, StringComparison.Ordinal);
         Assert.Contains(says, ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 — the Production guard asks for a proxy the server trusts explicitly, and counted any
+    /// entry as one: 0.0.0.0/0 satisfied it while naming no proxy at all, and the server started trusting every client's
+    /// forwarded address and scheme. Such an entry satisfies it no longer; it is refused, naming its key.
+    /// </summary>
+    [Theory]
+    [InlineData("0.0.0.0/0")]
+    [InlineData("::/0")]
+    public void G12_2_a_network_of_every_address_does_not_satisfy_the_production_guard(string network)
+    {
+        // Positive control: a network that is a proxy's satisfies it.
+        TransportSecurityGuard.Validate(Config(new() { ["HttpTransport:KnownNetworks:0"] = "10.0.0.0/8" }), isProduction: true);
+
+        var ex = Assert.Throws<ConfigurationException>(
+            () => TransportSecurityGuard.Validate(Config(new() { ["HttpTransport:KnownNetworks:0"] = network }), isProduction: true));
+
+        Assert.StartsWith($"HttpTransport:KnownNetworks:0 is '{network}'", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>contract-005 · G-12 (2), review round 9 — the control: entries that are what they say are read as written.</summary>
@@ -638,11 +677,30 @@ public class TransportAndPrincipalTests
             ["HttpTransport:KnownProxies:1"] = "fd00::2",
             ["HttpTransport:KnownNetworks:0"] = "10.0.0.0/8",
             ["HttpTransport:KnownNetworks:1"] = "10.1.2.3",
-            ["HttpTransport:KnownNetworks:2"] = "fd00::/8",
+            // contract-005 · G-17 round 1, follow-up — /32, not /8: no IPv6 network broader than /32 is taken.
+            ["HttpTransport:KnownNetworks:2"] = "fd00::/32",
         }));
 
         Assert.Equal(["10.0.0.2", "fd00::2"], proxies.Select(p => p.ToString()));
-        Assert.Equal(["10.0.0.0/8", "10.1.2.3/32", "fd00::/8"], networks.Select(n => n.ToString()));
+        Assert.Equal(["10.0.0.0/8", "10.1.2.3/32", "fd00::/32"], networks.Select(n => n.ToString()));
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1, follow-up — the control for the rows above: a network in its exact form, no broader than
+    /// /8 or /32, is read as written — the broadest of each, docs/04's own two, and the end-to-end suite's network.
+    /// </summary>
+    [Theory]
+    [InlineData("10.0.0.0/8")]
+    [InlineData("172.16.0.0/12")]
+    [InlineData("198.51.100.0/26")]
+    [InlineData("10.213.99.0/24")]
+    [InlineData("fd00::/32")]
+    [InlineData("fd00:0:0:1::/64")]
+    public void G12_2_a_network_in_its_exact_form_no_broader_than_a_proxy_needs_is_read_as_written(string network)
+    {
+        var (_, networks) = HttpServerComposition.TrustedProxies(Config(new() { ["HttpTransport:KnownNetworks:0"] = network }));
+
+        Assert.Equal(System.Net.IPNetwork.Parse(network), Assert.Single(networks));
     }
 
     /// <summary>

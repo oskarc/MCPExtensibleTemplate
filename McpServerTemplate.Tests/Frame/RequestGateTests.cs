@@ -168,6 +168,121 @@ public class RequestGateTests
         Assert.Equal("set v", GateClient.TextOf(await GateClient.RpcAsync(server, fresh, "tools/call", call)));
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 1, follow-up — a token that says it was issued later than now, past the clock skew its
+    /// validation allows (30 seconds), has no age anyone can tell, and counted as fresh until its iat plus a freshness
+    /// window, however long ago it was really issued. It is refused at authentication, on every request — a read among
+    /// them, which no freshness gate ever saw — with the reason logged as authn_login_fail. Inside the skew it is served,
+    /// as the validation treats it.
+    /// </summary>
+    [Fact]
+    public async Task T6_a_token_that_says_it_was_issued_in_the_future_is_refused_at_authentication_even_for_a_read()
+    {
+        using var corp = new TestIdentityProvider("corp", "https://corp.example.com/");
+        using var log = new CapturedLog();
+        await using var server = await InProcessServer.StartAsync([corp], modules: Everything, logs: log);
+        var call = new { name = "test_echo", arguments = new { text = "hi" } };
+
+        // Positive control: inside the skew, the read is served.
+        Assert.Equal("hi", GateClient.TextOf(await GateClient.RpcAsync(server, IssuedIn(corp, TimeSpan.FromSeconds(10)), "tools/call", call)));
+
+        var (status, body) = await RawRpcAsync(server, IssuedIn(corp, TimeSpan.FromMinutes(10)), "tools/call", call);
+        var logged = log.Lines.Where(l => l.Contains("authn_login_fail", StringComparison.Ordinal)).ToArray();
+
+        Assert.True(
+            status == System.Net.HttpStatusCode.Unauthorized,
+            $"a read called with a token that says it was issued 10 minutes from now got {(int)status}: {body}");
+        Assert.Contains(logged, l => l.Contains("issued", StringComparison.Ordinal) && l.Contains("from now", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 — defence in depth: the write and irreversible gates refuse such a token by their own
+    /// rule, token-age, should one ever reach them. Authentication's own check is taken out of the way by giving it a clock
+    /// ten minutes ahead, by which the token was issued now; the gate keeps the server's own clock.
+    /// </summary>
+    [Theory]
+    [InlineData("test_update")]
+    [InlineData("test_destroy")]
+    public async Task T6_a_token_that_says_it_was_issued_in_the_future_is_refused_for_its_age_by_the_gate_too(string tool)
+    {
+        using var corp = new TestIdentityProvider("corp", "https://corp.example.com/");
+        await using var server = await InProcessServer.StartAsync([corp], modules: Everything, identityClock: new ShiftedClock(TimeSpan.FromMinutes(10)));
+        var call = new { name = tool, arguments = tool == "test_update" ? (object)new { value = "v" } : new { target = "zeta" } };
+
+        // Positive control: inside the skew the token passes the age gate — the write is served, and the irreversible call goes
+        // on to ask for a confirmation, which this client cannot give.
+        var inside = GateClient.TextOf(await GateClient.RpcAsync(server, IssuedIn(corp, TimeSpan.FromSeconds(10)), "tools/call", call));
+        Assert.Contains(tool == "test_update" ? "set v" : "confirmation-unsupported", inside, StringComparison.Ordinal);
+
+        var text = GateClient.TextOf(await GateClient.RpcAsync(server, IssuedIn(corp, TimeSpan.FromMinutes(10)), "tools/call", call));
+
+        Assert.Contains("rule: token-age", text, StringComparison.Ordinal);
+        Assert.Contains("from now", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A token with test:act that says it was issued <paramref name="fromNow"/> from now, valid from a minute ago and for
+    /// twenty, so the validation's own nbf and exp checks let it through: as a token with no nbf would pass.
+    /// </summary>
+    private static string IssuedIn(TestIdentityProvider idp, TimeSpan fromNow)
+    {
+        var now = DateTime.UtcNow;
+        return idp.MintToken(GateClient.Resource, scopes: ["test:act"], issuedAt: now + fromNow, notBefore: now.AddMinutes(-1), expires: now.AddMinutes(20));
+    }
+
+    /// <summary>One JSON-RPC request, and the status and body it got, whatever they are: a refused token gets no JSON-RPC answer.</summary>
+    private static async Task<(System.Net.HttpStatusCode Status, string Body)> RawRpcAsync(InProcessServer server, string token, string method, object parameters)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, InProcessServer.McpPath)
+        {
+            Content = new StringContent(
+                System.Text.Json.JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 1, method, @params = parameters }),
+                System.Text.Encoding.UTF8,
+                "application/json"),
+        };
+        request.Headers.Accept.ParseAdd("application/json, text/event-stream");
+        request.Headers.Add("Authorization", $"Bearer {token}");
+        request.Headers.Add("MCP-Protocol-Version", "2025-06-18");
+        using var response = await server.Client.SendAsync(request);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>A clock <paramref name="ahead"/> of the system's.</summary>
+    private sealed class ShiftedClock(TimeSpan ahead) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => base.GetUtcNow() + ahead;
+    }
+
+    /// <summary>A log that keeps every line the server writes, for a test that reads what a refusal logged.</summary>
+    private sealed class CapturedLog : Microsoft.Extensions.Logging.ILoggerProvider
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _lines = new();
+
+        public IReadOnlyList<string> Lines => [.. _lines];
+
+        public Microsoft.Extensions.Logging.ILogger CreateLogger(string categoryName) => new Logger(categoryName, _lines);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Logger(string category, System.Collections.Concurrent.ConcurrentQueue<string> lines) : Microsoft.Extensions.Logging.ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => null;
+
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                Microsoft.Extensions.Logging.LogLevel logLevel,
+                Microsoft.Extensions.Logging.EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter) =>
+                lines.Enqueue($"{category}: {formatter(state, exception)}");
+        }
+    }
+
     [Fact]
     public async Task T6_a_read_is_not_aged()
     {

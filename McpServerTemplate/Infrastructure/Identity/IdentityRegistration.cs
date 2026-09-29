@@ -28,6 +28,13 @@ public static class IdentityRegistration
     public const int MaxTokenBytes = 8 * 1024;
 
     /// <summary>
+    /// How far a token's times may be off this server's clock and still be taken as they are: the bearer handler's
+    /// allowance for nbf and exp, and contract-005 · G-17 round 1, the request gate's for iat (a token issued further in
+    /// the future than this has no age anyone can tell).
+    /// </summary>
+    public static readonly TimeSpan ClockSkew = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Where the router sends anything it cannot attribute to a registered issuer.
     ///
     /// It must not be the MCP scheme: that handler authenticates through the default scheme,
@@ -39,10 +46,10 @@ public static class IdentityRegistration
     public const string UnattributableScheme = "unattributable";
 
     /// <summary>
-    /// contract-005 · T-3 — where the router leaves the issuer of a token it refused to route because no identity provider
-    /// is configured for it, for <see cref="UnattributableHandler"/> to log.
+    /// contract-005 · T-3, G-17 round 1 — where the router leaves why it refused to route a token, for
+    /// <see cref="UnattributableHandler"/> to log.
     /// </summary>
-    private const string UnregisteredIssuerItem = "McpServerTemplate.Identity.UnregisteredIssuer";
+    private const string RefusedTokenItem = "McpServerTemplate.Identity.RefusedToken";
 
     public static string SchemeFor(string identityProvider) => $"idp:{identityProvider}";
 
@@ -54,6 +61,10 @@ public static class IdentityRegistration
     /// with nothing said: the one refused token the log never showed. It is logged as authn_login_fail with its reason,
     /// once per request (the framework runs a handler's authentication once per request), naming the issuer made safe for
     /// a log line (<see cref="LogSafe"/>), never the token. Nothing is looked up to say it: no key, no document.
+    ///
+    /// contract-005 · G-17 round 1 — and so is every other token the router cannot attribute, each refused as silently
+    /// until now: one it cannot read as a JSON web token, one over <see cref="MaxTokenBytes"/>, and one that names no issuer.
+    /// A request with no token at all is not a refused token: the challenge that follows tells its caller where to get one.
     /// </summary>
     private sealed class UnattributableHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
@@ -67,9 +78,9 @@ public static class IdentityRegistration
 
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
-            if (Context.Items.TryGetValue(UnregisteredIssuerItem, out var issuer) && issuer is string unregistered)
+            if (Context.Items.TryGetValue(RefusedTokenItem, out var why) && why is string reason)
             {
-                LogRefusal(Context, UnattributableScheme, $"no identity provider is configured for issuer '{LogSafe.Text(unregistered)}'");
+                LogRefusal(Context, UnattributableScheme, reason);
             }
 
             return Task.FromResult(AuthenticateResult.NoResult());
@@ -146,6 +157,11 @@ public static class IdentityRegistration
                     ValidateAudience = true,
                     ValidAudience = config.Resource,
 
+                    // contract-005 · G-17 round 1 — exactly: the resource is held as written, a trailing slash included
+                    // or not (G-12 (1)), and the library's default read a trailing slash as nothing, so a token for
+                    // https://host/mcp/ passed a server whose resource is https://host/mcp, and the other way round.
+                    IgnoreTrailingSlashWhenValidatingAudience = false,
+
                     ValidateLifetime = true,
                     RequireExpirationTime = true,
                     RequireSignedTokens = true,
@@ -155,7 +171,7 @@ public static class IdentityRegistration
                     // absent rather than denied, so this cannot be widened by a typo.
                     ValidAlgorithms = provider.Algorithms,
 
-                    ClockSkew = TimeSpan.FromSeconds(30),
+                    ClockSkew = ClockSkew,
                 };
 
                 options.Events = new JwtBearerEvents
@@ -195,6 +211,23 @@ public static class IdentityRegistration
                             // set here is returned as it is, so OnAuthenticationFailed never runs for it, and the
                             // framework's own line is an Information event Production filters out: the token was
                             // refused and nothing said why. The reason names the claims, never the token.
+                            LogRefusal(context.HttpContext, scheme, reason);
+                            context.Fail(reason);
+                            return Task.CompletedTask;
+                        }
+
+                        // contract-005 · G-17 round 1, follow-up — a token that says it was issued later than now, past the
+                        // clock skew the validation allows its nbf and exp, has no age anyone can tell: it counted as fresh
+                        // until its iat plus a freshness window, however long ago it was really issued. Validation reads
+                        // nbf and exp and never iat, so this refuses it for every request, reads included, logged with its
+                        // reason. The request gate refuses it by its own rule as well (token-age), should one reach it.
+                        var now = (context.Options.TimeProvider ?? TimeProvider.System).GetUtcNow();
+                        if (long.TryParse(Claim(context, JwtRegisteredClaimNames.Iat), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var iat)
+                            && DateTimeOffset.FromUnixTimeSeconds(Math.Clamp(iat, DateTimeOffset.MinValue.ToUnixTimeSeconds(), DateTimeOffset.MaxValue.ToUnixTimeSeconds())) - now is var ahead
+                            && ahead > ClockSkew)
+                        {
+                            var reason = $"The token says it was issued {ahead.TotalSeconds:0} seconds from now, further ahead of this "
+                                + $"server's clock than the {ClockSkew.TotalSeconds:0} seconds it allows, so its age cannot be told.";
                             LogRefusal(context.HttpContext, scheme, reason);
                             context.Fail(reason);
                             return Task.CompletedTask;
@@ -303,9 +336,16 @@ public static class IdentityRegistration
         }
 
         var token = header["Bearer ".Length..].Trim();
-        if (token.Length == 0 || token.Length > MaxTokenBytes)
+        if (token.Length == 0)
         {
             return UnattributableScheme;
+        }
+
+        // contract-005 · T-3, G-17 round 1 — each refusal below is logged by the scheme it is sent to (UnattributableHandler),
+        // with its reason and nothing of the token's but the issuer it names, made safe for a log line.
+        if (token.Length > MaxTokenBytes)
+        {
+            return Unattributable(context, $"the token is {token.Length} characters long, more than the {MaxTokenBytes} this server reads");
         }
 
         string? issuer;
@@ -315,25 +355,31 @@ public static class IdentityRegistration
         }
         catch (ArgumentException)
         {
-            // Not a readable token. Nothing to route, and no reason to consult a key store.
-            return UnattributableScheme;
+            // Not a readable token. Nothing to route, and no reason to consult a key store. The library's own words are
+            // not logged: they can quote the token.
+            return Unattributable(context, "the token cannot be read as a JSON web token");
         }
 
         if (string.IsNullOrEmpty(issuer))
         {
-            return UnattributableScheme;
+            return Unattributable(context, "the token names no issuer");
         }
 
         var match = config.IdentityProviders.Values
             .FirstOrDefault(p => string.Equals(p.Issuer, issuer, StringComparison.Ordinal));
 
-        if (match is null)
-        {
-            // contract-005 · T-3 — refused here, and logged by the scheme it is sent to (UnattributableHandler).
-            context.Items[UnregisteredIssuerItem] = issuer;
-            return UnattributableScheme;
-        }
+        return match is null
+            ? Unattributable(context, $"no identity provider is configured for issuer '{LogSafe.Text(issuer)}'")
+            : SchemeFor(match.Name);
+    }
 
-        return SchemeFor(match.Name);
+    /// <summary>
+    /// contract-005 · T-3, G-17 round 1 — the scheme for a token the router refuses, leaving <paramref name="reason"/> on the
+    /// request for that scheme's handler to log, once (<see cref="UnattributableHandler"/>).
+    /// </summary>
+    private static string Unattributable(HttpContext context, string reason)
+    {
+        context.Items[RefusedTokenItem] = reason;
+        return UnattributableScheme;
     }
 }

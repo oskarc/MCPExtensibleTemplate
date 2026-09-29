@@ -34,13 +34,17 @@ public static class HostBuilders
     private const string StartNoWatcher = "--hostBuilder:reloadConfigOnChange=false";
 
     /// <summary>
-    /// contract-005 · T-10 — how long the web host gives the requests in flight once it is told to stop: 8 seconds, inside
+    /// contract-005 · T-10 — how long the web host gives the requests in flight once it is told to stop: 6 seconds, inside
     /// Docker's 10-second stop grace. The framework's own default is 30 seconds (HostOptions.ShutdownTimeout in
     /// Microsoft.Extensions.Hosting 10.0), so a server stopped while it held a request waited past the grace and was
-    /// killed — exit 137, no shutdown line — however cleanly it would have stopped. Now a request still running after 8
+    /// killed — exit 137, no shutdown line — however cleanly it would have stopped. Now a request still running after 6
     /// seconds has its connection closed, and the server stops and says so, inside the grace.
+    ///
+    /// contract-005 · G-17 round 1 — 6, not 8: the timeout bounds the host's own stop and nothing after it — the shutdown
+    /// line, disposing the app and its Redis connection, flushing the log, the runtime's exit — which took 0.3 to 1.6 seconds
+    /// under load, so at 8 a busy stop finished 0.4 to 1.7 seconds inside the grace. At 6 the rest has 4 seconds.
     /// </summary>
-    public static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(8);
+    public static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(6);
 
     /// <summary>The framework's own host setting for that time, in whole seconds (HostOptions reads it from the host's settings).</summary>
     private const string ShutdownTimeoutSetting = "shutdownTimeoutSeconds";

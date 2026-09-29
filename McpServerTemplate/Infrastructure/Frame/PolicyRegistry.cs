@@ -353,7 +353,8 @@ public sealed class PolicyRegistry
         {
             if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
             {
-                problems.Add($"Providers:{module.Name}:BaseUrl is '{baseUrl}'; it must be an absolute HTTPS address.");
+                // contract-005 · G-17 round 1 — echoed without its user information or its query, either of which can carry a credential (LogSafe.Url).
+                problems.Add($"Providers:{module.Name}:BaseUrl is '{LogSafe.Url(baseUrl)}'; it must be an absolute HTTPS address.");
             }
             else if (!egress.Hosts.Contains(uri.Host, StringComparer.OrdinalIgnoreCase))
             {

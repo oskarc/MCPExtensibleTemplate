@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using McpServerTemplate.Infrastructure.Identity;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -205,6 +206,21 @@ public sealed class RequestGate(
         {
             var freshness = entry.Policy.Risk == RiskClass.Write ? WriteFreshness : IrreversibleFreshness;
             var age = clock.GetUtcNow() - caller.IssuedAt;
+
+            // contract-005 · G-17 round 1 — a token that says it was issued later than now has a negative age, and counted as
+            // fresh until its iat plus the freshness window, however long ago it was really issued: an identity provider whose
+            // clock runs ahead, on a token with no nbf, held the gate open on one side. Past the clock skew the token's
+            // validation allows (IdentityRegistration.ClockSkew; Confirmation bounds its own age the same way), its age
+            // cannot be told, so it is refused by this rule. Follow-up — authentication refuses such a token first, for every
+            // request (IdentityRegistration, OnTokenValidated); this stays, as defence in depth, should one ever reach the gate.
+            if (age < -IdentityRegistration.ClockSkew)
+            {
+                throw Refuse(caller, name, Refusal.Of(
+                    "token-age",
+                    "authz_fail",
+                    $"The tool '{name}' is a {entry.Policy.Risk} tool and needs a token issued within the last {freshness.TotalSeconds:0} seconds; yours says it was issued {-age.TotalSeconds:0} seconds from now, further ahead of this server's clock than the {IdentityRegistration.ClockSkew.TotalSeconds:0} seconds it allows, so its age cannot be told. Get a fresh token from an issuer whose clock is right, and call again."));
+            }
+
             if (age > freshness)
             {
                 throw Refuse(caller, name, Refusal.Of(

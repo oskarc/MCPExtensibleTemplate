@@ -40,6 +40,7 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
     private const string KeyConfusionMintedValid = "t3-key-confusion-token-minted-valid";
     private const string StaleTokenIssuedAMinuteAgo = "t3-stale-token-issued-a-minute-ago";
     private const string StrangerRegistered = "t3-stranger-registered-on-the-server";
+    private const string UnattributableSentValid = "t3-unattributable-token-sent-valid";
 
     [Fact]
     [Sabotage(SentStraightToTheServer, SabotageActs.Network,
@@ -125,6 +126,74 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
         Claim.True(
             !(stderr.Contains(token, StringComparison.Ordinal) || stderr.Contains(token.Split('.')[1], StringComparison.Ordinal)),
             $"the server's log holds the {what} token it refused.");
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1, on T-3 — the tokens the server refuses before any identity provider sees them, because
+    /// it cannot say whose they are: one it cannot read as a JSON web token, one longer than it reads at all, and one that
+    /// names no issuer. Each was refused with 401 and nothing in the log, so an operator saw such tokens refused and never
+    /// why. Each is logged as every other refused token is, with its reason and never the token. Sent straight to the
+    /// server's published port, as the good token is first: the front is nginx, which answers a header line longer than one
+    /// of its buffers (8 KB by default, large_client_header_buffers) with 400 itself, so the long one would never reach the
+    /// server through it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(UnattributableTokens))]
+    [Sabotage(UnattributableSentValid, SabotageActs.Inputs, "The row's token is idp-a's valid token instead, which the server attributes and accepts.")]
+    public async Task T3_a_token_the_server_cannot_attribute_is_refused_with_its_reason_in_its_log(string kind, string reason)
+    {
+        using var http = fixture.CreateClient();
+        using var direct = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(10) };
+
+        // Positive control: this issuer's good token, sent the same way, is accepted, so a refusal below is the row's token's.
+        var good = await TestIssuerService.MintAsync(http, IssuerA, "valid", ServerUnderTest.Resource, ["weather:read"]);
+        Assert.Equal(HttpStatusCode.OK, await DirectStatusAsync(direct, good));
+
+        var marker = Guid.NewGuid().ToString("N");
+        var token = Sabotage.Choose(UnattributableSentValid, kind switch
+        {
+            "unreadable" => $"e2e-unreadable-{marker}",
+            "oversized" => $"{new string('a', 9 * 1024)}{marker}{new string('b', 9249 - (9 * 1024) - marker.Length)}",
+            "no-issuer" => string.Join('.',
+                Base64Url("""{"alg":"RS256","typ":"JWT"}"""),
+                Base64Url($$"""{"sub":"e2e-user","jti":"{{marker}}","aud":"{{ServerUnderTest.Resource}}","client_id":"e2e-client"}"""),
+                Base64Url("not a signature")),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unreadable, oversized or no-issuer"),
+        }, good);
+
+        var before = (await fixture.Server.StderrLinesAsync(AuthenticationFailed)).Count;
+        var status = await DirectStatusAsync(direct, token);
+        var logged = await fixture.Server.StderrLinesAfterAsync(AuthenticationFailed, before);
+        output.WriteLine($"{kind}: {(int)status}; logged: {string.Join(" | ", logged)}");
+
+        Claim.True(
+            status == HttpStatusCode.Unauthorized && logged.Count > 0 && logged.All(line => line.Contains(reason, StringComparison.Ordinal)),
+            $"{(kind == "no-issuer" ? "a" : "an")} {kind} token got {(int)status}, and the server's log "
+            + $"{(logged.Count == 0 ? $"has no {AuthenticationFailed} line for it" : $"says '{string.Join(" | ", logged)}'")}; a refusal with 401 "
+            + $"and its reason ('{reason}') is what it should be.");
+
+        // Never the token: the no-issuer token's claims, or the others' text.
+        var written = kind == "no-issuer" ? token.Split('.')[1] : token[..Math.Min(token.Length, 64)];
+        Claim.True(!(await fixture.Server.StderrAsync()).Contains(written, StringComparison.Ordinal), $"the server's log holds the {kind} token it refused.");
+    }
+
+    /// <summary>Each token the server cannot attribute, and the words in its log that say why.</summary>
+    public static TheoryData<string, string> UnattributableTokens() => new()
+    {
+        { "unreadable", "the token cannot be read as a JSON web token" },
+        { "oversized", "the token is 9249 characters long, more than the 8192 this server reads" },
+        { "no-issuer", "the token names no issuer" },
+    };
+
+    private static string Base64Url(string text) => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(text)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    /// <summary>The status an initialize request bearing <paramref name="token"/> gets, sent straight to the server under its own name.</summary>
+    private async Task<HttpStatusCode> DirectStatusAsync(HttpClient direct, string token)
+    {
+        using var request = McpRequests.Initialize(fixture.Server.DirectEndpoint, token);
+        request.Headers.Host = TlsFront.Host;
+        using var response = await direct.SendAsync(request);
+        return response.StatusCode;
     }
 
     /// <summary>

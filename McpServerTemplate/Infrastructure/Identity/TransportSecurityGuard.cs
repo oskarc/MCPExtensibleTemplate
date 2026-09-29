@@ -19,17 +19,38 @@ namespace McpServerTemplate.Infrastructure.Identity;
 /// <para>The Kestrel HTTPS listener moves to the phase that handles it, where P6.4 already covers
 /// TLS termination at the ingress or in Kestrel. The branch comes back when the listener does, and
 /// not before: this guard promises only what this server can do today.</para>
+///
+/// <para>contract-005 · G-17 round 1 — the guard ran only in an environment named Production, while the
+/// frame's other deployment rules (Limits:Redis, Providers:Enabled) apply in every environment but
+/// Development. Under any other name — Staging, or a misnamed Production — a server with no proxy
+/// started and read bearer tokens over plain http. It applies wherever they do now: in every
+/// environment but Development, which runs on the developer's own loopback.</para>
 /// </summary>
 public static class TransportSecurityGuard
 {
     /// <summary>
-    /// Checks the transport configuration for a Production deployment.
+    /// Checks the transport configuration of a server running in <paramref name="environment"/>: in every environment but
+    /// Development, a proxy it trusts explicitly must be named (contract-005 · G-17 round 1). The HTTP composition calls this.
+    /// </summary>
+    /// <param name="configuration">Configuration to read.</param>
+    /// <param name="environment">The server's environment.</param>
+    public static void Validate(IConfiguration configuration, IHostEnvironment environment)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        Validate(configuration, isProduction: !environment.IsDevelopment());
+    }
+
+    /// <summary>
+    /// Checks the transport configuration for a deployment.
     /// </summary>
     /// <param name="configuration">Configuration to read.</param>
     /// <param name="isProduction">
-    /// Whether this is a Production environment. Development and test environments run over
-    /// plaintext loopback by design, and refusing there would only teach developers to set a
-    /// flag that turns the check off.
+    /// Whether the guard applies: whether the server runs as a deployment rather than on a developer's
+    /// loopback. Development runs over plaintext loopback by design, and refusing there would only
+    /// teach developers to set a flag that turns the check off. The name is contract-002's, from when
+    /// only an environment named Production was guarded; since contract-005 · G-17 round 1 the
+    /// composition passes true for every environment but Development
+    /// (<see cref="Validate(IConfiguration, IHostEnvironment)"/>).
     /// </param>
     public static void Validate(IConfiguration configuration, bool isProduction)
     {
@@ -43,9 +64,12 @@ public static class TransportSecurityGuard
         // The one branch this server can honour. Declaring a proxy is not a formality: the same
         // values reach ForwardedHeadersOptions, so the address the rate limiter partitions on is
         // the one that proxy forwarded.
-        var behindKnownProxy =
-            (configuration.GetSection("HttpTransport:KnownProxies").Get<string[]>() ?? []).Length > 0 ||
-            (configuration.GetSection("HttpTransport:KnownNetworks").Get<string[]>() ?? []).Length > 0;
+        //
+        // contract-005 · G-17 round 1 — counted as the composition reads them (TrustedProxies), not as entries: any entry
+        // used to count, and 0.0.0.0/0, which names no proxy and trusts every client, satisfied the guard. An entry that
+        // is not a proxy's is refused there, naming its key, and satisfies nothing.
+        var (proxies, networks) = HttpServerComposition.TrustedProxies(configuration);
+        var behindKnownProxy = proxies.Count > 0 || networks.Count > 0;
 
         if (behindKnownProxy)
         {
@@ -62,7 +86,7 @@ public static class TransportSecurityGuard
             !string.IsNullOrWhiteSpace(configuration["HttpTransport:Certificate:Subject"]);
 
         throw new ConfigurationException(
-            "In Production this server must sit behind a proxy it trusts explicitly, and none is "
+            "Outside Development this server must sit behind a proxy it trusts explicitly, and none is "
             + "configured. Set HttpTransport:KnownProxies or :KnownNetworks to name the proxy in "
             + "front of it, and terminate TLS there. Bearer tokens over plaintext can be read and "
             + "replayed by anyone on the path, which would make every other identity control in "

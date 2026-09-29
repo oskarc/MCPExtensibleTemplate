@@ -7,6 +7,10 @@ namespace McpServerTemplate.Infrastructure.Identity;
 /// setting, not a stack trace and not a server that starts and rejects every request for a
 /// reason nobody can see. Each check below is a way a deployment can be wrong while looking
 /// plausible, so each names the setting and what it needs.
+///
+/// contract-005 · G-17 round 1 — a refusal that names a URL writes it without its user information or its query
+/// (<see cref="LogSafe.Url"/>): user information is refused because it is a credential written into
+/// a URL, a query can carry one too, and the refusal wrote them into the log the server stops with.
 /// </summary>
 public static class IdentityConfigurationBinder
 {
@@ -62,7 +66,7 @@ public static class IdentityConfigurationBinder
         {
             throw new ConfigurationException(
                 $"Authentication:Resource must be an absolute https URI naming this server as an "
-                + $"OAuth resource, for example https://mcp.example.com/mcp. It is '{config.Resource}'. "
+                + $"OAuth resource, for example https://mcp.example.com/mcp. It is '{LogSafe.Url(config.Resource)}'. "
                 + "Every identity provider must issue tokens whose audience is exactly this value.");
         }
 
@@ -87,7 +91,7 @@ public static class IdentityConfigurationBinder
             throw new ConfigurationException(
                 $"Authentication:Resource must be written as clients connect to it, https://{{host}}{HttpServerComposition.McpPath}, "
                 + "with no query, fragment, user information, backslash, percent-encoding or dot-segment; it is "
-                + $"'{config.Resource}', which carries {notAsClientsCarryIt}. It is published as written, and every token's "
+                + $"'{LogSafe.Url(config.Resource)}', which carries {notAsClientsCarryIt}. It is published as written, and every token's "
                 + "audience must equal it character for character, so a spelling that parses to the same URL is still "
                 + "another resource.");
         }
@@ -98,7 +102,7 @@ public static class IdentityConfigurationBinder
         {
             throw new ConfigurationException(
                 $"Authentication:Resource must name this server's MCP endpoint, https://{{host}}{HttpServerComposition.McpPath}; "
-                + $"it is '{config.Resource}', whose path is '{path}'. MCP answers at {HttpServerComposition.McpPath} "
+                + $"it is '{LogSafe.Url(config.Resource)}', whose path is '{path}'. MCP answers at {HttpServerComposition.McpPath} "
                 + "(with one trailing slash at most), and a client that connects to a resource URL where nothing "
                 + "answers cannot connect.");
         }
@@ -111,7 +115,7 @@ public static class IdentityConfigurationBinder
                 authority.Scheme != Uri.UriSchemeHttps)
             {
                 throw new ConfigurationException(
-                    $"{key}:Authority must be an absolute https URI; it is '{provider.Authority}'. "
+                    $"{key}:Authority must be an absolute https URI; it is '{LogSafe.Url(provider.Authority)}'. "
                     + "Discovery and signing keys are fetched from it, so plaintext would put key "
                     + "material on the wire.");
             }
@@ -122,7 +126,7 @@ public static class IdentityConfigurationBinder
             if (QueryFragmentOrUserInfo(provider.Authority, authority) is { } authorityPart)
             {
                 throw new ConfigurationException(
-                    $"{key}:Authority must not carry {authorityPart}; it is '{provider.Authority}'. Discovery and signing "
+                    $"{key}:Authority must not carry {authorityPart}; it is '{LogSafe.Url(provider.Authority)}'. Discovery and signing "
                     + "keys are fetched from paths appended to it, which a query or a fragment would swallow, and user "
                     + "information would be a credential written into a URL.");
             }
@@ -140,7 +144,7 @@ public static class IdentityConfigurationBinder
                 issuer.Scheme != Uri.UriSchemeHttps)
             {
                 throw new ConfigurationException(
-                    $"{key}:Issuer must be an absolute https URI; it is '{provider.Issuer}'. It is published as "
+                    $"{key}:Issuer must be an absolute https URI; it is '{LogSafe.Url(provider.Issuer)}'. It is published as "
                     + "an authorization server, and clients are sent to it to find its metadata and to sign in, "
                     + "so plaintext would hand their credentials to anyone on the path.");
             }
@@ -150,7 +154,7 @@ public static class IdentityConfigurationBinder
             if (QueryFragmentOrUserInfo(provider.Issuer, issuer) is { } issuerPart)
             {
                 throw new ConfigurationException(
-                    $"{key}:Issuer must not carry {issuerPart}; it is '{provider.Issuer}'. An issuer identifier is an https "
+                    $"{key}:Issuer must not carry {issuerPart}; it is '{LogSafe.Url(provider.Issuer)}'. An issuer identifier is an https "
                     + "URL with no query or fragment (RFC 8414, section 2), and this one is published as written, as an "
                     + "authorization server clients are sent to; user information in it would publish a credential.");
             }
@@ -230,6 +234,23 @@ public static class IdentityConfigurationBinder
             }
         }
 
+        // contract-005 · G-17 round 1 — a token goes to the identity provider whose Issuer its iss names, the first that
+        // does (IdentityRegistration, compared ordinally, as here), so a second provider with the same Issuer authenticates
+        // no caller, and every provider bound to it refuses every one. A setting the server would never act on is refused;
+        // the metadata listed the issuer twice besides.
+        foreach (var shared in config.IdentityProviders
+            .GroupBy(p => p.Value.Issuer, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1))
+        {
+            var names = shared.Select(p => p.Key).ToArray();
+            throw new ConfigurationException(
+                $"{Listed([.. names.Select(n => $"Authentication:IdentityProviders:{n}:Issuer")])} are {(names.Length == 2 ? "both" : "all")} "
+                + $"'{LogSafe.Url(shared.Key)}'. A token goes to the identity provider whose Issuer its iss "
+                + $"names, the first that does: '{names[0]}'. So {Listed([.. names[1..].Select(n => $"'{n}'")])} would authenticate no "
+                + $"caller, and every provider bound to {(names.Length == 2 ? "it" : "them")} would refuse every one. Give each "
+                + "identity provider the issuer its own tokens carry, or remove the one not meant.");
+        }
+
         if (config.AdminIdentityProvider is { } admin)
         {
             if (!config.IdentityProviders.TryGetValue(admin, out var adminProvider))
@@ -247,6 +268,10 @@ public static class IdentityConfigurationBinder
             }
         }
     }
+
+    /// <summary><paramref name="items"/> as a sentence lists them: "a", "a and b", "a, b and c".</summary>
+    private static string Listed(string[] items) =>
+        items.Length == 1 ? items[0] : $"{string.Join(", ", items[..^1])} and {items[^1]}";
 
     private static readonly char[] EndOfAuthority = ['/', '?', '#', '\\'];
 

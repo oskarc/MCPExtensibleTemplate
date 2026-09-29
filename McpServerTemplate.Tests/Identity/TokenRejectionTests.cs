@@ -102,6 +102,31 @@ public class TokenRejectionTests
         Assert.Equal(accepted, response.StatusCode != HttpStatusCode.Unauthorized);
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 1 — every token's audience must equal the resource exactly: the resource is held as
+    /// written, one trailing slash included or not (G-12 (1)), and published so. The token library's default read a
+    /// trailing slash as nothing, so a token for https://host/mcp/ was accepted by a server whose resource is
+    /// https://host/mcp, and the other way round.
+    /// </summary>
+    [Theory]
+    [InlineData("https://mcp.example.com/mcp", "https://mcp.example.com/mcp/")]
+    [InlineData("https://mcp.example.com/mcp/", "https://mcp.example.com/mcp")]
+    public async Task T2_a_token_whose_audience_is_the_resource_but_for_a_trailing_slash_is_refused(string resource, string audience)
+    {
+        using var corp = Corp();
+        await using var server = await InProcessServer.StartAsync([corp], resource: resource);
+
+        // Positive control: a token for the resource exactly is accepted, so the refusal below is the slash's.
+        using (var exact = await server.PostAsync(corp.MintToken(resource)))
+        {
+            Assert.NotEqual(HttpStatusCode.Unauthorized, exact.StatusCode);
+        }
+
+        using var response = await server.PostAsync(corp.MintToken(audience));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     /// <summary>A token whose header says alg=none, which is the "no signature at all" case.</summary>
     private static string UnsignedToken(TestIdentityProvider idp)
     {

@@ -42,4 +42,36 @@ public static class LogSafe
 
         return kept.ToString();
     }
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 — <paramref name="url"/>, a URL an operator configured, as written, but with the parts that
+    /// can carry a credential written as ***: its user information (scheme://***@host/path) and, follow-up, its query
+    /// (…/path?***, which ?client_secret=… would otherwise print). The refusals of such a URL echoed it whole, and put the
+    /// secret in the log the server stops with; each echo goes through this now.
+    ///
+    /// Read from the text, as the refusals echo it, and never from a parse: a password can hold / ? # : or @ unescaped, and
+    /// one that leaves the URL unparseable was refused as not a URL and echoed all the same. So user information goes first:
+    /// everything from after the scheme's :// (from the start, where there is none before it) to the last @ — an @ in a path
+    /// or a query is taken for it too, which hides more than the credential, never less. Then the query: everything after the
+    /// first ? that is left. A ? inside a password is gone with the user information by then, so it is never taken for the
+    /// query's start.
+    /// </summary>
+    public static string Url(string? url)
+    {
+        if (url is null)
+        {
+            return string.Empty;
+        }
+
+        var at = url.LastIndexOf('@');
+        if (at >= 0)
+        {
+            var scheme = url.IndexOf("://", StringComparison.Ordinal);
+            var start = scheme >= 0 && scheme < at ? scheme + 3 : 0;
+            url = string.Concat(url.AsSpan(0, start), "***", url.AsSpan(at));
+        }
+
+        var query = url.IndexOf('?', StringComparison.Ordinal);
+        return query < 0 ? url : string.Concat(url.AsSpan(0, query + 1), "***");
+    }
 }
