@@ -123,6 +123,9 @@ jobs:
       # label; and mcp-server:latest, the name the docs profile gives the run's image for docs/04's compose file and takes
       # back after it. Checked whether the tests passed or failed, since a failure is when a teardown is most likely to
       # have been skipped. The images the harness builds are kept by design (they carry no run label).
+      # contract-005 · G-17 round 1 (CON-R1-03) — here any mcp-server:latest is the run's: a runner starts with no image of
+      # its own. On a developer's machine that name may be their own image, so scripts/e2e-sabotage.sh, run there, flags it
+      # only when a run's record (tags.tsv in its run directory) shows the run gave it the image it names.
       - name: Nothing left behind
         if: ${{ !cancelled() }}
         run: |

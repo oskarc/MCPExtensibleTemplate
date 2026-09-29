@@ -8,11 +8,15 @@ namespace McpServerTemplate.E2E;
 /// <summary>
 /// contract-005 · T-9 (G-13 · UC-9) — the documented deployment runs as written.
 ///
-/// docs/04's compose file, with the production configuration it deploys, is run verbatim through the docs profile's
-/// declared table (<see cref="DocsProfile.Table"/>) — host names and addresses, and test trust, each with its reason —
-/// with this run's server image tagged mcp-server:latest, the name the file uses. It starts, accepts a real token —
-/// Keycloak's, through the TLS front the document tells an operator to put in front of it — and lists tools, each one
-/// the image's own startup line says it serves.
+/// docs/04's compose file, with the production configuration it deploys and the proxy configuration the document gives
+/// beside it, is run verbatim through the docs profile's declared table (<see cref="DocsProfile.Table"/>) — host names and
+/// addresses, and test trust, each with its reason — with this run's server image tagged mcp-server:latest, the name the
+/// file uses. It starts, accepts a real token — Keycloak's, through the file's own TLS-terminating proxy, the one service
+/// it publishes — and lists tools, each one the image's own startup line says it serves.
+///
+/// contract-005 · G-17 round 1 (DOC-R1-01) — the token went through a TLS front the harness started itself, which the file
+/// did not contain, so a file with no proxy passed. The front is the file's own now (<see cref="DocsProfile.Front"/>), and a
+/// file that publishes none fails here, whatever its server does.
 ///
 /// The document is the repository's docs/04, or in a run outside CI the copy <see cref="DocsProfile.DocumentVariable"/>
 /// names: how the profile is run against docs/04 as it stood at an earlier commit, without rewriting history.
@@ -60,14 +64,15 @@ public sealed class DocsProfileTests(ITestOutputHelper output)
         IReadOnlyList<string> unserved = [];
         var answered = string.Empty;
         var refusal = "(no authn_login_fail line)";
-        if (profile.Started)
+        if (profile.Started && profile.Front is not null)
         {
             // A real token: Keycloak's, for this class's own client, for the resource the document names.
             using var keycloak = environment.Names.CreateClient();
             var token = await environment.Keycloak.ClientCredentialsTokenAsync(keycloak, ServerFixture.ClientIdFor(typeof(DocsProfileTests)));
             Assert.Equal(KeycloakService.Issuer, new JsonWebToken(token).Issuer);
 
-            using var http = profile.CreateClient(ClientAddresses.Next());
+            // Through the file's own proxy, which forwards the connection's own address, as it would any client's.
+            using var http = profile.CreateClient();
             using var response = await http.SendAsync(McpRequests.Rpc(ServerUnderTest.Endpoint, token, "tools/list"));
             status = response.StatusCode;
             answered = await response.Content.ReadAsStringAsync();
@@ -90,16 +95,18 @@ public sealed class DocsProfileTests(ITestOutputHelper output)
                     .Where(l => l.Contains("authn_login_fail", StringComparison.Ordinal)).Select(l => l.Trim()));
             }
 
-            output.WriteLine($"tools/list with a Keycloak token through the front: {(int?)status}, [{string.Join(", ", tools)}]");
+            output.WriteLine($"tools/list with a Keycloak token through its proxy, '{profile.Front}': {(int?)status}, [{string.Join(", ", tools)}]");
         }
 
         Claim.True(
-            profile.Started && status == HttpStatusCode.OK && tools.Count > 0 && unserved.Count == 0,
-            profile.Started
-                ? $"the documented deployment ({document}) started, and tools/list with a Keycloak token through the front got "
-                    + $"{(int?)status}, listing [{string.Join(", ", tools)}]{(unserved.Count > 0 ? $", of which [{string.Join(", ", unserved)}] are not on its startup line" : string.Empty)}. "
-                    + $"{(status == HttpStatusCode.OK ? string.Empty : $"It answered: '{Shorten(answered)}'; its log: {refusal}")}"
-                : $"the documented deployment did not start: {profile.Describe()}");
+            profile.Started && profile.Front is not null && status == HttpStatusCode.OK && tools.Count > 0 && unserved.Count == 0,
+            !profile.Started
+                ? $"the documented deployment did not come up: {profile.Describe()}"
+                : profile.Front is null
+                    ? $"the documented deployment has no TLS front, so no client can reach it as https://{TlsFront.Host}/mcp: {profile.Describe()}"
+                    : $"the documented deployment ({document}) started, and tools/list with a Keycloak token through its proxy, '{profile.Front}', got "
+                        + $"{(int?)status}, listing [{string.Join(", ", tools)}]{(unserved.Count > 0 ? $", of which [{string.Join(", ", unserved)}] are not on its startup line" : string.Empty)}. "
+                        + $"{(status == HttpStatusCode.OK ? string.Empty : $"It answered: '{Shorten(answered)}'; its log: {refusal}")}");
     }
 
     private static string Shorten(string text) => text.Length <= 400 ? text : string.Concat(text.AsSpan(0, 400), "…");

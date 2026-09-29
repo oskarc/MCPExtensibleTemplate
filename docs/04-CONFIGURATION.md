@@ -389,7 +389,8 @@ $env:Limits__PerPrincipalPerMinute = "60"
 dotnet run
 ```
 
-**Docker Compose**:
+**Docker Compose**: the production deployment, whole. Three services share the file's own network, `mcp`, and one of them is published: `proxy`, an nginx that terminates TLS on the host's port 443 with your certificate and key and forwards every request to the server. The server and Redis publish no port, so clients reach the server through the proxy alone. The proxy's address on `mcp` is fixed, and `HttpTransport:KnownProxies` names that one address, so the server takes a client's address and scheme (`X-Forwarded-For`, `X-Forwarded-Proto`) from the proxy and from nowhere else. If you change the subnet, change both addresses with it.
+
 ```yaml
 services:
   redis:
@@ -397,16 +398,20 @@ services:
     # registry, a digest cannot. To update it, read the tag's current digest with
     # `docker buildx imagetools inspect redis:7.4-alpine` (the Digest line) and put it after the @.
     image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    networks:
+      - mcp
   mcp-server:
     image: mcp-server:latest
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - Transport=http
+      # Every interface the container has, which is on mcp alone: nothing publishes this port.
       - HttpTransport__BindAddress=0.0.0.0
       # The host name clients reach this server by. Compose stops, saying so, when MCP_HOST is unset or
       # empty; without the :? an empty entry reaches the server, which refuses to start on it.
       - HttpTransport__AllowedHosts__0=${MCP_HOST:?set MCP_HOST to the host name clients reach this server by, such as mcp.example.com}
-      - HttpTransport__KnownNetworks__0=172.16.0.0/12
+      # The proxy's fixed address below, and nothing else: forwarded headers from any other address are ignored.
+      - HttpTransport__KnownProxies__0=172.16.238.10
       - Limits__Redis=redis:6379
       - Authentication__Resource=https://${MCP_HOST}/mcp
       - Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
@@ -415,9 +420,69 @@ services:
       - Authentication__IdentityProviders__corp__Algorithms__0=RS256
       - Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
       - Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
+    # No ports: the server is reached through the proxy alone.
+    networks:
+      - mcp
+    depends_on:
+      - redis
+  proxy:
+    # The only service published. nginx, pinned as Redis is (`docker buildx imagetools inspect nginx:1.30.5-alpine`),
+    # given nginx.conf, below, and your certificate and key from beside this file, each mounted read-only.
+    image: nginx:1.30.5-alpine@sha256:bf3201ab56f23e5954646379c775d511fc466e9f11376d9725361064ad07ed35
     ports:
-      - "3001:3001"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./tls/tls.crt:/etc/nginx/tls/tls.crt:ro
+      - ./tls/tls.key:/etc/nginx/tls/tls.key:ro
+    networks:
+      mcp:
+        # Fixed, because the server's KnownProxies names it.
+        ipv4_address: 172.16.238.10
+    # nginx finds the server by its name when it starts, so the server starts first.
+    depends_on:
+      - mcp-server
+
+networks:
+  mcp:
+    ipam:
+      config:
+        - subnet: 172.16.238.0/24
 ```
+
+**nginx.conf**, beside the compose file: the proxy's whole configuration.
+
+```nginx
+# The TLS front: it terminates TLS for MCP_HOST and forwards every request to the server, on the compose file's network.
+events {}
+
+http {
+    server {
+        listen 443 ssl;
+
+        ssl_certificate     /etc/nginx/tls/tls.crt;
+        ssl_certificate_key /etc/nginx/tls/tls.key;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+
+        location / {
+            proxy_pass http://mcp-server:3001;
+            proxy_http_version 1.1;
+
+            # The Host header as the client sent it: the server answers only for HttpTransport:AllowedHosts.
+            proxy_set_header Host $http_host;
+            # Set, not appended: the server takes both from this proxy's address alone (HttpTransport:KnownProxies).
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-For $remote_addr;
+
+            # MCP answers may be event streams.
+            proxy_buffering off;
+            proxy_read_timeout 300s;
+        }
+    }
+}
+```
+
+Put your certificate for `MCP_HOST`, with its chain, at `tls/tls.crt` beside the compose file, and its key at `tls/tls.key`. Then start it with `MCP_HOST=mcp.example.com docker compose up -d`: clients connect to `https://mcp.example.com/mcp`, through the proxy, and nothing else of the deployment is published.
 
 ---
 

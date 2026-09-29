@@ -48,6 +48,14 @@ public static class E2ENetwork
     /// </summary>
     public static IPAddress NoFront => Offset(9);
 
+    /// <summary>
+    /// contract-005 · G-17 round 1 (DOC-R1-01) — the static address the docs profile gives the documented proxy: docs/04's
+    /// compose file fixes its proxy's address on the file's own network, and its server's KnownProxies names that address, so
+    /// the run's copy of both must be known before either starts (<see cref="DocsProfile.Table"/>). Below the first static
+    /// address handed out, like <see cref="NoFront"/>, and never handed out: one docs profile runs in a run.
+    /// </summary>
+    public static IPAddress DocsProxy => Offset(8);
+
     /// <summary>The upper half of the subnet, from which Docker assigns addresses on its own.</summary>
     public static string DynamicRange => $"{Offset(Size / 2)}/{PrefixLength + 1}";
 

@@ -616,14 +616,17 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
     /// <summary>contract-005 · G-17 round 1 (HAR-R1-05) — the resource's metadata document, through the front: what the forwarded-headers self-check sends.</summary>
     private static readonly Uri MetadataDocument = new($"https://{TlsFront.Host}/.well-known/oauth-protected-resource/mcp");
 
-    /// <summary>Whether the setting <paramref name="name"/>=<paramref name="value"/> (a KnownProxies or KnownNetworks entry) names <paramref name="address"/>.</summary>
-    private static bool Trusts(string name, string value, IPAddress address) =>
+    /// <summary>
+    /// Whether the setting <paramref name="name"/>=<paramref name="value"/> (a KnownProxies or KnownNetworks entry) names
+    /// <paramref name="address"/>. contract-005 · G-17 round 1 (DOC-R1-01) — the docs profile asks it of the documented proxy.
+    /// </summary>
+    internal static bool Trusts(string name, string value, IPAddress address) =>
         name.Contains("KnownNetworks", StringComparison.OrdinalIgnoreCase)
             ? IPNetwork.TryParse(value.Trim(), out var trusted) && trusted.Contains(address)
             : IPAddress.TryParse(value.Trim(), out var proxy) && proxy.Equals(address);
 
     /// <summary>A container's address on the run's network <paramref name="network"/>, as the engine gave it, or null when it has none.</summary>
-    private static async Task<IPAddress?> AddressOnRunNetworkAsync(
+    internal static async Task<IPAddress?> AddressOnRunNetworkAsync(
         Docker.DotNet.IDockerClient docker, string network, string containerId, CancellationToken cancellationToken)
     {
         var inspected = await docker.Containers.InspectContainerAsync(containerId, cancellationToken);
@@ -636,7 +639,7 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
 
     /// <summary>The environment variables that name the proxies a server trusts forwarded headers from.</summary>
     [System.Text.RegularExpressions.GeneratedRegex(@"^HttpTransport__Known(Proxies|Networks)__\d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
-    private static partial System.Text.RegularExpressions.Regex TrustedProxySetting();
+    internal static partial System.Text.RegularExpressions.Regex TrustedProxySetting();
 
     internal static async Task WriteLogsAsync(E2EEnvironment environment, string name, IContainer container, TlsFront? front)
     {

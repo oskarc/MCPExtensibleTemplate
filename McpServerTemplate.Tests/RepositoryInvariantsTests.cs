@@ -225,11 +225,14 @@ public partial class RepositoryInvariantsTests
     /// A Dockerfile's instructions, one per entry: comments dropped, and a line continued with a backslash joined to the
     /// next, as the builder reads them.
     /// </summary>
-    private static List<string> DockerfileInstructions(string path)
+    private static List<string> DockerfileInstructions(string path) => DockerfileInstructions(File.ReadAllLines(path));
+
+    /// <summary>The instructions of a Dockerfile's <paramref name="lines"/>, read as <see cref="DockerfileInstructions(string)"/> reads a file.</summary>
+    private static List<string> DockerfileInstructions(IEnumerable<string> lines)
     {
         var instructions = new List<string>();
         var current = new StringBuilder();
-        foreach (var raw in File.ReadAllLines(path))
+        foreach (var raw in lines)
         {
             var line = raw.Trim();
             if (line.StartsWith('#') || (line.Length == 0 && current.Length == 0))
@@ -351,30 +354,17 @@ public partial class RepositoryInvariantsTests
     [Fact]
     public void T13_every_image_reference_is_pinned_by_digest()
     {
-        // G-1, G-8 — a tag can move on its registry; a digest cannot. An image reference is every FROM of every Dockerfile
-        // that is not an earlier stage, and, in the end-to-end harness and this suite, every Image constant and every
-        // literal a container builder is given. The images the harness builds are tagged by their context's hash, and
-        // their FROM lines are the Dockerfiles'.
+        // G-1, G-8 — a tag can move on its registry; a digest cannot. An image reference is every image a Dockerfile names
+        // (ImagesNamedIn: every FROM that is not an earlier stage, and — contract-005 · G-17 round 1, CON-R1-01 — every
+        // COPY --from and RUN --mount from that names no earlier stage), and, in the end-to-end harness and this suite, every
+        // Image constant and every literal a container builder is given. The images the harness builds are tagged by their
+        // context's hash, and their FROM lines are the Dockerfiles'.
         var root = RepositoryRoot();
-        var pinned = new Regex(@"@sha256:[0-9a-f]{64}$");
         var references = new List<(string Where, string Image)>();
 
         foreach (var dockerfile in SourceFiles(root, "Dockerfile*"))
         {
-            var stages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var from in DockerfileInstructions(dockerfile).Where(i => i.StartsWith("FROM ", StringComparison.OrdinalIgnoreCase)))
-            {
-                var words = from.Split(' ', StringSplitOptions.RemoveEmptyEntries).Skip(1).Where(w => !w.StartsWith("--", StringComparison.Ordinal)).ToArray();
-                if (!stages.Contains(words[0]))
-                {
-                    references.Add((Relative(dockerfile), words[0]));
-                }
-
-                if (words.Length >= 3 && words[^2].Equals("AS", StringComparison.OrdinalIgnoreCase))
-                {
-                    stages.Add(words[^1]);
-                }
-            }
+            references.AddRange(ImagesNamedIn(DockerfileInstructions(dockerfile)).Select(image => (Relative(dockerfile), image)));
         }
 
         var constant = new Regex(@"const\s+string\s+\w*Image\s*=\s*""(?<image>[^""]+)""");
@@ -391,9 +381,127 @@ public partial class RepositoryInvariantsTests
         Assert.Contains(references, r => r.Where.EndsWith("Harness/TlsFront.cs", StringComparison.Ordinal));
         Assert.Contains(references, r => r.Where.EndsWith("TestRedis.cs", StringComparison.Ordinal));
 
-        var unpinned = references.Where(r => !pinned.IsMatch(r.Image)).Select(r => $"{r.Where}: {r.Image}").ToArray();
+        var unpinned = references.Where(r => !PinnedByDigest().IsMatch(r.Image)).Select(r => $"{r.Where}: {r.Image}").ToArray();
         Assert.True(unpinned.Length == 0, "Image references not pinned by digest: " + string.Join("; ", unpinned));
     }
+
+    /// <summary>An image reference that ends in a digest: the one form a registry cannot move.</summary>
+    [GeneratedRegex(@"@sha256:[0-9a-f]{64}$")]
+    private static partial Regex PinnedByDigest();
+
+    /// <summary>
+    /// Every image a Dockerfile's <paramref name="instructions"/> name, as the builder pulls it: each FROM that is not an
+    /// earlier stage, and — contract-005 · G-17 round 1 (CON-R1-01) — each COPY --from and each RUN --mount's from= that names
+    /// neither an earlier stage nor an earlier stage's index. The builder pulls an image named there as it pulls a FROM's, so
+    /// a tag there can move on its registry as a FROM's can; the digest check read the FROM lines alone, and
+    /// COPY --from=busybox:latest passed it.
+    /// </summary>
+    private static List<string> ImagesNamedIn(IReadOnlyList<string> instructions)
+    {
+        var images = new List<string>();
+        var stages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var declared = 0;
+
+        // A stage by its name, or by its index among the stages declared so far, as COPY --from takes either.
+        bool IsStage(string from) =>
+            stages.Contains(from)
+            || (int.TryParse(from, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var index) && index < declared);
+
+        foreach (var instruction in instructions)
+        {
+            var words = instruction.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var flags = words.Skip(1).TakeWhile(w => w.StartsWith("--", StringComparison.Ordinal)).ToArray();
+            switch (words[0].ToUpperInvariant())
+            {
+                case "FROM":
+                    var operands = words.Skip(1).Where(w => !w.StartsWith("--", StringComparison.Ordinal)).ToArray();
+                    if (!stages.Contains(operands[0]))
+                    {
+                        images.Add(operands[0]);
+                    }
+
+                    if (operands.Length >= 3 && operands[^2].Equals("AS", StringComparison.OrdinalIgnoreCase))
+                    {
+                        stages.Add(operands[^1]);
+                    }
+
+                    declared++;
+                    break;
+
+                case "COPY":
+                    images.AddRange(flags
+                        .Where(f => f.StartsWith("--from=", StringComparison.OrdinalIgnoreCase))
+                        .Select(f => f["--from=".Length..])
+                        .Where(from => !IsStage(from)));
+                    break;
+
+                case "RUN":
+                    images.AddRange(flags
+                        .Where(f => f.StartsWith("--mount=", StringComparison.OrdinalIgnoreCase))
+                        .SelectMany(f => f["--mount=".Length..].Split(','))
+                        .Where(option => option.StartsWith("from=", StringComparison.OrdinalIgnoreCase))
+                        .Select(option => option["from=".Length..])
+                        .Where(from => !IsStage(from)));
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        return images;
+    }
+
+    /// <summary>A digest of the right form, for the probe Dockerfiles below.</summary>
+    private const string ProbeDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    /// <summary>A probe Dockerfile's two stages, as the root Dockerfile declares them, each pinned by digest.</summary>
+    private const string ProbeStages =
+        $"FROM mcr.microsoft.com/dotnet/sdk:10.0.101-noble@sha256:{ProbeDigest} AS build\n"
+        + "RUN mkdir -p /runtime/logs\n"
+        + $"FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:{ProbeDigest} AS final\n";
+
+    /// <summary>
+    /// contract-005 · G-17 round 1 (CON-R1-01) — each way a Dockerfile names an image besides FROM, which the digest check must
+    /// see: the probe, and the unpinned image it names. The first is the one the round named: an image copied from by tag.
+    /// </summary>
+    public static TheoryData<string, string, string> WaysToNameAnImage() => new()
+    {
+        { "COPY --from an image by tag", ProbeStages + "COPY --from=nginx:latest /etc/nginx/nginx.conf /etc/nginx/nginx.conf\n", "nginx:latest" },
+        { "COPY --from an image, after another flag", ProbeStages + "COPY --chown=1654:1654 --from=busybox:latest /bin/busybox /busybox\n", "busybox:latest" },
+        { "COPY --from an image by name alone", ProbeStages + "COPY --from=busybox /bin/busybox /busybox\n", "busybox" },
+        { "COPY --from the test host's own image", ProbeStages + "COPY --from=mcp-e2e-testhost:4ff0f487 /app/McpServerTemplate.E2EHost.dll ./\n", "mcp-e2e-testhost:4ff0f487" },
+        {
+            "COPY --from a name no earlier stage has",
+            $"FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:{ProbeDigest} AS final\nCOPY --from=build /app ./\n"
+                + $"FROM mcr.microsoft.com/dotnet/sdk:10.0.101-noble@sha256:{ProbeDigest} AS build\n",
+            "build"
+        },
+        { "RUN --mount from an image", ProbeStages + "RUN --mount=type=bind,from=busybox:latest,source=/bin/busybox,target=/busybox /busybox true\n", "busybox:latest" },
+    };
+
+    [Theory]
+    [MemberData(nameof(WaysToNameAnImage))]
+    public void T13_the_digest_check_sees_every_image_a_dockerfile_names(string way, string dockerfile, string image)
+    {
+        // Positive control: the same stages named every other way a Dockerfile may — by name, by index, in a mount — and an
+        // image copied from by digest are not refused.
+        var clean = ProbeStages
+            + "COPY --from=build /app ./\n"
+            + "COPY --from=0 --chown=1654:1654 /runtime/logs ./logs\n"
+            + $"COPY --from=nginx:1.30.5-alpine@sha256:{ProbeDigest} /etc/nginx/mime.types /etc/mime.types\n"
+            + "RUN --mount=type=bind,from=build,source=/app,target=/b true\n";
+        Assert.Empty(UnpinnedImagesIn(clean));
+
+        // The row: the image the probe names, unpinned, is found.
+        var found = UnpinnedImagesIn(dockerfile);
+        Assert.True(found.Count > 0, $"{way}: the digest check found no image in{Environment.NewLine}{dockerfile}");
+        Assert.Contains(image, found);
+    }
+
+    /// <summary>The images a Dockerfile's text names that are not pinned by digest, as the digest check reads them.</summary>
+    private static List<string> UnpinnedImagesIn(string dockerfile) =>
+        [.. ImagesNamedIn(DockerfileInstructions(dockerfile.Split('\n'))).Where(i => !PinnedByDigest().IsMatch(i))];
 
     [Fact]
     public void T13_no_product_or_test_host_file_reads_an_end_to_end_variable()

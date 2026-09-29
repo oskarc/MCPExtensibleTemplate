@@ -42,6 +42,8 @@
 #   bash scripts/e2e-sabotage.sh --all         retake every sabotage: 99 reds at that rate, and the control run
 #   bash scripts/e2e-sabotage.sh NAME ...      retake these, whatever their state, and keep the rest
 #   bash scripts/e2e-sabotage.sh --dry-run     say what would be retaken, and why; run nothing
+#   bash scripts/e2e-sabotage.sh --left-behind say whether anything a run created is left, as every run of this script
+#                                              ends by saying; run nothing, and build nothing
 #   ... --same-verdicts                        and fail when any verdict differs from the record as it stood before the run
 #                                              (in the scheduled retake, a clean checkout: the committed record's)
 #
@@ -49,7 +51,8 @@
 # does, and so does this script. It needs Docker: every sabotage starts the environment afresh.
 #
 # Exit 0: every entry of the record is red on its claim, or held, nothing was left behind, and with --same-verdicts no
-# verdict changed. Exit 1: one of those is not so (named above), or the run could not be made.
+# verdict changed. Exit 1: one of those is not so (named above), or the run could not be made. With --left-behind: exit 0
+# when nothing a run created is left, and 1, naming each thing, when something is.
 
 set -uo pipefail
 
@@ -58,13 +61,15 @@ cd "$(dirname "$0")/.." || exit 1
 all=0
 dry=0
 same=0
+check=0
 names=()
 for arg in "$@"; do
   case "$arg" in
     --all) all=1 ;;
     --dry-run) dry=1 ;;
     --same-verdicts) same=1 ;;
-    -h|--help) sed -n '2,52p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --left-behind) check=1 ;;
+    -h|--help) sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "Unknown option '$arg'; see --help." >&2; exit 1 ;;
     *) names+=("$arg") ;;
   esac
@@ -73,6 +78,68 @@ done
 if [ "$all" -eq 1 ] && [ "${#names[@]}" -gt 0 ]; then
   echo "Give --all or the names of sabotages to retake, not both." >&2
   exit 1
+fi
+
+if [ "$check" -eq 1 ] && [ $((all + dry + same + ${#names[@]})) -gt 0 ]; then
+  echo "Give --left-behind alone: it runs nothing, and says only whether anything a run created is left." >&2
+  exit 1
+fi
+
+label=org.mcp-server-template.e2e.run
+
+# Whether the Docker engine answers. docker ps fails when it does not (docker info does not).
+engine_answers() { docker ps -q > /dev/null 2>&1; }
+
+# ── What a run created and left (contract-005 · T-13) ─────────────────────────────────────────────────────────────────
+# Every container and network carrying the run label, and every run directory in the temp folder, which holds a run's keys.
+#
+# contract-005 · G-17 round 1 (CON-R1-03) — and mcp-server:latest, the name docs/04's compose file deploys, which a developer
+# may well have an image of their own under. A run gives that name to its own build only for the docs profile, and puts it
+# back after; a run killed before that leaves the record of it in its run directory (tags.tsv, RecordingDockerClient: one
+# line per name given, the name, what it named before, what the run gave it). In CI the runner has no image of its own, so
+# any mcp-server:latest there is a run's, and is left behind. Locally, it is left behind only when a run's record shows that
+# run gave the name the image it names now, which it did not name before that run: a developer's own image of that name, or
+# one put back as it was, is theirs, and is not flagged. Sets left, one entry for each thing left.
+docs_image=mcp-server:latest
+left_behind() {
+  left=()
+  while IFS= read -r c; do [ -n "$c" ] && left+=("container $c"); done < <(docker ps -a --filter "label=$label" --format '{{.Names}}' 2>/dev/null)
+  while IFS= read -r n; do [ -n "$n" ] && left+=("network $n"); done < <(docker network ls --filter "label=$label" --format '{{.Name}}' 2>/dev/null)
+  for dir in "${TMPDIR:-/tmp}"/mcp-e2e-*; do [ -e "$dir" ] && left+=("run directory $dir"); done
+  if [ -n "${CI+set}" ]; then
+    if docker image inspect "$docs_image" > /dev/null 2>&1; then left+=("image tag $docs_image"); fi
+    return
+  fi
+
+  local now tags
+  now=$(docker image inspect "$docs_image" --format '{{.Id}}' 2>/dev/null)
+  [ -n "$now" ] || return
+  for tags in "${TMPDIR:-/tmp}"/mcp-e2e-*/tags.tsv; do
+    [ -f "$tags" ] || continue
+    # The run gave the name the image it names now, and the name did not name that image before the run.
+    if awk -F'\t' -v name="$docs_image" -v id="$now" '
+        $1 == name && !seen { seen = 1; before = $2 }
+        $1 == name && $3 == id { given = 1 }
+        END { exit !(given && before != id) }' "$tags"; then
+      left+=("image tag $docs_image, given $now by the run whose directory is $(dirname "$tags")")
+    fi
+  done
+}
+
+# --left-behind: the check alone. It sends no sabotage and runs no test, so CI's refusal below is not its to meet.
+if [ "$check" -eq 1 ]; then
+  if ! engine_answers; then
+    echo "The Docker engine does not answer (docker ps: $(docker ps 2>&1 | tail -n 1)). Start it, and run this again." >&2
+    exit 1
+  fi
+  left_behind
+  if [ "${#left[@]}" -gt 0 ]; then
+    echo "Left behind by the runs:" >&2
+    printf '  %s\n' "${left[@]}" >&2
+    exit 1
+  fi
+  echo "Nothing a run created is left$([ -n "${CI+set}" ] && echo " (CI: no $docs_image at all)" || echo " (a $docs_image no run's record gave is not a run's)")."
+  exit 0
 fi
 
 # contract-005 · G-17 round 1 (HAR-R1-01) — in CI, only the scheduled retake: its own workflow, on its schedule or by hand. The
@@ -101,10 +168,6 @@ project=McpServerTemplate.E2E/McpServerTemplate.E2E.csproj
 out=TestResults/sabotage
 record=McpServerTemplate.E2E/SABOTAGE-RECORD.md
 claim=McpServerTemplate.E2E.Harness.ClaimException
-label=org.mcp-server-template.e2e.run
-
-# Whether the Docker engine answers. docker ps fails when it does not (docker info does not).
-engine_answers() { docker ps -q > /dev/null 2>&1; }
 
 if [ "$dry" -eq 0 ] && ! engine_answers; then
   echo "The Docker engine does not answer (docker ps: $(docker ps 2>&1 | tail -n 1)). Start it, and run this again." >&2
@@ -335,12 +398,8 @@ for name in "${plan[@]}"; do
   printf '%3d/%d  %-66s %s (%s s)\n' "$i" "${#plan[@]}" "$name" "$verdict" "${seconds:-0.0}"
 done
 
-# ── Nothing a run created is left (contract-005 · T-13) ──────────────────────────────────────────────────────────────
-left=()
-while IFS= read -r c; do [ -n "$c" ] && left+=("container $c"); done < <(docker ps -a --filter "label=$label" --format '{{.Names}}' 2>/dev/null)
-while IFS= read -r n; do [ -n "$n" ] && left+=("network $n"); done < <(docker network ls --filter "label=$label" --format '{{.Name}}' 2>/dev/null)
-for dir in "${TMPDIR:-/tmp}"/mcp-e2e-*; do [ -e "$dir" ] && left+=("run directory $dir"); done
-if docker image inspect mcp-server:latest > /dev/null 2>&1; then left+=("image tag mcp-server:latest"); fi
+# ── Nothing a run created is left (contract-005 · T-13; left_behind, above) ─────────────────────────────────────────────
+left_behind
 if [ "${#left[@]}" -gt 0 ]; then
   echo "Left behind by the runs: ${left[*]}" >&2
 fi
