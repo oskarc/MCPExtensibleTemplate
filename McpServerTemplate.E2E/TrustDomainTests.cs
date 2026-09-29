@@ -12,6 +12,12 @@ namespace McpServerTemplate.E2E;
 /// getting each one is refused in the same words as an item that does not exist, so a refusal does not tell a caller
 /// from another trust domain that the item is there. What the bound providers serve is read from the image's own
 /// startup line (G-11); an idp-a caller seeing every one of them listed is the witness that the lists list them.
+///
+/// The tool row was held for the pioneer from 2026-09-29, because contract-002's T-6 held that such a call is refused
+/// in the reply by its own rule, idp-binding. The pioneer's decision of 2026-09-29 (contract-005's revision of that date,
+/// "1: A") settled it: a tool of the other trust domain is answered as a tool that does not exist, as a resource and a
+/// prompt already were, and the server's log keeps the rule that refused it, idp-binding — which contract-002's T-6
+/// (ScopeAndBindingEnforcementTests) now asserts in the log line instead of the reply.
 /// </summary>
 public sealed class TrustDomainTests(TrustDomainTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<TrustDomainTests.Server>
@@ -26,20 +32,6 @@ public sealed class TrustDomainTests(TrustDomainTests.Server fixture, ITestOutpu
 
     private const string IssuerA = "idp-a.e2e.test";
     private const string IssuerB = "idp-b.e2e.test";
-
-    /// <summary>
-    /// The tool row, stopped for the pioneer's decision (2026-09-29), not met and not changed: T-5 asks that a tool
-    /// of the other trust domain be refused in the words for a tool that does not exist, and contract-002's T-6
-    /// (ScopeAndBindingEnforcementTests.T6_a_caller_from_another_trust_domain_is_refused_by_a_different_rule), the
-    /// roadmap's Phase 1 exit criterion (docs/06) and contract-003's G-4 hold that it is refused by its own rule,
-    /// idp-binding. Seen red on the image: every bound tool answered 'authz_fail (rule: idp-binding). The tool '…'
-    /// belongs to a provider bound to a different identity provider …', a tool that does not exist 'authz_fail (rule:
-    /// not-permitted). You may not use the tool '…', or it does not exist.' Meeting one breaks the other.
-    /// </summary>
-    private const string ToolsStopped =
-        "held: t5-tool-refusal-words (McpServerTemplate.E2E/HELD.md). Stopped for the pioneer: contract-005 T-5 (the words for a "
-        + "tool that does not exist) conflicts with contract-002 T-6 and the roadmap (rule idp-binding). Red recorded; resolve by "
-        + "decision, then remove this Skip and its entry.";
 
     private const string OtherCallerMintedAtIdpA = "t5-other-caller-minted-at-idp-a";
     private const string CallerMintedAtIdpA = "t5-caller-minted-at-idp-a";
@@ -77,7 +69,7 @@ public sealed class TrustDomainTests(TrustDomainTests.Server fixture, ITestOutpu
     [Theory]
     [InlineData("resource")]
     [InlineData("prompt")]
-    [InlineData("tool", Skip = ToolsStopped)]
+    [InlineData("tool")]
     [Sabotage(CallerMintedAtIdpA, SabotageActs.Inputs,
         "The caller's token is minted at idp-a.e2e.test instead, so the items are its own: a resource is read, and a tool or a "
         + "prompt goes on to its arguments.")]

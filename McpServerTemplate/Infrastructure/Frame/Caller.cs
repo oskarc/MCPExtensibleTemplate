@@ -59,32 +59,56 @@ public sealed record Caller(string IdentityProvider, string Subject, IReadOnlySe
 }
 
 /// <summary>
-/// A request the frame refused. Each refusal has a rule name the caller can act on and a security
-/// event name in the OWASP logging vocabulary (contract-003 · G-4).
+/// A request the frame refused. Each refusal has a rule name and a security event name in the OWASP
+/// logging vocabulary (contract-003 · G-4). The log always records both; the caller is told the rule
+/// to act on, unless telling it would confirm what the caller may not know (<see cref="Concealed"/>).
 /// </summary>
 public sealed class Refusal
 {
-    private Refusal(string rule, string securityEvent, string message)
+    private Refusal(string rule, string securityEvent, string message, Refusal? shownAs)
     {
         Rule = rule;
         SecurityEvent = securityEvent;
         Message = message;
+        ShownAs = shownAs;
     }
 
-    /// <summary>Which check refused the request, for example <c>scope</c> or <c>idp-binding</c>.</summary>
+    /// <summary>Which check refused the request, for example <c>scope</c> or <c>idp-binding</c>: the rule the log records.</summary>
     public string Rule { get; }
 
     /// <summary>The logged event, for example <c>authz_fail</c>.</summary>
     public string SecurityEvent { get; }
 
-    /// <summary>What the caller is told: what was refused and what they can do about it.</summary>
+    /// <summary>
+    /// What was refused and why, as the log records it; and what the caller is told, what they can do about it, unless
+    /// <see cref="ShownAs"/> answers them instead.
+    /// </summary>
     public string Message { get; }
 
-    /// <summary>Creates a refusal.</summary>
-    public static Refusal Of(string rule, string securityEvent, string message) => new(rule, securityEvent, message);
+    /// <summary>
+    /// contract-005 · T-5 — the refusal the caller is answered with in place of this one, when this one's rule or words would
+    /// tell them something they may not know; null when they are told this one.
+    /// </summary>
+    public Refusal? ShownAs { get; }
 
-    /// <summary>The exception the SDK turns into an error for the caller.</summary>
-    public McpException ToException() => new($"{SecurityEvent} (rule: {Rule}). {Message}");
+    /// <summary>Creates a refusal.</summary>
+    public static Refusal Of(string rule, string securityEvent, string message) => new(rule, securityEvent, message, null);
+
+    /// <summary>
+    /// contract-005 · T-5 — the pioneer's decision of 2026-09-29 (contract-005's revision of that date, "1: A"): a refusal the
+    /// log records as it is, by its own rule and in its own words, and the caller is answered as <paramref name="shownAs"/>. A
+    /// tool of a provider bound to another identity provider is refused this way, answered as a tool that does not exist, so
+    /// the reply does not confirm that the tool exists in another trust domain; the operator reading the log still sees the
+    /// rule that refused it, idp-binding.
+    /// </summary>
+    public static Refusal Concealed(string rule, string securityEvent, string message, Refusal shownAs)
+    {
+        ArgumentNullException.ThrowIfNull(shownAs);
+        return new(rule, securityEvent, message, shownAs);
+    }
+
+    /// <summary>The exception the SDK turns into an error for the caller: this refusal's, or the one it is shown as.</summary>
+    public McpException ToException() => ShownAs?.ToException() ?? new($"{SecurityEvent} (rule: {Rule}). {Message}");
 }
 
 /// <summary>Claim names the identity layer writes and the frame reads.</summary>

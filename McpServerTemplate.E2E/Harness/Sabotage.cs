@@ -61,12 +61,12 @@ public sealed class NotEndToEndAttribute(string reason) : Attribute
 /// nothing else, and records how it ended (<see cref="E2ETestFramework"/>); scripts/e2e-sabotage.sh runs every
 /// sabotage in turn, checks each red is a <see cref="ClaimException"/>, and writes the record, SABOTAGE-RECORD.md.
 ///
-/// CI's push and pull-request runs refuse it: with CI set, a run that names a sabotage does not start (<see cref="Refusal"/>),
-/// and the e2e job checks the variable is unset before it runs anything. The variable is the suite's own, and no product or
-/// test-host file reads it (T-13). contract-005 · G-17 round 1 (HAR-R1-01, HAR-R1-02) — one run in CI is a sabotage run by
-/// design: the scheduled retake (<see cref="RetakeWorkflow"/>), which takes every red afresh on a clean checkout, weekly or by
-/// hand, and fails when one is not red on its claim. The per-push check proves that every test has a sabotage and that each
-/// recorded red was taken on its test's file as it is; the scheduled retake proves the reds.
+/// CI refuses it, on every run: with CI set, a run that names a sabotage does not start (<see cref="Refusal"/>), and the e2e
+/// job checks the variable is unset before it runs anything. The variable is the suite's own, and no product or test-host
+/// file reads it (T-13). The per-push check proves that every test has a sabotage and that each recorded red was taken on its
+/// test's file as it is; the full retake, run by hand (scripts/e2e-sabotage.sh --all), proves the reds. contract-005 · G-17
+/// round 1 (HAR-R1-01, HAR-R1-02) added a scheduled retake in CI, the one CI run that admitted a sabotage; the pioneer's
+/// decision of 2026-09-29 (contract-005's revision of that date, "3. B") removed it, and with it that admission.
 ///
 /// contract-005 · G-17 round 1 (HAR-R1-07) — and a control run: <see cref="ControlVariable"/> names sabotages whose tests are
 /// run with no sabotage at all, so scripts/e2e-sabotage.sh can require each test it retakes to pass without its sabotage
@@ -82,12 +82,6 @@ public static partial class Sabotage
     /// run runs: each with no sabotage applied, and no other test.
     /// </summary>
     public const string ControlVariable = "MCP_E2E_CONTROL";
-
-    /// <summary>
-    /// contract-005 · G-17 round 1 (HAR-R1-01) — the one workflow that runs sabotages in CI: the scheduled retake, on its
-    /// schedule or by hand (GITHUB_EVENT_NAME schedule or workflow_dispatch). CI's push and pull-request runs refuse them.
-    /// </summary>
-    public const string RetakeWorkflow = ".github/workflows/sabotage-retake.yml";
 
     /// <summary>The record the sabotages' reds are kept in, under the end-to-end project.</summary>
     public const string RecordFile = "SABOTAGE-RECORD.md";
@@ -111,9 +105,7 @@ public static partial class Sabotage
         new Run(
             Environment.GetEnvironmentVariable(Variable),
             Environment.GetEnvironmentVariable(ControlVariable),
-            Environment.GetEnvironmentVariable("CI"),
-            Environment.GetEnvironmentVariable("GITHUB_EVENT_NAME"),
-            Environment.GetEnvironmentVariable("GITHUB_WORKFLOW_REF")),
+            Environment.GetEnvironmentVariable("CI")),
         () => All));
 
     private static int _applied;
@@ -153,20 +145,11 @@ public static partial class Sabotage
     public static T Choose<T>(string name, T value, T sabotaged) => Applies(name) ? sabotaged : value;
 
     /// <summary>
-    /// What a run is given: the sabotage variable, the control variable, CI's variable, and, in GitHub's runs, the event that
-    /// started the workflow and the workflow's own reference (owner/repo/{path}@{ref}).
+    /// What a run is given: the sabotage variable, the control variable and CI's variable. contract-005 · the pioneer's
+    /// decision of 2026-09-29 ("3. B") — no longer the event that started a GitHub workflow, nor the workflow: they told the
+    /// scheduled retake apart, and no CI run is admitted now, whatever started it.
     /// </summary>
-    internal sealed record Run(string? Sabotage, string? Control, string? Ci, string? GitHubEvent = null, string? GitHubWorkflowRef = null)
-    {
-        /// <summary>
-        /// Whether this is the scheduled retake: CI, the workflow <see cref="RetakeWorkflow"/>, started on its schedule or by
-        /// hand. A push or a pull request never is, whichever workflow it starts.
-        /// </summary>
-        public bool IsScheduledRetake =>
-            Ci is not null
-            && GitHubEvent is "schedule" or "workflow_dispatch"
-            && GitHubWorkflowRef?.Contains($"/{RetakeWorkflow}@", StringComparison.Ordinal) == true;
-    }
+    internal sealed record Run(string? Sabotage, string? Control, string? Ci);
 
     /// <summary>What a run does: apply one sabotage, run some tests as a control, run as it is, or not start (and why).</summary>
     internal sealed record Decision(Entry? Active, IReadOnlyList<Entry> Controlled, string? Refusal);
@@ -174,8 +157,9 @@ public static partial class Sabotage
     /// <summary>
     /// What a run does, given what it is given (<paramref name="run"/>) and the registry: no sabotage, the one named, a
     /// control run of the named sabotages' tests, or a refusal to start. Set at all in CI, even empty, either variable is
-    /// refused — contract-005 · G-17 round 1 (HAR-R1-01) — but in the scheduled retake. Outside CI, a name no sabotage has is
-    /// refused rather than run as an ordinary run, and so is a run given both variables.
+    /// refused, on every run — contract-005 · the pioneer's decision of 2026-09-29 ("3. B") removed the scheduled retake, the
+    /// one CI run G-17 round 1 (HAR-R1-01) had admitted. Outside CI, a name no sabotage has is refused rather than run as an
+    /// ordinary run, and so is a run given both variables.
     /// </summary>
     internal static Decision Decide(Run run, Func<IReadOnlyList<Entry>> registry)
     {
@@ -192,13 +176,12 @@ public static partial class Sabotage
         }
 
         var (variable, named) = run.Sabotage is not null ? (Variable, run.Sabotage) : (ControlVariable, run.Control);
-        if (named is not null && run.Ci is not null && !run.IsScheduledRetake)
+        if (named is not null && run.Ci is not null)
         {
             return Refused(
                 $"{variable} is set ('{named}'), and so is CI. A sabotage weakens the environment on purpose, to see one test go red, and "
-                + "a control run runs a handful of tests; either is run by scripts/e2e-sabotage.sh, locally or in the scheduled retake "
-                + $"({RetakeWorkflow}, on its schedule or by hand), and never in CI's push or pull-request runs, where a run of one test "
-                + "must never stand for the suite. So this run does not start.");
+                + "a control run runs a handful of tests; either is run by scripts/e2e-sabotage.sh, by hand, and never in CI, on any "
+                + "run, where a run of one test must never stand for the suite. So this run does not start.");
         }
 
         if (string.IsNullOrEmpty(named))
@@ -342,8 +325,8 @@ public static partial class Sabotage
     /// change nothing. A red taken on another version of the file is stale: the test may no longer make the claim it made.
     /// contract-005 · G-17 round 1 (HAR-R1-01) — this is what the per-push check holds the record to, and all it can: that each
     /// test file's reds were taken on it as it is. A change to the harness or the product changes no fingerprint, and a
-    /// fingerprint anyone can compute is no proof that a red was taken; the scheduled retake (<see cref="RetakeWorkflow"/>),
-    /// which runs scripts/e2e-sabotage.sh --all on a clean checkout, proves the reds.
+    /// fingerprint anyone can compute is no proof that a red was taken; the full retake, run by hand (scripts/e2e-sabotage.sh
+    /// --all), proves the reds — contract-005 · the pioneer's decision of 2026-09-29 ("3. B"), which removed the scheduled one.
     /// </summary>
     public static string Fingerprint(EndToEndTest test)
     {

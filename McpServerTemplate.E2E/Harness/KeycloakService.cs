@@ -86,9 +86,8 @@ public sealed class KeycloakService : IAsyncDisposable
 
         var tls = pki.LeafDirectory("keycloak");
         var container = new ContainerBuilder(Image)
-            .WithNetwork(network)
+            .OnTheRunNetwork(network, runId)
             .WithNetworkAliases(Host)
-            .WithLabel(E2ENetwork.RunLabel, runId)
             .WithPortBinding(Port, true)
             .WithPortBinding(ManagementPort, true)
             .WithLoopbackPortsOnly()

@@ -92,15 +92,16 @@ jobs:
         run: dotnet build McpServerTemplate.sln --no-restore --configuration Release -warnaserror
 
       # contract-005 · G-11, T-12 — a sabotage weakens the environment on purpose, to see one test go red on its claim;
-      # it is run by scripts/e2e-sabotage.sh, locally or in the scheduled retake (sabotage-retake.yml), never here. The
-      # harness refuses to start with MCP_E2E_SABOTAGE set in a push or pull-request run; this step says so first, before
-      # anything runs. contract-005 · G-17 round 1 (HAR-R1-07) — and a control run's MCP_E2E_CONTROL, which would run a
-      # handful of tests where the suite must run whole.
+      # it is run by scripts/e2e-sabotage.sh, by hand, and never in CI. The harness refuses to start with MCP_E2E_SABOTAGE
+      # set in any CI run; this step says so first, before anything runs. contract-005 · G-17 round 1 (HAR-R1-07) — and a
+      # control run's MCP_E2E_CONTROL, which would run a handful of tests where the suite must run whole. contract-005 · the
+      # pioneer's decision of 2026-09-29 ("3. B") removed the scheduled retake that ran the record in CI: the full retake
+      # is run by hand (bash scripts/e2e-sabotage.sh --all), and no workflow admits a sabotage.
       - name: No sabotage
         run: |
           for variable in MCP_E2E_SABOTAGE MCP_E2E_CONTROL; do
             if [ -n "${!variable+set}" ]; then
-              echo "::error::$variable is set ('${!variable}'). Sabotages and control runs are run by scripts/e2e-sabotage.sh, locally or in the scheduled retake, and never in this job."
+              echo "::error::$variable is set ('${!variable}'). Sabotages and control runs are run by scripts/e2e-sabotage.sh, by hand, and never in CI."
               exit 1
             fi
           done

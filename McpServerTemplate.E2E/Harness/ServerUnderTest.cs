@@ -29,8 +29,11 @@ public enum ServerBuild
 ///
 /// contract-005 · G-8 — the image built from the repository's Dockerfile, configured through its
 /// environment only: the base settings below, then the test class's <see cref="SettingsDelta"/>.
+///   Names:     contract-005 · the pioneer's decision of 2026-09-29 — the container resolves no real
+///              name (<see cref="E2ENetwork.NameServer"/>), so a call to a host with no fake fails at
+///              the name lookup and reaches nothing.
 ///   Trust:     SSL_CERT_FILE and SSL_CERT_DIR both name the run's test CA and nothing else, so a
-///              call to a host with no fake fails TLS instead of reaching the internet.
+///              server that did reach some other host would fail TLS there, and trust nothing else.
 ///   Transport: BindAddress 0.0.0.0, AllowedHosts mcp.e2e.test only, KnownProxies the front's
 ///              static address only.
 ///   Running:   stderr is kept by Docker and read back through the container's logs; the server is
@@ -149,9 +152,8 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
         var settings = delta.ApplyTo(BaseSettings(E2EEnvironment.Issuers, frontAddress));
 
         var container = new ContainerBuilder(environment.ImageOf(build))
-            .WithNetwork(environment.Network)
+            .OnTheRunNetwork(environment.Network, environment.RunId)
             .WithNetworkAliases(alias)
-            .WithLabel(E2ENetwork.RunLabel, environment.RunId)
             .WithPortBinding(Port, true)
             .WithLoopbackPortsOnly()
             // contract-005 · G-3 — the CA certificate alone, by read-only bind mount.
@@ -335,9 +337,8 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
     {
         var settings = delta.ApplyTo(BaseSettings(E2EEnvironment.Issuers, E2ENetwork.NoFront));
         var container = new ContainerBuilder(environment.ImageOf(build))
-            .WithNetwork(environment.Network)
+            .OnTheRunNetwork(environment.Network, environment.RunId)
             .WithNetworkAliases($"server-{name}")
-            .WithLabel(E2ENetwork.RunLabel, environment.RunId)
             .WithPortBinding(Port, true)
             .WithLoopbackPortsOnly()
             .WithBindMount(environment.Pki.CaPath, $"{TrustMount}/{TestPki.CaFile}", AccessMode.ReadOnly)

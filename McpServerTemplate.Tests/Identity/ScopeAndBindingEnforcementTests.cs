@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using McpServerTemplate.Tests.Frame;
 
 namespace McpServerTemplate.Tests.Identity;
 
@@ -126,29 +127,54 @@ public class ScopeAndBindingEnforcementTests
         // corp. A partner token holding exactly the right scope must still be refused — and
         // refused as a binding violation, not as a missing scope, because the two call for
         // different action: one can be requested, the other cannot.
+        //
+        // contract-005 · T-5 — changed by the pioneer's decision of 2026-09-29 (contract-005's revision of that date, "1: A").
+        // The binding violation is the rule the server logs (authz_fail, rule=idp-binding), and the partner is answered in the
+        // words for a tool that does not exist: a reply must not confirm that an item exists in another trust domain, as a
+        // resource's or a prompt's already did not. Until that decision this test asserted idp-binding in the reply; it now
+        // asserts it in the log line, and that the reply is the one a tool that does not exist gets.
         using var corp = new TestIdentityProvider("corp", "https://login.corp.test/");
         using var partner = new TestIdentityProvider("partner", "https://login.partner.test/");
+        using var log = new RequestGateTests.CapturedLog();
 
-        await using var server = await InProcessServer.StartAsync([corp, partner]);
+        await using var server = await InProcessServer.StartAsync([corp, partner], logs: log);
 
         var partnerToken = partner.MintToken(Resource, scopes: ["demo:read"]);
 
         var listed = await ListToolsAsync(server, partnerToken);
         Assert.DoesNotContain("get_blog_post", listed);
 
+        var bound = await CallToolAsync(server, partnerToken, "get_blog_post");
+        var missing = await CallToolAsync(server, partnerToken, "get_no_such_tool");
+
+        // The log keeps the rule that refused the call to the bound tool.
+        Assert.Contains(
+            log.Lines,
+            l => l.Contains("authz_fail: rule=idp-binding principal=partner:", StringComparison.Ordinal)
+                && l.Contains(" target=get_blog_post ", StringComparison.Ordinal));
+
+        // The reply is the one a tool that does not exist gets, the names aside, and says nothing of the binding.
+        Assert.Contains("rule: not-permitted", missing, StringComparison.Ordinal);
+        Assert.Equal(
+            missing.Replace("get_no_such_tool", "{name}", StringComparison.Ordinal),
+            bound.Replace("get_blog_post", "{name}", StringComparison.Ordinal));
+        Assert.DoesNotContain("idp-binding", bound, StringComparison.Ordinal);
+    }
+
+    /// <summary>The body of a tools/call of <paramref name="tool"/>, with a blog post's arguments, as the server sent it.</summary>
+    private static async Task<string> CallToolAsync(InProcessServer server, string token, string tool)
+    {
         using var request = new HttpRequestMessage(HttpMethod.Post, InProcessServer.McpPath)
         {
             Content = new StringContent(
-                """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_blog_post","arguments":{"postId":1}}}""",
+                JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 1, method = "tools/call", @params = new { name = tool, arguments = new { postId = 1 } } }),
                 System.Text.Encoding.UTF8,
                 "application/json"),
         };
         request.Headers.Accept.ParseAdd("application/json, text/event-stream");
-        request.Headers.Add("Authorization", $"Bearer {partnerToken}");
+        request.Headers.Add("Authorization", $"Bearer {token}");
 
         using var response = await server.Client.SendAsync(request);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.Contains("idp-binding", body, StringComparison.Ordinal);
+        return await response.Content.ReadAsStringAsync();
     }
 }

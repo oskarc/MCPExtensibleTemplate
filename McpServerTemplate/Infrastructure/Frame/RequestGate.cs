@@ -12,7 +12,9 @@ namespace McpServerTemplate.Infrastructure.Frame;
 /// the request kind is one the frame governs; the caller is signed in; the item exists; it belongs
 /// to a provider bound to the caller's identity provider; the caller holds its scope; the risk gate
 /// holds; the caller is within their limits; the arguments fit the declared shape; and the answer
-/// fits its cap. Each refusal names its rule and is logged as a security event.
+/// fits its cap. Each refusal is logged as a security event with its rule, and names its rule to
+/// the caller — but a tool of a provider bound to another identity provider, which is answered as
+/// a tool that does not exist (contract-005 · T-5, the pioneer's decision of 2026-09-29).
 /// </summary>
 public sealed class RequestGate(
     PolicyRegistry registry,
@@ -187,10 +189,16 @@ public sealed class RequestGate(
 
         if (caller.IdentityProvider != entry.IdentityProvider)
         {
-            throw Refuse(caller, name, Refusal.Of(
+            // contract-005 · T-5 — the pioneer's decision of 2026-09-29 (contract-005's revision of that date, "1: A"): a caller
+            // from another trust domain is answered in the words for a tool that does not exist, as a resource or a prompt of
+            // another trust domain already is (AdmitScopedAsync), so the reply never confirms that the tool exists in a trust
+            // domain the caller is not in. The log keeps the rule that refused it, idp-binding, and why. Until then the reply
+            // named idp-binding, and told the caller the tool was there (contract-002 · T-6 asserted it; it now asserts the log).
+            throw Refuse(caller, name, Refusal.Concealed(
                 "idp-binding",
                 "authz_fail",
-                $"The tool '{name}' belongs to a provider bound to a different identity provider than the one that issued your token. This is not a scope you can request; the binding is a deployment decision."));
+                $"The tool '{name}' belongs to a provider bound to a different identity provider than the one that issued the caller's token; the binding is a deployment decision, not a scope the caller can request. The caller was answered as for a tool that does not exist.",
+                NotPermitted("tool", name)));
         }
 
         if (!caller.Scopes.Contains(entry.Policy.Scope))
@@ -373,7 +381,8 @@ public sealed class RequestGate(
         Refusal.Of("principal", "authz_fail", "The request carries no principal the server can attribute. Sign in with a configured identity provider.");
 
     // Something hidden and something forbidden are refused in the same words, so a refusal does not
-    // confirm that a hidden item exists.
+    // confirm that a hidden item exists; and so is a tool of another trust domain (AdmitCallAsync,
+    // contract-005 · T-5), whose log line keeps the rule that refused it.
     private static Refusal NotPermitted(string kind, string name) =>
         Refusal.Of("not-permitted", "authz_fail", $"You may not use the {kind} '{name}', or it does not exist.");
 

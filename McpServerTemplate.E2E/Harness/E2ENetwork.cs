@@ -21,6 +21,11 @@ namespace McpServerTemplate.E2E.Harness;
 /// the lower half holds the static addresses the front and the proxies are given (they must be
 /// known before the server starts, because KnownProxies names them), and Docker hands out the
 /// upper half to everything else, so a static address can never be taken by a dynamic one.
+///
+/// contract-005 · UC-6 — the pioneer's decision of 2026-09-29 (contract-005's revision of that date, "2. yes, cut it and
+/// mock any calls"): the network resolves no real name. Every container joins it one way (<see cref="OnTheRunNetwork"/>),
+/// with its own loopback address as its only name server (<see cref="NameServer"/>) and no search domain, so every call a
+/// server makes is answered by a fake of the run or fails at the name lookup, and none reaches the internet by name.
 /// </summary>
 public static class E2ENetwork
 {
@@ -29,6 +34,40 @@ public static class E2ENetwork
 
     /// <summary>A label on everything a run creates, so a run's leftovers can be found by hand.</summary>
     public const string RunLabel = "org.mcp-server-template.e2e.run";
+
+    /// <summary>
+    /// contract-005 · UC-6 — the pioneer's decision of 2026-09-29 ("2. yes, cut it and mock any calls"): the one name server
+    /// every container of a run is given, its own loopback address. Docker's embedded DNS (127.0.0.11 in the container)
+    /// answers the run network's own names — every alias the upstream and issuer registries give out, every service and
+    /// server — itself, and forwards any other name to the container's name servers; a name server given as a container's
+    /// own (--dns) is reached from the container's own network namespace ("--dns=127.0.0.1 refers to the container's own
+    /// loopback address", Docker's networking guide; moby's resolvconf marks only the host's own resolvers for the host's
+    /// namespace). Nothing listens on port 53 there, so the forward is refused at once, the embedded DNS answers SERVFAIL
+    /// (moby, libnetwork/resolver.go), and the lookup fails without a packet leaving the container: a host no fake of the run
+    /// answers fails at the name lookup, and a real name never reaches a real address. The published ports the test process
+    /// reaches every service through are untouched.
+    ///
+    /// Why this and not a stricter cut, on Docker Desktop and on the runner alike: an internal network (--internal, and the
+    /// isolated gateway mode, which requires it) publishes no port at all (moby#36174, moby#27441), and the test process
+    /// reaches the front, the issuers, Keycloak and the fake's journal only through ports published on loopback. The routed
+    /// gateway mode, or a network without masquerading, sends a container's packets out with its own address and relies on
+    /// the network beyond to drop them, which a Linux runner's does and Docker Desktop's user-space networking does not
+    /// promise. A firewall rule (DOCKER-USER) needs root on the host and has no equivalent on Docker Desktop. An unroutable
+    /// name server would cut the same names, but each lookup would wait out the embedded DNS's four-second forward, and
+    /// would rely on nothing routing or answering that address. What this does not cut is a connection to an address
+    /// written as one: nothing the suite configures is — a provider's BaseUrl must name its policy's host, an identity
+    /// provider's Authority names a host — so nothing reaches the internet by name, as the decision reads it.
+    /// </summary>
+    public const string NameServer = "127.0.0.1";
+
+    /// <summary>
+    /// contract-005 · the pioneer's decision of 2026-09-29 — no search domain: Docker's "." for none (moby's resolvconf,
+    /// OverrideSearch). Without it a container keeps the host's own search domains, which are tried first for a name with
+    /// fewer dots than the host's ndots; the forward of that try fails SERVFAIL, and musl's resolver (the Alpine images:
+    /// nginx, Redis, WireMock) stops at a SERVFAIL instead of trying the name itself, so a front could not find its server by
+    /// its alias.
+    /// </summary>
+    public const string NoSearchDomain = ".";
 
     private static readonly IPAddress Base = IPAddress.Parse(Subnet.Split('/')[0]);
     private static readonly int PrefixLength = int.Parse(Subnet.Split('/')[1], System.Globalization.CultureInfo.InvariantCulture);
@@ -111,6 +150,64 @@ public static class E2ENetwork
         }
 
         return Offset(offset);
+    }
+
+    /// <summary>
+    /// contract-005 · G-4, UC-6 — the one way a container joins the run's network: on <paramref name="network"/>, carrying the
+    /// run's label (<see cref="RunLabel"/>), with <see cref="NameServer"/> as its only name server and no search domain
+    /// (<see cref="NoSearchDomain"/>) — the pioneer's decision of 2026-09-29, "cut it and mock any calls". HarnessSelfTests
+    /// fails on a file of the suite that joins a container to a network any other way.
+    /// </summary>
+    internal static ContainerBuilder OnTheRunNetwork(this ContainerBuilder builder, INetwork network, string runId)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(network);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+
+        return builder
+            .WithNetwork(network)
+            .WithLabel(RunLabel, runId)
+            .WithCreateParameterModifier(parameters =>
+            {
+                parameters.HostConfig ??= new HostConfig();
+                parameters.HostConfig.DNS = [NameServer];
+                parameters.HostConfig.DNSSearch = [NoSearchDomain];
+            });
+    }
+
+    /// <summary>
+    /// contract-005 · UC-6 — the pioneer's decision of 2026-09-29: each container attached to <paramref name="network"/> that was
+    /// not started resolving no real name, as the engine records how it started — its name servers and search domains — named
+    /// with what it was given. Empty when every one was started with <see cref="NameServer"/> alone and no search domain. A
+    /// container removed while it is asked has left the network, and is not one.
+    /// </summary>
+    internal static async Task<IReadOnlyList<string>> ResolvingRealNamesAsync(IDockerClient docker, string network, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(docker);
+
+        var attached = await docker.Networks.InspectNetworkAsync(network, cancellationToken);
+        var found = new List<string>();
+        foreach (var id in attached.Containers?.Keys ?? [])
+        {
+            ContainerInspectResponse container;
+            try
+            {
+                container = await docker.Containers.InspectContainerAsync(id, cancellationToken);
+            }
+            catch (DockerContainerNotFoundException)
+            {
+                continue;
+            }
+
+            var servers = container.HostConfig?.DNS ?? [];
+            var search = container.HostConfig?.DNSSearch ?? [];
+            if (!servers.SequenceEqual([NameServer], StringComparer.Ordinal) || !search.SequenceEqual([NoSearchDomain], StringComparer.Ordinal))
+            {
+                found.Add($"{container.Name.TrimStart('/')} (name servers [{string.Join(", ", servers)}], search domains [{string.Join(", ", search)}])");
+            }
+        }
+
+        return found;
     }
 
     /// <summary>

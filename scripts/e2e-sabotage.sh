@@ -30,29 +30,28 @@
 # contract-005 · G-17 round 1 (HAR-R1-01, HAR-R1-02) — two checks hold the record, and they prove different things. The
 # per-push check, HarnessSelfTests, proves coverage and freshness of each test file: every test the runner lists has a
 # sabotage, every sabotage an entry, and each entry's red was taken on its test's file as that file is now, with its result
-# and its message kept. It cannot prove a red was taken — a fingerprint anyone can compute is no proof of a run, and CI's
-# push and pull-request runs refuse sabotages — and a change to the harness or the product marks no entry stale. The
-# scheduled retake, .github/workflows/sabotage-retake.yml (weekly, and by hand), proves the reds: it runs this script with
-# --all --same-verdicts on a clean checkout, which fails when any sabotage does not go red on its claim or when a verdict
-# differs from the committed record's, and keeps the record it wrote as the run's artifact. It pushes nothing.
+# and its message kept. It cannot prove a red was taken — a fingerprint anyone can compute is no proof of a run, and CI
+# refuses sabotages on every run — and a change to the harness or the product marks no entry stale. The full retake, run by
+# hand (bash scripts/e2e-sabotage.sh --all), proves the reds: it takes every one afresh, each beside its control run, and
+# exits 1 when any does not go red on its claim. contract-005 · the pioneer's decision of 2026-09-29 (contract-005's
+# revision of that date, "3. B") removed the scheduled retake that ran it in CI, and --same-verdicts, which it ran with.
 #
 #   bash scripts/e2e-sabotage.sh               retake what is missing, stale or not red, and keep the rest: each red took
 #                                              49 s here (23 in 18 min 45 s, 2026-09-29), and the control run is one run of
 #                                              those tests beside them
-#   bash scripts/e2e-sabotage.sh --all         retake every sabotage: 99 reds at that rate, and the control run
+#   bash scripts/e2e-sabotage.sh --all         retake every sabotage: the full retake, which proves the reds; about a
+#                                              hundred reds at that rate, and the control run
 #   bash scripts/e2e-sabotage.sh NAME ...      retake these, whatever their state, and keep the rest
 #   bash scripts/e2e-sabotage.sh --dry-run     say what would be retaken, and why; run nothing
 #   bash scripts/e2e-sabotage.sh --left-behind say whether anything a run created is left, as every run of this script
 #                                              ends by saying; run nothing, and build nothing
-#   ... --same-verdicts                        and fail when any verdict differs from the record as it stood before the run
-#                                              (in the scheduled retake, a clean checkout: the committed record's)
 #
-# Local, or the scheduled retake: CI's push and pull-request runs refuse MCP_E2E_SABOTAGE and MCP_E2E_CONTROL, the harness
-# does, and so does this script. It needs Docker: every sabotage starts the environment afresh.
+# By hand only: CI refuses MCP_E2E_SABOTAGE and MCP_E2E_CONTROL on every run — the harness does, the e2e job does, and so
+# does this script. It needs Docker: every sabotage starts the environment afresh.
 #
-# Exit 0: every entry of the record is red on its claim, or held, nothing was left behind, and with --same-verdicts no
-# verdict changed. Exit 1: one of those is not so (named above), or the run could not be made. With --left-behind: exit 0
-# when nothing a run created is left, and 1, naming each thing, when something is.
+# Exit 0: every entry of the record is red on its claim, or held, and nothing was left behind. Exit 1: one of those is not
+# so (named above), or the run could not be made. With --left-behind: exit 0 when nothing a run created is left, and 1,
+# naming each thing, when something is.
 
 set -uo pipefail
 
@@ -60,16 +59,14 @@ cd "$(dirname "$0")/.." || exit 1
 
 all=0
 dry=0
-same=0
 check=0
 names=()
 for arg in "$@"; do
   case "$arg" in
     --all) all=1 ;;
     --dry-run) dry=1 ;;
-    --same-verdicts) same=1 ;;
     --left-behind) check=1 ;;
-    -h|--help) sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,54p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "Unknown option '$arg'; see --help." >&2; exit 1 ;;
     *) names+=("$arg") ;;
   esac
@@ -80,7 +77,7 @@ if [ "$all" -eq 1 ] && [ "${#names[@]}" -gt 0 ]; then
   exit 1
 fi
 
-if [ "$check" -eq 1 ] && [ $((all + dry + same + ${#names[@]})) -gt 0 ]; then
+if [ "$check" -eq 1 ] && [ $((all + dry + ${#names[@]})) -gt 0 ]; then
   echo "Give --left-behind alone: it runs nothing, and says only whether anything a run created is left." >&2
   exit 1
 fi
@@ -142,19 +139,13 @@ if [ "$check" -eq 1 ]; then
   exit 0
 fi
 
-# contract-005 · G-17 round 1 (HAR-R1-01) — in CI, only the scheduled retake: its own workflow, on its schedule or by hand. The
-# harness admits the same run and no other (Sabotage.Run.IsScheduledRetake).
-retake=.github/workflows/sabotage-retake.yml
+# contract-005 · G-11 — never in CI, on any run: a sabotage weakens the environment on purpose. contract-005 · the pioneer's
+# decision of 2026-09-29 ("3. B") removed the scheduled retake, the one CI run G-17 round 1 (HAR-R1-01) had admitted here and
+# in the harness; the full retake is run by hand.
 if [ -n "${CI+set}" ]; then
-  case "${GITHUB_EVENT_NAME:-}:${GITHUB_WORKFLOW_REF:-}" in
-    schedule:*/"$retake"@*|workflow_dispatch:*/"$retake"@*) ;;
-    *)
-      echo "Refused: CI is set, and this is not the scheduled retake ($retake, on its schedule or by hand; this is" \
-        "'${GITHUB_EVENT_NAME:-no event}' of '${GITHUB_WORKFLOW_REF:-no workflow}'). A sabotage weakens the environment on purpose;" \
-        "CI's push and pull-request runs never run one (contract-005 · G-11)." >&2
-      exit 1
-      ;;
-  esac
+  echo "Refused: CI is set. A sabotage weakens the environment on purpose, and a control run runs a handful of tests; this" \
+    "script is run by hand (bash scripts/e2e-sabotage.sh --all is the full retake), and never in CI (contract-005 · G-11)." >&2
+  exit 1
 fi
 
 for variable in MCP_E2E_SABOTAGE MCP_E2E_CONTROL; do
@@ -408,7 +399,6 @@ fi
 rows=()
 blocks=()
 red=0 held=0 not_red=0
-declare -A final_result=()
 for entry in "${entries[@]}"; do
   IFS=$'\t' read -r name class method acts hold fingerprint test weakens <<< "$entry"
   if [ "$hold" != "-" ]; then
@@ -437,7 +427,6 @@ for entry in "${entries[@]}"; do
     *) not_red=$((not_red + 1)) ;;
   esac
 
-  final_result["$name"]=$result
   rows+=("| \`$name\` | \`${class##*.}.$method\` | $acts | $fingerprint_cell | $result |")
   blocks+=("$out/new/$name.block")
 done
@@ -471,11 +460,11 @@ mapfile -t span < <(grep -h '^- Taken ' "${blocks[@]}" | awk '{print $3}' | sort
   echo "Two checks hold this record, and prove different things. On every push, \`HarnessSelfTests\` proves coverage and"
   echo "freshness of each test file: every end-to-end test the runner lists has a sabotage, every sabotage has an entry here,"
   echo "and each entry's red was taken on its test's file as that file is now, with its result and its message kept. It cannot"
-  echo "prove that a red was taken — a fingerprint anyone can compute is no proof of a run — and CI's push and pull-request"
-  echo "runs refuse \`MCP_E2E_SABOTAGE\`. The scheduled retake (\`.github/workflows/sabotage-retake.yml\`, weekly and by hand)"
-  echo "proves the reds: it takes every one afresh on a clean checkout, and fails when any sabotage does not go red on its claim"
-  echo "or when a verdict differs from the one committed here. A change to the harness or the product marks no entry stale;"
-  echo "the scheduled retake takes it again. Written by \`scripts/e2e-sabotage.sh\`."
+  echo "prove that a red was taken — a fingerprint anyone can compute is no proof of a run — and CI refuses"
+  echo "\`MCP_E2E_SABOTAGE\` on every run. The full retake, run by hand (\`bash scripts/e2e-sabotage.sh --all\`), proves the"
+  echo "reds: it takes every one afresh, each beside its control run, and fails when any sabotage does not go red on its claim."
+  echo "A change to the harness or the product marks no entry stale; the full retake takes it again. Written by"
+  echo "\`scripts/e2e-sabotage.sh\`."
   echo
   echo "- ${#entries[@]} sabotages over the $tests end-to-end tests the runner lists, theory rows included: $red red on their test's claim, $not_red not, $held held"
   if [ "${#span[@]}" -gt 0 ]; then
@@ -506,20 +495,4 @@ if [ -n "$engine_lost" ]; then
   exit 1
 fi
 
-# contract-005 · G-17 round 1 (HAR-R1-01) — --same-verdicts: every entry's verdict is the one the record held before this run.
-changed_verdicts=()
-if [ "$same" -eq 1 ]; then
-  for name in $(printf '%s\n' "${!final_result[@]}" "${!was_result[@]}" | sort -u); do
-    if [ "${was_result[$name]:-(no entry)}" != "${final_result[$name]:-(no entry)}" ]; then
-      changed_verdicts+=("$name: '${was_result[$name]:-(no entry)}' before, '${final_result[$name]:-(no entry)}' now")
-    fi
-  done
-  if [ "${#changed_verdicts[@]}" -gt 0 ]; then
-    echo "The verdicts differ from the record's before this run, in ${#changed_verdicts[@]} entries:" >&2
-    printf '  %s\n' "${changed_verdicts[@]}" >&2
-  else
-    echo "Every verdict is the record's before this run."
-  fi
-fi
-
-[ "$not_red" -eq 0 ] && [ "${#left[@]}" -eq 0 ] && [ "${#changed_verdicts[@]}" -eq 0 ]
+[ "$not_red" -eq 0 ] && [ "${#left[@]}" -eq 0 ]

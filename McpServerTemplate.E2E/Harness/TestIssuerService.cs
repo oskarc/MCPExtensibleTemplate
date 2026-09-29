@@ -60,9 +60,8 @@ public sealed class TestIssuerService : IAsyncDisposable
         IReadOnlyList<string> hosts = [.. issuers.Select(i => new Uri(i).Host)];
         var tls = pki.LeafDirectory("issuer");
         var builder = new ContainerBuilder(image)
-            .WithNetwork(network)
+            .OnTheRunNetwork(network, runId)
             .WithNetworkAliases([.. hosts])
-            .WithLabel(E2ENetwork.RunLabel, runId)
             .WithPortBinding(Port, true)
             .WithLoopbackPortsOnly()
             .WithBindMount(Path.Combine(tls, TestPki.CertificateFile), "/e2e/tls/tls.crt", AccessMode.ReadOnly)

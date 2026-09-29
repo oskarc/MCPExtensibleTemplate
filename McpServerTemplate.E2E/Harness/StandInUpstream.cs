@@ -17,11 +17,25 @@ namespace McpServerTemplate.E2E.Harness;
 /// host name the registry gives it. Every request gets the same small JSON answer, and is recorded in its access log —
 /// the address it came from, its method, its Host and its path — which is its journal: <see cref="RecordedAsync"/>
 /// reads it back from the container's log, so nothing about it is taken on trust from WireMock's admin API.
+///
+/// contract-005 · T-6 — the pioneer's decision of 2026-09-29 ("2. yes, cut it and mock any calls") and T-6's own clauses ask
+/// three more things of it. Its record keeps each request whole — every header as it arrived, and its body — as WireMock's
+/// journal does, so "no journal entry anywhere in the run contains the caller's token in any header, URL or body" holds for
+/// this owner too (<see cref="WholeRecordsAsync"/>): nginx's own variables name headers one by one, so the record is written
+/// by nginx's JavaScript module (njs, which the pinned image carries), from the request's raw headers and body. Its answer
+/// reads as a station list with one active station, so an observations tool goes on to its own data request: SmhiObs keeps
+/// a station list for hours, and an empty one would have the next tool of the same parameter ask nothing any fake could see.
+/// And it closes every connection after its answer, so a server's next call to it looks its name up again: T-6 removes this
+/// name from the network (<see cref="E2EEnvironment.WithoutNameAsync"/>), and a kept connection would still reach it.
 /// </summary>
 public sealed partial class StandInUpstream : IUpstreamService
 {
-    /// <summary>The answer to every request: a JSON document naming what gave it.</summary>
-    public const string Answer = """{"answeredBy":"e2e-stand-in"}""";
+    /// <summary>
+    /// The answer to every request: a JSON document naming what gave it, which also reads as SMHI's station list with one
+    /// active station (contract-005 · T-6).
+    /// </summary>
+    public const string Answer =
+        """{"answeredBy":"e2e-stand-in","station":[{"id":1,"name":"e2e stand-in","latitude":59.33,"longitude":18.07,"active":true}]}""";
 
     /// <summary>How long nginx may take to start its worker; it takes about a second.</summary>
     private static readonly TimeSpan ReadyWithin = TimeSpan.FromMinutes(1);
@@ -70,15 +84,31 @@ public sealed partial class StandInUpstream : IUpstreamService
         }
     }
 
+    /// <summary>
+    /// contract-005 · T-6 — each request it recorded, whole: its access-log line, which holds the request line's path and query,
+    /// its Host, and — as njs wrote them — every header as it arrived and the body (JSON, escaped as nginx escapes a log line).
+    /// </summary>
+    public async Task<IReadOnlyList<string>> WholeRecordsAsync(HttpClient http, CancellationToken cancellationToken = default)
+    {
+        var (stdout, _) = await _container.GetLogsAsync(ct: cancellationToken);
+        return [.. stdout.Split('\n').Where(line => RecordLine().IsMatch(line)).Select(line => line.Trim())];
+    }
+
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();
 
     [GeneratedRegex(@"stand-in client=(?<client>\S+) method=(?<method>\S+) host=(?<host>\S+) path=(?<path>\S+) status=")]
     private static partial Regex RecordLine();
 
+    /// <summary>Where the stand-in's script is mounted, beside its configuration.</summary>
+    private const string ScriptPath = "/etc/nginx/standin.js";
+
     private static string Configuration() => string.Create(
         CultureInfo.InvariantCulture,
         $$"""
         # contract-005 · T-15 — the stand-in upstream: one answer to every request, and a record of each.
+        # contract-005 · T-6 — the record is whole (every header, the body), written by njs, which the pinned image carries.
+        load_module modules/ngx_http_js_module.so;
+
         worker_processes 1;
         error_log /dev/stderr notice;
         pid /tmp/nginx.pid;
@@ -86,8 +116,19 @@ public sealed partial class StandInUpstream : IUpstreamService
         events { worker_connections 64; }
 
         http {
-            log_format standin 'stand-in client=$remote_addr method=$request_method host=$host path=$request_uri status=$status';
+            js_import standin from {{ScriptPath}};
+            js_var $e2e_request "-";
+
+            log_format standin escape=json 'stand-in client=$remote_addr method=$request_method host=$host path=$request_uri status=$status request=$e2e_request';
             access_log /dev/stdout standin;
+
+            # contract-005 · T-6 — no connection outlives its answer, so a server's next call looks the name up again.
+            keepalive_timeout 0;
+
+            # contract-005 · T-6 — every body it accepts is held in memory, where njs reads it for the record.
+            client_max_body_size 8m;
+            client_body_buffer_size 8m;
+            client_body_in_single_buffer on;
 
             server {
                 listen 443 ssl;
@@ -98,11 +139,29 @@ public sealed partial class StandInUpstream : IUpstreamService
                 ssl_protocols       TLSv1.2 TLSv1.3;
 
                 location / {
-                    default_type application/json;
-                    return 200 '{{Answer}}';
+                    js_content standin.answer;
                 }
             }
         }
+        """);
+
+    /// <summary>
+    /// contract-005 · T-6 — the stand-in's content handler: it writes the request, whole, into the variable the access log
+    /// records (its raw headers as they arrived, and its body), then gives <see cref="Answer"/>.
+    /// </summary>
+    private static string Script() => string.Create(
+        CultureInfo.InvariantCulture,
+        $$"""
+        // contract-005, T-6 and T-15: the stand-in's one answer, and its record of each request whole.
+        const ANSWER = {{System.Text.Json.JsonSerializer.Serialize(Answer)}};
+
+        function answer(r) {
+            r.variables.e2e_request = JSON.stringify({ headers: r.rawHeadersIn, body: r.requestText || '' });
+            r.headersOut['Content-Type'] = 'application/json';
+            r.return(200, ANSWER);
+        }
+
+        export default { answer };
         """);
 
     private sealed class StandInOwner() : UpstreamOwner("standin")
@@ -110,12 +169,13 @@ public sealed partial class StandInUpstream : IUpstreamService
         internal override async Task<IUpstreamService> StartAsync(UpstreamStart start, IReadOnlyList<string> hosts, CancellationToken cancellationToken)
         {
             var configuration = start.Pki.WriteFile("standin.conf", Configuration());
+            var script = start.Pki.WriteFile("standin.js", Script());
             var tls = start.Pki.LeafDirectory(Name);
             var container = new ContainerBuilder(TlsFront.Image)
-                .WithNetwork(start.Network)
+                .OnTheRunNetwork(start.Network, start.RunId)
                 .WithNetworkAliases([.. hosts])
-                .WithLabel(E2ENetwork.RunLabel, start.RunId)
                 .WithBindMount(configuration, "/etc/nginx/nginx.conf", AccessMode.ReadOnly)
+                .WithBindMount(script, ScriptPath, AccessMode.ReadOnly)
                 .WithBindMount(Path.Combine(tls, TestPki.CertificateFile), "/e2e/tls/tls.crt", AccessMode.ReadOnly)
                 .WithBindMount(Path.Combine(tls, TestPki.KeyFile), "/e2e/tls/tls.key", AccessMode.ReadOnly)
                 // contract-005 · UC-1 edge — a deadline of its own, like every other wait of the environment.

@@ -6,6 +6,9 @@ no skipped test names, and on a sabotage record that calls a test held without o
 HAR-R1-03). A held test runs no sabotage, and the record says so. When the decision is made, the Skip and its entry go
 together, and the test's sabotage is taken like any other.
 
+No test is held. The last one, T-5's tool row (`t5-tool-refusal-words`, held since 2026-09-29), was released by the
+pioneer's decision of 2026-09-29 (contract-005's revision of that date, "1: A"): a tool of another trust domain is
+refused in the words for a tool that does not exist, and the server's log keeps the rule that refused it, `idp-binding`.
+
 | Id | Test | Waits on | Held since |
 |---|---|---|---|
-| `t5-tool-refusal-words` | `TrustDomainTests.T5_using_a_bound_providers_item_from_the_other_issuer_is_refused_in_the_words_for_one_that_does_not_exist("tool")` | The pioneer's decision between contract-005 T-5 (a tool of the other trust domain is refused in the words for a tool that does not exist) and contract-002 T-6 with the roadmap's Phase 1 exit criterion (it is refused by its own rule, idp-binding): meeting one breaks the other. | 2026-09-29 |

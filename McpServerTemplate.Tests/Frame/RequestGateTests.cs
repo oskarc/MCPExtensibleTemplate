@@ -253,8 +253,11 @@ public class RequestGateTests
         public override DateTimeOffset GetUtcNow() => base.GetUtcNow() + ahead;
     }
 
-    /// <summary>A log that keeps every line the server writes, for a test that reads what a refusal logged.</summary>
-    private sealed class CapturedLog : Microsoft.Extensions.Logging.ILoggerProvider
+    /// <summary>
+    /// A log that keeps every line the server writes, for a test that reads what a refusal logged. contract-005 · T-5 — also
+    /// contract-002's T-6 (ScopeAndBindingEnforcementTests), which reads the rule a refusal of another trust domain's tool logs.
+    /// </summary>
+    internal sealed class CapturedLog : Microsoft.Extensions.Logging.ILoggerProvider
     {
         private readonly System.Collections.Concurrent.ConcurrentQueue<string> _lines = new();
 

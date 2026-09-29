@@ -28,6 +28,11 @@ namespace McpServerTemplate.E2E.Harness;
 /// contract-005 · G-16 — the four extension points the harness is built in, and later contracts add
 /// through: <see cref="StartServerAsync"/> with a <see cref="SettingsDelta"/>, the
 /// <see cref="UpstreamRegistry"/>, the <see cref="IssuerRegistry"/>, and <see cref="E2ENetwork.Subnet"/>.
+///
+/// contract-005 · UC-6 — the pioneer's decision of 2026-09-29 ("2. yes, cut it and mock any calls"): the run's network
+/// resolves no real name (<see cref="E2ENetwork.NameServer"/>), so every call a server of the run makes is answered by a
+/// fake the registries give out or fails at the name lookup. The start checks it of every container it started (phase
+/// 'environment: no real names'), and T-6 of every container there when it runs.
 /// </summary>
 public sealed class E2EEnvironment : IAsyncDisposable
 {
@@ -107,9 +112,10 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// run (see <see cref="UpstreamRegistry"/>). A later contract hands a host to another owner here.
     ///
     /// contract-005 · T-15 — and so does this one: SMHI's observations host is handed to a stand-in fake
-    /// (<see cref="StandInUpstream"/>), which is not WireMock, in place of the fake. No other test in the run
-    /// reaches that host, so the stand-in's record is T-15's alone — and in a run of T-15's sabotage
-    /// (<see cref="StandInLeftOut"/>), the host is left to the fake.
+    /// (<see cref="StandInUpstream"/>), which is not WireMock, in place of the fake — and in a run of T-15's sabotage
+    /// (<see cref="StandInLeftOut"/>), the host is left to the fake. contract-005 · T-6 — T-15 is no longer the only test
+    /// that reaches that host: T-6's (UpstreamTests, UpstreamNamesTests) call every observations tool, and each test reads the
+    /// stand-in's record for its own server's address alone.
     /// </summary>
     public static UpstreamRegistry Upstreams { get; } = Sabotage.Choose(
         StandInLeftOut,
@@ -362,6 +368,10 @@ public sealed class E2EEnvironment : IAsyncDisposable
             var started = upstreams.ToDictionary(u => u.Key, u => u.Value.Result);
             await Timings.MeasureEnvironmentAsync("environment: upstreams", () => CheckUpstreamsAsync(docker, network, pki, started, cancellationToken));
 
+            // contract-005 · the pioneer's decision of 2026-09-29 ("2. yes, cut it and mock any calls") — before any test runs,
+            // every container the environment started, as the engine records it, resolves no real name (E2ENetwork.NameServer).
+            await Timings.MeasureEnvironmentAsync("environment: no real names", () => CheckNoRealNamesAsync(docker, network, cancellationToken));
+
             // contract-005 · G-8 — before any test runs: every image carries this checkout's revision
             // and its build context's hash.
             await Timings.MeasureEnvironmentAsync("environment: revision labels", async () =>
@@ -608,6 +618,120 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 "upstreams",
                 $"the upstream registry and the running environment disagree: {string.Join("; ", problems)}. "
                 + "A call to such a host would reach no fake, and would fail as if the product had.");
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · UC-6 — the pioneer's decision of 2026-09-29 ("2. yes, cut it and mock any calls"): every container on the
+    /// run's network was started resolving no real name — its own loopback as its only name server, and no search domain
+    /// (<see cref="E2ENetwork.OnTheRunNetwork"/>) — read from the engine's own record of how each started, not from what the
+    /// harness asked for. A container that could resolve a real name could reach the internet by it, and a call to a host with
+    /// no fake would read, in every test after, as the product's own failure or success.
+    /// </summary>
+    private static async Task CheckNoRealNamesAsync(IDockerClient docker, INetwork network, CancellationToken cancellationToken)
+    {
+        var resolving = await E2ENetwork.ResolvingRealNamesAsync(docker, network.Name, cancellationToken);
+        if (resolving.Count > 0)
+        {
+            throw new EnvironmentFaultException(
+                "names",
+                $"these containers on the run's network were started able to resolve real names: {string.Join("; ", resolving)}. Every "
+                + $"container joins it through {nameof(E2ENetwork)}.{nameof(E2ENetwork.OnTheRunNetwork)}, with {E2ENetwork.NameServer} as its "
+                + "only name server and no search domain, so that no call of the run reaches the internet by name.");
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · T-6 (G-7, G-16) — the registered upstream host names whose owner publishes no port, in a stable order: the
+    /// names <see cref="WithoutNameAsync"/> can take off the run's network and give back.
+    /// </summary>
+    internal async Task<IReadOnlyList<string>> RemovableNamesAsync(CancellationToken cancellationToken = default)
+    {
+        var names = new List<string>();
+        foreach (var (host, owner) in Upstreams.Owners.OrderBy(o => o.Key, StringComparer.Ordinal))
+        {
+            if (!await PublishesPortsAsync(UpstreamServices[owner].Container.Id, cancellationToken))
+            {
+                names.Add(host);
+            }
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    /// contract-005 · T-6 (G-7, G-16) — the run's network without the name <paramref name="host"/>: "with one fake's alias
+    /// removed". The owner the upstream registry gives <paramref name="host"/> is taken off the network and put back on it under
+    /// every other name the registry gives it, so no container of the run answers <paramref name="host"/> and a lookup of it
+    /// fails (<see cref="E2ENetwork.NameServer"/>); disposing what is returned puts the owner back under every one of its
+    /// names. Both are checked from the engine's own view of the network. Only an owner that publishes no port can be: Docker
+    /// gives a container that rejoins a network new published ports, or none (moby#44137), and the test process reaches
+    /// WireMock's journal through its port. Every server of the run resolves the name through the one network, so a test that
+    /// takes one away runs alone, after every other (UpstreamNamesTests' collection).
+    /// </summary>
+    internal async Task<IAsyncDisposable> WithoutNameAsync(string host, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(host);
+        if (!Upstreams.Owners.TryGetValue(host, out var owner))
+        {
+            throw new KeyNotFoundException($"No upstream owner is registered for '{host}'.");
+        }
+
+        var id = UpstreamServices[owner].Container.Id;
+        if (await PublishesPortsAsync(id, cancellationToken))
+        {
+            throw new EnvironmentFaultException(
+                "upstream names",
+                $"'{host}' is answered by {owner.Name}, which publishes a port the test process reaches it by: a container that rejoins a "
+                + "network is given new published ports, or none (moby#44137), so its name cannot be taken off the network and given back.");
+        }
+
+        var names = Upstreams.HostsOf(owner);
+        await RejoinAsync(id, owner, [.. names.Where(n => !n.Equals(host, StringComparison.OrdinalIgnoreCase))], host, cancellationToken);
+        return new NameGivenBack(() => RejoinAsync(id, owner, names, null, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Takes the container <paramref name="id"/> off the run's network and puts it back answering <paramref name="names"/>, and
+    /// not <paramref name="removed"/>, as the engine then records it; a fault of phase 'upstream names' otherwise.
+    /// </summary>
+    private async Task RejoinAsync(string id, UpstreamOwner owner, IReadOnlyList<string> names, string? removed, CancellationToken cancellationToken)
+    {
+        await Docker.Networks.DisconnectNetworkAsync(Network.Name, new NetworkDisconnectParameters { Container = id, Force = true }, cancellationToken);
+        await Docker.Networks.ConnectNetworkAsync(
+            Network.Name,
+            new NetworkConnectParameters { Container = id, EndpointConfig = new EndpointSettings { Aliases = [.. names] } },
+            cancellationToken);
+
+        var inspected = await Docker.Containers.InspectContainerAsync(id, cancellationToken);
+        IList<string> aliases = inspected.NetworkSettings?.Networks is { } networks && networks.TryGetValue(Network.Name, out var endpoint)
+            ? endpoint.Aliases ?? []
+            : [];
+        var missing = names.Where(n => !aliases.Contains(n, StringComparer.OrdinalIgnoreCase)).ToArray();
+        if (missing.Length > 0 || (removed is not null && aliases.Contains(removed, StringComparer.OrdinalIgnoreCase)))
+        {
+            throw new EnvironmentFaultException(
+                "upstream names",
+                $"{owner.Name} rejoined the run's network {Network.Name} answering [{string.Join(", ", aliases)}], where it was to answer "
+                + $"[{string.Join(", ", names)}]{(removed is null ? string.Empty : $" and not '{removed}'")}.");
+        }
+    }
+
+    /// <summary>Whether the container <paramref name="id"/> publishes any port on this machine, as the engine records how it was created.</summary>
+    private async Task<bool> PublishesPortsAsync(string id, CancellationToken cancellationToken) =>
+        (await Docker.Containers.InspectContainerAsync(id, cancellationToken)).HostConfig?.PortBindings is { Count: > 0 };
+
+    /// <summary>What <see cref="WithoutNameAsync"/> returns: disposing it gives the name back, once.</summary>
+    private sealed class NameGivenBack(Func<Task> giveBack) : IAsyncDisposable
+    {
+        private int _given;
+
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _given, 1) == 0)
+            {
+                await giveBack();
+            }
         }
     }
 

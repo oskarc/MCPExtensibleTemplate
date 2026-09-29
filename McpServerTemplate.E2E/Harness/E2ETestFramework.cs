@@ -18,9 +18,10 @@ namespace McpServerTemplate.E2E.Harness;
 ///
 /// contract-005 · G-11, T-12 — a sabotage weakens one thing for one test, so a run of it (MCP_E2E_SABOTAGE) runs that
 /// test and no other, whatever the runner's filter let through, and its result is written for scripts/e2e-sabotage.sh
-/// (<see cref="SabotageRecorder"/>). A run the sabotage variable refuses — set in CI but for the scheduled retake, or naming
-/// no sabotage — does not start: every test it was given fails with the refusal, before any fixture's server can start
-/// (<see cref="E2EEnvironment"/> refuses too).
+/// (<see cref="SabotageRecorder"/>). A run the sabotage variable refuses — set in CI, on any run (contract-005 · the pioneer's
+/// decision of 2026-09-29 removed the scheduled retake, the one CI run once admitted), or naming no sabotage — does not start:
+/// every test it was given fails with the refusal, before any fixture's server can start (<see cref="E2EEnvironment"/>
+/// refuses too).
 ///
 /// contract-005 · G-17 round 1 (HAR-R1-07) — a control run (MCP_E2E_CONTROL) runs the tests of the sabotages it names and no
 /// other, with no sabotage applied, and writes how each ended, so the script counts a red only when the same test, in the

@@ -20,8 +20,9 @@ namespace McpServerTemplate.E2E.Harness;
 /// from the document itself, at the path the test is given, and run verbatim through one declared table
 /// (<see cref="Table"/>). So is every file the compose file mounts that the document gives beside it: the proxy's
 /// nginx.conf is the block the document shows under that name. The table has two kinds of row, each with its reason: host
-/// names and addresses (the identity provider, the public host, the file's network, the proxy's fixed address on it, and
-/// where the file publishes on this machine), and test trust (the proxy's certificate and key, which become the run's
+/// names and addresses (the identity provider, the public host, the file's network, the proxy's fixed address on it, where
+/// the file publishes on this machine, and — contract-005 · the pioneer's decision of 2026-09-29 — the name server every
+/// service is given, which resolves no real name), and test trust (the proxy's certificate and key, which become the run's
 /// test-CA leaf for the public host; SSL_CERT_FILE, SSL_CERT_DIR and the read-only mount of the run's CA in the server).
 /// Nothing else about the file changes. Its image, mcp-server:latest, is this run's server image, tagged with that name
 /// for the run and untagged after it (a tag it replaced is put back).
@@ -127,6 +128,9 @@ public sealed partial class DocsProfile : IAsyncDisposable
 
         /// <summary>Added to the server's service: an environment variable, or a mount.</summary>
         Server,
+
+        /// <summary>contract-005 · the pioneer's decision of 2026-09-29 — added to every service the file defines.</summary>
+        EveryService,
     }
 
     /// <summary>One declared row.</summary>
@@ -178,6 +182,11 @@ public sealed partial class DocsProfile : IAsyncDisposable
             "Where the file publishes a service on this machine: docs/04, the proxy's 443. Nothing a run starts is published "
             + "beyond loopback, and a fixed host port can be held by another process or need privileges; the container side is "
             + "unchanged, and the run's clients reach it as https://mcp.e2e.test through their name map (G-6)."),
+        new(HostOrAddress, Scope.EveryService, "a name server", $"{E2ENetwork.NameServer}, the container's own loopback, and no search domain",
+            "The run's network resolves no real name — the pioneer's decision of 2026-09-29 (contract-005 revision, \"2. yes, cut "
+            + "it and mock any calls\"). The file sets no name server, so Compose would give each service the host's; every container "
+            + "of the run is given its own loopback instead (E2ENetwork.NameServer), so the file's services find each other and the "
+            + "run's by name, and any name no container of the run answers fails at the lookup rather than reaching the internet."),
         new(TestTrust, Scope.Mount, ProxyCertificate, "the certificate of the run's test-CA leaf for mcp.e2e.test",
             "The proxy's certificate. An operator's names their public host and chains to a CA the run's clients do not "
             + "trust; the run's leaf (G-3) names the run's front name and chains to the run's CA, which is all the run's "
@@ -187,7 +196,7 @@ public sealed partial class DocsProfile : IAsyncDisposable
             + "service's (G-3)."),
         new(TestTrust, Scope.Server, "SSL_CERT_FILE", TrustFile,
             "The identity provider's certificate is a leaf of the run's test CA (G-3), which no image trusts. Trust is that CA "
-            + "alone, as for every server of the run (G-8), so a call to a host with no fake fails TLS instead of reaching the internet."),
+            + "alone, as for every server of the run (G-8), so a host that is not the run's would fail TLS, were its name to resolve."),
         new(TestTrust, Scope.Server, "SSL_CERT_DIR", ServerUnderTest.TrustMount,
             "Both are set, or the runtime falls back to the image's own store for the other and trusts more than the run's CA."),
         new(TestTrust, Scope.Server, "a read-only mount", $"the run's CA at {TrustFile}",
@@ -446,10 +455,12 @@ public sealed partial class DocsProfile : IAsyncDisposable
         List<string> applied,
         CancellationToken cancellationToken)
     {
+        // contract-005 · the pioneer's decision of 2026-09-29 — on the run's network the one way, which resolves no real name: a
+        // row of the table (Scope.EveryService), reported for each service.
         var builder = new ContainerBuilder(service.Image)
-            .WithNetwork(environment.Network)
-            .WithNetworkAliases(service.Name)
-            .WithLabel(E2ENetwork.RunLabel, environment.RunId);
+            .OnTheRunNetwork(environment.Network, environment.RunId)
+            .WithNetworkAliases(service.Name);
+        applied.Add($"'{service.Name}': {Table.Single(r => r.Where == Scope.EveryService)}");
 
         foreach (var entry in service.Environment)
         {

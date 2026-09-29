@@ -647,9 +647,9 @@ public partial class RepositoryInvariantsTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        // Positive control: the workflows were found, and read as workflows.
+        // Positive control: the workflows were found, and read as workflows. contract-005 · the pioneer's decision of
+        // 2026-09-29 ("3. B") removed the second one, the scheduled sabotage retake; ci.yml is the one there is.
         Assert.Contains(".github/workflows/ci.yml", files);
-        Assert.Contains(".github/workflows/sabotage-retake.yml", files);
         Assert.All(files.Where(f => f.StartsWith(".github/workflows/", StringComparison.Ordinal)), f => Assert.Contains("jobs:", File.ReadAllText(Path.Combine(root, f)), StringComparison.Ordinal));
 
         string? Read(string relative) => File.Exists(Path.Combine(root, relative)) ? File.ReadAllText(Path.Combine(root, relative)) : null;

@@ -52,9 +52,8 @@ public sealed class RedisService : IAsyncDisposable
     internal static async Task<RedisService> StartAsync(INetwork network, string runId, string host, CancellationToken cancellationToken)
     {
         var container = new ContainerBuilder(Image)
-            .WithNetwork(network)
+            .OnTheRunNetwork(network, runId)
             .WithNetworkAliases(host)
-            .WithLabel(E2ENetwork.RunLabel, runId)
             // contract-005 · UC-1 edge — the wait has a deadline of its own, so a Redis that never
             // becomes ready is a named fault rather than a run held until CI's hang timeout.
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Ready to accept connections", wait => wait.WithTimeout(ReadyWithin)))

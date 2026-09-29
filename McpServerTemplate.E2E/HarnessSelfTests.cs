@@ -13,9 +13,9 @@ namespace McpServerTemplate.E2E;
 /// </summary>
 [NotEndToEnd(
     "In-process checks of the harness's own code — the settings delta, the revision label, the sabotage registry and its "
-    + "record, the held decisions, what constructs a claim's failure, and how an exhausted address pool is named: they start "
-    + "no container and send nothing to the image, so there is no fixture input, container environment or network for a "
-    + "sabotage to act on, and no claim about the image for it to break.")]
+    + "record, the held decisions, what constructs a claim's failure, how an exhausted address pool is named, and how every "
+    + "container joins the run's network: they start no container and send nothing to the image, so there is no fixture "
+    + "input, container environment or network for a sabotage to act on, and no claim about the image for it to break.")]
 public sealed partial class HarnessSelfTests
 {
     /// <summary>
@@ -198,14 +198,21 @@ public sealed partial class HarnessSelfTests
     /// on a decision McpServerTemplate.E2E/HELD.md names: its Skip reason says "held: {id}" of an entry there, and that entry
     /// names the test. Any skip counted as held before; now a skip that names no decision fails here, and so does an entry no
     /// skipped test names, which would outlive its decision.
+    ///
+    /// contract-005 · T-5 — the list may be empty, and is: the pioneer's decision of 2026-09-29 (contract-005's revision of
+    /// that date, "1: A") released its one entry, T-5's tool row. The file and this check stay for the next held test.
     /// </summary>
     [Fact]
     public void Every_skipped_end_to_end_test_waits_on_a_decision_held_md_names()
     {
-        var held = HeldDecisions();
+        var (text, held) = HeldFile();
 
-        // Positive control: the list was read, T-5's tool row among it.
-        Assert.Contains(held, h => h.Id == "t5-tool-refusal-words");
+        // Positive controls: the file read is the list — its table's head is there — and the list's reader reads a row written
+        // as the file writes one, so an empty list is an empty file, not a reader that reads nothing.
+        Assert.Contains("| Id | Test | Waits on | Held since |", text, StringComparison.Ordinal);
+        Assert.Equal(
+            ["t0-example"],
+            Sabotage.HeldDecisions("| `t0-example` | `TrustDomainTests.T5_example(\"tool\")` | a decision | 2026-09-29 |\n").Select(h => h.Id));
 
         var problems = HeldProblems(held).ToList();
         problems.AddRange(held
@@ -225,9 +232,9 @@ public sealed partial class HarnessSelfTests
     /// every sabotage has an entry, and each entry's red was taken on its test's file as that file is now. It reads each
     /// entry's own text too, not only its row: the entry is there, its result line is the row's, its fingerprint is the
     /// row's, and its message is kept — an entry's message deleted, or its row edited alone, fails here. It cannot prove a red
-    /// was taken: a fingerprint anyone can compute is no proof of a run, and CI's push runs refuse sabotages. The scheduled
-    /// retake (<see cref="Sabotage.RetakeWorkflow"/>) proves the reds: it takes every one afresh on a clean checkout, and
-    /// fails when one is not red on its claim or its verdict differs from the one committed here.
+    /// was taken: a fingerprint anyone can compute is no proof of a run, and CI refuses sabotages on every run. The full
+    /// retake, run by hand (scripts/e2e-sabotage.sh --all), proves the reds: it takes every one afresh, each beside its
+    /// control run. contract-005 · the pioneer's decision of 2026-09-29 ("3. B") removed the scheduled retake that ran it in CI.
     /// </summary>
     [Fact]
     public void Every_named_sabotage_has_a_recorded_red_on_its_claim()
@@ -246,7 +253,7 @@ public sealed partial class HarnessSelfTests
         Assert.NotEmpty(recorded);
         Assert.NotEmpty(blocks);
 
-        var held = HeldDecisions();
+        var (_, held) = HeldFile();
         var problems = new List<string>();
         foreach (var entry in Sabotage.All)
         {
@@ -301,12 +308,13 @@ public sealed partial class HarnessSelfTests
 
     /// <summary>
     /// contract-005 · G-11, T-12 — a run that names a sabotage is refused in CI, even with the variable empty, and one that
-    /// names no sabotage of the suite is refused anywhere; a registered one, named outside CI, is the one applied.
+    /// names no sabotage of the suite is refused anywhere; a registered one, named outside CI, is the one applied. A control
+    /// run (G-17 round 1, HAR-R1-07) is refused in CI the same way, runs only tests that run, and never with a sabotage.
     ///
-    /// contract-005 · G-17 round 1 — and in CI, the scheduled retake (HAR-R1-01) is the one run that may name one: on its own
-    /// workflow, started on its schedule or by hand; a push or a pull request is refused whichever workflow it starts, and so
-    /// is another workflow's schedule. A control run (HAR-R1-07) is refused and admitted the same way, runs only tests that
-    /// run, and never with a sabotage.
+    /// contract-005 · the pioneer's decision of 2026-09-29 (contract-005's revision of that date, "3. B") — in CI, on every
+    /// run: G-17 round 1 (HAR-R1-01) had admitted one CI run, the scheduled retake, on its own workflow's schedule or by hand,
+    /// and this test held both sides of that line. The retake is gone, the harness reads no workflow or event any more, and CI
+    /// set is refused whatever started the run. The full retake is run by hand (scripts/e2e-sabotage.sh --all).
     /// </summary>
     [Fact]
     public void A_sabotage_is_refused_in_ci_and_one_the_suite_does_not_have_is_refused_anywhere()
@@ -314,56 +322,79 @@ public sealed partial class HarnessSelfTests
         IReadOnlyList<Sabotage.Entry> Registry() => Sabotage.All;
         var registered = Sabotage.All.First(e => e.Held is null);
         var other = Sabotage.All.First(e => e.Held is null && e.Name != registered.Name);
-        var heldOne = Sabotage.All.First(e => e.Held is not null);
-        const string retake = $"owner/repo/{Sabotage.RetakeWorkflow}@refs/heads/main";
 
-        // Positive controls: none named, none applied and nothing refused; a registered one named outside CI, applied; and
-        // in the scheduled retake, on its schedule and by hand, applied.
+        // A held test's sabotage, made here: HELD.md holds no test today (T-5's tool row was released on 2026-09-29), and a
+        // control run must still refuse one.
+        var heldOne = registered with { Name = "t0-held-example", Declared = "t0-held-example", Test = registered.Test with { Skip = "held: t0-example" } };
+        IReadOnlyList<Sabotage.Entry> WithHeld() => [.. Sabotage.All, heldOne];
+
+        // Positive controls: none named, none applied and nothing refused; a registered one named outside CI, applied.
         var none = Sabotage.Decide(new(null, null, null), Registry);
         Assert.Null(none.Active);
         Assert.Empty(none.Controlled);
         Assert.Null(none.Refusal);
         Assert.Same(registered, Sabotage.Decide(new(registered.Name, null, null), Registry).Active);
-        foreach (var started in new[] { "schedule", "workflow_dispatch" })
-        {
-            var inRetake = Sabotage.Decide(new(registered.Name, null, "true", started, retake), Registry);
-            Assert.Null(inRetake.Refusal);
-            Assert.Same(registered, inRetake.Active);
-        }
 
-        foreach (var named in new[] { registered.Name, string.Empty })
+        // In CI, on every run, even named empty and even with CI set empty.
+        foreach (var (named, ci) in new[] { (registered.Name, "true"), (string.Empty, "true"), (registered.Name, string.Empty) })
         {
-            var inCi = Sabotage.Decide(new(named, null, "true"), Registry);
+            var inCi = Sabotage.Decide(new(named, null, ci), Registry);
             Assert.Null(inCi.Active);
             Assert.Contains($"{Sabotage.Variable} is set ('{named}'), and so is CI", inCi.Refusal, StringComparison.Ordinal);
-        }
-
-        // In CI, anything but the retake's own schedule or hand is refused: a push to the retake's workflow, another workflow's schedule.
-        foreach (var (started, workflow) in new[] { ("push", retake), ("pull_request", retake), ("schedule", "owner/repo/.github/workflows/ci.yml@refs/heads/main") })
-        {
-            var refused = Sabotage.Decide(new(registered.Name, null, "true", started, workflow), Registry);
-            Assert.Null(refused.Active);
-            Assert.Contains("and so is CI", refused.Refusal, StringComparison.Ordinal);
+            Assert.Contains("never in CI, on any run", inCi.Refusal, StringComparison.Ordinal);
         }
 
         var unknown = Sabotage.Decide(new("t0-no-such-sabotage", null, null), Registry);
         Assert.Null(unknown.Active);
         Assert.Contains("'t0-no-such-sabotage', which is no sabotage of this suite", unknown.Refusal, StringComparison.Ordinal);
 
-        // A control run: the named sabotages' tests, none applied; refused in CI but for the retake, for a name that is no
-        // sabotage or whose test is held, and with a sabotage beside it.
+        // A control run: the named sabotages' tests, none applied; refused in CI, for a name that is no sabotage or whose test
+        // is held, and with a sabotage beside it.
         var control = Sabotage.Decide(new(null, $"{registered.Name},{other.Name}", null), Registry);
         Assert.Null(control.Refusal);
         Assert.Null(control.Active);
         Assert.Equal(new[] { registered.Name, other.Name }.Order(StringComparer.Ordinal), control.Controlled.Select(e => e.Name).Order(StringComparer.Ordinal));
-        Assert.Null(Sabotage.Decide(new(null, registered.Name, "true", "workflow_dispatch", retake), Registry).Refusal);
         Assert.Contains(
             $"{Sabotage.ControlVariable} is set ('{registered.Name}'), and so is CI",
-            Sabotage.Decide(new(null, registered.Name, "true", "push", retake), Registry).Refusal,
+            Sabotage.Decide(new(null, registered.Name, "true"), Registry).Refusal,
             StringComparison.Ordinal);
         Assert.Contains("'t0-no-such-sabotage'", Sabotage.Decide(new(null, "t0-no-such-sabotage", null), Registry).Refusal, StringComparison.Ordinal);
-        Assert.Contains($"'{heldOne.Name}'", Sabotage.Decide(new(null, heldOne.Name, null), Registry).Refusal, StringComparison.Ordinal);
+        Assert.Null(Sabotage.Decide(new(null, registered.Name, null), WithHeld).Refusal);
+        Assert.Contains($"'{heldOne.Name}'", Sabotage.Decide(new(null, heldOne.Name, null), WithHeld).Refusal, StringComparison.Ordinal);
         Assert.Contains("are both set", Sabotage.Decide(new(registered.Name, other.Name, null), Registry).Refusal, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · UC-6 — the pioneer's decision of 2026-09-29 (contract-005's revision of that date, "2. yes, cut it and
+    /// mock any calls"): every container the harness starts joins the run's network one way, E2ENetwork.OnTheRunNetwork, which
+    /// gives it its own loopback address as its only name server and no search domain, so no container of a run can resolve a
+    /// real name. Read from the suite's own source: no file but Harness/E2ENetwork.cs joins a container to a network
+    /// (.WithNetwork, .WithNetworkMode), and a container the engine is asked to create directly (CreateContainerAsync) has no
+    /// network at all (NetworkMode "none") — ShippedImageContentsTests', which is created, read and never started. What the
+    /// engine then gave each container is checked where the containers run: at the environment's start ("environment: no real
+    /// names") and in T-6 (UpstreamNamesTests).
+    /// </summary>
+    [Fact]
+    public void Every_container_joins_the_run_network_the_one_way_that_resolves_no_real_name()
+    {
+        var suite = Path.Combine(E2EEnvironment.FindRepositoryRoot(), "McpServerTemplate.E2E");
+        var sources = Directory.EnumerateFiles(suite, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(d => d is "bin" or "obj"))
+            .ToDictionary(f => Path.GetRelativePath(suite, f).Replace('\\', '/'), File.ReadAllText, StringComparer.Ordinal);
+        var joining = sources.Where(s => JoinsANetwork().IsMatch(s.Value)).Select(s => s.Key).Order(StringComparer.Ordinal).ToArray();
+        var creating = sources.Where(s => CreatesAContainer().IsMatch(s.Value)).Select(s => s.Key).Order(StringComparer.Ordinal).ToArray();
+
+        // Positive controls: the reading sees the one way's own join, and the one container made through the engine directly.
+        Assert.Contains("Harness/E2ENetwork.cs", joining);
+        Assert.Contains("ShippedImageContentsTests.cs", creating);
+
+        var problems = joining.Where(f => f != "Harness/E2ENetwork.cs")
+            .Select(f => $"{f} joins a container to a network itself; every container joins the run's network through "
+                + $"{nameof(E2ENetwork)}.{nameof(E2ENetwork.OnTheRunNetwork)}, which gives it no way to resolve a real name.")
+            .Concat(creating.Where(f => !WithNoNetwork().IsMatch(sources[f]))
+                .Select(f => $"{f} has the engine create a container with a network; only one with none (NetworkMode \"none\") may be made that way."))
+            .ToList();
+        Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
     }
 
     /// <summary>
@@ -420,12 +451,13 @@ public sealed partial class HarnessSelfTests
         Assert.Equal("x: redis", (await Assert.ThrowsAsync<EnvironmentFaultException>(() => timings.MeasureEnvironmentAsync<bool>("x: redis", () => throw wrapped))).Phase);
     }
 
-    /// <summary>The held decisions, as McpServerTemplate.E2E/HELD.md lists them.</summary>
-    private static IReadOnlyList<Sabotage.HeldDecision> HeldDecisions()
+    /// <summary>McpServerTemplate.E2E/HELD.md as it stands, and the held decisions it lists.</summary>
+    private static (string Text, IReadOnlyList<Sabotage.HeldDecision> Held) HeldFile()
     {
         var path = Path.Combine(E2EEnvironment.FindRepositoryRoot(), "McpServerTemplate.E2E", Sabotage.HeldFile);
         Assert.True(File.Exists(path), $"{path} is missing: it lists the decisions a skipped end-to-end test may wait on.");
-        return Sabotage.HeldDecisions(File.ReadAllText(path));
+        var text = File.ReadAllText(path);
+        return (text, Sabotage.HeldDecisions(text));
     }
 
     /// <summary>Every skipped end-to-end test whose Skip names no held decision, or one whose entry does not name the test.</summary>
@@ -531,6 +563,21 @@ public sealed partial class HarnessSelfTests
     /// <summary>A ClaimException constructed: new ClaimException(…), or new(…) given to one.</summary>
     [GeneratedRegex(@"\bnew\s+ClaimException\s*\(|\bClaimException\s+\w+\s*=\s*new\s*\(")]
     private static partial Regex ConstructsClaimException();
+
+    /// <summary>
+    /// contract-005 · the pioneer's decision of 2026-09-29 — a container builder given a network, or a network mode. Written
+    /// with character classes, so the pattern's own text is not a match.
+    /// </summary>
+    [GeneratedRegex(@"[.]WithNetwork(?:Mode)?\s*[(]")]
+    private static partial Regex JoinsANetwork();
+
+    /// <summary>contract-005 · the pioneer's decision of 2026-09-29 — the engine asked to create a container directly.</summary>
+    [GeneratedRegex(@"\bCreateContainerAsync\s*[(]")]
+    private static partial Regex CreatesAContainer();
+
+    /// <summary>contract-005 · the pioneer's decision of 2026-09-29 — a container created with no network at all.</summary>
+    [GeneratedRegex(@"NetworkMode\s*=\s*""none""")]
+    private static partial Regex WithNoNetwork();
 
     private static async Task<string> GitAsync(string repository, params string[] arguments)
     {

@@ -16,8 +16,9 @@ namespace McpServerTemplate.E2E.Harness;
 /// CA, under every host name the upstream registry gives it: the real provider hosts
 /// (opendata-download-metfcst.smhi.se and jsonplaceholder.typicode.com; opendata-download-metobs.smhi.se
 /// is T-15's stand-in's) and the neutral alias wiremock.e2e.test. Inside the network those names resolve to this container,
-/// so the server under test calls its upstreams by their real names and reaches the fake; with its
-/// trust narrowed to the test CA, a name with no fake fails TLS instead of reaching the internet.
+/// so the server under test calls its upstreams by their real names and reaches the fake. contract-005 · the pioneer's
+/// decision of 2026-09-29 — and a name with no fake on the network resolves to nothing (<see cref="E2ENetwork.NameServer"/>):
+/// the call fails at the name lookup, where it used to resolve to the real host and fail TLS there.
 ///
 /// Its request journal is read through WireMock's admin REST API with a plain HttpClient from the name
 /// map — no WireMock client package, so nothing about the fake is taken on trust from a library.
@@ -60,9 +61,8 @@ public sealed class WireMockService : IUpstreamService
     {
         var tls = pki.LeafDirectory(Owner.Name);
         var container = new ContainerBuilder(Image)
-            .WithNetwork(network)
+            .OnTheRunNetwork(network, runId)
             .WithNetworkAliases([.. hosts])
-            .WithLabel(E2ENetwork.RunLabel, runId)
             .WithPortBinding(Port, true)
             .WithLoopbackPortsOnly()
             // One PEM holding the certificate and its key, so no password has to be passed around.
@@ -200,6 +200,38 @@ public sealed class WireMockService : IUpstreamService
             e.Method,
             Uri.TryCreate(e.Url, UriKind.Absolute, out var url) ? url.Host : string.Empty,
             e.Path))];
+
+    /// <summary>
+    /// contract-005 · T-6 — every entry of the journal, whole, as WireMock's admin API returns it: the request's URL, every
+    /// header, its cookies and its body, and the fake's answer. A body WireMock keeps as bytes (Request.BodyAsBytes, base64) is
+    /// decoded and added, so a token in it reads as it was sent.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> WholeRecordsAsync(HttpClient http, CancellationToken cancellationToken = default)
+    {
+        var journal = await JournalAsync(http, cancellationToken);
+        if (journal.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidOperationException($"WireMock's journal is not a list of requests: {journal}");
+        }
+
+        return [.. journal.EnumerateArray().Select(entry =>
+        {
+            var whole = entry.GetRawText();
+            if (entry.TryGetProperty("Request", out var request)
+                && request.TryGetProperty("BodyAsBytes", out var bytes)
+                && bytes.ValueKind == JsonValueKind.String
+                && bytes.GetString() is { Length: > 0 } encoded)
+            {
+                var buffer = new byte[encoded.Length];
+                if (Convert.TryFromBase64String(encoded, buffer, out var written))
+                {
+                    whole += "\n" + System.Text.Encoding.UTF8.GetString(buffer, 0, written);
+                }
+            }
+
+            return whole;
+        })];
+    }
 
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();
 

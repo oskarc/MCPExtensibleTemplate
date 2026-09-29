@@ -67,8 +67,7 @@ public sealed class TlsFront : IAsyncDisposable
 
         var tls = pki.LeafDirectory("front");
         var container = new ContainerBuilder(Image)
-            .WithNetwork(network)
-            .WithLabel(E2ENetwork.RunLabel, runId)
+            .OnTheRunNetwork(network, runId)
             .WithPortBinding(Port, true)
             .WithLoopbackPortsOnly()
             .WithBindMount(configuration, "/etc/nginx/nginx.conf", AccessMode.ReadOnly)

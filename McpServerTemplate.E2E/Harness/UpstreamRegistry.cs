@@ -134,6 +134,15 @@ public interface IUpstreamService : IAsyncDisposable
     /// <param name="http">A client made from the environment's name map, for an owner whose record is read over HTTPS.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
     public Task<IReadOnlyList<UpstreamRequest>> RecordedAsync(HttpClient http, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// contract-005 · T-6 — every request it has recorded, whole, one text each: its URL, every header it arrived with, and its
+    /// body. What T-6 searches for a caller's token, "in any header, URL or body"; an owner whose record kept less would hide a
+    /// token passed through in what it left out, so an owner keeps the whole request or is not one.
+    /// </summary>
+    /// <param name="http">A client made from the environment's name map, for an owner whose record is read over HTTPS.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    public Task<IReadOnlyList<string>> WholeRecordsAsync(HttpClient http, CancellationToken cancellationToken = default);
 }
 
 /// <summary>One request an upstream container recorded.</summary>
