@@ -1,11 +1,21 @@
+using System.Text.RegularExpressions;
 using McpServerTemplate.E2E.Harness;
 
 namespace McpServerTemplate.E2E;
 
 /// <summary>
 /// The harness's own checks that need no environment: nothing here starts a container.
+///
+/// contract-005 · T-12 — so they are not end-to-end tests of the contract's claims, and have no sabotage. A sabotage acts
+/// only in the end-to-end fixture — a test's inputs, a container's environment or the network — and weakens one thing
+/// the image is claimed to do; these run in the test process against the harness's own code, which the end-to-end tests
+/// stand on. The record names them, with this reason.
 /// </summary>
-public sealed class HarnessSelfTests
+[NotEndToEnd(
+    "In-process checks of the harness's own code — the settings delta, the revision label, the sabotage registry and its "
+    + "record: they start no container and send nothing to the image, so there is no fixture input, container environment "
+    + "or network for a sabotage to act on, and no claim about the image for it to break.")]
+public sealed partial class HarnessSelfTests
 {
     /// <summary>
     /// contract-005 · G-8 — a key outside the sections the server's own startup check governs is one
@@ -119,6 +129,93 @@ public sealed class HarnessSelfTests
             Directory.Delete(repository, recursive: true);
         }
     }
+
+    /// <summary>
+    /// contract-005 · T-12 (G-11) — every end-to-end test, as the runner reports it (a theory's every row), has a named
+    /// sabotage; each name is one sabotage's, and each says in one line what it weakens. The registry, as the harness reads
+    /// it, is written to TestResults/sabotage/ for scripts/e2e-sabotage.sh, which runs each sabotage in turn from it.
+    /// </summary>
+    [Fact]
+    public void Every_end_to_end_test_has_a_named_sabotage()
+    {
+        var assembly = typeof(HarnessSelfTests).Assembly;
+        var tests = Sabotage.EndToEndTests(assembly);
+        var entries = Sabotage.All;
+
+        // Positive controls: the reading found the suite's tests, a theory's rows among them, and not this class's.
+        Assert.Contains(tests, t => t.Class == typeof(WalkingSkeletonTests));
+        Assert.Contains(tests, t => t.Row is ["no-allowed-hosts", ..]);
+        Assert.DoesNotContain(tests, t => t.Class == typeof(HarnessSelfTests));
+
+        var problems = Sabotage.Problems(tests, entries);
+        Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
+
+        var directory = Path.Combine(E2EEnvironment.FindRepositoryRoot(), "TestResults", "sabotage");
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "registry.tsv"), Sabotage.Listing(entries));
+        File.WriteAllText(
+            Path.Combine(directory, "not-end-to-end.tsv"),
+            string.Concat(Sabotage.NotEndToEnd(assembly).Select(n => $"{n.Class.Name}\t{n.Tests}\t{n.Reason}\n")));
+    }
+
+    /// <summary>
+    /// contract-005 · T-12 — and each has its recorded red, kept with its message in SABOTAGE-RECORD.md: a red on the
+    /// assertion that carries the test's claim, or, for a test skipped by decision, held. A sabotage added without its red,
+    /// or a record naming one the suite no longer has, fails here until scripts/e2e-sabotage.sh is run again.
+    /// </summary>
+    [Fact]
+    public void Every_named_sabotage_has_a_recorded_red_on_its_claim()
+    {
+        var path = Path.Combine(E2EEnvironment.FindRepositoryRoot(), "McpServerTemplate.E2E", Sabotage.RecordFile);
+        Assert.True(File.Exists(path), $"{path} is missing: run scripts/e2e-sabotage.sh, which writes it.");
+        var recorded = RecordRow().Matches(File.ReadAllText(path))
+            .ToDictionary(m => m.Groups["name"].Value, m => m.Groups["result"].Value.Trim(), StringComparer.Ordinal);
+
+        // Positive control: the record was read as one.
+        Assert.NotEmpty(recorded);
+
+        var problems = Sabotage.All
+            .Select(e => (Entry: e, Result: recorded.GetValueOrDefault(e.Name)))
+            .Where(r => r.Entry.Held is null ? r.Result != "red on its claim" : r.Result?.StartsWith("held", StringComparison.Ordinal) != true)
+            .Select(r => $"{r.Entry.Name} ({r.Entry.Test.Name}): {(r.Result is null ? "not in the record" : $"recorded as '{r.Result}'")}")
+            .Concat(recorded.Keys.Where(n => Sabotage.All.All(e => e.Name != n)).Select(n => $"{n}: in the record, but no sabotage of the suite"))
+            .ToList();
+        Assert.True(
+            problems.Count == 0,
+            $"{Sabotage.RecordFile} does not hold a red on its claim for every sabotage; run scripts/e2e-sabotage.sh. {string.Join("; ", problems)}");
+    }
+
+    /// <summary>
+    /// contract-005 · G-11, T-12 — a run that names a sabotage is refused in CI, even with the variable empty, and one that
+    /// names no sabotage of the suite is refused anywhere; a registered one, named outside CI, is the one applied.
+    /// </summary>
+    [Fact]
+    public void A_sabotage_is_refused_in_ci_and_one_the_suite_does_not_have_is_refused_anywhere()
+    {
+        IReadOnlyList<Sabotage.Entry> Registry() => Sabotage.All;
+        var registered = Sabotage.All.First(e => e.Held is null);
+
+        // Positive controls: none named, none applied and nothing refused; a registered one named outside CI, applied.
+        var none = Sabotage.Decide(null, null, Registry);
+        Assert.Null(none.Active);
+        Assert.Null(none.Refusal);
+        Assert.Same(registered, Sabotage.Decide(registered.Name, null, Registry).Active);
+
+        foreach (var named in new[] { registered.Name, string.Empty })
+        {
+            var inCi = Sabotage.Decide(named, "true", Registry);
+            Assert.Null(inCi.Active);
+            Assert.Contains($"{Sabotage.Variable} is set ('{named}'), and so is CI", inCi.Refusal, StringComparison.Ordinal);
+        }
+
+        var unknown = Sabotage.Decide("t0-no-such-sabotage", null, Registry);
+        Assert.Null(unknown.Active);
+        Assert.Contains("'t0-no-such-sabotage', which is no sabotage of this suite", unknown.Refusal, StringComparison.Ordinal);
+    }
+
+    /// <summary>A row of the record's index: the sabotage, its test, where it acts, and its result.</summary>
+    [GeneratedRegex(@"^\| `(?<name>[a-z0-9.-]+)` \|[^\n]*\| (?<result>[^|\n]+) \|[ \t]*\r?$", RegexOptions.Multiline)]
+    private static partial Regex RecordRow();
 
     private static async Task<string> GitAsync(string repository, params string[] arguments)
     {

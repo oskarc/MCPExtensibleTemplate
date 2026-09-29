@@ -16,10 +16,12 @@ namespace McpServerTemplate.E2E;
 public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<HostFilteringTests.Server>
 {
-    /// <summary>The environment's server: bound to 0.0.0.0, AllowedHosts mcp.e2e.test.</summary>
-    public sealed class Server() : ServerFixture(SettingsDelta.None);
+    /// <summary>The environment's server: bound to 0.0.0.0, AllowedHosts mcp.e2e.test; in a run of the sabotage that acts on it, the attacker's name too.</summary>
+    public sealed class Server() : ServerFixture(SettingsDelta.None
+        .Sabotaged(AttackerAllowed, d => d.Set("HttpTransport:AllowedHosts:1", Attacker)));
 
     private const string Attacker = "attacker.example.com";
+    private const string AttackerAllowed = "t11-2-attacker-host-allowed";
 
     /// <summary>Each way a 0.0.0.0 bind has been left open, with the key the refusal must name.</summary>
     public static TheoryData<string, string, string?> OpenVariants() => new()
@@ -33,12 +35,13 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
 
     [Theory]
     [MemberData(nameof(OpenVariants))]
+    [Sabotage("t11-2-open-variant-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_2_a_wildcard_bind_with_no_real_allowed_host_refuses_to_start(string variant, string key, string? value)
     {
         // The environment binds 0.0.0.0 (G-8); the delta takes away the real name, or replaces it.
-        var delta = value is null
+        var delta = (value is null
             ? SettingsDelta.None.Remove(key)
-            : SettingsDelta.None.Set(key, value);
+            : SettingsDelta.None.Set(key, value)).Sabotaged("t11-2-open-variant-left-out", _ => SettingsDelta.None);
 
         await using var outcome = await fixture.Environment.StartupAsync($"hosts-{variant}", delta);
         output.WriteLine(outcome.Describe());
@@ -46,7 +49,7 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
         var served = outcome.Started
             ? $" A GET /healthz sent to it with Host: {Attacker} got {(int)await outcome.GetDirectAsync("/healthz", Attacker)}."
             : string.Empty;
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(key, StringComparison.Ordinal) == true,
             $"a 0.0.0.0 bind with {(value is null ? "no AllowedHosts" : $"{key}={value}")}: {outcome.Describe()}.{served}");
     }
@@ -75,16 +78,18 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
 
     [Theory]
     [MemberData(nameof(NotOneNameVariants))]
+    [Sabotage("t11-2-not-one-name-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_2_an_allowed_host_that_is_not_one_name_as_written_refuses_to_start(string variant, string value, string admits)
     {
         const string key = "HttpTransport:AllowedHosts:0";
-        await using var outcome = await fixture.Environment.StartupAsync($"hosts-{variant}", SettingsDelta.None.Set(key, value));
+        await using var outcome = await fixture.Environment.StartupAsync(
+            $"hosts-{variant}", SettingsDelta.None.Set(key, value).Sabotaged("t11-2-not-one-name-left-out", _ => SettingsDelta.None));
         output.WriteLine(outcome.Describe());
 
         var served = outcome.Started
             ? $" A GET /healthz sent to it with Host: {admits} got {(int)await outcome.GetDirectAsync("/healthz", admits)}."
             : string.Empty;
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(key, StringComparison.Ordinal) == true,
             $"a 0.0.0.0 bind with {key}={value}: {outcome.Describe()}.{served}");
     }
@@ -100,12 +105,14 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
     [InlineData("bind-multicast", "HttpTransport:BindAddress", "224.0.0.1")]
     [InlineData("proxy-not-an-address", "HttpTransport:KnownProxies:0", "not-an-ip")]
     [InlineData("network-prefix-too-long", "HttpTransport:KnownNetworks:0", "10.0.0.0/99")]
+    [Sabotage("t11-2-unservable-setting-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_2_a_setting_the_image_cannot_serve_by_refuses_to_start(string variant, string key, string value)
     {
-        await using var outcome = await fixture.Environment.StartupAsync(variant, SettingsDelta.None.Set(key, value));
+        await using var outcome = await fixture.Environment.StartupAsync(
+            variant, SettingsDelta.None.Set(key, value).Sabotaged("t11-2-unservable-setting-left-out", _ => SettingsDelta.None));
         output.WriteLine(outcome.Describe());
 
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains($"{key} is '{value}'", StringComparison.Ordinal) == true,
             $"{key}={value}: {outcome.Describe()}");
     }
@@ -121,13 +128,15 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
     [InlineData("bind-link-local-unknown-zone", "fe80::1%nosuchnic")]
     [InlineData("bind-not-held", "10.1.2.3")]
     [InlineData("bind-octal", "010.0.0.1")]
+    [Sabotage("t11-2-unbindable-address-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_2_a_bind_address_the_image_cannot_bind_refuses_to_start(string variant, string bindAddress)
     {
         const string key = "HttpTransport:BindAddress";
-        await using var outcome = await fixture.Environment.StartupAsync(variant, SettingsDelta.None.Set(key, bindAddress));
+        await using var outcome = await fixture.Environment.StartupAsync(
+            variant, SettingsDelta.None.Set(key, bindAddress).Sabotaged("t11-2-unbindable-address-left-out", _ => SettingsDelta.None));
         output.WriteLine(outcome.Describe());
 
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains($"{key} is '{bindAddress}'", StringComparison.Ordinal) == true,
             $"{key}={bindAddress}: {outcome.Describe()}");
     }
@@ -139,13 +148,15 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
     /// do with it.
     /// </summary>
     [Fact]
+    [Sabotage("t11-2-bind-path-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_2_a_bind_address_with_a_path_refuses_to_start()
     {
         const string key = "HttpTransport:BindAddress";
-        await using var outcome = await fixture.Environment.StartupAsync("bind-path", SettingsDelta.None.Set(key, "127.0.0.1/x"));
+        await using var outcome = await fixture.Environment.StartupAsync(
+            "bind-path", SettingsDelta.None.Set(key, "127.0.0.1/x").Sabotaged("t11-2-bind-path-left-out", _ => SettingsDelta.None));
         output.WriteLine(outcome.Describe());
 
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains($"{key} is '127.0.0.1/x'", StringComparison.Ordinal) == true,
             $"{key}=127.0.0.1/x: {outcome.Describe()}");
     }
@@ -156,13 +167,15 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
     /// pass its checks and stop in Kestrel, "Invalid url", exit 70; it refuses, naming the key.
     /// </summary>
     [Fact]
+    [Sabotage("t11-2-empty-bind-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_2_an_empty_bind_address_refuses_to_start_naming_the_key()
     {
         const string key = "HttpTransport:BindAddress";
-        await using var outcome = await fixture.Environment.StartupAsync("bind-unset-variable", SettingsDelta.None.Set(key, string.Empty));
+        await using var outcome = await fixture.Environment.StartupAsync(
+            "bind-unset-variable", SettingsDelta.None.Set(key, string.Empty).Sabotaged("t11-2-empty-bind-left-out", _ => SettingsDelta.None));
         output.WriteLine(outcome.Describe());
 
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains($"{key} is empty", StringComparison.Ordinal) == true,
             $"{key}= (empty): {outcome.Describe()}");
     }
@@ -175,13 +188,15 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
     [Theory]
     [InlineData("ipv4-mapped-bracketed", "[::ffff:127.0.0.1]")]
     [InlineData("ipv4-mapped", "::ffff:127.0.0.1")]
+    [Sabotage("t11-2-ipv4-mapped-bind-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_2_an_ipv4_mapped_bind_address_refuses_to_start(string variant, string bindAddress)
     {
         const string key = "HttpTransport:BindAddress";
-        await using var outcome = await fixture.Environment.StartupAsync($"bind-{variant}", SettingsDelta.None.Set(key, bindAddress));
+        await using var outcome = await fixture.Environment.StartupAsync(
+            $"bind-{variant}", SettingsDelta.None.Set(key, bindAddress).Sabotaged("t11-2-ipv4-mapped-bind-left-out", _ => SettingsDelta.None));
         output.WriteLine(outcome.Describe());
 
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains($"{key} is '{bindAddress}', an IPv4-mapped", StringComparison.Ordinal) == true,
             $"{key}={bindAddress}: {outcome.Describe()}");
     }
@@ -192,13 +207,15 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
     /// loopback names as its host allowlist, and Kestrel:Endpoints puts it on every interface.
     /// </summary>
     [Fact]
+    [Sabotage("t11-2-kestrel-endpoint-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_2_a_kestrel_setting_refuses_to_start()
     {
         const string key = "Kestrel:Endpoints:Web:Url";
         var delta = SettingsDelta.None
             .Remove("HttpTransport:BindAddress")
             .Remove("HttpTransport:AllowedHosts")
-            .Set(key, $"http://0.0.0.0:{ServerUnderTest.Port}");
+            .Set(key, $"http://0.0.0.0:{ServerUnderTest.Port}")
+            .Sabotaged("t11-2-kestrel-endpoint-left-out", _ => SettingsDelta.None);
 
         await using var outcome = await fixture.Environment.StartupAsync("hosts-kestrel-endpoint", delta);
         output.WriteLine(outcome.Describe());
@@ -206,12 +223,14 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
         var served = outcome.Started
             ? $" A GET /healthz sent to it from off the machine with Host: localhost got {(int)await outcome.GetDirectAsync("/healthz", "localhost")}."
             : string.Empty;
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.Refusal?.Contains($"'{key}'", StringComparison.Ordinal) == true,
             $"a server whose BindAddress is loopback, with {key}=http://0.0.0.0:{ServerUnderTest.Port}: {outcome.Describe()}.{served}");
     }
 
     [Fact]
+    [Sabotage(AttackerAllowed, SabotageActs.ContainerEnvironment,
+        "The class's server also allows the attacker's host name: HttpTransport:AllowedHosts:1 is attacker.example.com.")]
     public async Task T11_2_once_a_real_name_is_set_a_foreign_host_is_refused()
     {
         using var direct = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(10) };
@@ -228,7 +247,7 @@ public sealed class HostFilteringTests(HostFilteringTests.Server fixture, ITestO
         using var foreign = new HttpRequestMessage(HttpMethod.Get, healthz);
         foreign.Headers.Host = Attacker;
         using var refused = await direct.SendAsync(foreign);
-        Assert.True(
+        Claim.True(
             refused.StatusCode == HttpStatusCode.BadRequest,
             $"with AllowedHosts={TlsFront.Host}, a request with Host: {Attacker} got {(int)refused.StatusCode}, not 400.");
     }

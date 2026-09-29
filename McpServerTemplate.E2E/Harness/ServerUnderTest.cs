@@ -164,7 +164,7 @@ public sealed class ServerUnderTest : IAsyncDisposable
         {
             await E2EEnvironment.Timings.MeasureAsync($"{name}: server ready", async () =>
             {
-                await container.StartAsync(cancellationToken);
+                await container.StartServerAsync(environment.Docker, cancellationToken);
                 await WaitUntilReadyAsync(environment.Docker, container, cancellationToken);
             });
 
@@ -317,7 +317,7 @@ public sealed class ServerUnderTest : IAsyncDisposable
             // never started.
             var (exitCode, answered) = await E2EEnvironment.Timings.MeasureAsync($"{name}: startup outcome", async () =>
             {
-                await container.StartAsync(cancellationToken);
+                await container.StartServerAsync(environment.Docker, cancellationToken);
                 return await WaitForStartupAsync(environment.Docker, container, [HttpStatusCode.OK, HttpStatusCode.BadRequest], cancellationToken);
             });
 

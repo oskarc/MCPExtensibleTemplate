@@ -24,16 +24,19 @@ namespace McpServerTemplate.E2E;
 public sealed class TestHostTests(TestHostTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<TestHostTests.Server>
 {
-    /// <summary>The test host, as the environment and <see cref="TestHost.Delta"/> configure it.</summary>
-    public sealed class Server() : ServerFixture(TestHost.Delta(), ServerBuild.TestHost);
+    /// <summary>The test host, as the environment and <see cref="TestHost.Delta"/> configure it, but in a run of the sabotage that acts on it.</summary>
+    public sealed class Server() : ServerFixture(
+        TestHost.Delta().Sabotaged(AlsoServesJsonPlaceholder, d => d.Set("Providers:Enabled:4", "JsonPlaceholder")), ServerBuild.TestHost);
 
     private const string IssuerA = "idp-a.e2e.test";
 
-    /// <summary>
-    /// Sabotage (G-11): mint the unscoped caller's token with demo:read as well. It is given the completions, and the
-    /// claim's assertion goes red.
-    /// </summary>
+    private const string UnscopedGivenTheScope = "t8-unscoped-caller-given-demo-read";
+    private const string AuthorityUnderTest = "t8-authority-under-test";
+    private const string AlsoServesJsonPlaceholder = "t8-test-host-also-serves-jsonplaceholder";
+
     [Fact]
+    [Sabotage(UnscopedGivenTheScope, SabotageActs.Inputs,
+        "The unscoped caller's token is minted with demo:read as well, the prompt's scope, so it may be given completions.")]
     public async Task T8_an_unscoped_completion_is_refused_not_permitted_with_no_result_and_its_refusal_is_on_stderr()
     {
         using var http = fixture.CreateClient();
@@ -56,30 +59,29 @@ public sealed class TestHostTests(TestHostTests.Server fixture, ITestOutputHelpe
 
         var subject = $"e2e-unscoped-{Guid.NewGuid():N}";
         var unscoped = await TestIssuerService.MintAsync(
-            http, IssuerA, "valid", ServerUnderTest.Resource, ["weather:read"], new Dictionary<string, object> { ["subject"] = subject });
+            http, IssuerA, "valid", ServerUnderTest.Resource, Sabotage.Choose<string[]>(UnscopedGivenTheScope, ["weather:read"], ["weather:read", TestHost.PromptScope]),
+            new Dictionary<string, object> { ["subject"] = subject });
         var before = (await fixture.Server.StderrLinesAsync("rule=not-permitted")).Count;
         var refused = await McpRequests.ExchangeAsync(http, McpRequests.Rpc(ServerUnderTest.Endpoint, unscoped, "completion/complete", request));
         var logged = await fixture.Server.StderrLinesAfterAsync("rule=not-permitted", before);
         output.WriteLine($"Without it: {refused}");
         output.WriteLine($"Logged: {string.Join(" | ", logged)}");
 
-        Assert.True(
+        Claim.True(
             McpRequests.RuleOf(McpRequests.TextOf(refused)) == "not-permitted" && !refused.TryGetProperty("result", out _),
             $"an unscoped completion of {TestHost.Prompt} answered {refused}, not a not-permitted refusal with no result.");
         var principal = $"principal={E2EEnvironment.IdpA}:{subject} target={TestHost.Prompt} ";
-        Assert.True(
+        Claim.True(
             logged.Any(l => l.Contains("authz_fail: rule=not-permitted", StringComparison.Ordinal) && l.Contains(principal, StringComparison.Ordinal)),
             $"the test host refused an unscoped completion, and its stderr has no matching refusal ('authz_fail: rule=not-permitted … {principal}…'): "
             + $"[{string.Join(" | ", logged)}].");
     }
 
-    /// <summary>
-    /// Sabotage (G-11): give the Authority a host under .test instead (https://idp-a.example.test). The test host
-    /// comes up, and the claim's assertion goes red.
-    /// </summary>
     [Theory]
     [InlineData("Production")]
     [InlineData("Staging")]
+    [Sabotage(AuthorityUnderTest, SabotageActs.ContainerEnvironment,
+        "The Authority the test host is given is https://idp-a.example.test, a host under .test, instead of https://idp-a.example.com.")]
     public async Task T8_the_test_host_exits_78_given_an_identity_provider_outside_test(string environmentName)
     {
         var key = $"Authentication:IdentityProviders:{E2EEnvironment.IdpA}:Authority";
@@ -99,21 +101,20 @@ public sealed class TestHostTests(TestHostTests.Server fixture, ITestOutputHelpe
                 $"under {environmentName}, with every identity under .test, the test host did not come up: {contained.Describe()}");
         }
 
-        const string outside = "https://idp-a.example.com";
+        var outside = Sabotage.Choose(AuthorityUnderTest, "https://idp-a.example.com", "https://idp-a.example.test");
         await using var refused = await fixture.Environment.StartupAsync(
             $"test-host-{environmentName.ToLowerInvariant()}-outside", delta.Set(key, outside), ServerBuild.TestHost);
         output.WriteLine($"{environmentName}, {key}={outside}: {refused.Describe()}");
 
-        Assert.True(
+        Claim.True(
             refused.ExitCode == 78 && refused.Refusal?.Contains($"{key} is '{outside}'", StringComparison.Ordinal) == true,
             $"under {environmentName}, the test host given {key}={outside}, a host not under .test: {refused.Describe()}");
     }
 
-    /// <summary>
-    /// Sabotage (G-11): the test host's delta also enables JsonPlaceholder (Providers:Enabled:4). Its providers= and
-    /// manifest then add a provider that is not a test module, and the claim's assertion goes red.
-    /// </summary>
     [Fact]
+    [Sabotage(AlsoServesJsonPlaceholder, SabotageActs.ContainerEnvironment,
+        "The class's test host also enables JsonPlaceholder (Providers:Enabled:4), a built-in provider that is not a test module "
+        + "and that the shipped image does not serve.")]
     public async Task T8_the_test_hosts_frame_line_is_the_shipped_images_but_for_the_test_modules()
     {
         var testHost = FrameLine.Parse(await fixture.Server.StartupLineAsync());
@@ -136,7 +137,7 @@ public sealed class TestHostTests(TestHostTests.Server fixture, ITestOutputHelpe
             testHost.Filters,
             [.. testHost.Manifest.Where(e => !IsTestModules(e))]);
 
-        Assert.True(
+        Claim.True(
             image.Limits == "Redis" && testHost.Limits == "Redis"
                 && addedProviders.SequenceEqual(TestHost.Modules)
                 && addedEntries.Length > 0 && addedEntries.All(IsTestModules)

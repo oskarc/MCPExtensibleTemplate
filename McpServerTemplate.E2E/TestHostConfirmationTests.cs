@@ -32,12 +32,11 @@ public sealed class TestHostConfirmationTests(TestHostConfirmationTests.Server f
     /// <summary>How long a confirmation is valid (contract-003 · T-7).</summary>
     private static readonly TimeSpan Validity = TimeSpan.FromSeconds(120);
 
-    /// <summary>
-    /// Sabotage (G-11): wait 100 seconds instead of 121 before the last attempt. The unused confirmation is then
-    /// still valid, the tool runs a second time, and the claim's assertion goes red: two runs, and that attempt not
-    /// refused as expired.
-    /// </summary>
+    private const string SentBeforeExpiry = "t8-expired-attempt-sent-before-it-expires";
+
     [Fact]
+    [Sabotage(SentBeforeExpiry, SabotageActs.Inputs,
+        "The last attempt waits 100 seconds instead of 121, so the confirmation it sends has not expired: the tool runs a second time.")]
     public async Task T8_five_tampering_attempts_are_each_refused_for_their_own_reason_and_the_tool_ran_once()
     {
         var target = $"e2e-{Guid.NewGuid():N}";
@@ -105,13 +104,13 @@ public sealed class TestHostConfirmationTests(TestHostConfirmationTests.Server f
 
         // The expired one: the unused confirmation, once it has waited out its 120 seconds by the server's clock (the
         // engine's, which every container shares), sent with a token issued now.
-        var waited = await WaitOutAsync(http, askedAt, Validity + TimeSpan.FromSeconds(1));
+        var waited = await WaitOutAsync(http, askedAt, Sabotage.Choose(SentBeforeExpiry, Validity + TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(100)));
         output.WriteLine($"Waited until the unused confirmation was {waited.TotalSeconds:0} s old.");
         wrong.AddRange(await AttemptAsync(
             http, "an expired one", "confirmation", $"it is valid for {Validity.TotalSeconds:0}", With(retry, body => body["params"]!["requestState"] = unused), caller, headers));
 
         runs = await RunsAsync(http, server);
-        Assert.True(
+        Claim.True(
             wrong.Count == 0 && runs.Count == 1,
             string.Join("; ", wrong) + $"{(wrong.Count > 0 ? "; " : string.Empty)}the witness shows {runs.Count} run(s): [{string.Join(", ", runs)}], not exactly one.");
     }

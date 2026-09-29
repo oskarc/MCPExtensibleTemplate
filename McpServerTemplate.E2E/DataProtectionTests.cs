@@ -18,9 +18,26 @@ public sealed class DataProtectionTests(DataProtectionTests.Server fixture, ITes
     /// <summary>The environment's server, as it ships.</summary>
     public sealed class Server() : ServerFixture(SettingsDelta.None);
 
+    private const string KeyWrittenInTheProfile = "t17-key-written-in-the-profile";
+
+    /// <summary>
+    /// Nothing in the environment can make the product write a key again (G-18 left it no key repository to write to), so
+    /// the sabotage writes one where the framework did, through Docker's archive API — the way anything with write access
+    /// to the container could — and the claim, read as docker diff reads the container, must see it.
+    /// </summary>
     [Fact]
+    [Sabotage(KeyWrittenInTheProfile, SabotageActs.ContainerEnvironment,
+        "A key file is written into the class's server container at /home/app/.aspnet/DataProtection-Keys, where the framework "
+        + "wrote its unencrypted key before G-18, through Docker's archive API.")]
     public async Task T17_the_image_writes_no_key_and_loads_no_key_ring()
     {
+        if (Sabotage.Applies(KeyWrittenInTheProfile))
+        {
+            await fixture.Server.Container.CopyAsync(
+                "<!-- contract-005 · T-12 sabotage: stands for the key the framework wrote here before G-18. -->\n"u8.ToArray(),
+                "/home/app/.aspnet/DataProtection-Keys/key-e2e-sabotage.xml");
+        }
+
         using var docker = await DockerEngine.ConnectAsync(CancellationToken.None);
         var changes = await docker.Containers.InspectChangesAsync(fixture.Server.Container.Id, CancellationToken.None);
         var written = changes
@@ -40,7 +57,7 @@ public sealed class DataProtectionTests(DataProtectionTests.Server fixture, ITes
 
         output.WriteLine($"written: {string.Join(" | ", written)}");
         output.WriteLine($"logged: {string.Join(" | ", logged)}");
-        Assert.True(
+        Claim.True(
             written.Count == 0 && logged.Count == 0 && answered.StatusCode == HttpStatusCode.OK,
             $"the image wrote under /home/app/.aspnet: [{string.Join(", ", written)}]; its log said: [{string.Join(" | ", logged)}]; "
             + $"GET /readyz answered {(int)answered.StatusCode}.");

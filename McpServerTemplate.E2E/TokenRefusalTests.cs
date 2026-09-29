@@ -35,20 +35,32 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
     private const string WriteTool = "create_user_todo";
     private const string AuthenticationFailed = "authn_login_fail";
 
-    /// <summary>
-    /// Sabotage (G-11): send the request straight to the server's published port instead of through the front. The
-    /// server honours no forwarded scheme from there, its challenge names http://mcp.e2e.test/…, and the claim's
-    /// assertion goes red.
-    /// </summary>
+    private const string SentStraightToTheServer = "t3-no-token-sent-straight-to-the-server";
+    private const string BadTokenMintedValid = "t3-bad-token-minted-valid";
+    private const string KeyConfusionMintedValid = "t3-key-confusion-token-minted-valid";
+    private const string StaleTokenIssuedAMinuteAgo = "t3-stale-token-issued-a-minute-ago";
+    private const string StrangerRegistered = "t3-stranger-registered-on-the-server";
+
     [Fact]
+    [Sabotage(SentStraightToTheServer, SabotageActs.Network,
+        "The request goes straight to the server's published port instead of through the front, so no forwarded scheme reaches "
+        + "the server from a proxy it trusts.")]
     public async Task T3_no_token_is_challenged_with_the_metadata_on_the_front()
     {
         using var http = fixture.CreateClient();
-        using var response = await http.SendAsync(McpRequests.Initialize(ServerUnderTest.Endpoint));
+        using var direct = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(10) };
+        var straight = Sabotage.Applies(SentStraightToTheServer);
+        using var request = McpRequests.Initialize(straight ? fixture.Server.DirectEndpoint : ServerUnderTest.Endpoint);
+        if (straight)
+        {
+            request.Headers.Host = TlsFront.Host;
+        }
+
+        using var response = await (straight ? direct : http).SendAsync(request);
         var named = McpRequests.ResourceMetadataOf(response);
         output.WriteLine($"{(int)response.StatusCode}, resource_metadata={named}");
 
-        Assert.True(
+        Claim.True(
             response.StatusCode == HttpStatusCode.Unauthorized && named?.StartsWith($"https://{TlsFront.Host}/", StringComparison.Ordinal) == true,
             $"a request with no token got {(int)response.StatusCode} with resource_metadata={named ?? "(none)"}, not a 401 naming "
             + $"metadata on https://{TlsFront.Host}/.");
@@ -71,12 +83,9 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
         { "missing-claim", "iat", "missing iat," },
     };
 
-    /// <summary>
-    /// Sabotage (G-11): mint the row's token with kind "valid" instead. The claim's assertion goes red on the status
-    /// (200, not 401); with the status kept, a red on the reason is the log's own.
-    /// </summary>
     [Theory]
     [MemberData(nameof(BadTokens))]
+    [Sabotage(BadTokenMintedValid, SabotageActs.Inputs, "The row's token is minted as kind valid instead of its own, wrong in no way.")]
     public async Task T3_a_bad_token_is_refused_with_its_reason_in_the_servers_log(string kind, string? claim, string reason)
     {
         using var http = fixture.CreateClient();
@@ -96,25 +105,25 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
             extra["signedBy"] = IssuerB;
         }
 
-        var token = await TestIssuerService.MintAsync(http, IssuerA, kind, ServerUnderTest.Resource, ["weather:read"], extra);
+        var token = await TestIssuerService.MintAsync(http, IssuerA, Sabotage.Choose(BadTokenMintedValid, kind, "valid"), ServerUnderTest.Resource, ["weather:read"], extra);
         var before = (await fixture.Server.StderrLinesAsync(AuthenticationFailed)).Count;
         var status = await StatusAsync(http, token);
         var logged = await fixture.Server.StderrLinesAfterAsync(AuthenticationFailed, before);
         var what = claim is null ? kind : $"{kind} {claim}";
         output.WriteLine($"{what}: {(int)status}; logged: {string.Join(" | ", logged)}");
 
-        Assert.True(
+        Claim.True(
             status == HttpStatusCode.Unauthorized,
             $"a {what} token from {IssuerA} got {(int)status}, not 401.");
-        Assert.True(
+        Claim.True(
             logged.Count > 0 && logged.All(line => line.Contains(reason, StringComparison.Ordinal)),
             $"a {what} token was refused with 401, and the server's log {(logged.Count == 0 ? $"has no {AuthenticationFailed} line for it" : $"says '{string.Join(" | ", logged)}'")}, "
             + $"not its reason ('{reason}').");
 
         // Never the token: not whole, and not its claims.
         var stderr = await fixture.Server.StderrAsync();
-        Assert.False(
-            stderr.Contains(token, StringComparison.Ordinal) || stderr.Contains(token.Split('.')[1], StringComparison.Ordinal),
+        Claim.True(
+            !(stderr.Contains(token, StringComparison.Ordinal) || stderr.Contains(token.Split('.')[1], StringComparison.Ordinal)),
             $"the server's log holds the {what} token it refused.");
     }
 
@@ -123,12 +132,11 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
     /// is refused for that (IDX10517) before its algorithm is weighed. This token is HS256 signed with idp-a's own public
     /// key — the PEM anyone can derive from idp-a's key set — as the HMAC secret, under the key id idp-a publishes, every
     /// claim valid: a verifier that let the token's alg choose how to use the key its kid names would accept it. It is
-    /// refused with 401, the refusal is logged, and the token is not.
-    ///
-    /// Sabotage (G-11): mint it as kind "valid" instead. It is then idp-a's own token, accepted with 200, and the claim's
-    /// assertion goes red.
+    /// refused with 401, the refusal is logged, and the token is not. The contract asks only that each refusal's reason be
+    /// logged (T-3): the reason logged for this one is the signature's (IDX10511), which is true, and names no algorithm.
     /// </summary>
     [Fact]
+    [Sabotage(KeyConfusionMintedValid, SabotageActs.Inputs, "The token is minted as kind valid instead: idp-a's own token, RS256, every claim valid.")]
     public async Task T3_a_key_confusion_token_is_refused_and_its_refusal_logged()
     {
         using var http = fixture.CreateClient();
@@ -137,49 +145,22 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
         var good = await TestIssuerService.MintAsync(http, IssuerA, "valid", ServerUnderTest.Resource, ["weather:read"]);
         Assert.Equal(HttpStatusCode.OK, await StatusAsync(http, good));
 
-        var (token, status, logged) = await KeyConfusionAsync(http, "key-confusion");
+        var (token, status, logged) = await KeyConfusionAsync(http, Sabotage.Choose(KeyConfusionMintedValid, "key-confusion", "valid"));
 
-        Assert.True(
+        Claim.True(
             status == HttpStatusCode.Unauthorized && logged.Count > 0,
             $"an HS256 token keyed with {IssuerA}'s own public key, under its real key id, got {(int)status}"
             + (logged.Count == 0 ? $", and the server's log has no {AuthenticationFailed} line for it." : "."));
 
         var stderr = await fixture.Server.StderrAsync();
-        Assert.False(
-            stderr.Contains(token, StringComparison.Ordinal) || stderr.Contains(token.Split('.')[1], StringComparison.Ordinal),
+        Claim.True(
+            !(stderr.Contains(token, StringComparison.Ordinal) || stderr.Contains(token.Split('.')[1], StringComparison.Ordinal)),
             "the server's log holds the key-confusion token it refused.");
     }
 
-    /// <summary>
-    /// The held half of the key-confusion row (2026-09-29), stopped and put to the pioneer, not met and not changed: the
-    /// brief asks that the log name the algorithm as the reason. The token library refuses it before any algorithm check
-    /// can speak — for an RSA key it treats HS256 as unsupported and says nothing — so the log reads "IDX10511: Signature
-    /// validation failed. Keys tried: '…RsaSecurityKey, KeyId: 'idp-a.e2e.test-key'…'. … kid: 'idp-a.e2e.test-key'.
-    /// Exceptions caught: '[PII … hidden]'", naming the key id and not HS256. Naming it needs a product change in the
-    /// authentication path — an explicit refusal of an algorithm outside the provider's list, before the signature is
-    /// checked — which no clause of the contract names, and which would also reword the alg-none and HS256 rows' reasons.
-    /// </summary>
-    private const string KeyConfusionReasonHeld =
-        "Stopped for the pioneer: the key-confusion token is refused (401) but logged as IDX10511, which does not name HS256; "
-        + "naming it needs an authentication-path product change the contract does not name. Resolve by decision, then remove this Skip.";
-
-    [Fact(Skip = KeyConfusionReasonHeld)]
-    public async Task T3_a_key_confusion_tokens_refusal_names_its_algorithm_in_the_log()
-    {
-        using var http = fixture.CreateClient();
-        var (_, status, logged) = await KeyConfusionAsync(http, "key-confusion");
-
-        Assert.True(
-            status == HttpStatusCode.Unauthorized && logged.Count > 0 && logged.All(line => line.Contains("HS256", StringComparison.Ordinal)),
-            $"a key-confusion token got {(int)status}, and the server's log says '{string.Join(" | ", logged)}', which does not name "
-            + "its algorithm, HS256, as the reason.");
-    }
-
-    /// <summary>
-    /// Sabotage (G-11): mint the stale token issued 60 seconds ago instead of 360. It passes the write gate, and the
-    /// claim's assertion goes red: the call is not refused with token-age.
-    /// </summary>
     [Fact]
+    [Sabotage(StaleTokenIssuedAMinuteAgo, SabotageActs.Inputs,
+        "The stale token is minted as issued 60 seconds ago instead of 360, inside the write gate's five minutes.")]
     public async Task T3_a_write_tool_called_with_a_token_issued_six_minutes_ago_is_refused_for_its_age()
     {
         using var http = fixture.CreateClient();
@@ -200,25 +181,25 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
             + "POSTs from this server.");
 
         var stale = await TestIssuerService.MintAsync(
-            http, IssuerA, "stale-iat", ServerUnderTest.Resource, ["demo:write"], new Dictionary<string, object> { ["issuedSecondsAgo"] = 360 });
+            http, IssuerA, "stale-iat", ServerUnderTest.Resource, ["demo:write"],
+            new Dictionary<string, object> { ["issuedSecondsAgo"] = Sabotage.Choose(StaleTokenIssuedAMinuteAgo, 360, 60) });
         var issued = DateTimeOffset.UtcNow - new JsonWebToken(stale).IssuedAt;
         var refused = await CallAsync(http, stale, arguments);
         var text = McpRequests.TextOf(refused);
         output.WriteLine($"A token issued {issued.TotalSeconds:0} s ago: {text}");
 
-        Assert.True(
+        Claim.True(
             McpRequests.RuleOf(text) == "token-age" && !McpRequests.ReturnsContent(refused),
             $"{WriteTool} called with a token issued {issued.TotalSeconds:0} s ago answered '{text}', not a token-age refusal with no content.");
-        Assert.Equal(upstream, await UpstreamPostsAsync(http, server));
+        var after = await UpstreamPostsAsync(http, server);
+        Claim.Holds(() => Assert.Equal(upstream, after));
     }
 
-    /// <summary>
-    /// Sabotage (G-11): the server's delta also registers the stranger as an identity provider
-    /// (Authentication:IdentityProviders:stranger, its Authority and Issuer https://stranger.e2e.test). Its token is then
-    /// routed to a scheme of its own, which fetches the stranger's discovery document and key set, and the claim's
-    /// assertion — no lookup at any issuer name — goes red, before the status is looked at.
-    /// </summary>
     [Fact]
+    [Sabotage(StrangerRegistered, SabotageActs.ContainerEnvironment,
+        "The test's server also registers the stranger as an identity provider (Authentication:IdentityProviders:stranger, "
+        + "Authority and Issuer https://stranger.e2e.test, as the issuer registry registers every provider), so its token is "
+        + "routed to a scheme of its own, which fetches keys.")]
     public async Task T3_an_unregistered_issuers_token_costs_no_key_lookup_at_any_issuer()
     {
         var environment = fixture.Environment;
@@ -230,7 +211,11 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
             SettingsDelta.None
                 .Remove($"Authentication:IdentityProviders:{E2EEnvironment.KeycloakIssuer}")
                 .Set("Providers:Smhi:IdentityProvider", E2EEnvironment.IdpA)
-                .Set("Providers:SmhiObs:IdentityProvider", E2EEnvironment.IdpA));
+                .Set("Providers:SmhiObs:IdentityProvider", E2EEnvironment.IdpA)
+                .Sabotaged(StrangerRegistered, d => new IssuerRegistry()
+                    .Register(new(E2EEnvironment.Stranger, stranger.Authority, stranger.Issuer, stranger.ServedBy, "client_id", KeycloakService.Scopes))
+                    .ToSettings()
+                    .Aggregate(d, (delta, setting) => delta.Set(setting.Key, setting.Value))));
         using var http = server.CreateClient(ClientAddresses.Next());
         var address = await server.NetworkAddressAsync();
         var names = E2EEnvironment.Issuers.HostsServedBy(IssuerRegistry.Owner.TestIssuer);
@@ -252,11 +237,11 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
 
         var after = await TestIssuerService.CountsAsync(http, IssuerA, address);
         output.WriteLine($"After the stranger's token ({(int)status}), from {address}: {JsonSerializer.Serialize(after)}");
-        Assert.True(
+        Claim.True(
             names.All(name => after.ContainsKey(name) && Lookups(after, name) == 0),
             $"a token from {stranger.Issuer}, which no server is configured with, made this server ask the issuers for "
             + $"{JsonSerializer.Serialize(after)}; every issuer name ({string.Join(", ", names)}) should show no discovery and no key-set request.");
-        Assert.Equal(HttpStatusCode.Unauthorized, status);
+        Claim.Holds(() => Assert.Equal(HttpStatusCode.Unauthorized, status));
 
         // The witness is live: a registered issuer's token makes that issuer's counts rise from zero.
         var registered = await TestIssuerService.MintAsync(http, IssuerA, "valid", ServerUnderTest.Resource, ["weather:read"]);

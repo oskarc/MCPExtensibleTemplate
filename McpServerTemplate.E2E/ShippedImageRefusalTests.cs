@@ -36,11 +36,11 @@ public sealed class ShippedImageRefusalTests(ShippedImageRefusalTests.Server fix
     private const string ToolScope = "weather:read";
     private const string OtherScope = "observations:read";
 
-    /// <summary>
-    /// Sabotage (G-11): give the hidden-tool and unscoped-prompt callers' tokens weather:read as well. The tool then
-    /// runs and the prompt answers, and the claim's assertion goes red on both, naming each.
-    /// </summary>
+    private const string HiddenAndUnscopedGivenTheScope = "t2-hidden-tool-and-unscoped-prompt-callers-given-weather-read";
+
     [Fact]
+    [Sabotage(HiddenAndUnscopedGivenTheScope, SabotageActs.Inputs,
+        "The hidden-tool and unscoped-prompt callers' token is minted with weather:read as well, so the tool runs and the prompt answers.")]
     public async Task T2_contract_003s_refusals_each_carry_their_rule_return_nothing_and_reach_no_upstream()
     {
         using var http = fixture.CreateClient();
@@ -56,7 +56,8 @@ public sealed class ShippedImageRefusalTests(ShippedImageRefusalTests.Server fix
         Assert.Contains(entries, e => e.Scope == OtherScope);
 
         var weather = await TestIssuerService.MintAsync(http, IssuerA, "valid", ServerUnderTest.Resource, [ToolScope]);
-        var observationsOnly = await TestIssuerService.MintAsync(http, IssuerA, "valid", ServerUnderTest.Resource, [OtherScope]);
+        var observationsOnly = await TestIssuerService.MintAsync(
+            http, IssuerA, "valid", ServerUnderTest.Resource, Sabotage.Choose<string[]>(HiddenAndUnscopedGivenTheScope, [OtherScope], [OtherScope, ToolScope]));
         var keycloak = await fixture.KeycloakTokenAsync();
 
         // The permitted call, and the witness seen active: the tool runs and its request reaches the fake from this server.
@@ -99,7 +100,7 @@ public sealed class ShippedImageRefusalTests(ShippedImageRefusalTests.Server fix
 
         var seen = recorded.Select(e => e.Id).ToHashSet(StringComparer.Ordinal);
         var reached = (await FromServerAsync(http, server)).Where(e => !seen.Contains(e.Id)).ToList();
-        Assert.True(
+        Claim.True(
             wrong.Count == 0 && reached.Count == 0,
             string.Join("; ", wrong)
             + (reached.Count == 0

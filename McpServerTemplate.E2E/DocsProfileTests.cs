@@ -20,16 +20,30 @@ namespace McpServerTemplate.E2E;
 [KeycloakClient]
 public sealed class DocsProfileTests(ITestOutputHelper output)
 {
+    private const string ResourceAtTheRoot = "t9-documented-resource-at-the-root";
+
     /// <summary>
-    /// Sabotage (G-11) and T-9's red: run it against docs/04 as it stood when the fixes landed — commit 6f370e2, before
-    /// phase 2's edits — by naming that text in MCP_E2E_DOCS04. Its resource is https://mcp.example.com/, and nothing
-    /// else about the run changes; the server refuses to start, and the claim's assertion goes red.
+    /// T-9's own red was taken against docs/04 as it stood when the fixes landed — commit 6f370e2, before phase 2's edits —
+    /// named in MCP_E2E_DOCS04. Its named sabotage changes one line of today's document instead.
     /// </summary>
     [Fact]
+    [Sabotage(ResourceAtTheRoot, SabotageActs.Inputs,
+        "The document the profile reads says Authentication__Resource=https://${MCP_HOST}/ where docs/04 says …/mcp, as it did "
+        + "before G-12 (1); the rest of it, and of the run, is unchanged.")]
     public async Task T9_the_documented_deployment_starts_accepts_a_real_token_and_lists_tools()
     {
         var environment = await E2EEnvironment.GetAsync();
         var document = DocsProfile.DocumentPath(environment.RepositoryRoot);
+        if (Sabotage.Applies(ResourceAtTheRoot))
+        {
+            // A copy in the run directory, deleted with it; the repository's docs/04 is not touched.
+            const string resource = "Authentication__Resource=https://${MCP_HOST}/mcp";
+            var text = await File.ReadAllTextAsync(document);
+            document = text.Contains(resource, StringComparison.Ordinal)
+                ? environment.Pki.WriteFile("docs04-resource-at-the-root.md", text.Replace(resource, "Authentication__Resource=https://${MCP_HOST}/", StringComparison.Ordinal))
+                : throw new InvalidOperationException($"The sabotage {ResourceAtTheRoot} cannot act: {document} no longer says '{resource}'.");
+        }
+
         output.WriteLine($"The document: {document}");
 
         await using var profile = await environment.StartDocsProfileAsync(document);
@@ -79,7 +93,7 @@ public sealed class DocsProfileTests(ITestOutputHelper output)
             output.WriteLine($"tools/list with a Keycloak token through the front: {(int?)status}, [{string.Join(", ", tools)}]");
         }
 
-        Assert.True(
+        Claim.True(
             profile.Started && status == HttpStatusCode.OK && tools.Count > 0 && unserved.Count == 0,
             profile.Started
                 ? $"the documented deployment ({document}) started, and tools/list with a Keycloak token through the front got "

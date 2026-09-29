@@ -106,6 +106,17 @@ public sealed partial class SettingsDelta
         return new SettingsDelta(Changes.SetItem(Checked(key, removal: true), null));
     }
 
+    /// <summary>
+    /// contract-005 · G-11, T-12 — this delta weakened by <paramref name="weaken"/> in a run of the sabotage declared as
+    /// <paramref name="sabotage"/>, and unchanged in every other run: a sabotage that acts on a server's environment acts
+    /// here (<see cref="Sabotage.Applies"/>).
+    /// </summary>
+    public SettingsDelta Sabotaged(string sabotage, Func<SettingsDelta, SettingsDelta> weaken)
+    {
+        ArgumentNullException.ThrowIfNull(weaken);
+        return Sabotage.Applies(sabotage) ? weaken(this) : this;
+    }
+
     /// <summary>The environment variables a container is started with: the base settings, then this delta.</summary>
     public IReadOnlyDictionary<string, string> ApplyTo(IReadOnlyDictionary<string, string> baseSettings)
     {

@@ -95,20 +95,29 @@ public sealed class E2EEnvironment : IAsyncDisposable
         .Register(new(IdpB, new Uri("https://idp-b.e2e.test"), "https://idp-b.e2e.test/", IssuerRegistry.Owner.TestIssuer, "client_id", KeycloakService.Scopes))
         .WithStranger(new(Stranger, new Uri("https://stranger.e2e.test"), IssuerRegistry.Owner.TestIssuer));
 
+    /// <summary>Every upstream host, WireMock's: what <see cref="Upstreams"/> hands on from; declared first, since it is read as Upstreams is made.</summary>
+    private static readonly UpstreamRegistry OwnedByTheFake = new UpstreamRegistry()
+        .Register("opendata-download-metfcst.smhi.se", WireMockService.Owner)
+        .Register("opendata-download-metobs.smhi.se", WireMockService.Owner)
+        .Register("jsonplaceholder.typicode.com", WireMockService.Owner)
+        .Register(WireMockService.Alias, WireMockService.Owner);
+
     /// <summary>
     /// The upstream host names and the owner that answers each, for the whole run: registration is per
     /// run (see <see cref="UpstreamRegistry"/>). A later contract hands a host to another owner here.
     ///
     /// contract-005 · T-15 — and so does this one: SMHI's observations host is handed to a stand-in fake
     /// (<see cref="StandInUpstream"/>), which is not WireMock, in place of the fake. No other test in the run
-    /// reaches that host, so the stand-in's record is T-15's alone.
+    /// reaches that host, so the stand-in's record is T-15's alone — and in a run of T-15's sabotage
+    /// (<see cref="StandInLeftOut"/>), the host is left to the fake.
     /// </summary>
-    public static UpstreamRegistry Upstreams { get; } = new UpstreamRegistry()
-        .Register("opendata-download-metfcst.smhi.se", WireMockService.Owner)
-        .Register("opendata-download-metobs.smhi.se", WireMockService.Owner)
-        .Register("jsonplaceholder.typicode.com", WireMockService.Owner)
-        .Register(WireMockService.Alias, WireMockService.Owner)
-        .Replace("opendata-download-metobs.smhi.se", StandInUpstream.Owner);
+    public static UpstreamRegistry Upstreams { get; } = Sabotage.Choose(
+        StandInLeftOut,
+        OwnedByTheFake.Replace("opendata-download-metobs.smhi.se", StandInUpstream.Owner),
+        OwnedByTheFake);
+
+    /// <summary>contract-005 · T-12 (G-11) — T-15's sabotage, which acts here: the observations host left to the fake.</summary>
+    internal const string StandInLeftOut = "t15-observations-host-left-to-the-fake";
 
     public string RunId { get; }
 
@@ -258,6 +267,12 @@ public sealed class E2EEnvironment : IAsyncDisposable
 
     private static async Task<E2EEnvironment> StartAsync(CancellationToken cancellationToken)
     {
+        // contract-005 · G-11 — a run the sabotage variable refuses (set in CI, or naming no sabotage) starts nothing.
+        if (Sabotage.Refusal is { } refusal)
+        {
+            throw new EnvironmentFaultException("sabotage", refusal);
+        }
+
         var runId = $"{DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}-{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(3))}";
         var root = FindRepositoryRoot();
         var created = new List<(string Name, IAsyncDisposable Resource)>();
@@ -636,7 +651,8 @@ public sealed class E2EEnvironment : IAsyncDisposable
         Timings.WriteTo(Path.Combine(ResultsDirectory, "timings.json"));
     }
 
-    private static string FindRepositoryRoot()
+    /// <summary>The repository the suite runs from: the directory above the test output that holds McpServerTemplate.sln.</summary>
+    internal static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "McpServerTemplate.sln")))

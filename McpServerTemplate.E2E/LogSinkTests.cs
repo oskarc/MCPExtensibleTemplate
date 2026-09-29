@@ -19,7 +19,13 @@ public sealed class LogSinkTests(ITestOutputHelper output)
     /// <summary>The image's working directory (Dockerfile, WORKDIR), owned by root; the app user 1654 cannot create anything in it.</summary>
     private const string WorkingDirectory = "/app";
 
+    private const string SinkPathWritable = "t11-5-sink-path-writable";
+    private const string VariableStaysInside = "t11-5-variable-stays-inside-logs";
+
     [Fact]
+    [Sabotage(SinkPathWritable, SabotageActs.ContainerEnvironment,
+        "The sink at Serilog:WriteTo:2 is pointed at logs/e2e-sabotage-.log, in the log directory the app user may write to "
+        + "(G-1), instead of a directory it cannot create.")]
     public async Task T11_5_a_file_sink_at_another_index_that_cannot_write_refuses_to_start_naming_the_resolved_path()
     {
         const string path = "e2e-unwritable/e2e-.log";
@@ -30,13 +36,13 @@ public sealed class LogSinkTests(ITestOutputHelper output)
             "log-sink-unwritable",
             SettingsDelta.None
                 .Set("Serilog:WriteTo:2:Name", "File")
-                .Set("Serilog:WriteTo:2:Args:path", path));
+                .Set("Serilog:WriteTo:2:Args:path", Sabotage.Choose(SinkPathWritable, path, "logs/e2e-sabotage-.log")));
         output.WriteLine(outcome.Describe());
 
         var said = outcome.Stderr.Contains("e2e-unwritable", StringComparison.Ordinal)
             ? "its stderr mentions the sink's directory"
             : "its stderr never mentions the sink";
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(resolved, StringComparison.Ordinal) == true,
             $"a File sink at Serilog:WriteTo:2 pointed at '{path}' (resolved {resolved}, which user 1654 cannot create): "
             + $"{outcome.Describe()}; {said}.");
@@ -48,6 +54,8 @@ public sealed class LogSinkTests(ITestOutputHelper output)
     /// expanded, it climbs out of the working directory to /tmp.
     /// </summary>
     [Fact]
+    [Sabotage(VariableStaysInside, SabotageActs.ContainerEnvironment,
+        "MCP_LOGDIR is e2e instead of ../../tmp, so the sink's path expands to logs/e2e/e2e-.log, inside the log directory.")]
     public async Task T11_5_a_file_sink_whose_path_climbs_out_through_an_environment_variable_refuses_to_start()
     {
         const string key = "Serilog:WriteTo:2:Args:path";
@@ -59,10 +67,10 @@ public sealed class LogSinkTests(ITestOutputHelper output)
             SettingsDelta.None
                 .Set("Serilog:WriteTo:2:Name", "File")
                 .Set(key, path)
-                .Set("MCP_LOGDIR", "../../tmp"));
+                .Set("MCP_LOGDIR", Sabotage.Choose(VariableStaysInside, "../../tmp", "e2e")));
         output.WriteLine(outcome.Describe());
 
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(key, StringComparison.Ordinal) == true,
             $"a File sink at {key}='{path}' with MCP_LOGDIR=../../tmp, which the sink resolves to /tmp/e2e-.log: {outcome.Describe()}.");
     }

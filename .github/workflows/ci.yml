@@ -88,6 +88,16 @@ jobs:
       - name: Build (warnings are errors)
         run: dotnet build McpServerTemplate.sln --no-restore --configuration Release -warnaserror
 
+      # contract-005 · G-11, T-12 — a sabotage weakens the environment on purpose, to see one test go red on its claim;
+      # it is run locally (scripts/e2e-sabotage.sh), never here. The harness refuses to start with MCP_E2E_SABOTAGE set
+      # in CI; this step says so first, before anything runs.
+      - name: No sabotage
+        run: |
+          if [ -n "${MCP_E2E_SABOTAGE+set}" ]; then
+            echo "::error::MCP_E2E_SABOTAGE is set ('${MCP_E2E_SABOTAGE}'). Sabotages run locally, with scripts/e2e-sabotage.sh, and never in CI."
+            exit 1
+          fi
+
       # The first test starts the shared environment, cold: image builds, pulls and Keycloak (about a
       # minute here). The hang timeout is per test, so it must cover that start and sit well inside the
       # job's budget; a test that exceeds it is named and killed
@@ -100,6 +110,34 @@ jobs:
           --logger "console;verbosity=detailed" --logger "trx;LogFileName=e2e.trx"
           --results-directory TestResults
           --blame-hang --blame-hang-timeout 5m --blame-hang-dump-type none
+
+      # contract-005 · T-13 — no key or certificate is left behind after a run, and nothing else the run created: its run
+      # directory in the temp folder, which holds the test PKI's keys; any container or network carrying the harness's run
+      # label; and mcp-server:latest, the name the docs profile gives the run's image for docs/04's compose file and takes
+      # back after it. Checked whether the tests passed or failed, since a failure is when a teardown is most likely to
+      # have been skipped. The images the harness builds are kept by design (they carry no run label).
+      - name: Nothing left behind
+        if: ${{ !cancelled() }}
+        run: |
+          left=0
+          for dir in "${TMPDIR:-/tmp}"/mcp-e2e-*; do
+            [ -e "$dir" ] || continue
+            echo "::error::A run directory, with the test PKI's keys, was left in the temp folder: $dir"
+            left=1
+          done
+          for container in $(docker ps -a --filter label=org.mcp-server-template.e2e.run --format '{{.Names}}'); do
+            echo "::error::A container carrying the harness's run label was left: $container"
+            left=1
+          done
+          for network in $(docker network ls --filter label=org.mcp-server-template.e2e.run --format '{{.Name}}'); do
+            echo "::error::A network carrying the harness's run label was left: $network"
+            left=1
+          done
+          if docker image inspect mcp-server:latest > /dev/null 2>&1; then
+            echo "::error::The docs profile's tag mcp-server:latest was left on the run's image."
+            left=1
+          fi
+          exit "$left"
 
       # The diagnostics bundle: every container's log, the fake's journal, the issuers' counts and the
       # per-phase timings (written by the harness under TestResults/e2e/), with the trx.

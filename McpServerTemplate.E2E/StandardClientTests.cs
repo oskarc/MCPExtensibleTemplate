@@ -25,15 +25,20 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
     : IClassFixture<StandardClientTests.Server>
 {
     /// <summary>The weather provider bound to idp-a, the authorization server a standard client picks first.</summary>
-    public sealed class Server() : ServerFixture(SettingsDelta.None.Set("Providers:Smhi:IdentityProvider", E2EEnvironment.IdpA));
+    public sealed class Server() : ServerFixture(SettingsDelta.None.Set(
+        "Providers:Smhi:IdentityProvider", Sabotage.Choose(WeatherLeftToKeycloak, E2EEnvironment.IdpA, E2EEnvironment.KeycloakIssuer)));
 
     private const string IssuerA = "idp-a.e2e.test";
+    private const string WeatherLeftToKeycloak = "t4-weather-left-bound-to-keycloak";
     private const string Tool = "get_forecast_model_info";
 
     /// <summary>The upstream request that tool makes: SMHI's point forecast for Stockholm.</summary>
     private const string ToolUpstreamRequest = "/api/category/snow1g/version/1/geotype/point/lon/18.070000/lat/59.330000/data.json";
 
     [Fact]
+    [Sabotage(WeatherLeftToKeycloak, SabotageActs.ContainerEnvironment,
+        "The class's server leaves the weather provider bound to Keycloak, as the environment has it, rather than to idp-a, the "
+        + "authorization server the client is sent to first: the client's token is from the other trust domain.")]
     public async Task T4_the_sdk_client_given_only_the_resource_url_discovers_authorizes_and_calls_a_tool()
     {
         // Unique to this run, so the issuer's record of /authorize and /token is this test's alone.
@@ -59,7 +64,7 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
         output.WriteLine($"Requests through the name map:{Environment.NewLine}{log}");
 
         // The claim: the client, given only the URL, called a tool.
-        Assert.True(
+        Claim.True(
             failure is null,
             $"the SDK client, given only {endpoint}, did not call {Tool}: {failure?.GetType().Name}: {failure?.Message.Split('\n')[0]} "
             + $"Requests it made: {log.ToString().Replace(Environment.NewLine, " ;", StringComparison.Ordinal)}");
@@ -67,8 +72,8 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
         // It was the tool that answered, not the frame refusing: a refusal names its rule.
         var text = string.Join(" ", result!.Content.OfType<TextContentBlock>().Select(c => c.Text));
         output.WriteLine($"{Tool} answered (isError={result.IsError}): {text}");
-        Assert.DoesNotContain("rule:", text, StringComparison.Ordinal);
-        Assert.True(
+        Claim.Holds(() => Assert.DoesNotContain("rule:", text, StringComparison.Ordinal));
+        Claim.True(
             await WireMockService.CountAsync(http, ToolUpstreamRequest) > upstreamBefore,
             $"{Tool} answered '{text}', but the fake recorded no request from it: the tool did not run.");
 
@@ -80,9 +85,12 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
             .ToList();
         output.WriteLine($"{IssuerA} saw: {string.Join("; ", seen)}");
 
-        var authorize = Assert.Single(seen, r => r.Path == "/authorize");
-        var token = Assert.Single(seen, r => r.Path == "/token");
-        Assert.Equal((ServerUnderTest.Resource, "S256", "approved"), (authorize.Resource, authorize.ChallengeMethod, authorize.Outcome));
-        Assert.Equal((ServerUnderTest.Resource, "S256", "issued"), (token.Resource, token.ChallengeMethod, token.Outcome));
+        Claim.Holds(() =>
+        {
+            var authorize = Assert.Single(seen, r => r.Path == "/authorize");
+            var token = Assert.Single(seen, r => r.Path == "/token");
+            Assert.Equal((ServerUnderTest.Resource, "S256", "approved"), (authorize.Resource, authorize.ChallengeMethod, authorize.Outcome));
+            Assert.Equal((ServerUnderTest.Resource, "S256", "issued"), (token.Resource, token.ChallengeMethod, token.Outcome));
+        });
     }
 }

@@ -375,7 +375,9 @@ public sealed partial class DocsProfile : IAsyncDisposable
         }
 
         var container = builder.Build();
-        await E2EEnvironment.Timings.MeasureAsync($"docs profile: {service.Name}", () => container.StartAsync(cancellationToken));
+        await E2EEnvironment.Timings.MeasureAsync(
+            $"docs profile: {service.Name}",
+            () => isServer ? container.StartServerAsync(environment.Docker, cancellationToken) : container.StartAsync(cancellationToken));
         return container;
     }
 

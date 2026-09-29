@@ -40,11 +40,12 @@ public sealed class TrustDomainTests(TrustDomainTests.Server fixture, ITestOutpu
         "Stopped for the pioneer: contract-005 T-5 (the words for a tool that does not exist) conflicts with contract-002 T-6 "
         + "and the roadmap (rule idp-binding). Red recorded; resolve by decision, then remove this Skip.";
 
-    /// <summary>
-    /// Sabotage (G-11): mint the other-issuer caller's token at idp-a.e2e.test instead. It is then the bound
-    /// providers' own caller, the lists show their items, and the claim's assertion goes red.
-    /// </summary>
+    private const string OtherCallerMintedAtIdpA = "t5-other-caller-minted-at-idp-a";
+    private const string CallerMintedAtIdpA = "t5-caller-minted-at-idp-a";
+
     [Fact]
+    [Sabotage(OtherCallerMintedAtIdpA, SabotageActs.Inputs,
+        "The other-issuer caller's token is minted at idp-a.e2e.test instead: the bound providers' own caller.")]
     public async Task T5_a_caller_from_the_other_issuer_sees_none_of_the_bound_providers_items_in_the_lists()
     {
         using var http = fixture.CreateClient();
@@ -59,11 +60,11 @@ public sealed class TrustDomainTests(TrustDomainTests.Server fixture, ITestOutpu
             $"an {IssuerA} caller holding every scope does not see these of the bound providers' items listed: {string.Join(", ", unlisted)}. "
             + $"The lists it got: {string.Join(", ", own.Select(i => $"{i.Kind} {i.Key}"))}.");
 
-        var other = await ListedAsync(http, await TestIssuerService.MintAsync(http, IssuerB, "valid", ServerUnderTest.Resource, scopes));
+        var other = await ListedAsync(http, await TestIssuerService.MintAsync(http, Sabotage.Choose(OtherCallerMintedAtIdpA, IssuerB, IssuerA), "valid", ServerUnderTest.Resource, scopes));
         output.WriteLine($"An {IssuerB} caller holding [{string.Join(", ", scopes)}] was listed: [{string.Join(", ", other.Select(i => $"{i.Kind} {i.Key}"))}]");
 
         var seen = bound.Where(e => other.Contains((e.Kind, e.Key))).Select(e => $"{e.Kind} {e.Key}").ToArray();
-        Assert.True(
+        Claim.True(
             seen.Length == 0,
             $"a caller from {IssuerB}, the other issuer, sees the bound providers' {string.Join(", ", seen)} in the lists.");
     }
@@ -71,15 +72,14 @@ public sealed class TrustDomainTests(TrustDomainTests.Server fixture, ITestOutpu
     /// <summary>
     /// Each of the bound providers' items, used by a caller from the other issuer, against an item of the same kind
     /// that does not exist, with each name replaced: the same words.
-    ///
-    /// Sabotage (G-11): mint the caller's token at idp-a.e2e.test instead. The items are then the caller's own: a
-    /// resource is read, and a tool or a prompt goes on to its arguments, so the words are no longer those for an
-    /// item that does not exist, and the claim's assertion goes red.
     /// </summary>
     [Theory]
     [InlineData("resource")]
     [InlineData("prompt")]
     [InlineData("tool", Skip = ToolsStopped)]
+    [Sabotage(CallerMintedAtIdpA, SabotageActs.Inputs,
+        "The caller's token is minted at idp-a.e2e.test instead, so the items are its own: a resource is read, and a tool or a "
+        + "prompt goes on to its arguments.")]
     public async Task T5_using_a_bound_providers_item_from_the_other_issuer_is_refused_in_the_words_for_one_that_does_not_exist(string kind)
     {
         using var http = fixture.CreateClient();
@@ -87,7 +87,7 @@ public sealed class TrustDomainTests(TrustDomainTests.Server fixture, ITestOutpu
         Assert.NotEmpty(items);
 
         var token = await TestIssuerService.MintAsync(
-            http, IssuerB, "valid", ServerUnderTest.Resource, E2EEnvironment.Issuers[E2EEnvironment.IdpB].ScopeCatalog);
+            http, Sabotage.Choose(CallerMintedAtIdpA, IssuerB, IssuerA), "valid", ServerUnderTest.Resource, E2EEnvironment.Issuers[E2EEnvironment.IdpB].ScopeCatalog);
 
         var missing = kind == "resource" ? $"smhi://e2e-no-such-{Guid.NewGuid():N}" : $"e2e_no_such_{Guid.NewGuid():N}";
         var absent = await UseAsync(http, token, kind, missing);
@@ -109,7 +109,7 @@ public sealed class TrustDomainTests(TrustDomainTests.Server fixture, ITestOutpu
             }
         }
 
-        Assert.True(
+        Claim.True(
             different.Count == 0,
             $"a caller from {IssuerB}, the other issuer, is refused the bound providers' {kind}s in other words than a {kind} that does not "
             + $"exist ('{absentWords}'): {string.Join("; ", different)}.");

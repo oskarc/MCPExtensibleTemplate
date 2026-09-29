@@ -42,6 +42,11 @@ public sealed class LimitsTests(LimitsTests.Servers fixture, ITestOutputHelper o
     /// <summary>A tool of the observations provider, called with a month it refuses itself: governed, and no upstream call.</summary>
     private const string ObservationsTool = "get_monthly_climate";
 
+    private const string ServerBInTheEnvironmentsRedis = "t7-server-b-counts-in-the-environments-redis";
+    private const string OtherCallerIsTheSame = "t7-other-caller-minted-for-the-same-subject";
+    private const string SecondAsFirst = "t7-second-address-forwarded-as-the-first";
+    private const string RedisLeftRunning = "t7-redis-left-running";
+
     /// <summary>The two servers, sharing a Redis of this class's own.</summary>
     public sealed class Servers : IAsyncLifetime
     {
@@ -68,7 +73,8 @@ public sealed class LimitsTests(LimitsTests.Servers fixture, ITestOutputHelper o
             Environment = await E2EEnvironment.GetAsync();
             Redis = await Environment.StartRedisAsync("redis-limits.e2e.test");
             A = await Environment.StartServerAsync("limits-a", Delta(Redis));
-            B = await Environment.StartServerAsync("limits-b", Delta(Redis));
+            B = await Environment.StartServerAsync(
+                "limits-b", Delta(Redis).Sabotaged(ServerBInTheEnvironmentsRedis, d => d.Set("Limits:Redis", RedisService.ConnectionString)));
         }
 
         public async Task DisposeAsync()
@@ -85,14 +91,13 @@ public sealed class LimitsTests(LimitsTests.Servers fixture, ITestOutputHelper o
         }
     }
 
-    /// <summary>
-    /// Sabotage (G-11), for the first claim: start server B with Limits:Redis naming the environment's own Redis
-    /// (redis.e2e.test:6379) instead of this class's. The two servers then count apart, the request after the limit is
-    /// only server A's fourth, it is served, and the claim's assertion goes red. For the second: mint the other caller's
-    /// token for the exhausted caller's own subject at idp-a. It is refused with caller-rate, and the second claim's
-    /// assertion goes red.
-    /// </summary>
+    /// <summary>Two claims, and a sabotage for each.</summary>
     [Fact]
+    [Sabotage(ServerBInTheEnvironmentsRedis, SabotageActs.ContainerEnvironment,
+        "Server B counts in the environment's own Redis (Limits:Redis=redis.e2e.test:6379) instead of this class's, so the two "
+        + "servers count apart and the request after the limit is only server A's fourth.")]
+    [Sabotage(OtherCallerIsTheSame, SabotageActs.Inputs,
+        "The other caller's token is minted at idp-a for the exhausted caller's own subject, so it is the same caller, not another.")]
     public async Task T7_one_callers_count_carries_across_both_servers_while_other_callers_are_served()
     {
         using var viaA = fixture.A.CreateClient(fixture.ClientAddress);
@@ -126,7 +131,7 @@ public sealed class LimitsTests(LimitsTests.Servers fixture, ITestOutputHelper o
         var refusal = McpRequests.TextOf(next);
         output.WriteLine($"Limit {PerPrincipalPerMinute}: {string.Join("; ", spent)}; then on A: {refusal}");
 
-        Assert.True(
+        Claim.True(
             spent.All(s => s.EndsWith(": served", StringComparison.Ordinal))
                 && McpRequests.RuleOf(refusal) == "caller-rate" && !McpRequests.ReturnsContent(next),
             $"with Limits:PerPrincipalPerMinute={PerPrincipalPerMinute} and both servers counting in {fixture.Redis.Endpoint}, the caller's "
@@ -135,7 +140,8 @@ public sealed class LimitsTests(LimitsTests.Servers fixture, ITestOutputHelper o
             + "from one server to the other.");
 
         // Other callers: another subject at the same issuer, and the same subject at the other issuer.
-        var another = await ReadAsync(viaA, await TokenAsync(viaA, IssuerA, $"e2e-limits-other-{Guid.NewGuid():N}", "weather:read"));
+        var another = await ReadAsync(
+            viaA, await TokenAsync(viaA, IssuerA, Sabotage.Choose(OtherCallerIsTheSame, $"e2e-limits-other-{Guid.NewGuid():N}", subject), "weather:read"));
         var sameSubjectOtherIssuer = await McpRequests.ExchangeAsync(viaA, McpRequests.Rpc(
             ServerUnderTest.Endpoint,
             await TokenAsync(viaA, IssuerB, subject, "observations:read"),
@@ -143,23 +149,21 @@ public sealed class LimitsTests(LimitsTests.Servers fixture, ITestOutputHelper o
             new { name = ObservationsTool, arguments = new { latitude = 59.33, longitude = 18.07, month = 13 } }));
         output.WriteLine($"Another subject at {IssuerA}: {Describe(another)}; {subject} at {IssuerB}: {Describe(sameSubjectOtherIssuer)}");
 
-        Assert.True(
+        Claim.True(
             McpRequests.ReturnsContent(another) && McpRequests.RuleOf(McpRequests.TextOf(sameSubjectOtherIssuer)) is null,
             $"once {subject} at {IssuerA} was refused for its rate, another subject at {IssuerA} got {Describe(another)}, and {subject} "
             + $"at {IssuerB} got {Describe(sameSubjectOtherIssuer)}: each is another caller, with a count of its own, and is served.");
     }
 
-    /// <summary>
-    /// Sabotage (G-11): forward the second request as the first address instead of a fresh one. It shares the spent
-    /// count, gets 429, and the claim's assertion goes red.
-    /// </summary>
     [Fact]
+    [Sabotage(SecondAsFirst, SabotageActs.Inputs,
+        "The second address's request is forwarded as the first address instead of a fresh one, so it shares the count the first has spent.")]
     public async Task T7_one_forwarded_address_gets_429_on_its_61st_request_while_another_gets_200()
     {
         var first = ClientAddresses.Next();
         var second = ClientAddresses.Next();
         using var asFirst = fixture.A.CreateClient(first);
-        using var asSecond = fixture.A.CreateClient(second);
+        using var asSecond = fixture.A.CreateClient(Sabotage.Choose(SecondAsFirst, second, first));
         var healthz = new Uri($"https://{TlsFront.Host}/healthz");
 
         var statuses = new List<HttpStatusCode>();
@@ -176,7 +180,7 @@ public sealed class LimitsTests(LimitsTests.Servers fixture, ITestOutputHelper o
         // Phase 1's note (UC-1 edge): with X-Forwarded-For lost, every request through the front counts as the front's own
         // address, which reads exactly like the product's 429. Each message names that cause.
         var early = statuses.Take(PerAddressPerMinute).Select((status, i) => (Status: status, Number: i + 1)).Where(s => s.Status != HttpStatusCode.OK).ToList();
-        Assert.True(
+        Claim.True(
             early.Count == 0 && statuses[PerAddressPerMinute] == HttpStatusCode.TooManyRequests && other.StatusCode == HttpStatusCode.OK,
             $"the forwarded address {first} got {(early.Count == 0 ? "200 on each of its first 60 requests" : $"{(int)early[0].Status} on its request {early[0].Number}")} "
             + $"and {(int)statuses[PerAddressPerMinute]} on its 61st; {second}, through the same front just after, got {(int)other.StatusCode}. "
@@ -188,10 +192,9 @@ public sealed class LimitsTests(LimitsTests.Servers fixture, ITestOutputHelper o
     /// <summary>
     /// A server of this test's own, over a Redis of this test's own, so stopping it takes no other server's store. Every
     /// governed request — a resource read and a tool call — is refused with limits-unavailable once Redis is stopped.
-    ///
-    /// Sabotage (G-11): leave Redis running. The requests are served, and the claim's assertion goes red.
     /// </summary>
     [Fact]
+    [Sabotage(RedisLeftRunning, SabotageActs.ContainerEnvironment, "The test's Redis is left running instead of being stopped.")]
     public async Task T7_with_redis_stopped_requests_are_refused_limits_unavailable()
     {
         var environment = fixture.Environment;
@@ -204,14 +207,17 @@ public sealed class LimitsTests(LimitsTests.Servers fixture, ITestOutputHelper o
         var before = await ReadAsync(http, token);
         Assert.True(McpRequests.ReturnsContent(before), $"with Redis running, reading {Resource} got {Describe(before)}.");
 
-        await redis.StopAsync();
+        if (!Sabotage.Applies(RedisLeftRunning))
+        {
+            await redis.StopAsync();
+        }
 
         var read = await ReadAsync(http, token);
         var call = await McpRequests.ExchangeAsync(http, McpRequests.Rpc(
             ServerUnderTest.Endpoint, token, "tools/call", new { name = "get_forecast", arguments = new { latitude = 59.33, longitude = 18.07 } }));
         output.WriteLine($"With {redis.Endpoint} stopped: resources/read got {Describe(read)}; tools/call got {Describe(call)}");
 
-        Assert.True(
+        Claim.True(
             new[] { read, call }.All(a => McpRequests.RuleOf(McpRequests.TextOf(a)) == "limits-unavailable" && !McpRequests.ReturnsContent(a)),
             $"with the server's Redis ({redis.Endpoint}) stopped, reading {Resource} got {Describe(read)} and calling get_forecast got "
             + $"{Describe(call)}: each must be refused with limits-unavailable and nothing returned, never let through uncounted.");

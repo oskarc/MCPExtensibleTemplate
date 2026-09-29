@@ -30,11 +30,22 @@ public sealed class SettingsReadOnceTests(ITestOutputHelper output)
 
     private const string IdpBHost = "idp-b.e2e.test";
 
+    private const string IdpBTrustsIdpAKeys = "settings-read-once-idp-b-keys-from-idp-a";
+
+    /// <summary>
+    /// Its sabotage gives the server, from its start, what the changed file would give it if it were read: idp-b's scheme
+    /// fetching idp-a's keys.
+    /// </summary>
     [Fact]
+    [Sabotage(IdpBTrustsIdpAKeys, SabotageActs.ContainerEnvironment,
+        "The server is started with idp-b's Authority at https://idp-a.e2e.test, so idp-b's scheme takes idp-a's keys from the "
+        + "start, as it would had the running server read the changed file.")]
     public async Task A_settings_file_changed_while_the_server_runs_changes_nothing_until_it_restarts()
     {
         var environment = await E2EEnvironment.GetAsync();
-        await using var server = await environment.StartServerAsync("settings-read-once", SettingsDelta.None);
+        await using var server = await environment.StartServerAsync(
+            "settings-read-once",
+            SettingsDelta.None.Sabotaged(IdpBTrustsIdpAKeys, d => d.Set($"Authentication:IdentityProviders:{E2EEnvironment.IdpB}:Authority", $"https://{IdpAHost}")));
         using var http = server.CreateClient(ClientAddresses.Next());
 
         // Positive control: this server accepts the test issuer's tokens. idp-a's, so idp-b's scheme is not
@@ -66,7 +77,7 @@ public sealed class SettingsReadOnceTests(ITestOutputHelper output)
             http, IdpBHost, "cross-signed", ServerUnderTest.Resource, ["weather:read"],
             new Dictionary<string, object> { ["signedBy"] = IdpAHost });
         var status = await InitializeAsync(http, crossSigned);
-        Assert.True(
+        Claim.True(
             status == HttpStatusCode.Unauthorized,
             $"after /app/appsettings.Production.json gained {key}=https://{IdpAHost}/…, a token naming idp-b and signed with "
             + $"idp-a's key got {(int)status}, not 401. The running server applied a setting no startup check had read.");
@@ -91,7 +102,7 @@ public sealed class SettingsReadOnceTests(ITestOutputHelper output)
         var (_, stderr) = await server.Container.GetLogsAsync();
         var refusal = StartupOutcome.RefusalIn(stderr);
         output.WriteLine($"On restart: exit {exitCode}; {refusal}");
-        Assert.True(
+        Claim.True(
             exitCode == 78 && refusal?.Contains($"'{key}'", StringComparison.Ordinal) == true,
             $"restarted with {key} in /app/appsettings.Production.json, the server exited with {exitCode?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "no code within a minute"}; "
             + $"{refusal ?? "its stderr names no refusal"}.");

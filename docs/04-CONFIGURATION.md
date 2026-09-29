@@ -391,7 +391,10 @@ dotnet run
 ```yaml
 services:
   redis:
-    image: redis:7.4-alpine
+    # Pinned by the digest of its multi-arch index, as every image in this repository is: a tag can be moved on the
+    # registry, a digest cannot. To update it, read the tag's current digest with
+    # `docker buildx imagetools inspect redis:7.4-alpine` (the Digest line) and put it after the @.
+    image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
   mcp-server:
     image: mcp-server:latest
     environment:

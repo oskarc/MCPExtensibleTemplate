@@ -33,6 +33,15 @@ public static class HostBuilders
     /// </summary>
     private const string StartNoWatcher = "--hostBuilder:reloadConfigOnChange=false";
 
+    /// <summary>
+    /// contract-005 · T-10 — how long the web host gives the requests in flight once it is told to stop: 8 seconds, inside
+    /// Docker's 10-second stop grace. The framework's own default is 30 seconds (HostOptions.ShutdownTimeout in
+    /// Microsoft.Extensions.Hosting 10.0), so a server stopped while it held a request waited past the grace and was
+    /// killed — exit 137, no shutdown line — however cleanly it would have stopped. Now a request still running after 8
+    /// seconds has its connection closed, and the server stops and says so, inside the grace.
+    /// </summary>
+    public static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(8);
+
     /// <summary>The web host for Transport=http.</summary>
     public static WebApplicationBuilder ForHttp(string[] args)
     {
@@ -40,6 +49,9 @@ public static class HostBuilders
 
         var builder = WebApplication.CreateBuilder([StartNoWatcher, .. args]);
         ReadOnce(builder.Configuration);
+
+        // contract-005 · T-10 — registered after the host's own reading of its settings, so this is the timeout it stops with.
+        builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = ShutdownTimeout);
         return builder;
     }
 

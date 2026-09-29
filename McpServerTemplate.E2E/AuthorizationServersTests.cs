@@ -19,10 +19,16 @@ namespace McpServerTemplate.E2E;
 public sealed class AuthorizationServersTests(AuthorizationServersTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<AuthorizationServersTests.Server>
 {
-    /// <summary>The server exactly as the environment configures it.</summary>
-    public sealed class Server() : ServerFixture(SettingsDelta.None);
+    /// <summary>The server exactly as the environment configures it, but in a run of the sabotage that acts on it.</summary>
+    public sealed class Server() : ServerFixture(SettingsDelta.None
+        .Sabotaged(IdpBIssuerAsItsAuthority, d => d.Set($"Authentication:IdentityProviders:{E2EEnvironment.IdpB}:Issuer", "https://idp-b.e2e.test")));
+
+    private const string IdpBIssuerAsItsAuthority = "t11-4-idp-b-issuer-pinned-as-its-authority";
 
     [Fact]
+    [Sabotage(IdpBIssuerAsItsAuthority, SabotageActs.ContainerEnvironment,
+        "The class's server pins idp-b's issuer as its authority, https://idp-b.e2e.test without the trailing slash, which is "
+        + "then what it lists: not the issuer idp-b's tokens and its RFC 8414 metadata carry.")]
     public async Task T11_4_the_metadata_lists_each_identity_providers_issuer()
     {
         using var http = fixture.CreateClient();
@@ -37,7 +43,7 @@ public sealed class AuthorizationServersTests(AuthorizationServersTests.Server f
         output.WriteLine($"authorization_servers: {string.Join(", ", listed)}");
 
         var issuers = E2EEnvironment.Issuers.Entries.Select(e => e.Issuer).Order(StringComparer.Ordinal).ToArray();
-        Assert.True(
+        Claim.True(
             listed.Order(StringComparer.Ordinal).SequenceEqual(issuers),
             $"authorization_servers is [{string.Join(", ", listed)}], not the identity providers' issuers [{string.Join(", ", issuers)}]: "
             + $"idp-b's issuer is {idpB.Issuer} and its authority {idpB.Authority.ToString().TrimEnd('/')}.");
@@ -48,13 +54,15 @@ public sealed class AuthorizationServersTests(AuthorizationServersTests.Server f
     }
 
     [Fact]
+    [Sabotage("t11-4-http-issuer-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_4_an_http_issuer_refuses_to_start()
     {
         var key = $"Authentication:IdentityProviders:{E2EEnvironment.IdpB}:Issuer";
-        await using var outcome = await fixture.Environment.StartupAsync("issuer-http", SettingsDelta.None.Set(key, "http://idp-b.e2e.test/"));
+        await using var outcome = await fixture.Environment.StartupAsync(
+            "issuer-http", SettingsDelta.None.Set(key, "http://idp-b.e2e.test/").Sabotaged("t11-4-http-issuer-left-out", _ => SettingsDelta.None));
         output.WriteLine(outcome.Describe());
 
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(key, StringComparison.Ordinal) == true,
             $"{key}=http://idp-b.e2e.test/ would send clients to a plaintext issuer, and {outcome.Describe()}");
     }
@@ -64,14 +72,16 @@ public sealed class AuthorizationServersTests(AuthorizationServersTests.Server f
     /// Issuer is published verbatim as an authorization server.
     /// </summary>
     [Fact]
+    [Sabotage("t11-4-issuer-query-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_4_an_issuer_with_a_query_refuses_to_start()
     {
         var key = $"Authentication:IdentityProviders:{E2EEnvironment.IdpB}:Issuer";
         const string issuer = "https://idp-b.e2e.test/?tenant=e2e";
-        await using var outcome = await fixture.Environment.StartupAsync("issuer-query", SettingsDelta.None.Set(key, issuer));
+        await using var outcome = await fixture.Environment.StartupAsync(
+            "issuer-query", SettingsDelta.None.Set(key, issuer).Sabotaged("t11-4-issuer-query-left-out", _ => SettingsDelta.None));
         output.WriteLine(outcome.Describe());
 
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(key, StringComparison.Ordinal) == true,
             $"{key}={issuer} would be published as an authorization server with a query, and {outcome.Describe()}");
     }

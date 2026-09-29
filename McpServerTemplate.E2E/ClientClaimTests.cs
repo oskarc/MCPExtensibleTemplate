@@ -20,10 +20,16 @@ public sealed class ClientClaimTests(ClientClaimTests.Server fixture, ITestOutpu
     : IClassFixture<ClientClaimTests.Server>
 {
     /// <summary>Keycloak's provider told that its client claim is client_id, which Keycloak's tokens do not carry.</summary>
-    public sealed class Server() : ServerFixture(
-        SettingsDelta.None.Set($"Authentication:IdentityProviders:{E2EEnvironment.KeycloakIssuer}:ClientIdClaim", "client_id"));
+    public sealed class Server() : ServerFixture(SettingsDelta.None
+        .Set(ClientIdClaimKey, "client_id")
+        .Sabotaged(KeycloakClaimLeftAsAzp, d => d.Set(ClientIdClaimKey, "azp")));
+
+    private const string ClientIdClaimKey = $"Authentication:IdentityProviders:{E2EEnvironment.KeycloakIssuer}:ClientIdClaim";
+    private const string KeycloakClaimLeftAsAzp = "t11-3-keycloak-client-claim-left-as-azp";
 
     [Fact]
+    [Sabotage(KeycloakClaimLeftAsAzp, SabotageActs.ContainerEnvironment,
+        "The class's server keeps Keycloak's ClientIdClaim as the environment has it, azp, the claim Keycloak's tokens carry.")]
     public async Task T11_3_a_token_without_the_claim_that_ClientIdClaim_names_is_refused()
     {
         using var http = fixture.CreateClient();
@@ -50,7 +56,7 @@ public sealed class ClientClaimTests(ClientClaimTests.Server fixture, ITestOutpu
         using var response = await http.SendAsync(McpRequests.Initialize(ServerUnderTest.Endpoint, keycloak));
         output.WriteLine($"The Keycloak token got {(int)response.StatusCode}.");
 
-        Assert.True(
+        Claim.True(
             response.StatusCode == HttpStatusCode.Unauthorized,
             $"with ClientIdClaim=client_id, a Keycloak token carrying only azp got {(int)response.StatusCode}, not 401: the claim "
             + "ClientIdClaim names was not the one required.");
@@ -65,14 +71,15 @@ public sealed class ClientClaimTests(ClientClaimTests.Server fixture, ITestOutpu
     [InlineData("sub")]
     [InlineData("scope")]
     [InlineData("typ")]
+    [Sabotage("t11-3-client-claim-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_3_a_client_claim_that_is_always_present_or_means_something_else_refuses_to_start(string claim)
     {
-        var key = $"Authentication:IdentityProviders:{E2EEnvironment.KeycloakIssuer}:ClientIdClaim";
-        await using var outcome = await fixture.Environment.StartupAsync($"client-claim-{claim}", SettingsDelta.None.Set(key, claim));
+        await using var outcome = await fixture.Environment.StartupAsync(
+            $"client-claim-{claim}", SettingsDelta.None.Set(ClientIdClaimKey, claim).Sabotaged("t11-3-client-claim-left-out", _ => SettingsDelta.None));
         output.WriteLine(outcome.Describe());
 
-        Assert.True(
-            outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(key, StringComparison.Ordinal) == true,
-            $"{key}={claim} names a claim that would switch the client requirement off, and {outcome.Describe()}");
+        Claim.True(
+            outcome.ExitCode == 78 && outcome.RefusalLine?.Contains(ClientIdClaimKey, StringComparison.Ordinal) == true,
+            $"{ClientIdClaimKey}={claim} names a claim that would switch the client requirement off, and {outcome.Describe()}");
     }
 }

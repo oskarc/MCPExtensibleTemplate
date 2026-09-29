@@ -23,14 +23,18 @@ public sealed class EndpointAndResourceTests(EndpointAndResourceTests.Server fix
     /// <summary>RFC 9728 §3.1: the well-known location for https://mcp.e2e.test/mcp.</summary>
     private static readonly Uri WellKnownForResource = new($"https://{TlsFront.Host}/.well-known/oauth-protected-resource/mcp");
 
+    private const string ClientDialsTheRoot = "t11-1-client-dials-the-root";
+
     [Fact]
+    [Sabotage("t11-1-resource-at-the-root-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_1_a_resource_whose_path_is_not_mcp_refuses_to_start()
     {
         await using var outcome = await fixture.Environment.StartupAsync(
-            "resource-at-root", SettingsDelta.None.Set("Authentication:Resource", $"https://{TlsFront.Host}/"));
+            "resource-at-root",
+            SettingsDelta.None.Set("Authentication:Resource", $"https://{TlsFront.Host}/").Sabotaged("t11-1-resource-at-the-root-left-out", _ => SettingsDelta.None));
         output.WriteLine(outcome.Describe());
 
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains("Authentication:Resource", StringComparison.Ordinal) == true,
             $"Authentication:Resource=https://{TlsFront.Host}/ names a resource MCP does not answer at, and {outcome.Describe()}");
     }
@@ -41,40 +45,47 @@ public sealed class EndpointAndResourceTests(EndpointAndResourceTests.Server fix
     /// must equal, and no client connects to it.
     /// </summary>
     [Fact]
+    [Sabotage("t11-1-dot-segment-left-out", SabotageActs.ContainerEnvironment, Sabotage.MisconfigurationLeftOut)]
     public async Task T11_1_a_resource_whose_path_is_mcp_only_once_parsed_refuses_to_start()
     {
         var resource = $"https://{TlsFront.Host}/./mcp";
         await using var outcome = await fixture.Environment.StartupAsync(
-            "resource-dot-segment", SettingsDelta.None.Set("Authentication:Resource", resource));
+            "resource-dot-segment", SettingsDelta.None.Set("Authentication:Resource", resource).Sabotaged("t11-1-dot-segment-left-out", _ => SettingsDelta.None));
         output.WriteLine(outcome.Describe());
 
-        Assert.True(
+        Claim.True(
             outcome.ExitCode == 78 && outcome.RefusalLine?.Contains("Authentication:Resource", StringComparison.Ordinal) == true,
             $"Authentication:Resource={resource} is published as written, and {outcome.Describe()}");
     }
 
     [Fact]
+    [Sabotage(ClientDialsTheRoot, SabotageActs.Inputs,
+        "The unauthenticated initialize is sent to https://mcp.e2e.test/, the root, where MCP answered before G-12 (1), instead of "
+        + "the resource's URL.")]
     public async Task T11_1_the_challenge_at_the_resource_url_and_the_rfc9728_location_answer_with_the_same_document()
     {
         using var http = fixture.CreateClient();
 
         // The resource URL itself, with no token: what a standard client sends first.
-        using var challenged = await http.SendAsync(McpRequests.Initialize(new Uri(ServerUnderTest.Resource)));
+        var dialled = Sabotage.Choose(ClientDialsTheRoot, new Uri(ServerUnderTest.Resource), new Uri($"https://{TlsFront.Host}/"));
+        using var challenged = await http.SendAsync(McpRequests.Initialize(dialled));
         var named = McpRequests.ResourceMetadataOf(challenged);
-        Assert.True(
+        Claim.True(
             challenged.StatusCode == HttpStatusCode.Unauthorized && named is not null,
-            $"an unauthenticated initialize to the resource URL {ServerUnderTest.Resource} got {(int)challenged.StatusCode}"
+            $"an unauthenticated initialize to the resource URL {dialled} got {(int)challenged.StatusCode}"
             + $" {(named is null ? "with no resource_metadata in its challenge" : $"naming {named}")}, not a 401 naming its metadata.");
-        output.WriteLine($"The challenge at {ServerUnderTest.Resource} names {named}.");
+        output.WriteLine($"The challenge at {dialled} names {named}.");
 
         using var fromChallenge = await http.GetAsync(new Uri(named!));
         using var fromWellKnown = await http.GetAsync(WellKnownForResource);
-        Assert.Equal(HttpStatusCode.OK, fromChallenge.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, fromWellKnown.StatusCode);
-
         var challengeDocument = await fromChallenge.Content.ReadAsStringAsync();
         var wellKnownDocument = await fromWellKnown.Content.ReadAsStringAsync();
-        Assert.Equal(wellKnownDocument, challengeDocument);
-        Assert.Equal(ServerUnderTest.Resource, JsonDocument.Parse(wellKnownDocument).RootElement.GetProperty("resource").GetString());
+        Claim.Holds(() =>
+        {
+            Assert.Equal(HttpStatusCode.OK, fromChallenge.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, fromWellKnown.StatusCode);
+            Assert.Equal(wellKnownDocument, challengeDocument);
+            Assert.Equal(ServerUnderTest.Resource, JsonDocument.Parse(wellKnownDocument).RootElement.GetProperty("resource").GetString());
+        });
     }
 }

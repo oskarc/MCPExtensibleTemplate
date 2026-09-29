@@ -30,12 +30,10 @@ public sealed class UpstreamExtensionPointTests(UpstreamExtensionPointTests.Serv
     /// <summary>A provider host the fake still answers: the witness that the fake records this server's calls.</summary>
     private const string StillTheFake = "opendata-download-metfcst.smhi.se";
 
-    /// <summary>
-    /// Sabotage (G-11): leave the observations host registered to the fake (drop the .Replace in
-    /// <see cref="E2EEnvironment.Upstreams"/>, the one place it is registered). The server's call then reaches WireMock, no
-    /// stand-in is started, and the claim's assertion goes red.
-    /// </summary>
     [Fact]
+    [Sabotage(E2EEnvironment.StandInLeftOut, SabotageActs.Network,
+        "The observations host is left registered to the fake: the run's upstream registry hands it to no stand-in, so its "
+        + "name reaches WireMock and no stand-in is started.")]
     public async Task T15_a_stand_in_registered_for_a_provider_host_receives_the_servers_call()
     {
         var environment = fixture.Environment;
@@ -68,7 +66,7 @@ public sealed class UpstreamExtensionPointTests(UpstreamExtensionPointTests.Serv
         output.WriteLine($"The owner answering {StoodIn}: {environment.UpstreamFor(StoodIn).Container.Name}; the stand-in recorded "
             + $"[{string.Join(", ", received.Select(r => $"{r.Method} {r.Path}"))}]; the fake [{string.Join(", ", byTheFake.Select(r => $"{r.Method} {r.Path}"))}].");
 
-        Assert.True(
+        Claim.True(
             standIn is not null && received.Count > 0 && byTheFake.Count == 0,
             $"the server's call to {StoodIn} was {(standIn is null ? "made with no stand-in started: nothing registered one for the host" : $"recorded by the stand-in {received.Count} time(s)")}, "
             + $"and by the fake it replaced {byTheFake.Count} time(s) [{string.Join(", ", byTheFake.Select(r => $"{r.Method} {r.Path}"))}]: a host registered "

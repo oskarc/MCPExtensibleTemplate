@@ -6,7 +6,6 @@ using McpServerTemplate.E2E.Harness;
 using Microsoft.IdentityModel.JsonWebTokens;
 using ModelContextProtocol.Client;
 using Xunit.Abstractions;
-using Xunit.Sdk;
 
 namespace McpServerTemplate.E2E;
 
@@ -29,12 +28,28 @@ namespace McpServerTemplate.E2E;
 public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<WalkingSkeletonTests.Server>
 {
-    /// <summary>The server exactly as the environment configures it: no delta.</summary>
-    public sealed class Server() : ServerFixture(SettingsDelta.None);
+    /// <summary>
+    /// The server exactly as the environment configures it: no delta, but in a run of one of the sabotages below that
+    /// act on it, each weakening it for its own test (G-11).
+    /// </summary>
+    public sealed class Server() : ServerFixture(SettingsDelta.None
+        .Sabotaged(KeycloakIssuerElsewhere, d => d.Set($"Authentication:IdentityProviders:{E2EEnvironment.KeycloakIssuer}:Issuer", $"https://{KeycloakService.Host}:{KeycloakService.Port}/realms/other"))
+        .Sabotaged(IdpAByAnotherName, d => d.Set($"Authentication:IdentityProviders:{E2EEnvironment.IdpA}:Authority", "https://stranger.e2e.test"))
+        .Sabotaged(AuthorizationServerOutside, d => d.Set($"Authentication:IdentityProviders:{E2EEnvironment.IdpA}:Issuer", "https://idp-a.example.com"))
+        .Sabotaged(GatewayTrusted, d => d.Set("HttpTransport:KnownProxies:1", E2ENetwork.Gateway.ToString())));
 
     private const string IssuerA = "idp-a.e2e.test";
 
+    private const string KeycloakIssuerElsewhere = "t1-keycloak-issuer-pinned-to-another-realm";
+    private const string IdpAByAnotherName = "t1-idp-a-reached-by-another-name";
+    private const string AuthorizationServerOutside = "t1-authorization-server-outside-the-environment";
+    private const string SecondAsFirst = "t1-second-address-forwarded-as-the-first";
+    private const string GatewayTrusted = "t1-gateway-trusted-as-a-proxy";
+
     [Fact]
+    [Sabotage(KeycloakIssuerElsewhere, SabotageActs.ContainerEnvironment,
+        "The class's server pins Keycloak's issuer to another realm of the same Keycloak "
+        + "(Authentication:IdentityProviders:keycloak:Issuer …/realms/other), so it accepts no token Keycloak's realm mcp issues.")]
     public async Task T1_a_keycloak_token_lists_tools_through_the_front()
     {
         var timings = E2EEnvironment.Timings;
@@ -57,7 +72,7 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
                 // contract-005 · G-11 — a red here carries its reason, not only the status: the server
                 // logs why it refused a token (authn_login_fail), and that line goes into the failure.
                 var refusal = await fixture.Server.LatestStderrLineAsync("authn_login_fail");
-                throw new XunitException(
+                throw new ClaimException(
                     $"tools/list with a Keycloak token failed: {ex.GetType().Name}: {ex.Message} "
                     + $"The server's latest authn_login_fail line: {refusal ?? "(none on its stderr)"}");
             }
@@ -69,9 +84,12 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
 
             // The claim: the call succeeded, and what came back is what the image says it serves.
             var startupLine = await fixture.Server.StartupLineAsync();
-            Assert.NotEmpty(tools);
-            Assert.All(tools, tool => Assert.Contains($"/{tool.Name}:", startupLine, StringComparison.Ordinal));
-            Assert.Contains(log.Requests, r => r.Uri.Host == TlsFront.Host && r.Status == (int)HttpStatusCode.OK);
+            Claim.Holds(() =>
+            {
+                Assert.NotEmpty(tools);
+                Assert.All(tools, tool => Assert.Contains($"/{tool.Name}:", startupLine, StringComparison.Ordinal));
+                Assert.Contains(log.Requests, r => r.Uri.Host == TlsFront.Host && r.Status == (int)HttpStatusCode.OK);
+            });
 
             output.WriteLine($"tools/list with a Keycloak token returned {tools.Count} tools: {string.Join(", ", tools.Select(t => t.Name))}");
         }
@@ -86,34 +104,58 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
         }
     }
 
+    /// <summary>
+    /// The server's requests are counted from its own address (contract-005 · T-3's per-server counts), so what another
+    /// class's server asks the issuer at the same moment is not taken for this one's.
+    /// </summary>
     [Fact]
+    [Sabotage(IdpAByAnotherName, SabotageActs.ContainerEnvironment,
+        "The class's server reaches idp-a by another name: its Authentication:IdentityProviders:idp-a:Authority is "
+        + "https://stranger.e2e.test, a name of the same test issuer container that no server is configured with.")]
     public async Task T1_the_test_issuer_is_one_issuer_by_one_name_from_the_server_and_from_the_test()
     {
         var log = new NameMapLog();
         using var http = fixture.CreateClient(log);
+        var server = await fixture.Server.NetworkAddressAsync();
 
-        var before = await TestIssuerService.CountsAsync(http, IssuerA);
+        var before = await TestIssuerService.CountsAsync(http, IssuerA, server);
 
         // From the test: minted through idp-a.e2e.test's own door, over TLS the test CA validates.
         var token = await E2EEnvironment.Timings.MeasureAsync("t1: mint at the test issuer", () =>
             TestIssuerService.MintAsync(http, IssuerA, "valid", ServerUnderTest.Resource, ["weather:read"]));
-        Assert.Equal("https://idp-a.e2e.test", new JsonWebToken(token).Issuer);
-        Assert.Contains(log.Connections, c => c.StartsWith($"{IssuerA}:443 -> ", StringComparison.Ordinal));
+        Claim.Holds(() =>
+        {
+            Assert.Equal("https://idp-a.e2e.test", new JsonWebToken(token).Issuer);
+            Assert.Contains(log.Connections, c => c.StartsWith($"{IssuerA}:443 -> ", StringComparison.Ordinal));
+        });
 
         // From the server: it can accept that token only by fetching idp-a.e2e.test's discovery
         // document and key set itself, under the same name, from inside the network.
-        await ListToolsAsync(http, token);
+        string? refused = null;
+        try
+        {
+            await ListToolsAsync(http, token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            refused = $"{ex.GetType().Name}: {ex.Message.Split('\n')[0]}";
+        }
 
-        var after = await TestIssuerService.CountsAsync(http, IssuerA);
-        Assert.True(
+        var after = await TestIssuerService.CountsAsync(http, IssuerA, server);
+        var why = refused is null ? string.Empty : $"; and it refused {IssuerA}'s token ({refused})";
+        Claim.True(
             Count(after, IssuerA, "/.well-known/openid-configuration") > Count(before, IssuerA, "/.well-known/openid-configuration"),
-            $"the server fetched no discovery document from {IssuerA}; counts {JsonSerializer.Serialize(after)}");
-        Assert.True(
+            $"the server ({server}) fetched no discovery document from {IssuerA}; counts {JsonSerializer.Serialize(after)}{why}");
+        Claim.True(
             Count(after, IssuerA, "/jwks") > Count(before, IssuerA, "/jwks"),
-            $"the server fetched no key set from {IssuerA}; counts {JsonSerializer.Serialize(after)}");
+            $"the server ({server}) fetched no key set from {IssuerA}; counts {JsonSerializer.Serialize(after)}{why}");
+        Claim.True(refused is null, $"the server fetched {IssuerA}'s discovery document and key set, and refused its token: {refused}");
     }
 
     [Fact]
+    [Sabotage(AuthorizationServerOutside, SabotageActs.ContainerEnvironment,
+        "The class's server names an authorization server outside the environment first: idp-a's Issuer, which the "
+        + "protected-resource metadata lists, is https://idp-a.example.com, a name the test's name map does not hold.")]
     public async Task T1_the_sdk_clients_traffic_and_its_oauth_discovery_go_through_the_name_map()
     {
         var log = new NameMapLog();
@@ -139,12 +181,15 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
 
         // It was challenged through the front, and fetched the protected-resource metadata the
         // challenge named — OAuth discovery, through the map, validated against the test CA.
-        Assert.Contains(log.Requests, r => r.Method == HttpMethod.Post && r.Uri.Host == TlsFront.Host && r.Status == (int)HttpStatusCode.Unauthorized);
-        Assert.Contains(log.Requests, r =>
-            r.Method == HttpMethod.Get
-            && r.Uri.Host == TlsFront.Host
-            && r.Uri.AbsolutePath.StartsWith("/.well-known/oauth-protected-resource", StringComparison.Ordinal)
-            && r.Status == (int)HttpStatusCode.OK);
+        Claim.Holds(() =>
+        {
+            Assert.Contains(log.Requests, r => r.Method == HttpMethod.Post && r.Uri.Host == TlsFront.Host && r.Status == (int)HttpStatusCode.Unauthorized);
+            Assert.Contains(log.Requests, r =>
+                r.Method == HttpMethod.Get
+                && r.Uri.Host == TlsFront.Host
+                && r.Uri.AbsolutePath.StartsWith("/.well-known/oauth-protected-resource", StringComparison.Ordinal)
+                && r.Status == (int)HttpStatusCode.OK);
+        });
 
         // contract-005 · G-12 (1) — with the endpoint at the resource's URL, the flow goes on: to the
         // authorization server the metadata names first (read here through a client of its own, so
@@ -157,17 +202,20 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
             authorizationServer = new Uri(metadata.GetProperty("authorization_servers")[0].GetString()!).Host;
         }
 
-        Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/.well-known/oauth-authorization-server" && r.Status == (int)HttpStatusCode.OK);
-        Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/authorize" && r.Status == (int)HttpStatusCode.Redirect);
-        Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/token" && r.Status == (int)HttpStatusCode.OK);
-        Assert.Contains(log.Requests, r => r.Method == HttpMethod.Post && r.Uri.Host == TlsFront.Host && r.Status == (int)HttpStatusCode.OK);
+        Claim.Holds(() =>
+        {
+            Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/.well-known/oauth-authorization-server" && r.Status == (int)HttpStatusCode.OK);
+            Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/authorize" && r.Status == (int)HttpStatusCode.Redirect);
+            Assert.Contains(log.Requests, r => r.Uri.Host == authorizationServer && r.Uri.AbsolutePath == "/token" && r.Status == (int)HttpStatusCode.OK);
+            Assert.Contains(log.Requests, r => r.Method == HttpMethod.Post && r.Uri.Host == TlsFront.Host && r.Status == (int)HttpStatusCode.OK);
 
-        // Nothing it asked for lay outside the map, and it connected to exactly the names its flow
-        // calls for: the front, and the authorization server.
-        Assert.Empty(log.Refused);
-        Assert.Equal(
-            new[] { $"{authorizationServer}:443", $"{TlsFront.Host}:{TlsFront.Port}" }.Order(StringComparer.Ordinal),
-            log.Connections.Select(c => c.Split(" -> ")[0]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+            // Nothing it asked for lay outside the map, and it connected to exactly the names its flow
+            // calls for: the front, and the authorization server.
+            Assert.Empty(log.Refused);
+            Assert.Equal(
+                new[] { $"{authorizationServer}:443", $"{TlsFront.Host}:{TlsFront.Port}" }.Order(StringComparer.Ordinal),
+                log.Connections.Select(c => c.Split(" -> ")[0]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        });
     }
 
     /// <summary>
@@ -176,6 +224,8 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
     /// assertion here could never be the one that goes red.
     /// </summary>
     [Fact]
+    [Sabotage(SecondAsFirst, SabotageActs.Inputs,
+        "The second address's request is forwarded as the first address instead, so it shares the count the first has spent.")]
     public async Task T1_the_fronts_forwarded_address_is_honoured()
     {
         // The server's per-address limit (60 a minute) counts by the address the front forwards. One
@@ -185,7 +235,7 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
         var first = ClientAddresses.Next();
         var second = ClientAddresses.Next();
         using var asFirst = fixture.CreateClient(clientAddress: first);
-        using var asSecond = fixture.CreateClient(clientAddress: second);
+        using var asSecond = fixture.CreateClient(clientAddress: Sabotage.Choose(SecondAsFirst, second, first));
         var healthz = new Uri($"https://{TlsFront.Host}/healthz");
 
         var statuses = new List<HttpStatusCode>();
@@ -203,14 +253,14 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
         // for what others spent. The messages name that cause. Note for T-7: its per-address
         // assertions meet the same fault as a 429, and need the same message.
         var early = statuses.Take(60).Select((status, i) => (Status: status, Number: i + 1)).Where(s => s.Status != HttpStatusCode.OK).ToList();
-        Assert.True(
+        Claim.True(
             early.Count == 0,
             $"forwarded address not honoured: {early.Count} of the first 60 requests forwarded as the fresh address {first} were refused "
             + $"(first request {early.FirstOrDefault().Number}, with {(int)early.FirstOrDefault().Status}). A fresh address has a count "
             + "of its own only if the server honours the X-Forwarded-For the front sets; without it, every request through the front "
             + "shares the front's own count.");
-        Assert.Equal(HttpStatusCode.TooManyRequests, statuses[60]);
-        Assert.True(
+        Claim.Holds(() => Assert.Equal(HttpStatusCode.TooManyRequests, statuses[60]));
+        Claim.True(
             other.StatusCode == HttpStatusCode.OK,
             $"forwarded address not honoured: {second} got {(int)other.StatusCode} just after {first} spent its 60, so the server "
             + "counted both as one address — the front's own, not the ones it forwarded.");
@@ -223,16 +273,12 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
     /// http, and requests each forging a different X-Forwarded-For share the one count of the address
     /// they really came from.
     ///
-    /// Sabotage: the class's delta adds the run network's gateway (<see cref="E2ENetwork.Gateway"/>,
-    /// 198.51.100.1), the address a request to a published port arrives from, to KnownProxies as
-    /// HttpTransport:KnownProxies:1 — added beside the front, so the fixture's self-checks still pass
-    /// and the red is this test's. Recorded red (2026-09-26, Windows, the other four T-1 tests green),
-    /// on the claim's first assertion: "a forged X-Forwarded-Proto from outside KnownProxies was
-    /// trusted: the challenge to a request sent straight to the server is 'Bearer
-    /// resource_metadata="https://mcp.e2e.test/.well-known/oauth-protected-resource/"', not an http URL
-    /// on mcp.e2e.test."
+    /// Its sabotage is added beside the front, so the fixture's self-checks still pass and the red is this test's.
     /// </summary>
     [Fact]
+    [Sabotage(GatewayTrusted, SabotageActs.ContainerEnvironment,
+        "The class's server also trusts the run network's gateway (198.51.100.1), the address a request to a published port "
+        + "arrives from, as a proxy: HttpTransport:KnownProxies:1, beside the front.")]
     public async Task T1_forwarded_headers_sent_straight_to_the_server_are_ignored()
     {
         using var direct = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(10) };
@@ -243,7 +289,7 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
 
             var challenge = string.Join(" ", response.Headers.WwwAuthenticate.Select(h => h.ToString()));
-            Assert.True(
+            Claim.True(
                 challenge.Contains($"resource_metadata=\"http://{TlsFront.Host}/", StringComparison.Ordinal),
                 $"a forged X-Forwarded-Proto from outside KnownProxies was trusted: the challenge to a request sent straight to the "
                 + $"server is '{challenge}', not an http URL on {TlsFront.Host}.");
@@ -264,7 +310,7 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
             }
         }
 
-        Assert.True(
+        Claim.True(
             refusedAt is not null,
             $"a forged X-Forwarded-For from outside KnownProxies was trusted: {sent} requests sent straight to the server, each "
             + "forging a different address, were never refused; the server counted each under the address it forged.");

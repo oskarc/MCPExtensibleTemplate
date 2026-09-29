@@ -92,6 +92,40 @@ public sealed partial class StartupOutcome : IAsyncDisposable
     }
 
     /// <summary>
+    /// contract-005 · T-10 — where MCP answers on a server that came up, on its published port and not through a front: plain
+    /// http from the test process, sent under the Host the server allows (<see cref="TlsFront.Host"/>).
+    /// </summary>
+    public Uri DirectEndpoint => Started
+        ? new($"http://{_container.Hostname}:{_container.GetMappedPublicPort(ServerUnderTest.Port)}{ServerUnderTest.Endpoint.AbsolutePath}")
+        : throw new InvalidOperationException($"The server exited with code {ExitCode}; nothing answers. {Describe()}");
+
+    /// <summary>
+    /// contract-005 · T-10 — the first line on the server's standard error that contains <paramref name="marker"/>, waiting up
+    /// to <paramref name="within"/> for it (Docker's log follows the server a moment later); null when none has appeared.
+    /// </summary>
+    public async Task<string?> StderrLineAsync(string marker, TimeSpan within)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(marker);
+
+        var deadline = DateTime.UtcNow + within;
+        while (true)
+        {
+            var (_, stderr) = await _container.GetLogsAsync();
+            if (stderr.Split('\n').FirstOrDefault(l => l.Contains(marker, StringComparison.Ordinal)) is { } line)
+            {
+                return line.Trim();
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                return null;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+    }
+
+    /// <summary>
     /// contract-005 · T-8 — the "Frame installed:" line of a server that came up, read from its log as it stands now,
     /// waiting up to five seconds for it: Docker's log follows the server a moment later.
     /// </summary>

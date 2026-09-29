@@ -145,6 +145,54 @@ public sealed class WireMockService : IUpstreamService
             : 0;
     }
 
+    /// <summary>
+    /// contract-005 · T-10 — an upstream that holds its answer back: a GET whose path matches <paramref name="pathPattern"/>
+    /// (a wildcard, * standing for any run of characters) is answered 200 with an empty JSON object, but only after
+    /// <paramref name="delay"/>. Set through the admin API, as the journal is read; every server in the run shares the
+    /// fake, so the pattern names a path no other test asks for. Returns the stub's id, for <see cref="RemoveStubAsync"/>.
+    /// </summary>
+    public static async Task<string> StubAsync(HttpClient http, string pathPattern, TimeSpan delay, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(http);
+        ArgumentException.ThrowIfNullOrEmpty(pathPattern);
+
+        var mapping = new
+        {
+            Request = new
+            {
+                Path = new { Matchers = new[] { new { Name = "WildcardMatcher", Pattern = pathPattern } } },
+                Methods = new[] { "GET" },
+            },
+            Response = new
+            {
+                StatusCode = 200,
+                Headers = new Dictionary<string, string> { ["Content-Type"] = "application/json" },
+                Body = "{}",
+                Delay = (int)delay.TotalMilliseconds,
+            },
+        };
+
+        using var response = await http.PostAsJsonAsync(new Uri($"https://{Alias}/__admin/mappings"), mapping, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        string? guid = null;
+        if (response.IsSuccessStatusCode)
+        {
+            using var added = JsonDocument.Parse(body);
+            guid = added.RootElement.EnumerateObject().FirstOrDefault(p => p.Name.Equals("Guid", StringComparison.OrdinalIgnoreCase)).Value is { ValueKind: JsonValueKind.String } id
+                ? id.GetString()
+                : null;
+        }
+
+        return guid ?? throw new InvalidOperationException($"WireMock refused the stub for {pathPattern}: {(int)response.StatusCode} {body}");
+    }
+
+    /// <summary>contract-005 · T-10 — removes a stub <see cref="StubAsync"/> set; one already gone is gone either way.</summary>
+    public static async Task RemoveStubAsync(HttpClient http, string id, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(http);
+        using var response = await http.DeleteAsync(new Uri($"https://{Alias}/__admin/mappings/{Uri.EscapeDataString(id)}"), cancellationToken);
+    }
+
     /// <inheritdoc />
     public async Task<IReadOnlyList<UpstreamRequest>> RecordedAsync(HttpClient http, CancellationToken cancellationToken = default) =>
         [.. (await EntriesAsync(http, cancellationToken)).Select(e => new UpstreamRequest(
