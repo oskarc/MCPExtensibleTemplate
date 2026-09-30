@@ -1,12 +1,12 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using DotNet.Testcontainers.Configurations;
-using DotNet.Testcontainers.Images;
 using DotNet.Testcontainers.Networks;
 using McpServerTemplate.Testing;
 
@@ -149,6 +149,15 @@ public sealed class E2EEnvironment : IAsyncDisposable
 
     /// <summary>contract-005 · G-10 — the test host image, tagged with the build context's hash like the others.</summary>
     public string TestHostImage { get; }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (CON-R3-01) — the checkout's revision, as every image of the run was checked to carry before any
+    /// test ran (<see cref="Images.CheckoutRevisionAsync"/>): what a test holds the image under test to.
+    /// </summary>
+    public string Revision { get; private init; } = string.Empty;
+
+    /// <summary>contract-005 · G-17 round 3 (CON-R3-01) — the build context's hash, as every image of the run was checked to carry.</summary>
+    public string ContextHash { get; private init; } = string.Empty;
 
     public KeycloakService Keycloak { get; }
 
@@ -325,16 +334,17 @@ public sealed class E2EEnvironment : IAsyncDisposable
             // Independent parts start together; the test issuer waits only for its own image. The
             // server image's build is the one phase whose failure can be the product's: a Dockerfile
             // that does not build says so in its own words (Images.BuildAsync), not as the environment.
+            // contract-005 · G-17 round 3 (CON-R3-01) — each built by BuildKit, as operators build the server's.
             var serverImage = Timings.MeasureEnvironmentAsync(
                 "image: server (Dockerfile)",
-                () => Images.BuildAsync(Images.ServerRepository, "Dockerfile", root, contextHash, revision, cancellationToken),
-                isProductFailure: ex => ex is InvalidOperationException { InnerException: ImageBuildFailedException });
+                () => Images.BuildAsync(docker, Images.ServerRepository, "Dockerfile", root, contextHash, revision, cancellationToken),
+                isProductFailure: ex => ex is DockerfileBuildException);
             var issuerImage = Timings.MeasureEnvironmentAsync("image: test issuer", () =>
-                Images.BuildAsync(Images.IssuerRepository, "McpServerTemplate.TestIssuer/Dockerfile", root, contextHash, revision, cancellationToken));
+                Images.BuildAsync(docker, Images.IssuerRepository, "McpServerTemplate.TestIssuer/Dockerfile", root, contextHash, revision, cancellationToken));
 
             // contract-005 · G-10 — the test host, built like the others from the same context and tagged by its hash.
             var testHostImage = Timings.MeasureEnvironmentAsync("image: test host", () =>
-                Images.BuildAsync(Images.TestHostRepository, "McpServerTemplate.E2EHost/Dockerfile", root, contextHash, revision, cancellationToken));
+                Images.BuildAsync(docker, Images.TestHostRepository, "McpServerTemplate.E2EHost/Dockerfile", root, contextHash, revision, cancellationToken));
             var redis = Timings.MeasureEnvironmentAsync("container: redis", () => RedisService.StartAsync(docker, network, runId, cancellationToken));
             var keycloak = Timings.MeasureEnvironmentAsync("container: keycloak", () =>
                 KeycloakService.StartAsync(docker, network, pki, names, ServerUnderTest.Resource, ServerFixture.AllClientIds(), runId, cancellationToken));
@@ -396,7 +406,11 @@ public sealed class E2EEnvironment : IAsyncDisposable
             // the run's directory, so a run killed before its teardown has each put back by the next run's sweep.
             var environment = new E2EEnvironment(
                 runId, root, new RecordingDockerClient(docker, pki.Directory), pki, network, serverImage.Result, issuerImage.Result,
-                testHostImage.Result, keycloak.Result, testIssuer.Result, started, redis.Result);
+                testHostImage.Result, keycloak.Result, testIssuer.Result, started, redis.Result)
+            {
+                Revision = revision,
+                ContextHash = contextHash,
+            };
 
             await Timings.MeasureEnvironmentAsync("environment: clock self-check", () => environment.CheckClockAsync(cancellationToken));
             return environment;
@@ -515,6 +529,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// on a shared engine, or of an IDE that sets its own TMP, had its containers and network removed mid-run. Every other run
     /// is left alone; its network then holds the subnet, and this run stops with a fault naming its owner. A run of an earlier
     /// harness, which carries no owner label, is removed only when its directory is here, marked, and its owner gone.
+    /// contract-005 · G-17 round 3 (DOC-R3-01) — and every volume such a run labelled, after its containers.
     /// </summary>
     private static async Task<bool> SweepDeadRunsAsync(IDockerClient docker, string repositoryRoot, string runId, CancellationToken cancellationToken)
     {
@@ -542,6 +557,17 @@ public sealed class E2EEnvironment : IAsyncDisposable
             {
                 await IgnoringGoneAsync(docker.Networks.DeleteNetworkAsync(network.ID, cancellationToken));
                 swept.Add($"network {network.Name} of run {run}");
+            }
+        }
+
+        // contract-005 · G-17 round 3 (DOC-R3-01) — and volumes, after the containers that held them: the docs profile runs docs/04's
+        // named volume as the run's own, carrying the run's labels.
+        foreach (var volume in (await docker.Volumes.ListAsync(new VolumesListParameters { Filters = labelled }, cancellationToken)).Volumes ?? [])
+        {
+            if (Dead(volume.Labels, out var run))
+            {
+                await IgnoringGoneAsync(docker.Volumes.RemoveAsync(volume.Name, force: true, cancellationToken));
+                swept.Add($"volume {volume.Name} of run {run}");
             }
         }
 
@@ -676,7 +702,8 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 "names",
                 $"these containers on the run's network were started able to resolve real names: {string.Join("; ", resolving)}. Every "
                 + $"container joins it through {nameof(E2ENetwork)}.{nameof(E2ENetwork.OnTheRunNetwork)}, with {E2ENetwork.NameServer} as its "
-                + "only name server, no search domain and no host names written in, so that no call of the run reaches the internet by name.");
+                + "only name server, no search domain, no host names written in and nothing mounted over its resolver's files, so that no "
+                + "call of the run reaches the internet by name.");
         }
     }
 
@@ -813,11 +840,11 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 await File.WriteAllTextAsync(Path.Combine(ResultsDirectory, $"{name}.log"), stdout + stderr);
             }
 
+            // contract-005 · G-17 round 3 (HAR-R3-04) — every server's record, written: the readers that return a record give one
+            // server's alone.
             using var http = Names.CreateClient();
-            var journal = await WireMockService.JournalAsync(http);
-            await File.WriteAllTextAsync(Path.Combine(ResultsDirectory, "wiremock-journal.json"), journal.ToString());
-            var counts = await TestIssuerService.CountsAsync(http, TestIssuer.Hosts[0]);
-            await File.WriteAllTextAsync(Path.Combine(ResultsDirectory, "issuer-counts.json"), JsonSerializer.Serialize(counts));
+            await WireMockService.WriteJournalAsync(http, Path.Combine(ResultsDirectory, "wiremock-journal.json"));
+            await TestIssuerService.WriteEveryServersCountsAsync(http, TestIssuer.Hosts[0], Path.Combine(ResultsDirectory, "issuer-counts.json"));
         }
         catch (Exception ex) when (ex is IOException or HttpRequestException or DockerApiException or InvalidOperationException)
         {
@@ -1051,6 +1078,16 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// of its label, within thirty seconds: every image name it gave put back as it was (its run directory records them), every
     /// container and network it labelled removed, then its run directory, with every key, deleted. What it did is written to its
     /// bundle as interrupted.txt. A run killed outright runs no handler at all; the next run's sweep stays the backstop for it.
+    ///
+    /// contract-005 · G-17 round 3 (FLA-R3-01) — it did not, in the case it was written for. It removed every container in one step,
+    /// and that step stopped at the first container already gone — as they are, since the tests' own teardowns remove theirs while
+    /// the process exits — after two or three; the network step then met a network still holding endpoints, and Keycloak, the test
+    /// issuer with its /admin/mint and WireMock's /__admin were left running on loopback until the next run. Now the run directory,
+    /// with every key, goes first, after the image names its record holds; then each container is removed on its own, one already
+    /// gone or being removed counted gone, and the run's label is listed again after every pass until nothing carries it, since
+    /// tests start and remove containers while the process exits; then its networks, tried again while they still hold an
+    /// endpoint; then its volumes (<see cref="RunRemoval"/>, which HarnessSelfTests holds to this with an engine of its own); and
+    /// whatever still carries the label when the time runs out is written to interrupted.txt as left.
     /// </summary>
     private static class OnExit
     {
@@ -1105,7 +1142,8 @@ public sealed class E2EEnvironment : IAsyncDisposable
         /// <summary>Removes what the run <paramref name="run"/> made, each step on its own, so one that fails stops none after it.</summary>
         private static async Task RemoveAsync(string run, string repositoryRoot, string why)
         {
-            using var deadline = new CancellationTokenSource(Within);
+            // The engine's removals end in time for what remains to be listed and written within the thirty seconds.
+            using var deadline = new CancellationTokenSource(Within - TimeSpan.FromSeconds(5));
             var cancellationToken = deadline.Token;
             var done = new List<string> { why };
             async Task StepAsync(string what, Func<Task> step)
@@ -1120,41 +1158,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 }
             }
 
-            using var docker = TestcontainersSettings.OS.DockerEndpointAuthConfig?.GetDockerClientBuilder().Build();
-            var directory = RunDirectories.For(run);
-            if (docker is not null)
-            {
-                var labelled = new Dictionary<string, IDictionary<string, bool>>
-                {
-                    ["label"] = new Dictionary<string, bool> { [$"{E2ENetwork.RunLabel}={run}"] = true },
-                };
-
-                // The image names it gave, put back from its directory's record before the directory goes.
-                await StepAsync("image names", async () => done.AddRange(await RecordingDockerClient.TakeBackAsync(docker, directory, cancellationToken)));
-                await StepAsync("containers", async () =>
-                {
-                    foreach (var container in await docker.Containers.ListContainersAsync(new ContainersListParameters { All = true, Filters = labelled }, cancellationToken))
-                    {
-                        await docker.Containers.RemoveContainerAsync(container.ID, new ContainerRemoveParameters { Force = true, RemoveVolumes = true }, cancellationToken);
-                        done.Add($"container {container.Names?.FirstOrDefault()?.TrimStart('/') ?? container.ID} ({container.Image})");
-                    }
-                });
-                await StepAsync("networks", async () =>
-                {
-                    foreach (var network in await docker.Networks.ListNetworksAsync(new NetworksListParameters { Filters = labelled }, cancellationToken))
-                    {
-                        await docker.Networks.DeleteNetworkAsync(network.ID, cancellationToken);
-                        done.Add($"network {network.Name}");
-                    }
-                });
-            }
-            else
-            {
-                done.Add("containers and networks: not removed, Testcontainers found no Docker endpoint");
-            }
-
-            // contract-005 · G-3 — the keys go whatever else failed.
-            await StepAsync("run directory", () =>
+            Task DeleteRunDirectory(string directory)
             {
                 if (Directory.Exists(directory))
                 {
@@ -1163,7 +1167,36 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 }
 
                 return Task.CompletedTask;
-            });
+            }
+
+            using var docker = TestcontainersSettings.OS.DockerEndpointAuthConfig?.GetDockerClientBuilder().Build();
+            var directory = RunDirectories.For(run);
+
+            // The image names it gave, put back from its directory's record before the directory goes.
+            if (docker is not null)
+            {
+                await StepAsync("image names", async () => done.AddRange(await RecordingDockerClient.TakeBackAsync(docker, directory, cancellationToken)));
+            }
+
+            // contract-005 · G-3 — the keys go whatever else failed. contract-005 · G-17 round 3 (FLA-R3-01) — and first, before the
+            // engine's removals, which may take the rest of the time given: a key file a container still holds open is tried again
+            // once the containers are gone.
+            await StepAsync("run directory", () => DeleteRunDirectory(directory));
+
+            if (docker is not null)
+            {
+                await StepAsync("containers, networks and volumes", async () =>
+                    done.AddRange(await RunRemoval.RemoveAsync(RunEngine.Of(docker, run), cancellationToken)));
+            }
+            else
+            {
+                done.Add("containers, networks and volumes: not removed, Testcontainers found no Docker endpoint");
+            }
+
+            if (Directory.Exists(directory))
+            {
+                await StepAsync("run directory, again", () => DeleteRunDirectory(directory));
+            }
 
             await StepAsync("bundle", async () =>
             {
@@ -1171,6 +1204,143 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 Directory.CreateDirectory(bundle);
                 await File.WriteAllLinesAsync(Path.Combine(bundle, "interrupted.txt"), done, CancellationToken.None);
             });
+        }
+    }
+}
+
+/// <summary>
+/// contract-005 · G-17 round 3 (FLA-R3-01) — one thing a run labelled, as the engine lists it: its id, and the name a line of
+/// interrupted.txt gives it.
+/// </summary>
+/// <param name="Id">What the engine removes it by.</param>
+/// <param name="Name">What a line names it by.</param>
+internal sealed record RunResource(string Id, string Name);
+
+/// <summary>
+/// contract-005 · G-17 round 3 (FLA-R3-01) — what removing a run asks of the engine, as functions: list what carries the run's
+/// label, of each kind, and remove one of it. The engine's own (<see cref="Of"/>) for a run's way out; an engine of a test's own for
+/// HarnessSelfTests, which holds <see cref="RunRemoval"/> to its word with no container at all.
+/// </summary>
+internal sealed record RunEngine(
+    Func<CancellationToken, Task<IReadOnlyList<RunResource>>> Containers,
+    Func<string, CancellationToken, Task> RemoveContainer,
+    Func<CancellationToken, Task<IReadOnlyList<RunResource>>> Networks,
+    Func<string, CancellationToken, Task> RemoveNetwork,
+    Func<CancellationToken, Task<IReadOnlyList<RunResource>>> Volumes,
+    Func<string, CancellationToken, Task> RemoveVolume)
+{
+    /// <summary>The engine <paramref name="docker"/> reaches, for everything that carries the run <paramref name="run"/>'s label.</summary>
+    public static RunEngine Of(IDockerClient docker, string run)
+    {
+        ArgumentNullException.ThrowIfNull(docker);
+
+        var labelled = new Dictionary<string, IDictionary<string, bool>>
+        {
+            ["label"] = new Dictionary<string, bool> { [$"{E2ENetwork.RunLabel}={run}"] = true },
+        };
+
+        return new RunEngine(
+            async cancellationToken => [.. (await docker.Containers.ListContainersAsync(new ContainersListParameters { All = true, Filters = labelled }, cancellationToken))
+                .Select(c => new RunResource(c.ID, $"{c.Names?.FirstOrDefault()?.TrimStart('/') ?? c.ID} ({c.Image})"))],
+            (id, cancellationToken) => docker.Containers.RemoveContainerAsync(id, new ContainerRemoveParameters { Force = true, RemoveVolumes = true }, cancellationToken),
+            async cancellationToken => [.. (await docker.Networks.ListNetworksAsync(new NetworksListParameters { Filters = labelled }, cancellationToken))
+                .Select(n => new RunResource(n.ID, n.Name))],
+            (id, cancellationToken) => docker.Networks.DeleteNetworkAsync(id, cancellationToken),
+            async cancellationToken => [.. ((await docker.Volumes.ListAsync(new VolumesListParameters { Filters = labelled }, cancellationToken)).Volumes ?? [])
+                .Select(v => new RunResource(v.Name, v.Name))],
+            (name, cancellationToken) => docker.Volumes.RemoveAsync(name, force: true, cancellationToken));
+    }
+}
+
+/// <summary>
+/// contract-005 · G-17 round 3 (FLA-R3-01) — how a run stopped before its teardown removes what it labelled, whatever is removed under
+/// it meanwhile: each container on its own, one the engine says is gone (404) or already being removed (409) counted gone; the run's
+/// label listed again after every pass, until nothing carries it or the time runs out, since the tests' own teardowns remove their
+/// containers, and a test may start one, while the process exits; then its networks, tried again while they still hold an
+/// endpoint; then its volumes, tried again while a container still holds one. Returns what it removed, a line each, and a last line
+/// naming whatever still carries the label.
+/// </summary>
+internal static class RunRemoval
+{
+    /// <summary>Removes, through <paramref name="engine"/>, everything that carries the run's label, until <paramref name="cancellationToken"/> says the time is up.</summary>
+    public static async Task<IReadOnlyList<string>> RemoveAsync(RunEngine engine, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+
+        var said = new List<string>();
+        await RemoveEveryAsync("container", engine.Containers, engine.RemoveContainer, [HttpStatusCode.NotFound, HttpStatusCode.Conflict], said, cancellationToken);
+        await RemoveEveryAsync("network", engine.Networks, engine.RemoveNetwork, [HttpStatusCode.NotFound], said, cancellationToken);
+        await RemoveEveryAsync("volume", engine.Volumes, engine.RemoveVolume, [HttpStatusCode.NotFound], said, cancellationToken);
+
+        // What is left, asked once more whatever the deadline did, briefly.
+        using var last = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var left = new List<string>();
+        foreach (var (kind, list) in new[] { ("container", engine.Containers), ("network", engine.Networks), ("volume", engine.Volumes) })
+        {
+            try
+            {
+                left.AddRange((await list(last.Token)).Select(r => $"{kind} {r.Name}"));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                left.Add($"{kind}s: not listed ({ex.GetType().Name}: {ex.Message})");
+            }
+        }
+
+        said.Add(left.Count == 0 ? "left: nothing that carries the run's label" : $"left: {string.Join("; ", left)}");
+        return said;
+    }
+
+    /// <summary>
+    /// Removes every <paramref name="kind"/> <paramref name="list"/> gives, each on its own, listing again after each pass, until it
+    /// gives none or the time is up. A removal the engine answers with one of <paramref name="gone"/> is of one gone, or going; any
+    /// other failure leaves it to the next pass.
+    /// </summary>
+    private static async Task RemoveEveryAsync(
+        string kind,
+        Func<CancellationToken, Task<IReadOnlyList<RunResource>>> list,
+        Func<string, CancellationToken, Task> remove,
+        HttpStatusCode[] gone,
+        List<string> said,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (true)
+            {
+                var listed = await list(cancellationToken);
+                if (listed.Count == 0)
+                {
+                    return;
+                }
+
+                foreach (var resource in listed)
+                {
+                    try
+                    {
+                        await remove(resource.Id, cancellationToken);
+                        said.Add($"{kind} {resource.Name}");
+                    }
+                    catch (DockerApiException ex) when (gone.Contains(ex.StatusCode))
+                    {
+                        // Gone, or going: the next listing says which.
+                    }
+                    catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+                    {
+                        // Still there — a network with an endpoint left, a volume a container still holds — and tried again.
+                    }
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The time given is up; what is left is named after.
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            said.Add($"{kind}s: not listed ({ex.GetType().Name}: {ex.Message})");
         }
     }
 }

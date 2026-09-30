@@ -75,8 +75,9 @@ public sealed class RequestGate(
         }
 
         // contract-005 · G-17 round 2 (SEC-R2-03) — the method is the caller's to write: made safe for a log line and cut
-        // (LogSafe.Text), in the line and in the reply, which the SDK logs with the exception.
-        var shown = LogSafe.Text(method ?? context.JsonRpcMessage.GetType().Name);
+        // (LogSafe.Text), in the line and in the reply, which the SDK logs with the exception. Round 3 (SEC-R3-04) — escaped,
+        // not stripped, and once: as SafeText, which the log pipeline passes on as it is.
+        var shown = SafeText.Value(method ?? context.JsonRpcMessage.GetType().Name);
         context.Services?.GetService<ILogger<RequestGate>>()?.LogWarning(
             "authz_fail: rule=request-kind method={Method} — refused, the frame does not govern it",
             shown);
@@ -411,12 +412,13 @@ public sealed class RequestGate(
     // contract-005 · G-17 round 2 (SEC-R2-03) — the target is often the caller's to write (a tool that is not there, a URI
     // matched to nothing), and so is the principal's subject at some identity providers: each is made safe for a log line
     // and cut (LogSafe.Text). The message names what the caller wrote only through the refusals built for it, which make it
-    // safe themselves (NotPermitted, ArgumentGuard).
+    // safe themselves (NotPermitted, ArgumentGuard). Round 3 (SEC-R3-04) — escaped, not stripped: a target or a subject
+    // that differs from a real one by an invisible character is logged as what it is, and each is SafeText, escaped once.
     private McpException Refuse(Caller? caller, string target, Refusal refusal)
     {
         logger.LogWarning(
             "{Event}: rule={Rule} principal={Principal} target={Target} — {Detail}",
-            refusal.SecurityEvent, refusal.Rule, LogSafe.Text(caller?.Key ?? "anonymous"), LogSafe.Text(target), refusal.Message);
+            refusal.SecurityEvent, refusal.Rule, SafeText.Value(caller?.Key ?? "anonymous"), SafeText.Value(target), refusal.Message);
         return refusal.ToException();
     }
 
@@ -427,9 +429,10 @@ public sealed class RequestGate(
     // confirm that a hidden item exists; and so is a tool, a resource or a prompt of another trust domain
     // (contract-005 · T-5; G-17 round 2 for the resource and the prompt), whose log line keeps the rule that refused it.
     // contract-005 · G-17 round 2 — the name is as the caller wrote it (SEC-R2-02), made safe for a log line and cut
-    // (SEC-R2-03): the reply is logged too, by the SDK, with the exception it travels in.
+    // (SEC-R2-03): the reply is logged too, by the SDK, with the exception it travels in. Round 3 (SEC-R3-04) — escaped, not
+    // stripped: get_fore + U+200B + cast is answered as get_fore​cast, what was sent, and never as the real get_forecast.
     private static Refusal NotPermitted(string kind, string name) =>
-        Refusal.Of("not-permitted", "authz_fail", $"You may not use the {kind} '{LogSafe.Text(name)}', or it does not exist.");
+        Refusal.Of("not-permitted", "authz_fail", SafeText.Line($"You may not use the {kind} '{name}', or it does not exist."));
 
     private static RequestGate GateOf(IServiceProvider? services) =>
         services?.GetService<RequestGate>()

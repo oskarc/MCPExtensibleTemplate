@@ -21,7 +21,10 @@ using Serilog.Events;
 // verified against an identity provider over HTTPS, as the shipped server's are.
 //
 // CONTAINMENT (Containment.cs): it refuses to start unless Authentication:Resource and every identity provider's
-// Authority and Issuer are hosts under .test, checked on the fully built configuration, under any environment name.
+// Authority and Issuer are hosts under .test, checked on the fully built configuration, under any environment name —
+// and, contract-005 · G-17 round 3 (CON-R3-03), unless everything that decides whether a token is accepted (each bearer
+// scheme's keys, validators, configuration and backchannel, the scheme handlers, the services a principal is decided by,
+// and every step that configures them) is the product's or the framework's: nothing here may configure them.
 //
 // EXIT CODES, as the program's: 0 normal shutdown · 70 unhandled failure · 78 configuration it will not honour.
 // ============================================================================

@@ -65,7 +65,7 @@ public sealed record Caller(string IdentityProvider, string Subject, IReadOnlySe
 /// </summary>
 public sealed class Refusal
 {
-    private Refusal(string rule, string securityEvent, string message, Refusal? shownAs)
+    private Refusal(string rule, string securityEvent, SafeText message, Refusal? shownAs)
     {
         Rule = rule;
         SecurityEvent = securityEvent;
@@ -81,9 +81,10 @@ public sealed class Refusal
 
     /// <summary>
     /// What was refused and why, as the log records it; and what the caller is told, what they can do about it, unless
-    /// <see cref="ShownAs"/> answers them instead.
+    /// <see cref="ShownAs"/> answers them instead. contract-005 · G-17 round 3 (SEC-R3-04) — escaped once, a caller's value in
+    /// it included (<see cref="SafeText"/>), in the reply and in the frame's line alike.
     /// </summary>
-    public string Message { get; }
+    public SafeText Message { get; }
 
     /// <summary>
     /// contract-005 · T-5 — the refusal the caller is answered with in place of this one, when this one's rule or words would
@@ -91,8 +92,15 @@ public sealed class Refusal
     /// </summary>
     public Refusal? ShownAs { get; }
 
-    /// <summary>Creates a refusal.</summary>
-    public static Refusal Of(string rule, string securityEvent, string message) => new(rule, securityEvent, message, null);
+    /// <summary>Creates a refusal in the frame's own words, which name nothing a caller wrote.</summary>
+    public static Refusal Of(string rule, string securityEvent, string message) => new(rule, securityEvent, SafeText.Of(message), null);
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-04) — creates a refusal whose words name what a caller wrote, escaped once
+    /// (<see cref="SafeText.Line"/>).
+    /// </summary>
+    public static Refusal Of(string rule, string securityEvent, SafeText message) =>
+        new(rule, securityEvent, message ?? throw new ArgumentNullException(nameof(message)), null);
 
     /// <summary>
     /// contract-005 · T-5 — the pioneer's decision of 2026-09-29 (contract-005's revision of that date, "1: A"): a refusal the
@@ -104,7 +112,7 @@ public sealed class Refusal
     public static Refusal Concealed(string rule, string securityEvent, string message, Refusal shownAs)
     {
         ArgumentNullException.ThrowIfNull(shownAs);
-        return new(rule, securityEvent, message, shownAs);
+        return new(rule, securityEvent, SafeText.Of(message), shownAs);
     }
 
     /// <summary>The exception the SDK turns into an error for the caller: this refusal's, or the one it is shown as.</summary>

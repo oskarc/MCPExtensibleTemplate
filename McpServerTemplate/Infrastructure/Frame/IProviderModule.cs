@@ -10,7 +10,10 @@ namespace McpServerTemplate.Infrastructure.Frame;
 ///
 /// <see cref="Register"/> is the provider's only way into the service collection, and the frame
 /// watches it: a module that removes a registration, or adds one that belongs to the frame, the SDK
-/// or the identity layer, stops the server from starting (contract-003 · G-12).
+/// or the identity layer, stops the server from starting (contract-003 · G-12). contract-005 · G-17
+/// round 3 — declared, not inferred: a module registers its own types (declared in its own assembly,
+/// in its namespace), the HTTP client and resilience plumbing its client is built from, and options
+/// over those; anything else stops the server, naming the module and the type (FrameIntegrity).
 /// </summary>
 public interface IProviderModule
 {

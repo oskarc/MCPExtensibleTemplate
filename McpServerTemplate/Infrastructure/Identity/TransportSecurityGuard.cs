@@ -25,18 +25,31 @@ namespace McpServerTemplate.Infrastructure.Identity;
 /// Development. Under any other name — Staging, or a misnamed Production — a server with no proxy
 /// started and read bearer tokens over plain http. It applies wherever they do now: in every
 /// environment but Development, which runs on the developer's own loopback.</para>
+///
+/// <para>contract-005 · G-17 round 3 (SEC-R3-05) — and Development is held to that loopback. Nothing held it there: the
+/// image named Development on a 0.0.0.0 bind started, served bearer requests from the network over plain http with limits
+/// per instance, and answered an unauthenticated caller's failed request with a stack trace and the request's headers. The
+/// name that switches the deployment rules off was one more way round them. Development now refuses a bind that is not
+/// loopback, naming what a deployed server needs instead; the developer exception page is gone in every environment
+/// (HttpServerComposition).</para>
 /// </summary>
 public static class TransportSecurityGuard
 {
     /// <summary>
     /// Checks the transport configuration of a server running in <paramref name="environment"/>: in every environment but
-    /// Development, a proxy it trusts explicitly must be named (contract-005 · G-17 round 1). The HTTP composition calls this.
+    /// Development, a proxy it trusts explicitly must be named (contract-005 · G-17 round 1); in Development, the server
+    /// listens on loopback alone (contract-005 · G-17 round 3, SEC-R3-05). The HTTP composition calls this.
     /// </summary>
     /// <param name="configuration">Configuration to read.</param>
     /// <param name="environment">The server's environment.</param>
     public static void Validate(IConfiguration configuration, IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(environment);
+        if (environment.IsDevelopment())
+        {
+            RefuseDevelopmentOffLoopback(configuration);
+        }
+
         Validate(configuration, isProduction: !environment.IsDevelopment());
     }
 
@@ -97,5 +110,35 @@ public static class TransportSecurityGuard
                   + "later phase, and until it exists a certificate setting here would claim a "
                   + "protection the server does not provide."
                 : string.Empty));
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-05) — refuses a Development server whose HttpTransport:BindAddress is not loopback.
+    /// An address in none of the accepted forms is left to the host allowlist's check, which refuses it saying what Kestrel
+    /// would do with it (HttpServerComposition.AllowedHosts).
+    /// </summary>
+    private static void RefuseDevelopmentOffLoopback(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var bindAddress = configuration.GetValue("HttpTransport:BindAddress", "localhost") ?? "localhost";
+        if (HttpServerComposition.BindsLoopbackOnly(bindAddress) is not false)
+        {
+            return;
+        }
+
+        var which = bindAddress is "*" or "+"
+            || (System.Net.IPAddress.TryParse(bindAddress, out var any)
+                && (any.Equals(System.Net.IPAddress.Any) || any.Equals(System.Net.IPAddress.IPv6Any)))
+            ? "which listens on every interface"
+            : "which is not a loopback address";
+        throw new ConfigurationException(
+            $"HttpTransport:BindAddress is '{bindAddress}', {which}, and this server runs as Development "
+            + "(ASPNETCORE_ENVIRONMENT). Development is for this machine alone: it leaves out what a deployed server is held "
+            + "to — a proxy it trusts in front of it, terminating TLS (HttpTransport:KnownProxies or :KnownNetworks), "
+            + "per-caller limits kept in Redis (Limits:Redis), and the providers it serves, named (Providers:Enabled) — so it "
+            + "listens on loopback only, where nothing off this machine reaches it. Bind to 127.0.0.1, [::1] or localhost; or, "
+            + "to serve other machines, run as Production, which needs those settings and HttpTransport:AllowedHosts, behind "
+            + "the proxy.");
     }
 }

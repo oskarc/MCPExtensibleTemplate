@@ -182,6 +182,14 @@ public class TransportAndPrincipalTests
     [InlineData("foo.localhost", false, "reads it as localhost")]
     [InlineData("::1%1", true, "zone")]
     [InlineData("::1%1", false, "zone")]
+    // contract-005 · G-17 round 3 (SEC-R3-08) — a zone the address parser cannot resolve is dropped without a word, and so is
+    // everything after it: '::1%x:9999' was read as ::1, and the server bound [::1]:3001, the zone and the port it carried
+    // both ignored. A % on an address that is not link-local is refused whatever the parser kept, naming the zone as written.
+    [InlineData("::1%x", true, "an address with a zone, '%x', which the address parser dropped")]
+    [InlineData("::1%x", false, "an address with a zone, '%x', which the address parser dropped")]
+    [InlineData("::1%x:9999", true, "an address with a zone, '%x:9999', which the address parser dropped")]
+    [InlineData("::1%x:9999", false, "the port in HttpTransport:Port")]
+    [InlineData("::1%x;*", true, "an address with a zone, '%x;*'")]
     public void G12_2_a_bind_address_outside_the_accepted_forms_is_refused_saying_what_kestrel_would_do(string bindAddress, bool allowedHosts, string says)
     {
         var settings = new Dictionary<string, string?> { ["HttpTransport:BindAddress"] = bindAddress };

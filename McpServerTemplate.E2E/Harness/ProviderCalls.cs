@@ -64,7 +64,7 @@ public static class ProviderCalls
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(server);
-        return [.. (await owner.RecordedAsync(http, cancellationToken))
+        return [.. (await owner.RecordedAsync(http, server, cancellationToken))
             .Where(r => server.Made(r) && r.Host.Equals(host, StringComparison.OrdinalIgnoreCase) && (path is null || r.Path == path))];
     }
 

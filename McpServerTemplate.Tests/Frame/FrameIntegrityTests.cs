@@ -29,6 +29,120 @@ public class FrameIntegrityTests
         Assert.Contains(why, message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-01, SEC-R3-02) — declared, not inferred: a provider that adds a part of the frame
+    /// of its own, which the check's list of forbidden namespaces did not name, refuses startup naming itself and the type.
+    /// Each was accepted: a provider's HttpContextFactory made every request with no token a principal of its choosing; its
+    /// ILoggerFactory took the whole log, security events included, round the line-safe pipeline; an ILoggerProvider or a
+    /// Serilog logger of its own reaches the same log; its IOptionsFactory for ForwardedHeadersOptions put a /0 trust in force.
+    /// The memory cache every provider shares is the frame's to lay, as logging is; and a provider declared in ASP.NET Core's
+    /// own namespace owns none of ASP.NET Core's types, a namespace being only a name.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(ContextForgingModule), "Microsoft.AspNetCore.Http.IHttpContextFactory")]
+    [InlineData(typeof(LoggerFactoryModule), "Microsoft.Extensions.Logging.ILoggerFactory")]
+    [InlineData(typeof(LoggerProviderModule), "Microsoft.Extensions.Logging.ILoggerProvider")]
+    [InlineData(typeof(SerilogModule), "Serilog.ILogger")]
+    [InlineData(typeof(ForwardedHeadersOptionsModule), "Microsoft.Extensions.Options.IOptionsFactory<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>")]
+    [InlineData(typeof(MemoryCacheModule), "Microsoft.Extensions.Caching.Memory.IMemoryCache")]
+    [InlineData(typeof(Microsoft.AspNetCore.Http.NamespaceSquatterModule), "Microsoft.AspNetCore.Http.IHttpContextFactory")]
+    public void G17_a_provider_that_adds_a_part_of_the_frame_of_its_own_refuses_startup_naming_it(Type moduleType, string type)
+    {
+        var module = (IProviderModule)Activator.CreateInstance(moduleType)!;
+        var message = FrameHarness.Refusal([module], StartupRefusalTests.SettingsWithKey([module]));
+
+        Assert.Contains($"The provider '{module.Name}' registered services", message, StringComparison.Ordinal);
+        Assert.Contains($"which no provider may register: {type}.", message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-01) — the control for the rows above: what a provider may register is exactly what
+    /// the built-in providers' registrations add. Each built-in provider starts alone, which is when its registrations add the
+    /// most (the HTTP client factory's and the resilience handler's plumbing are the first provider's to add), and all three
+    /// start together; and so does a provider from another assembly with a typed client of its own, as the end-to-end test
+    /// host's irreversible provider has.
+    /// </summary>
+    [Theory]
+    [InlineData("Smhi")]
+    [InlineData("SmhiObs")]
+    [InlineData("JsonPlaceholder")]
+    public void G17_each_built_in_provider_alone_starts(string name)
+    {
+        var module = BuiltInProviders.Create().Single(m => m.Name == name);
+        using var provider = FrameHarness.Compose([module], StartupRefusalTests.SettingsWithKey([module]));
+
+        Assert.Equal([name], provider.GetRequiredService<EnabledProviders>().Modules.Select(m => m.Name));
+    }
+
+    [Fact]
+    public void G17_a_provider_with_a_typed_http_client_of_its_own_starts()
+    {
+        var module = new TypedClientModule();
+        using var provider = FrameHarness.Compose([module], StartupRefusalTests.SettingsWithKey([module]));
+
+        Assert.NotNull(provider.GetService<TypedClientModuleClient>());
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 — a provider owns the types of its namespace and those under it, in its own assembly, so a
+    /// provider declared in a namespace that holds another provider's would own that provider's types and could register over
+    /// them. The pair refuses startup, naming both. Two providers in one namespace of one assembly are one provider's parts —
+    /// this suite's own test modules, the end-to-end test host's two — and start, as the rows above show.
+    /// </summary>
+    [Fact]
+    public void G17_a_provider_whose_namespace_holds_another_providers_refuses_startup_naming_both()
+    {
+        IProviderModule[] modules = [new Nesting.OuterNamespaceModule(), new Nesting.Inner.InnerNamespaceModule()];
+        var message = FrameHarness.Refusal(modules, StartupRefusalTests.SettingsWithKey(modules));
+
+        Assert.Contains(
+            "'Outer' (McpServerTemplate.Tests.Frame.Nesting) holds 'Inner' (McpServerTemplate.Tests.Frame.Nesting.Inner)",
+            message,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-01) — defence in depth. Should an HttpContextFactory that forges every request's
+    /// principal be in place anyway — put beside the composition here, where no provider can reach — a request to /mcp with no
+    /// token is still refused 401 with the metadata challenge: /mcp's policy names the router, which puts what the bearer
+    /// schemes made of the request in place of the principal it carried. The finding's forged principal read resources and
+    /// listed tools with no token. The control: a request with a token is served, the forging factory still in place.
+    /// </summary>
+    [Fact]
+    public async Task G17_a_principal_the_bearer_schemes_did_not_produce_is_refused_at_mcp()
+    {
+        using var corp = new TestIdentityProvider("corp", "https://corp.example.com/");
+        var forged = 0;
+        await using var server = await McpServerTemplate.Tests.Identity.InProcessServer.StartAsync(
+            [corp],
+            modules: [.. BuiltInProviders.Create(), new TestModule()],
+            outsideTheFrame: services => services.AddSingleton<Microsoft.AspNetCore.Http.IHttpContextFactory>(
+                sp => new ForgingHttpContextFactory(
+                    new Microsoft.AspNetCore.Http.DefaultHttpContextFactory(sp), () => Interlocked.Increment(ref forged))));
+
+        foreach (var method in new[] { "initialize", "tools/list" })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, McpServerTemplate.Tests.Identity.InProcessServer.McpPath)
+            {
+                Content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 1, method, @params = new { } }),
+                    System.Text.Encoding.UTF8,
+                    "application/json"),
+            };
+            request.Headers.Accept.ParseAdd("application/json, text/event-stream");
+            using var response = await server.Client.SendAsync(request);
+
+            Assert.True(Volatile.Read(ref forged) > 0, "the forging factory made no request's context, so this row shows nothing about it.");
+            Assert.True(
+                response.StatusCode == System.Net.HttpStatusCode.Unauthorized,
+                $"{method} with no token, as the forged principal, got {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+            Assert.Contains("resource_metadata", string.Join(" ", response.Headers.WwwAuthenticate), StringComparison.Ordinal);
+        }
+
+        using var signedIn = await server.PostAsync(corp.MintToken(GateClient.Resource, scopes: ["weather:read"]));
+        Assert.NotEqual(System.Net.HttpStatusCode.Unauthorized, signedIn.StatusCode);
+    }
+
     [Fact]
     public void T13_a_filter_the_frame_did_not_install_refuses_startup()
     {

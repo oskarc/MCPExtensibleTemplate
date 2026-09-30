@@ -16,7 +16,12 @@ namespace McpServerTemplate.E2E;
 /// </summary>
 public sealed class LogSinkTests(ITestOutputHelper output)
 {
-    /// <summary>The image's working directory (Dockerfile, WORKDIR), owned by root; the app user 1654 cannot create anything in it.</summary>
+    /// <summary>
+    /// The image's working directory (Dockerfile, WORKDIR), owned by root; the app user 1654 cannot create anything in it.
+    /// contract-005 · G-17 round 3 (CON-R3-01) — so under the builder operators use, too: the Dockerfile lays /app out as root, where
+    /// BuildKit had made it the app user's and this test passed only because the harness built with the classic builder. The harness
+    /// builds with BuildKit now, and ShippedImageContentsTests holds /app's owners to this.
+    /// </summary>
     private const string WorkingDirectory = "/app";
 
     private const string SinkPathWritable = "t11-5-sink-path-writable";

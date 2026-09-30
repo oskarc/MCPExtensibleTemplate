@@ -268,6 +268,14 @@ public class IdentityConfigurationTests
     [InlineData("Authentication:IdentityProviders:corp:Authority", "https://login.example.com\n", "U+000A at its end")]
     [InlineData("Authentication:Resource", " https://mcp.example.com/mcp", "a space at its start")]
     [InlineData("Authentication:Resource", "https://mcp.example.com/mcp ", "a space at its end")]
+    // contract-005 · G-17 round 3 (SEC-R3-06) — read by code point: a format character beyond the basic plane is stored as a
+    // surrogate pair, neither half of which was classed as one, so each of these was accepted, and an Issuer was published
+    // as written, matched by no token. Named by its code point, and counted as one character; half a pair is refused too.
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://login.example.com/\U000E0020", "U+E0020 at its end")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://login.example.com/\U000E0001", "U+E0001 at its end")]
+    [InlineData("Authentication:IdentityProviders:corp:Issuer", "https://login.example.com/realms/c\U0001D173orp", "U+1D173 at character 35")]
+    [InlineData("Authentication:IdentityProviders:corp:Authority", "https://login.example.com\U000E0020", "U+E0020 at its end")]
+    [InlineData("Authentication:Resource", "https://mcp.exa\U000E0020mple.com/mcp", "U+E0020 at character 16")]
     public void T9_whitespace_in_the_resource_an_authority_or_an_issuer_is_refused_naming_it(string key, string value, string where)
     {
         var settings = Wellformed();
@@ -278,6 +286,23 @@ public class IdentityConfigurationTests
         Assert.StartsWith($"{key} is '", ex.Message, StringComparison.Ordinal);
         Assert.Contains($"which holds {where}.", ex.Message, StringComparison.Ordinal);
         Assert.Contains("Write it without whitespace or control characters.", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-06) — half of a surrogate pair with no other half is no character at all, and is
+    /// refused where it stands, named by its code unit. A fact of its own: a theory's arguments are written out as UTF-8,
+    /// which cannot hold it.
+    /// </summary>
+    [Fact]
+    public void T9_half_a_surrogate_pair_in_an_issuer_is_refused_naming_it()
+    {
+        var settings = Wellformed();
+        settings["Authentication:IdentityProviders:corp:Issuer"] = "https://login.example.com/\uD800";
+
+        var ex = Assert.Throws<ConfigurationException>(() => IdentityConfigurationBinder.Bind(Config(settings)));
+
+        Assert.StartsWith("Authentication:IdentityProviders:corp:Issuer is '", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("which holds U+D800, half of a surrogate pair with no other half, at its end.", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

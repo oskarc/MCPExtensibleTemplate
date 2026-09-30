@@ -57,7 +57,17 @@ public sealed partial class StandInUpstream : IUpstreamService
     public NameMap Names { get; }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<UpstreamRequest>> RecordedAsync(HttpClient http, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<UpstreamRequest>> RecordedAsync(HttpClient http, RequestSource from, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+
+        // contract-005 · G-17 round 3 (HAR-R3-04) — the requests from made, and no others; read whole first, as before, so the wait
+        // below is for the record to hold anything at all, not for this server's first request.
+        return [.. (await EveryRequestAsync(cancellationToken)).Where(from.Made)];
+    }
+
+    /// <summary>Every request the stand-in recorded, every server's: for <see cref="RecordedAsync"/>, which a <see cref="RequestSource"/> bounds.</summary>
+    private async Task<IReadOnlyList<UpstreamRequest>> EveryRequestAsync(CancellationToken cancellationToken)
     {
         // The access log follows a request a moment after it completes; a read that finds nothing looks again for up to
         // two seconds, so a request just answered is not missed.

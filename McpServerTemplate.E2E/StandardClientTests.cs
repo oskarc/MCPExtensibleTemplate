@@ -27,7 +27,9 @@ namespace McpServerTemplate.E2E;
 /// test's window; a server that never ran the tool passed on theirs. The fake is left without a forecast: a stub for that path
 /// would answer every class that asks it, and the tool's own answer is not the claim — that it ran and reached its upstream is.
 /// contract-005 · G-17 round 2 (HAR-R2-03) — and a flow that failed because a name of the environment did not answer (the
-/// test issuer stopped, or its certificate untrusted) is that environment fault, named, never the claim's red.
+/// test issuer stopped, or its certificate untrusted) is that environment fault, named, never the claim's red. contract-005 ·
+/// G-17 round 3 (HAR-R3-01) — nor one that accepted the connection and did not answer in the client's time (hung, paused,
+/// slow): the flow runs through <see cref="StandardClient.RunAsync"/>, whose log counts a request cancelled before its answer.
 /// </summary>
 public sealed class StandardClientTests(StandardClientTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<StandardClientTests.Server>
@@ -55,8 +57,6 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
         // Unique to this run, so the issuer's record of /authorize and /token is this test's alone.
         var clientId = $"e2e-standard-client-{Guid.NewGuid():N}";
         var endpoint = new Uri(ServerUnderTest.Resource);
-        var log = new NameMapLog();
-        using var http = fixture.CreateClient(log);
 
         // contract-005 · G-17 round 2 (HAR-R2-01) — the witness, read for this server alone, through a client of its own so the
         // name map's log holds the client's flow and nothing else.
@@ -65,23 +65,15 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
         var owner = fixture.Environment.UpstreamFor(ForecastHost);
         var upstreamBefore = (await ProviderCalls.FromServerAsync(owner, witness, server, ForecastHost, ToolUpstreamRequest)).Count;
 
+        // contract-005 · G-17 round 1 (HAR-R1-04), round 2 (HAR-R2-03) — the claim's failures only: a status the server answered,
+        // or an MCP error, once the name map's log shows every name of the environment answered; anything else propagates as what
+        // it is. contract-005 · G-17 round 3 (HAR-R3-01, HAR-R3-04) — the harness's one run of the SDK's OAuth client reads that
+        // log itself, counts a name that did not answer in time among those that did not answer, and gives the probe the whole
+        // initialization's budget: a hung or slow test issuer read here as the server's metadata failing.
         CallToolResult? result = null;
-        Exception? failure = null;
-        try
-        {
-            await using var client = await McpClient.CreateAsync(StandardClient.Transport(http, endpoint, clientId));
-            result = await client.CallToolAsync(Tool);
-        }
-        catch (Exception ex) when (Claim.IsTheServersAnswer(ex))
-        {
-            // contract-005 · G-17 round 1 (HAR-R1-04) — the claim's failures only: a status the server answered, or an MCP
-            // error (the SDK's own, when the flow the server's metadata sent it on could not be completed). A connection or
-            // TLS failure, or an environment fault, propagates as what it is. contract-005 · G-17 round 2 (HAR-R2-03) — and the
-            // SDK's OAuth client throws its own McpException for a connection or TLS failure at the authorization server, so the
-            // name map's log is read first: a request no name of the environment answered is thrown as that fault.
-            log.ThrowIfAMappedNameGaveNoAnswer("t4: the standard client's flow", ex);
-            failure = ex;
-        }
+        var flow = await StandardClient.RunAsync(
+            log => fixture.CreateClient(log), endpoint, clientId, "t4: the standard client's flow", async client => result = await client.CallToolAsync(Tool));
+        var (log, failure) = (flow.Log, flow.Failure);
 
         output.WriteLine($"Requests through the name map:{Environment.NewLine}{log}");
 
@@ -103,7 +95,7 @@ public sealed class StandardClientTests(StandardClientTests.Server fixture, ITes
 
         // The flow, as the authorization server saw it: one authorization request and one token
         // request from this client, each for this resource and with S256.
-        var seen = (await TestIssuerService.AuthorizationsAsync(http, IssuerA))
+        var seen = (await TestIssuerService.AuthorizationsAsync(witness, IssuerA))
             .GetValueOrDefault(IssuerA, [])
             .Where(r => r.ClientId == clientId)
             .ToList();

@@ -2,10 +2,12 @@ using McpServerTemplate.Infrastructure;
 using McpServerTemplate.Providers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace McpServerTemplate.Tests.Identity;
@@ -280,6 +282,97 @@ public class TransportCompositionTests
         request.Headers.Add("X-Forwarded-For", forwardedFor);
         request.Headers.Add("X-Forwarded-Proto", "https");
         return await http.SendAsync(request);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-05) — Development is for this machine alone: it leaves out the trusted proxy and
+    /// TLS, Redis and Providers:Enabled, and nothing held it to loopback, so the image named Development on 0.0.0.0 served the
+    /// network over plain http. A bind that is not loopback refuses to start there now, saying what a deployed server needs.
+    /// The controls: Development on each loopback spelling composes, and so does another environment on 0.0.0.0 behind a proxy.
+    /// </summary>
+    [Theory]
+    [InlineData("0.0.0.0", "which listens on every interface")]
+    [InlineData("[::]", "which listens on every interface")]
+    [InlineData("*", "which listens on every interface")]
+    [InlineData("10.1.2.3", "which is not a loopback address")]
+    public async Task G17_development_refuses_a_bind_that_is_not_loopback(string bindAddress, string which)
+    {
+        var settings = Settings();
+        settings["HttpTransport:AllowedHosts:0"] = "mcp.example.com";
+
+        foreach (var loopback in new[] { "localhost", "127.0.0.1", "[::1]" })
+        {
+            Compose(Builder("Development", new Dictionary<string, string?>(settings) { ["HttpTransport:BindAddress"] = loopback }));
+        }
+
+        var deployed = new Dictionary<string, string?>(Settings(await TestRedis.ConnectionStringAsync()))
+        {
+            ["HttpTransport:BindAddress"] = "0.0.0.0",
+            ["HttpTransport:AllowedHosts:0"] = "mcp.example.com",
+            ["HttpTransport:KnownProxies:0"] = "10.1.2.3",
+        };
+        Compose(Builder("Production", deployed));
+
+        settings["HttpTransport:BindAddress"] = bindAddress;
+        var ex = Assert.Throws<ConfigurationException>(() => Compose(Builder("Development", settings)));
+
+        Assert.StartsWith($"HttpTransport:BindAddress is '{bindAddress}', {which}, and this server runs as Development", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Development is for this machine alone", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("HttpTransport:KnownProxies", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Limits:Redis", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Providers:Enabled", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-05) — the developer exception page, which ASP.NET Core puts in front of a Development
+    /// server's pipeline, answered an unhandled exception with its message, its stack and the request's headers, the
+    /// Authorization header among them. It answers with the status alone now, and no body, whatever the client accepts. The
+    /// control: the same page, from the same services less the frame's filter, writes all of that.
+    /// </summary>
+    [Theory]
+    [InlineData("text/plain")]
+    [InlineData("text/html")]
+    [InlineData("application/json")]
+    public async Task G17_the_developer_exception_page_answers_nothing_of_the_exception(string accept)
+    {
+        const string Secret = "g17-r3-secret-message";
+        var builder = Builder("Development", Settings());
+        Compose(builder);
+        await using var app = builder.Build();
+
+        var withoutTheFilter = Builder("Development", Settings());
+        Compose(withoutTheFilter);
+        withoutTheFilter.Services.RemoveAll<Microsoft.AspNetCore.Diagnostics.IDeveloperPageExceptionFilter>();
+        await using var control = withoutTheFilter.Build();
+
+        var (status, body) = await ThrowThroughTheDeveloperPageAsync(app.Services, accept, Secret);
+        Assert.Equal(StatusCodes.Status500InternalServerError, status);
+        Assert.True(body.Length == 0, $"the developer exception page answered a {accept} client with: {body}");
+
+        var (_, shown) = await ThrowThroughTheDeveloperPageAsync(control.Services, accept, Secret);
+        Assert.Contains(Secret, shown, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The status and body the developer exception page answers a request with, the exception page set up as ASP.NET Core sets
+    /// it up in Development (UseDeveloperExceptionPage) over <paramref name="services"/>, and the request's handler throwing.
+    /// </summary>
+    private static async Task<(int Status, string Body)> ThrowThroughTheDeveloperPageAsync(IServiceProvider services, string accept, string secret)
+    {
+        var pipeline = new ApplicationBuilder(services);
+        pipeline.UseDeveloperExceptionPage();
+        pipeline.Run(_ => throw new InvalidOperationException(secret));
+
+        var context = new DefaultHttpContext { RequestServices = services };
+        context.Request.Method = "POST";
+        context.Request.Path = "/mcp";
+        context.Request.Headers.Accept = accept;
+        context.Request.Headers.Authorization = "Bearer g17-r3-token";
+        using var body = new MemoryStream();
+        context.Response.Body = body;
+
+        await pipeline.Build()(context);
+        return (context.Response.StatusCode, System.Text.Encoding.UTF8.GetString(body.ToArray()));
     }
 
     /// <summary>

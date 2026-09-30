@@ -210,6 +210,9 @@ public static class E2ENetwork
     /// What the engine gave a container used to be read only for the shared services, at the environment's start, and in T-6's
     /// last class; every other class's server and front, T-7's Redis, the docs profile's services and the startup-outcome
     /// servers were held by the suite's source alone, which a later create-parameter modifier, or ExtraHosts, would pass.
+    /// contract-005 · G-17 round 3 (HAR-R3-05) — and the check reads more than that record: nothing may be mounted over a file its
+    /// resolver reads, and the resolv.conf and hosts file it actually has are read from it and held to what the engine writes
+    /// (<see cref="ResolverNotTheRunsAsync"/>).
     /// </summary>
     internal static ContainerBuilder OnTheRunNetwork(string image, IDockerClient docker, INetwork network, string runId)
     {
@@ -241,20 +244,24 @@ public static class E2ENetwork
         ArgumentNullException.ThrowIfNull(docker);
 
         var container = await docker.Containers.InspectContainerAsync(containerId, cancellationToken);
-        if (CouldResolveRealNames(container) is { } why)
+        if ((CouldResolveRealNames(container) ?? await ResolverNotTheRunsAsync(docker, container, cancellationToken)) is { } why)
         {
             throw new EnvironmentFaultException(
                 "names",
                 $"the container {container.Name.TrimStart('/')} ({container.Config?.Image}) was started able to resolve real names: {why}. "
                 + $"Every container of the run is made through {nameof(E2ENetwork)}.{nameof(OnTheRunNetwork)}, with {NameServer} as its only "
-                + "name server, no search domain and no host names written in, so that no call of the run reaches the internet by name.");
+                + "name server, no search domain, no host names written in and nothing mounted over its resolver's files, so that no "
+                + "call of the run reaches the internet by name.");
         }
     }
 
     /// <summary>
     /// contract-005 · UC-6, G-17 round 2 (HAR-R2-08) — why a container, as the engine records how it was created, could resolve a
     /// real name, or null when it could not: a name server other than its own loopback alone, a search domain, or a host name
-    /// written into its hosts file (ExtraHosts), which is answered before any name server is asked.
+    /// written into its hosts file (ExtraHosts), which is answered before any name server is asked. contract-005 · G-17 round 3
+    /// (HAR-R3-05) — or a mount over a file its resolver reads (<see cref="MountedOverResolverFiles"/>): with a hosts file or a
+    /// resolv.conf of its own bound in, a container resolved real names while its record showed the name server, search domains
+    /// and written-in names this accepts.
     /// </summary>
     internal static string? CouldResolveRealNames(ContainerInspectResponse container)
     {
@@ -263,12 +270,186 @@ public static class E2ENetwork
         var servers = container.HostConfig?.DNS ?? [];
         var search = container.HostConfig?.DNSSearch ?? [];
         var written = container.HostConfig?.ExtraHosts ?? [];
+        var mounted = MountedOverResolverFiles(container);
         return servers.SequenceEqual([NameServer], StringComparer.Ordinal)
             && search.SequenceEqual([NoSearchDomain], StringComparer.Ordinal)
             && written.Count == 0
+            && mounted.Count == 0
             ? null
             : $"name servers [{string.Join(", ", servers)}], search domains [{string.Join(", ", search)}], host names written in "
-                + $"[{string.Join(", ", written)}]";
+                + $"[{string.Join(", ", written)}], mounts over its resolver's files [{string.Join(", ", mounted)}]";
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (HAR-R3-05) — the files a container's resolver reads, whatever image it runs: its name servers and
+    /// search domains (resolv.conf), the names answered before any name server is asked (hosts), and the order glibc asks its
+    /// sources in (nsswitch.conf). The engine writes the first two into every container it starts on the run's network.
+    /// </summary>
+    internal static readonly string[] ResolverFiles = ["/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf"];
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (HAR-R3-05) — the resolver file a mount at <paramref name="target"/> lies over — the file itself, or
+    /// a directory above it — or null when it lies over none. The path is read as the engine reads it: separators doubled, "." and
+    /// ".." resolved, a trailing separator dropped.
+    /// </summary>
+    internal static string? ResolverFileUnder(string target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        var parts = new List<string>();
+        foreach (var part in target.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part == "..")
+            {
+                if (parts.Count > 0)
+                {
+                    parts.RemoveAt(parts.Count - 1);
+                }
+            }
+            else if (part != ".")
+            {
+                parts.Add(part);
+            }
+        }
+
+        var clean = "/" + string.Join('/', parts);
+        return ResolverFiles.FirstOrDefault(f => f == clean || clean == "/" || f.StartsWith(clean + "/", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (HAR-R3-05) — every mount of <paramref name="container"/>, as the engine records it, that lies over a
+    /// resolver file (<see cref="ResolverFileUnder"/>): each mount point it lists (a file or a directory bound in, a volume), each
+    /// mount it was created with, and each tmpfs.
+    /// </summary>
+    internal static IReadOnlyList<string> MountedOverResolverFiles(ContainerInspectResponse container)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+
+        IEnumerable<string?> targets = [
+            .. (container.Mounts ?? []).Select(m => m.Destination),
+            .. (container.HostConfig?.Mounts ?? []).Select(m => m.Target),
+            .. container.HostConfig?.Tmpfs?.Keys ?? []];
+        return [.. targets
+            .OfType<string>()
+            .Where(t => ResolverFileUnder(t) is not null)
+            .Select(t => $"{t} (over {ResolverFileUnder(t)})")
+            .Distinct(StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (HAR-R3-05) — the name server Docker's embedded DNS answers on, in every container on a user-defined
+    /// network: the one a container of the run's resolv.conf may name.
+    /// </summary>
+    internal const string EmbeddedDns = "127.0.0.11";
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (HAR-R3-05) — why the resolver <paramref name="container"/> actually has is not the run's, or null
+    /// when it is: its /etc/resolv.conf and /etc/hosts, read through Docker's archive API as the CA-trust check reads files, held
+    /// to what the engine writes for a container of the run (<see cref="ResolvConfNotTheRuns"/>, <see cref="HostsNotTheRuns"/>).
+    /// The engine's record of how the container was started (<see cref="CouldResolveRealNames"/>) is not the resolver it uses: a
+    /// file mounted or written over either one resolved real names with that record unchanged. A container that has stopped, or
+    /// gone, resolves nothing more, and is not one.
+    /// </summary>
+    internal static async Task<string?> ResolverNotTheRunsAsync(IDockerClient docker, ContainerInspectResponse container, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(docker);
+        ArgumentNullException.ThrowIfNull(container);
+
+        string? resolv;
+        string? hosts;
+        try
+        {
+            resolv = await ContainerArchive.ReadTextAsync(docker, container.ID, "/etc/resolv.conf", cancellationToken);
+            hosts = await ContainerArchive.ReadTextAsync(docker, container.ID, "/etc/hosts", cancellationToken);
+        }
+        catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            resolv = hosts = null;
+        }
+
+        if (resolv is null || hosts is null)
+        {
+            // Not there to read: a container that has stopped or gone meanwhile resolves nothing more; one still running without
+            // the files the engine writes for every container is not one of the run's as the run makes them.
+            try
+            {
+                var now = await docker.Containers.InspectContainerAsync(container.ID, cancellationToken);
+                if (now.State is not { Running: true })
+                {
+                    return null;
+                }
+            }
+            catch (DockerContainerNotFoundException)
+            {
+                return null;
+            }
+
+            return $"its {(resolv is null ? "/etc/resolv.conf" : "/etc/hosts")} could not be read through the engine's archive, where the engine "
+                + "writes one into every container it starts on the run's network";
+        }
+
+        var why = new[] { ResolvConfNotTheRuns(resolv), HostsNotTheRuns(hosts) }.OfType<string>().ToArray();
+        return why.Length == 0 ? null : string.Join("; ", why);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (HAR-R3-05) — why <paramref name="text"/>, a resolv.conf, is not one the engine writes for a
+    /// container of the run, or null when it is: at least one name server, every one of them the embedded DNS
+    /// (<see cref="EmbeddedDns"/>), which answers the run's names and forwards any other to <see cref="NameServer"/>, where nothing
+    /// answers; and no search or domain line but ".", which is none.
+    /// </summary>
+    internal static string? ResolvConfNotTheRuns(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var servers = new List<string>();
+        var domains = new List<string>();
+        foreach (var line in text.Replace("\r", string.Empty, StringComparison.Ordinal).Split('\n').Select(l => l.Trim()))
+        {
+            if (line.Length == 0 || line[0] is '#' or ';')
+            {
+                continue;
+            }
+
+            var words = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+            switch (words[0])
+            {
+                case "nameserver":
+                    servers.Add(words.Length > 1 ? words[1] : string.Empty);
+                    break;
+                case "search" or "domain":
+                    domains.AddRange(words.Skip(1));
+                    break;
+            }
+        }
+
+        return servers.Count > 0 && servers.All(s => s == EmbeddedDns) && domains.All(d => d == NoSearchDomain)
+            ? null
+            : $"its /etc/resolv.conf names the name servers [{string.Join(", ", servers)}] and the search domains [{string.Join(", ", domains)}], "
+                + $"where the engine writes the embedded DNS, {EmbeddedDns}, alone and no search domain";
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (HAR-R3-05) — why <paramref name="text"/>, a hosts file, answers a real name, or null when it
+    /// answers none: every name in it is one no real resolver gives out — a single label (localhost, the ip6- names, the
+    /// container's own host name, which the engine writes) or a name under a suffix reserved for local or test use (.test,
+    /// .localhost, .invalid, .internal, .local, .home.arpa). A real name written in, as a mounted hosts file wrote
+    /// opendata-download-metobs.smhi.se, is answered before any name server is asked.
+    /// </summary>
+    internal static string? HostsNotTheRuns(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        string[] local = [".test", ".localhost", ".invalid", ".internal", ".local", ".home.arpa"];
+        var real = text.Replace("\r", string.Empty, StringComparison.Ordinal).Split('\n')
+            .Select(l => (l.IndexOf('#', StringComparison.Ordinal) is var hash and >= 0 ? l[..hash] : l).Trim())
+            .Where(l => l.Length > 0)
+            .SelectMany(l => l.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries).Skip(1))
+            .Select(n => n.TrimEnd('.'))
+            .Where(n => n.Contains('.', StringComparison.Ordinal) && !local.Any(s => n.EndsWith(s, StringComparison.OrdinalIgnoreCase)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return real.Length == 0 ? null : $"its /etc/hosts answers real names [{string.Join(", ", real)}]";
     }
 
     /// <summary>
@@ -276,7 +457,10 @@ public static class E2ENetwork
     /// not started resolving no real name, as the engine records how it started — its name servers, search domains and, since
     /// G-17 round 2 (HAR-R2-08), host names written in — named with what it was given (<see cref="CouldResolveRealNames"/>).
     /// Empty when every one was started with <see cref="NameServer"/> alone, no search domain and no host name written in. A
-    /// container removed while it is asked has left the network, and is not one.
+    /// container removed while it is asked has left the network, and is not one. contract-005 · G-17 round 3 (HAR-R3-05) — and
+    /// nothing mounted over its resolver's files, and the resolver it actually has, read from it, the run's
+    /// (<see cref="ResolverNotTheRunsAsync"/>): T-6's "every container on the run's network resolves no real name" read the record
+    /// of how each started, and a hosts file mounted in left that record as this accepts it.
     /// </summary>
     internal static async Task<IReadOnlyList<string>> ResolvingRealNamesAsync(IDockerClient docker, string network, CancellationToken cancellationToken)
     {
@@ -296,7 +480,7 @@ public static class E2ENetwork
                 continue;
             }
 
-            if (CouldResolveRealNames(container) is { } why)
+            if ((CouldResolveRealNames(container) ?? await ResolverNotTheRunsAsync(docker, container, cancellationToken)) is { } why)
             {
                 found.Add($"{container.Name.TrimStart('/')} ({why})");
             }

@@ -78,7 +78,7 @@ public static class IdentityRegistration
 
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
-            if (Context.Items.TryGetValue(RefusedTokenItem, out var why) && why is string reason)
+            if (Context.Items.TryGetValue(RefusedTokenItem, out var why) && why is SafeText reason)
             {
                 LogRefusal(Context, UnattributableScheme, reason);
             }
@@ -134,6 +134,12 @@ public static class IdentityRegistration
             {
                 options.Authority = provider.Authority;
                 options.MapInboundClaims = false;
+
+                // contract-005 · G-17 round 3 (SEC-R3-01) — /mcp's policy names the router (HttpServerComposition.McpPolicy), so
+                // a refused request is challenged through it, and it hands the challenge to the scheme it routed the token to.
+                // That scheme hands it on to the MCP scheme, as the unattributable scheme does: a refused token is told where
+                // to get a good one, with the metadata challenge, not JwtBearer's own error="invalid_token" and its reason.
+                options.ForwardChallenge = McpAuthenticationDefaults.AuthenticationScheme;
 
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
@@ -211,7 +217,7 @@ public static class IdentityRegistration
                             // set here is returned as it is, so OnAuthenticationFailed never runs for it, and the
                             // framework's own line is an Information event Production filters out: the token was
                             // refused and nothing said why. The reason names the claims, never the token.
-                            LogRefusal(context.HttpContext, scheme, reason);
+                            LogRefusal(context.HttpContext, scheme, SafeText.Of(reason));
                             context.Fail(reason);
                             return Task.CompletedTask;
                         }
@@ -228,7 +234,7 @@ public static class IdentityRegistration
                         {
                             var reason = $"The token says it was issued {ahead.TotalSeconds:0} seconds from now, further ahead of this "
                                 + $"server's clock than the {ClockSkew.TotalSeconds:0} seconds it allows, so its age cannot be told.";
-                            LogRefusal(context.HttpContext, scheme, reason);
+                            LogRefusal(context.HttpContext, scheme, SafeText.Of(reason));
                             context.Fail(reason);
                             return Task.CompletedTask;
                         }
@@ -262,10 +268,11 @@ public static class IdentityRegistration
                     //
                     // contract-005 · G-17 round 2 (SEC-R2-03) — the message quotes what the token says, its kid among
                     // them, which is the caller's to write before any signature is checked: a kid of 5,000 characters
-                    // holding U+2028 was logged whole. It is made safe for a log line and cut (LogSafe.Text).
+                    // holding U+2028 was logged whole. It is made safe for a log line and cut (LogSafe.Text). Round 3
+                    // (SEC-R3-04) — escaped, not stripped, and once (SafeText).
                     OnAuthenticationFailed = context =>
                     {
-                        LogRefusal(context.HttpContext, scheme, LogSafe.Text(context.Exception.Message));
+                        LogRefusal(context.HttpContext, scheme, SafeText.Value(context.Exception.Message));
                         return Task.CompletedTask;
                     },
                 };
@@ -312,15 +319,16 @@ public static class IdentityRegistration
     /// credential attacks (roadmap P1.1): which scheme refused it, for which path, and why. The reason is the
     /// validator's message or the claims a token lacks, never the token: a token in a log is a credential in a log
     /// (roadmap I8). contract-005 · G-17 round 2 (SEC-R2-03) — a reason quoting the caller comes here made safe
-    /// (LogSafe.Text), and the path, the caller's too, is written escaped for a URL and cut.
+    /// (LogSafe.Text), and the path, the caller's too, is written escaped for a URL and cut. Round 3 (SEC-R3-04) — both
+    /// escaped, not stripped, and once: each is SafeText, which the log pipeline passes on as it is.
     /// </summary>
-    private static void LogRefusal(HttpContext context, string scheme, string reason) =>
+    private static void LogRefusal(HttpContext context, string scheme, SafeText reason) =>
         context.RequestServices
             .GetRequiredService<ILoggerFactory>()
             .CreateLogger("McpServerTemplate.Identity")
             .LogWarning(
                 "authn_login_fail: {Scheme} refused a token for {Path} — {Reason}",
-                scheme, LogSafe.Text(context.Request.Path.ToString()), reason);
+                scheme, SafeText.Value(context.Request.Path.ToString()), reason);
 
     /// <summary>
     /// Picks the scheme for a presented token by reading its issuer without validating anything.
@@ -350,7 +358,7 @@ public static class IdentityRegistration
         // with its reason and nothing of the token's but the issuer it names, made safe for a log line.
         if (token.Length > MaxTokenBytes)
         {
-            return Unattributable(context, $"the token is {token.Length} characters long, more than the {MaxTokenBytes} this server reads");
+            return Unattributable(context, SafeText.Line($"the token is {token.Length} characters long, more than the {MaxTokenBytes} this server reads"));
         }
 
         string? issuer;
@@ -358,23 +366,30 @@ public static class IdentityRegistration
         {
             issuer = new JsonWebTokenHandler().ReadJsonWebToken(token)?.Issuer;
         }
-        catch (ArgumentException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // Not a readable token. Nothing to route, and no reason to consult a key store. The library's own words are
             // not logged: they can quote the token.
-            return Unattributable(context, "the token cannot be read as a JSON web token");
+            //
+            // contract-005 · G-17 round 3 (SEC-R3-03) — whatever the reader throws, not ArgumentException alone. A token of
+            // five parts, one of them not base64url (eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkEyNTZHQ00ifQ.a.b.c.d, shaped as an
+            // encrypted token), made it throw FormatException, which left the router: the request got 500 and no challenge,
+            // nothing said why, and Kestrel logged a stack trace for each one an unauthenticated caller sent.
+            return Unattributable(context, SafeText.Of("the token cannot be read as a JSON web token"));
         }
 
         if (string.IsNullOrEmpty(issuer))
         {
-            return Unattributable(context, "the token names no issuer");
+            return Unattributable(context, SafeText.Of("the token names no issuer"));
         }
 
         var match = config.IdentityProviders.Values
             .FirstOrDefault(p => string.Equals(p.Issuer, issuer, StringComparison.Ordinal));
 
+        // contract-005 · G-17 round 3 (SEC-R3-04) — the issuer escaped, not stripped: one that differs from a configured issuer
+        // by an invisible character was logged as that configured issuer, which it is not.
         return match is null
-            ? Unattributable(context, $"no identity provider is configured for issuer '{LogSafe.Text(issuer)}'")
+            ? Unattributable(context, SafeText.Line($"no identity provider is configured for issuer '{issuer}'"))
             : SchemeFor(match.Name);
     }
 
@@ -382,7 +397,7 @@ public static class IdentityRegistration
     /// contract-005 · T-3, G-17 round 1 — the scheme for a token the router refuses, leaving <paramref name="reason"/> on the
     /// request for that scheme's handler to log, once (<see cref="UnattributableHandler"/>).
     /// </summary>
-    private static string Unattributable(HttpContext context, string reason)
+    private static string Unattributable(HttpContext context, SafeText reason)
     {
         context.Items[RefusedTokenItem] = reason;
         return UnattributableScheme;

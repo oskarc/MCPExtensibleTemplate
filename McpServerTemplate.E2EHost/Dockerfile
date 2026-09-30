@@ -7,7 +7,12 @@
 # It compiles the product from the same sources and lock file as the shipped image, with the test host beside it,
 # and runs the way the shipped image runs: the same digest-pinned base images, the same working directory and log
 # directory, the same non-root user, the product's own settings files (published with it from the product project).
-# No BuildKit-only syntax, as the root Dockerfile: the harness builds through the engine's classic builder.
+#
+# contract-005 · G-17 round 3 (CON-R3-01) — built by BuildKit, as the harness builds every image now and as operators build
+# the shipped one, and laid out as the root Dockerfile lays the shipped image out: owners and modes are set here rather than
+# left to a builder's defaults (WORKDIR makes /app as the user in force, root under the classic builder and the base
+# image's user, 1654, under BuildKit), so /app is root's, its files 0644 and its directories 0755, and logs/ alone the app
+# user's, whichever builder builds it. No BuildKit-only syntax, as the root Dockerfile.
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0.101-noble@sha256:5504edd1267dd4deab3443f960cfab219249c8bd935fbcc358f1c24aeae23fe0 AS build
 WORKDIR /src
@@ -21,12 +26,18 @@ COPY McpServerTemplate/ McpServerTemplate/
 COPY McpServerTemplate.E2EHost/ McpServerTemplate.E2EHost/
 RUN dotnet publish McpServerTemplate.E2EHost/McpServerTemplate.E2EHost.csproj -c Release --no-restore -o /app -p:UseAppHost=false
 
-# The log directory the Production file sink writes to, owned by the app user (the root Dockerfile explains why).
-RUN mkdir -p /runtime/logs
+# The log directory the Production file sink writes to, owned by the app user (the root Dockerfile explains why), and every
+# mode set here, where there is a shell, and carried across by COPY, as the root Dockerfile sets the shipped image's.
+RUN mkdir -p /runtime/logs \
+    && chmod -R u=rwX,go=rX /app \
+    && chmod 0755 /app /runtime/logs
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02 AS final
+
+# contract-005 · G-17 round 3 (CON-R3-01) — root while the tree is laid out, as in the root Dockerfile; the app user comes back last.
+USER 0:0
 WORKDIR /app
-COPY --from=build /app ./
+COPY --from=build --chown=0:0 /app ./
 COPY --from=build --chown=1654:1654 /runtime/logs ./logs
 EXPOSE 3001
 

@@ -132,10 +132,13 @@ public interface IUpstreamService : IAsyncDisposable
     /// reached the container answering a host (<see cref="E2EEnvironment.UpstreamFor"/>) without assuming it is WireMock.
     /// contract-005 · G-17 round 2 (HAR-R2-02) — each with when it was recorded, which a test reads one server's requests by,
     /// through <see cref="ProviderCalls.FromServerAsync"/> and <see cref="RequestSource"/>, and never by address alone.
+    /// contract-005 · G-17 round 3 (HAR-R3-04) — the requests <paramref name="from"/> made, and no others: every owner's record was
+    /// returned whole, and a caller could filter it by an address alone.
     /// </summary>
     /// <param name="http">A client made from the environment's name map, for an owner whose record is read over HTTPS.</param>
+    /// <param name="from">The server whose requests are read: from its address, since it started.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
-    public Task<IReadOnlyList<UpstreamRequest>> RecordedAsync(HttpClient http, CancellationToken cancellationToken = default);
+    public Task<IReadOnlyList<UpstreamRequest>> RecordedAsync(HttpClient http, RequestSource from, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// contract-005 · T-6 — every request it has recorded, whole, one text each: its URL, every header it arrived with, and its

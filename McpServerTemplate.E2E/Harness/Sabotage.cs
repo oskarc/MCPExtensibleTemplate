@@ -300,6 +300,24 @@ public static partial class Sabotage
                 || !File.ReadAllText(Path.Combine(root, $"McpServerTemplate.E2E/{c.Name}.cs")).Contains($"class {c.Name}", StringComparison.Ordinal))
             .Select(c => $"{c.Name} is not declared in McpServerTemplate.E2E/{c.Name}.cs, the file its reds are taken on."));
 
+        // contract-005 · G-17 round 3 (HAR-R3-02) — and compiled from that file alone, as the compiler recorded it: a part of the class
+        // in another file — a partial class's second part, with a test or a helper its claim rests on — could change the claim with
+        // every red still counted fresh, since a red is taken on the class's own file alone (Fingerprint). UpstreamTests was partial.
+        if (SourceDocuments.Missing is { } missing)
+        {
+            problems.Add($"The files each test class is compiled from cannot be read ({missing}), so a test class in more than one file would pass unseen.");
+        }
+        else
+        {
+            problems.AddRange(tests
+                .Select(t => t.Class).Distinct()
+                .Select(c => (Class: c, Own: $"/McpServerTemplate.E2E/{c.Name}.cs", Documents: SourceDocuments.Of(c)))
+                .Where(c => !c.Documents.Any(d => d.EndsWith(c.Own, StringComparison.Ordinal)) || c.Documents.Any(d => !d.EndsWith(c.Own, StringComparison.Ordinal)))
+                .Select(c => $"{c.Class.Name} is compiled from [{string.Join(", ", c.Documents.Order(StringComparer.Ordinal))}], not from "
+                    + $"McpServerTemplate.E2E/{c.Class.Name}.cs alone: its reds are taken on that one file, so a change in any other would leave "
+                    + "them counted fresh. Declare a test class whole, in its own file, and not partial."));
+        }
+
         return problems;
     }
 
@@ -327,6 +345,8 @@ public static partial class Sabotage
     /// test file's reds were taken on it as it is. A change to the harness or the product changes no fingerprint, and a
     /// fingerprint anyone can compute is no proof that a red was taken; the full retake, run by hand (scripts/e2e-sabotage.sh
     /// --all), proves the reds — contract-005 · the pioneer's decision of 2026-09-29 ("3. B"), which removed the scheduled one.
+    /// contract-005 · G-17 round 3 (HAR-R3-02) — one file is the whole test class: <see cref="Problems"/> refuses a test class the
+    /// compiler built from any other file as well (<see cref="SourceDocuments"/>), so no part of it lies outside what this hashes.
     /// </summary>
     public static string Fingerprint(EndToEndTest test)
     {

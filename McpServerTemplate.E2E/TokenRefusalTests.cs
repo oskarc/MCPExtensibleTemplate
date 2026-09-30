@@ -385,10 +385,10 @@ public sealed class TokenRefusalTests(TokenRefusalTests.Server fixture, ITestOut
 
     /// <summary>
     /// The POSTs the fake recorded from <paramref name="server"/>: the write tool's upstream requests. contract-005 · G-17 round 2
-    /// (HAR-R2-02) — from its address since it started.
+    /// (HAR-R2-02) — from its address since it started; contract-005 · G-17 round 3 (HAR-R3-04) — as the fake's reader now gives them.
     /// </summary>
     private static async Task<int> UpstreamPostsAsync(HttpClient http, RequestSource server) =>
-        (await WireMockService.EntriesAsync(http)).Count(e => server.Made(e) && e.Method == "POST" && e.Path == "/todos");
+        (await WireMockService.EntriesAsync(http, server)).Count(e => e.Method == "POST" && e.Path == "/todos");
 
     private static int Lookups(IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>> counts, string host) =>
         Count(counts, host, "/.well-known/openid-configuration") + Count(counts, host, "/jwks");

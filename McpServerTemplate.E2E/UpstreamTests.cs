@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using McpServerTemplate.E2E.Harness;
 using Xunit.Abstractions;
 
@@ -30,8 +29,12 @@ namespace McpServerTemplate.E2E;
 /// The pioneer's decision of 2026-09-29 (contract-005's revision of that date, "2. yes, cut it and mock any calls") cut the
 /// run's network off from real names (<see cref="E2ENetwork.NameServer"/>): every call a server of the run makes is answered
 /// by a fake or fails at the name lookup. <see cref="UpstreamNamesTests"/> holds T-6's last clause, the name lookup.
+///
+/// contract-005 · G-17 round 3 (HAR-R3-02) — not partial: its reds are taken on this file alone, and a part of it in another
+/// file could change its claim with every red still counted fresh. No other file can add to a class that is not partial, and
+/// the registry refuses a test class compiled from any file but its own (<see cref="SourceDocuments"/>).
 /// </summary>
-public sealed partial class UpstreamTests(UpstreamTests.Server fixture, ITestOutputHelper output)
+public sealed class UpstreamTests(UpstreamTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<UpstreamTests.Server>
 {
     /// <summary>Every built-in provider, each bound to idp-a.</summary>
@@ -164,7 +167,7 @@ public sealed partial class UpstreamTests(UpstreamTests.Server fixture, ITestOut
                 {
                     carrying.Add($"{owner.Name} holds the caller's token in {Excerpt(record, signature)}");
                 }
-                else if (JsonWebToken().IsMatch(record))
+                else if (JsonWebTokens.Pattern().IsMatch(record))
                 {
                     carrying.Add($"{owner.Name} holds a token in {Excerpt(record, signature)}");
                 }
@@ -180,8 +183,4 @@ public sealed partial class UpstreamTests(UpstreamTests.Server fixture, ITestOut
         var redacted = SabotageRecorder.Redacted(record).Replace(signature, "[signature]", StringComparison.Ordinal);
         return redacted.Length <= 400 ? $"'{redacted}'" : $"'{redacted[..400]}…'";
     }
-
-    /// <summary>A JSON web token: three base64url parts, the first a JSON object's ("eyJ").</summary>
-    [GeneratedRegex(@"eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*")]
-    private static partial Regex JsonWebToken();
 }

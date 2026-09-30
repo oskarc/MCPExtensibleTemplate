@@ -149,8 +149,8 @@ public sealed class TestHostConfirmationTests(TestHostConfirmationTests.Server f
 
     /// <summary>The runs the witness recorded from <paramref name="server"/>: each report's marker, which no other run has.</summary>
     private static async Task<IReadOnlyList<string>> RunsAsync(HttpClient http, RequestSource server) =>
-        [.. (await WireMockService.EntriesAsync(http))
-            .Where(e => server.Made(e) && e.Path.StartsWith(TestHost.WitnessPath, StringComparison.Ordinal))
+        [.. (await WireMockService.EntriesAsync(http, server))
+            .Where(e => e.Path.StartsWith(TestHost.WitnessPath, StringComparison.Ordinal))
             .Select(e => e.Path[TestHost.WitnessPath.Length..])
             .Distinct(StringComparer.Ordinal)];
 

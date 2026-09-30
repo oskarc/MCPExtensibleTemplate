@@ -194,3 +194,93 @@ public sealed class IdentityTamperingModule() : TestModule("IdentityTamperer")
         services.AddSingleton<IPostConfigureOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>>(
             new PostConfigureOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(null, o => o.TokenValidationParameters.ValidateAudience = false));
 }
+
+// ── contract-005 · G-17 round 3 (SEC-R3-01, SEC-R3-02): modules that replace the frame's parts by adding their own ──
+
+/// <summary>Replaces the host's HttpContextFactory: every request would run as the principal it forges.</summary>
+public sealed class ContextForgingModule() : TestModule("ContextForger")
+{
+    public override void Register(IServiceCollection services, IConfiguration configuration) =>
+        services.AddSingleton<Microsoft.AspNetCore.Http.IHttpContextFactory>(
+            sp => new ForgingHttpContextFactory(new Microsoft.AspNetCore.Http.DefaultHttpContextFactory(sp)));
+}
+
+/// <summary>Replaces the logger factory: the whole log, the frame's security events among it, would be its.</summary>
+public sealed class LoggerFactoryModule() : TestModule("LogTaker")
+{
+    public override void Register(IServiceCollection services, IConfiguration configuration) =>
+        services.AddSingleton<Microsoft.Extensions.Logging.ILoggerFactory>(Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+}
+
+/// <summary>Adds a logger provider of its own beside the log pipeline's.</summary>
+public sealed class LoggerProviderModule() : TestModule("LogListener")
+{
+    public override void Register(IServiceCollection services, IConfiguration configuration) =>
+        services.AddSingleton<Microsoft.Extensions.Logging.ILoggerProvider>(Microsoft.Extensions.Logging.Abstractions.NullLoggerProvider.Instance);
+}
+
+/// <summary>Registers a Serilog logger of its own.</summary>
+public sealed class SerilogModule() : TestModule("SerilogTaker")
+{
+    public override void Register(IServiceCollection services, IConfiguration configuration) =>
+        services.AddSingleton<Serilog.ILogger>(_ => new Serilog.LoggerConfiguration().CreateLogger());
+}
+
+/// <summary>Replaces the options factory of the forwarded-headers step: every address's forwarded headers would be believed.</summary>
+public sealed class ForwardedHeadersOptionsModule() : TestModule("ProxyTruster")
+{
+    public override void Register(IServiceCollection services, IConfiguration configuration) =>
+        services.AddSingleton<IOptionsFactory<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>>(
+            new OptionsFactory<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>([], []));
+}
+
+/// <summary>Registers its own memory cache over the one every provider shares.</summary>
+public sealed class MemoryCacheModule() : TestModule("CacheTaker")
+{
+    public override void Register(IServiceCollection services, IConfiguration configuration) =>
+        services.AddSingleton<Microsoft.Extensions.Caching.Memory.IMemoryCache>(
+            _ => new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()));
+}
+
+/// <summary>
+/// A provider outside the product's assembly with one typed HttpClient, as the end-to-end test host's irreversible module
+/// has: its client is its own, and the client factory its plumbing.
+/// </summary>
+public sealed class TypedClientModule() : TestModule("TypedClient")
+{
+    public override void Register(IServiceCollection services, IConfiguration configuration) =>
+        services.AddHttpClient<TypedClientModuleClient>(client => client.BaseAddress = new Uri("https://api.example.com"));
+}
+
+/// <summary>The typed client of <see cref="TypedClientModule"/>.</summary>
+public sealed class TypedClientModuleClient(HttpClient http)
+{
+    public HttpClient Http { get; } = http;
+}
+
+/// <summary>
+/// An HttpContextFactory that sets every request's principal before anything else sees it: corp's user 'nobody', holding
+/// weather:read and test:act, issued now. What a provider could make of every request without a token, had it been let
+/// replace the host's factory.
+/// </summary>
+public sealed class ForgingHttpContextFactory(Microsoft.AspNetCore.Http.IHttpContextFactory inner, Action? forged = null)
+    : Microsoft.AspNetCore.Http.IHttpContextFactory
+{
+    public Microsoft.AspNetCore.Http.HttpContext Create(Microsoft.AspNetCore.Http.Features.IFeatureCollection featureCollection)
+    {
+        var context = inner.Create(featureCollection);
+        context.User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+            [
+                new System.Security.Claims.Claim(TrustDomainClaims.IdentityProvider, "corp"),
+                new System.Security.Claims.Claim("sub", "nobody"),
+                new System.Security.Claims.Claim(TrustDomainClaims.Scope, "weather:read"),
+                new System.Security.Claims.Claim(TrustDomainClaims.Scope, "test:act"),
+                new System.Security.Claims.Claim("iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ],
+            authenticationType: "module"));
+        forged?.Invoke();
+        return context;
+    }
+
+    public void Dispose(Microsoft.AspNetCore.Http.HttpContext httpContext) => inner.Dispose(httpContext);
+}

@@ -401,11 +401,27 @@ services:
     # Started again when the Docker daemon restarts or the host reboots, and after a failure, until you stop it; so is
     # each service below.
     restart: unless-stopped
+    # Its container's output kept in at most three files of 10 MB, where Docker's default keeps one that grows without
+    # bound; so is each service's below.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - mcp
   mcp-server:
     image: mcp-server:latest
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # The server's log files, which it writes to logs/ under /app, on a named volume, mcp-logs (declared at the end): a
+    # volume outlives the container, so recreating it, for a new image or a changed setting, keeps them.
+    volumes:
+      - mcp-logs:/app/logs
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - Transport=http
@@ -434,6 +450,11 @@ services:
     # given nginx.conf, below, and your certificate and key from beside this file, each mounted read-only.
     image: nginx:1.30.5-alpine@sha256:bf3201ab56f23e5954646379c775d511fc466e9f11376d9725361064ad07ed35
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "443:443"
     volumes:
@@ -453,6 +474,10 @@ networks:
     ipam:
       config:
         - subnet: 172.16.238.0/24
+
+volumes:
+  # The server's log files. Docker fills it, the first time, from the image's own logs/, which the server's user owns.
+  mcp-logs:
 ```
 
 **nginx.conf**, beside the compose file: the proxy's whole configuration.
@@ -483,6 +508,10 @@ http {
         ssl_protocols       TLSv1.2 TLSv1.3;
         # Under TLS 1.2, only forward-secret, authenticated ciphers; TLS 1.3's are all of that kind.
         ssl_ciphers         ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+        # No session tickets. A ticket holds its session's secret, sealed with a key nginx keeps for as long as it runs,
+        # and under TLS 1.2 it is sent in the clear: whoever later read that one key could open every recorded
+        # connection that was given a ticket, whatever the cipher, which would undo the forward secrecy above.
+        ssl_session_tickets off;
 
         # A client that takes over 10 seconds to complete its TLS handshake or to send its request header, or that stalls
         # sending its body for 10, is dropped; so is a kept-alive connection idle for 30. nginx's own are 60, 60 and 75.
@@ -512,9 +541,9 @@ http {
 }
 ```
 
-Put your certificate for `MCP_HOST`, with its chain, at `tls/tls.crt` beside the compose file, and its key at `tls/tls.key`. Put the host name in a file named `.env` beside the compose file, the one line `MCP_HOST=mcp.example.com`: Compose reads it for every command run in that directory (`up`, `ps`, `logs`, `stop`, `down`), where a variable given on one command line is gone by the next and each later command stops, asking for `MCP_HOST`. Then start it with `docker compose up -d`: clients connect to `https://mcp.example.com/mcp`, through the proxy, and nothing else of the deployment is published. Each service is started again after a failure, and when the Docker daemon restarts or the host reboots, until you stop it.
+Put your certificate for `MCP_HOST`, with its chain, at `tls/tls.crt` beside the compose file, and its key at `tls/tls.key`. Put the host name in a file named `.env` beside the compose file, the one line `MCP_HOST=mcp.example.com`: Compose reads it for every command run in that directory (`up`, `ps`, `logs`, `stop`, `down`), where a variable given on one command line is gone by the next and each later command stops, asking for `MCP_HOST`. Then start it with `docker compose up -d`: clients connect to `https://mcp.example.com/mcp`, through the proxy, and nothing else of the deployment is published. Each service is started again after a failure, and when the Docker daemon restarts or the host reboots, until you stop it. The server's log files, its security events among them, live on the named volume `mcp-logs`, which survives the server's container being recreated for a new image or a changed setting, and is deleted by `docker compose down -v`; each container's own output is kept to three files of 10 MB, so ship the logs elsewhere to keep them longer.
 
-What the proxy holds: a worker per CPU core, each with up to 1024 connections (a request on its way to the server holds two, the client's and the server's); a client that takes more than 10 seconds for its TLS handshake or its request header, or stalls its body for 10, is dropped, and an idle connection after 30; one client address has at most 20 requests in flight, and the rest are answered 429. That address is the one nginx sees, and so is the address the server's own limit counts, 60 requests a minute per client address. Where every client reaches nginx from one address, as through Docker Desktop's port forwarding or a load balancer that rewrites the source address, both limits are one limit shared by every client: carry each client's own address to nginx there, with the PROXY protocol or `real_ip` from a balancer you trust. The proxy names no nginx version in its responses, and offers TLS 1.2 only with forward-secret, authenticated ciphers.
+What the proxy holds: a worker per CPU core, each with up to 1024 connections (a request on its way to the server holds two, the client's and the server's); a client that takes more than 10 seconds for its TLS handshake or its request header, or stalls its body for 10, is dropped, and an idle connection after 30; one client address has at most 20 requests in flight, and the rest are answered 429. That address is the one nginx sees, and so is the address the server's own limit counts, 60 requests a minute per client address. Where every client reaches nginx from one address, as through Docker Desktop's port forwarding or a load balancer that rewrites the source address, both limits are one limit shared by every client: carry each client's own address to nginx there, with the PROXY protocol or `real_ip` from a balancer you trust. The proxy names no nginx version in its responses, and offers TLS 1.2 only with forward-secret, authenticated ciphers. It issues no session tickets: a ticket's key lasts as long as nginx runs, and under TLS 1.2, where the ticket is sent in the clear, that key alone would open every recorded connection given one, forward secrecy or not.
 
 The server listens where `HttpTransport:BindAddress` and `HttpTransport:Port` say, and nowhere else. ASP.NET Core's own listening settings, `ASPNETCORE_URLS`, `ASPNETCORE_HTTP_PORTS` and `ASPNETCORE_HTTPS_PORTS` (or `urls`, `http_ports` and `https_ports` by any other route), are settings it would ignore, so it refuses to start on any of them, naming where it came from; an empty one asks for nothing. The image clears the port its base image sets, `ASPNETCORE_HTTP_PORTS=8080`, that way.
 

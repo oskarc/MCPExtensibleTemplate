@@ -90,12 +90,20 @@ public sealed class WireMockService : IUpstreamService
         }
     }
 
-    /// <summary>Every request the fake has recorded, as WireMock's admin API returns them.</summary>
-    public static async Task<JsonElement> JournalAsync(HttpClient http, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Every request the fake has recorded, as WireMock's admin API returns them. contract-005 · G-17 round 3 (HAR-R3-04) — private:
+    /// a test reads one server's entries (<see cref="EntriesAsync"/>, through its <see cref="RequestSource"/>), and the diagnostics
+    /// bundle's whole journal is written, never returned (<see cref="WriteJournalAsync"/>).
+    /// </summary>
+    private static async Task<JsonElement> JournalAsync(HttpClient http, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(http);
         return await http.GetFromJsonAsync<JsonElement>(new Uri($"https://{Alias}/__admin/requests"), cancellationToken);
     }
+
+    /// <summary>contract-005 · G-17 round 3 (HAR-R3-04) — the whole journal, every server's, written to <paramref name="path"/> for the diagnostics bundle.</summary>
+    internal static async Task WriteJournalAsync(HttpClient http, string path, CancellationToken cancellationToken = default) =>
+        await File.WriteAllTextAsync(path, (await JournalAsync(http, cancellationToken)).ToString(), cancellationToken);
 
     /// <summary>One request the fake recorded: the address it came from, when, and what it asked for.</summary>
     /// <param name="Id">WireMock's own id for the entry.</param>
@@ -115,9 +123,18 @@ public sealed class WireMockService : IUpstreamService
     /// the fake, and a test reads what its own server sent. contract-005 · G-17 round 2 (HAR-R2-02) — and by when it came,
     /// since Docker hands a freed address to the next container at once: a test reads its server's entries through
     /// <see cref="RequestSource.Made(JournalEntry)"/>, never by address alone. An entry with no time the fake wrote is a fault
-    /// of the fake, named, and never a request silently left out.
+    /// of the fake, named, and never a request silently left out. contract-005 · G-17 round 3 (HAR-R3-04) — the entries
+    /// <paramref name="from"/> made, and no others: a test read every server's entries and filtered them itself, by
+    /// <see cref="RequestSource"/> or by an address alone.
     /// </summary>
-    public static async Task<IReadOnlyList<JournalEntry>> EntriesAsync(HttpClient http, CancellationToken cancellationToken = default)
+    public static async Task<IReadOnlyList<JournalEntry>> EntriesAsync(HttpClient http, RequestSource from, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        return [.. (await EveryEntryAsync(http, cancellationToken)).Where(from.Made)];
+    }
+
+    /// <summary>Every entry of the journal, every server's: for this type's own reads, each of which a <see cref="RequestSource"/> bounds.</summary>
+    private static async Task<IReadOnlyList<JournalEntry>> EveryEntryAsync(HttpClient http, CancellationToken cancellationToken)
     {
         var journal = await JournalAsync(http, cancellationToken);
         if (journal.ValueKind != JsonValueKind.Array)
@@ -196,8 +213,8 @@ public sealed class WireMockService : IUpstreamService
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<UpstreamRequest>> RecordedAsync(HttpClient http, CancellationToken cancellationToken = default) =>
-        [.. (await EntriesAsync(http, cancellationToken)).Select(e => new UpstreamRequest(
+    public async Task<IReadOnlyList<UpstreamRequest>> RecordedAsync(HttpClient http, RequestSource from, CancellationToken cancellationToken = default) =>
+        [.. (await EntriesAsync(http, from, cancellationToken)).Select(e => new UpstreamRequest(
             e.Client,
             e.Method,
             Uri.TryCreate(e.Url, UriKind.Absolute, out var url) ? url.Host : string.Empty,

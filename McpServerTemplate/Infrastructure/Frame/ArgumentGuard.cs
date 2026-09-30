@@ -53,6 +53,7 @@ public sealed class ArgumentGuard
     ///
     /// contract-005 · G-17 round 2 (SEC-R2-03) — an argument's name, and a place in the arguments the schema names, are the
     /// caller's to write, and each refusal is logged: each is made safe for a log line and cut (LogSafe.Text), as the reply.
+    /// Round 3 (SEC-R3-04) — escaped, not stripped, and once (SafeText): the reply and the line name what was sent.
     /// </summary>
     public Refusal? Check(IDictionary<string, JsonElement>? arguments)
     {
@@ -64,7 +65,7 @@ public sealed class ArgumentGuard
             return Refusal.Of(
                 "extraneous-argument",
                 "malicious_extraneous",
-                $"The tool does not declare {LogSafe.Text(string.Join(", ", undeclared))}. Send only the arguments in its input schema.");
+                SafeText.Line($"The tool does not declare {string.Join(", ", undeclared)}. Send only the arguments in its input schema."));
         }
 
         foreach (var (name, value) in arguments)
@@ -74,7 +75,7 @@ public sealed class ArgumentGuard
                 return Refusal.Of(
                     "argument-length",
                     "input_validation_fail",
-                    $"The argument '{LogSafe.Text(name)}' is longer than the {_maxStringLength} characters this tool accepts.");
+                    SafeText.Line($"The argument '{name}' is longer than the {_maxStringLength} characters this tool accepts."));
             }
 
             // JSON cannot carry NaN or infinity, but a string can, and the SDK's number binding
@@ -86,7 +87,7 @@ public sealed class ArgumentGuard
                 return Refusal.Of(
                     "not-a-number",
                     "input_validation_fail",
-                    $"The argument '{LogSafe.Text(name)}' must be a finite number.");
+                    SafeText.Line($"The argument '{name}' must be a finite number."));
             }
         }
 
@@ -96,12 +97,12 @@ public sealed class ArgumentGuard
         {
             var reasons = (result.Details ?? [])
                 .Where(d => d.Errors is { Count: > 0 })
-                .SelectMany(d => d.Errors!.Select(e => LogSafe.Text($"{d.InstanceLocation}: {e.Value}")))
+                .SelectMany(d => d.Errors!.Select(e => SafeText.Value($"{d.InstanceLocation}: {e.Value}")))
                 .Take(3);
             return Refusal.Of(
                 "argument-schema",
                 "input_validation_fail",
-                "The arguments do not match the tool's input schema: " + string.Join("; ", reasons) + ".");
+                SafeText.Line($"The arguments do not match the tool's input schema: {SafeText.Join("; ", reasons)}."));
         }
 
         return null;

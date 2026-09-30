@@ -85,6 +85,7 @@ public sealed partial class DocsProfile : IAsyncDisposable
     private readonly E2EEnvironment _environment;
     private readonly IReadOnlyList<(string Service, IContainer Container)> _services;
     private readonly RetaggedImage _image;
+    private readonly IReadOnlyList<string> _volumes;
 
     private DocsProfile(
         E2EEnvironment environment,
@@ -92,6 +93,7 @@ public sealed partial class DocsProfile : IAsyncDisposable
         IReadOnlyList<string> applied,
         IReadOnlyList<(string Service, IContainer Container)> services,
         RetaggedImage image,
+        IReadOnlyList<string> volumes,
         long? exitCode,
         string? notServing,
         string stderr,
@@ -103,6 +105,7 @@ public sealed partial class DocsProfile : IAsyncDisposable
         Applied = applied;
         _services = services;
         _image = image;
+        _volumes = volumes;
         ExitCode = exitCode;
         NotServing = notServing;
         Stderr = stderr;
@@ -292,19 +295,20 @@ public sealed partial class DocsProfile : IAsyncDisposable
             + $"plain http: the file publishes no proxy on the host's {TlsFront.Port}, so nothing terminates TLS in front of it",
     };
 
-    public async ValueTask DisposeAsync() => await TearDownAsync(_environment, Document, Applied, _services, _image);
+    public async ValueTask DisposeAsync() => await TearDownAsync(_environment, Document, Applied, _services, _image, _volumes);
 
     /// <summary>
     /// The diagnostics bundle's docs-profile directory — the table as it acted, and each service's log, the proxy's among
     /// them — then every container removed and the image's name put back. The same whether the profile came up or its start
-    /// failed.
+    /// failed. contract-005 · G-17 round 3 (DOC-R3-01) — then every volume the run made for the file, once no container holds it.
     /// </summary>
     private static async Task TearDownAsync(
         E2EEnvironment environment,
         string document,
         IReadOnlyList<string> applied,
         IReadOnlyList<(string Service, IContainer Container)> services,
-        RetaggedImage image)
+        RetaggedImage image,
+        IReadOnlyList<string> volumes)
     {
         try
         {
@@ -332,6 +336,20 @@ public sealed partial class DocsProfile : IAsyncDisposable
         finally
         {
             await image.RestoreAsync();
+
+            // contract-005 · G-17 round 3 (DOC-R3-01) — a volume outlives its containers by design; the run's does not outlive the run.
+            foreach (var volume in volumes)
+            {
+                try
+                {
+                    await environment.Docker.Volumes.RemoveAsync(volume, force: true);
+                }
+                catch (DockerApiException)
+                {
+                    // Best effort, as every teardown step: it carries the run's labels, so the interruption teardown and the next
+                    // run's sweep remove it.
+                }
+            }
         }
     }
 
@@ -354,9 +372,25 @@ public sealed partial class DocsProfile : IAsyncDisposable
                 Volumes = [.. s.Volumes.Select(Interpolated)],
                 Networks = [.. s.Networks.Select(n => (n.Network, n.Address is null ? null : Interpolated(n.Address)))],
                 Restart = s.Restart is null ? null : Interpolated(s.Restart),
+                Logging = s.Logging is { } logging
+                    ? new Compose.Logging(
+                        logging.Driver is null ? null : Interpolated(logging.Driver),
+                        logging.Options.ToDictionary(o => o.Key, o => Interpolated(o.Value), StringComparer.Ordinal))
+                    : null,
             })
             .ToList();
         var networks = project.Networks.Select(n => n with { Subnet = n.Subnet is null ? null : Interpolated(n.Subnet) }).ToList();
+
+        // contract-005 · G-17 round 3 (DOC-R3-01) — a logging block runs as written, through a driver that keeps the log here.
+        foreach (var service in services)
+        {
+            Compose.RefuseLoggingElsewhere(service);
+        }
+
+        // contract-005 · G-17 round 3 (DOC-R3-01) — each volume the file declares is the run's own: named as Compose names a project's
+        // volume, the run's network standing for the project (project_volume), made before any service starts and carrying the run's
+        // labels, so the teardown, the interruption teardown and the next run's sweep each remove it.
+        var volumes = project.Volumes.ToDictionary(v => v, v => $"{environment.Network.Name}_{v}", StringComparer.Ordinal);
 
         var server = services.FirstOrDefault(s => s.Name == ServerService)
             ?? throw new InvalidOperationException(
@@ -394,10 +428,11 @@ public sealed partial class DocsProfile : IAsyncDisposable
                 + "is dialled, and does not publish the server either: nothing reaches the deployment, and the docs profile cannot see it serve.");
         }
 
-        // Every file a service mounts, before anything starts: the document's own, or a declared row's in its place.
+        // Every file a service mounts, before anything starts: the document's own, or a declared row's in its place — or, since
+        // contract-005 · G-17 round 3 (DOC-R3-01), a volume the file declares.
         var mounts = services.ToDictionary(
             s => s.Name,
-            s => s.Volumes.Select(v => MountOf(environment, text, s.Name, v, applied)).ToList(),
+            s => s.Volumes.Select(v => MountOf(environment, text, s.Name, v, applied, volumes)).ToList(),
             StringComparer.Ordinal);
 
         // "For that run the image is tagged with the name the compose file uses" (G-13).
@@ -405,8 +440,18 @@ public sealed partial class DocsProfile : IAsyncDisposable
         applied.Add($"image: '{server.Image}' is this run's server image ({environment.ServerImage}), tagged with that name for the run");
 
         var started = new List<(string Service, IContainer Container)>();
+        var made = new List<string>();
         try
         {
+            foreach (var (declared, name) in volumes)
+            {
+                await environment.Docker.Volumes.CreateAsync(
+                    new VolumesCreateParameters { Name = name, Labels = new Dictionary<string, string>(E2ENetwork.RunLabels(environment.RunId)) },
+                    cancellationToken);
+                made.Add(name);
+                applied.Add($"volume '{declared}': the run's own, {name}, as Compose names a project's volume, carrying the run's labels, removed with the run");
+            }
+
             foreach (var service in InStartOrder(services))
             {
                 started.Add((service.Name, await StartServiceAsync(environment, service, mounts[service.Name], applied, cancellationToken)));
@@ -434,11 +479,11 @@ public sealed partial class DocsProfile : IAsyncDisposable
             }
 
             var (_, stderr) = await container.GetLogsAsync(ct: cancellationToken);
-            return new DocsProfile(environment, documentPath, applied, started, image, exitCode, notServing, stderr, front?.Service, names);
+            return new DocsProfile(environment, documentPath, applied, started, image, made, exitCode, notServing, stderr, front?.Service, names);
         }
         catch
         {
-            await TearDownAsync(environment, documentPath, applied, started, image);
+            await TearDownAsync(environment, documentPath, applied, started, image, made);
             throw;
         }
     }
@@ -470,7 +515,7 @@ public sealed partial class DocsProfile : IAsyncDisposable
     private static async Task<IContainer> StartServiceAsync(
         E2EEnvironment environment,
         Compose.Service service,
-        IReadOnlyList<(string Source, string Target)> mounts,
+        IReadOnlyList<ServiceMount> mounts,
         List<string> applied,
         CancellationToken cancellationToken)
     {
@@ -501,9 +546,43 @@ public sealed partial class DocsProfile : IAsyncDisposable
 
         builder = builder.WithLoopbackPortsOnly();
 
-        foreach (var (source, target) in mounts)
+        foreach (var mount in mounts.Where(m => !m.Volume))
         {
-            builder = builder.WithBindMount(source, target, AccessMode.ReadOnly);
+            builder = builder.WithBindMount(mount.Source, mount.Target, AccessMode.ReadOnly);
+        }
+
+        // contract-005 · G-17 round 3 (DOC-R3-01) — a volume the file declares, mounted as the file mounts it: the run's own volume of
+        // that name (StartAsync made it), which the engine fills from the image's directory the first time, as it does for Compose.
+        var volumes = mounts.Where(m => m.Volume).ToList();
+        if (volumes.Count > 0)
+        {
+            builder = builder.WithCreateParameterModifier(parameters =>
+            {
+                parameters.HostConfig ??= new HostConfig();
+                parameters.HostConfig.Mounts =
+                [
+                    .. parameters.HostConfig.Mounts ?? [],
+                    .. volumes.Select(v => new Mount { Type = "volume", Source = v.Source, Target = v.Target, ReadOnly = v.ReadOnly }),
+                ];
+            });
+        }
+
+        // contract-005 · G-17 round 3 (DOC-R3-01) — the service's logging block, as written: its driver (one Compose.RefuseLoggingElsewhere
+        // let through, or the engine's default where it names none) with its options. Not a row of the table: nothing about it is the run's.
+        if (service.Logging is { } logging)
+        {
+            builder = builder.WithCreateParameterModifier(parameters =>
+            {
+                parameters.HostConfig ??= new HostConfig();
+                parameters.HostConfig.LogConfig = new LogConfig
+                {
+                    Type = logging.Driver ?? string.Empty,
+                    Config = new Dictionary<string, string>(logging.Options, StringComparer.Ordinal),
+                };
+            });
+            applied.Add($"'{service.Name}': logs through {logging.Driver ?? "the engine's default driver"}"
+                + (logging.Options.Count == 0 ? string.Empty : $", {string.Join(", ", logging.Options.Select(o => $"{o.Key}={o.Value}"))}")
+                + ", as written");
         }
 
         // contract-005 · G-17 round 1 (DOC-R1-01) — the address the file fixes for it on its network, which the address row
@@ -666,7 +745,7 @@ public sealed partial class DocsProfile : IAsyncDisposable
         E2EEnvironment environment, string service, IContainer proxy, IContainer server, CancellationToken cancellationToken)
     {
         var docker = environment.Docker;
-        var address = await ServerUnderTest.AddressOnRunNetworkAsync(docker, environment.Network.Name, proxy.Id, cancellationToken)
+        var address = await AddressOnRunNetworkAsync(docker, environment.Network.Name, proxy.Id, cancellationToken)
             ?? throw new EnvironmentFaultException("docs profile: proxy", $"the proxy '{service}' has no address on the run's network {environment.Network.Name}.");
 
         var started = await docker.Containers.InspectContainerAsync(server.Id, cancellationToken);
@@ -681,6 +760,21 @@ public sealed partial class DocsProfile : IAsyncDisposable
             : $"it does not take forwarded headers from its proxy: '{service}' is at {address} on the run's network, and the server "
                 + $"was started trusting [{string.Join(", ", trusted.Select(t => $"{t.Name}={t.Value}"))}] as proxies, so it would take "
                 + "every client's address and scheme to be the proxy's own.";
+    }
+
+    /// <summary>
+    /// The documented proxy's address on the run's network, as the engine gave it, or null when it has none. contract-005 · G-17
+    /// round 3 (HAR-R3-04) — this type's own, private: ServerUnderTest's was internal, and a test could read any container's bare
+    /// address by it.
+    /// </summary>
+    private static async Task<IPAddress?> AddressOnRunNetworkAsync(IDockerClient docker, string network, string containerId, CancellationToken cancellationToken)
+    {
+        var inspected = await docker.Containers.InspectContainerAsync(containerId, cancellationToken);
+        return inspected.NetworkSettings?.Networks is { } networks
+            && networks.TryGetValue(network, out var endpoint)
+            && IPAddress.TryParse(endpoint.IPAddress, out var address)
+            ? address
+            : null;
     }
 
     /// <summary>The environment's name map, with mcp.e2e.test:443 sent to what <paramref name="front"/> publishes of <paramref name="port"/>.</summary>
@@ -833,28 +927,53 @@ public sealed partial class DocsProfile : IAsyncDisposable
             : throw new InvalidOperationException($"The '{service}' service publishes '{mapping}', whose host port the docs profile cannot read.");
     }
 
+    /// <summary>One mount of a service, as the run makes it: its source, the path in the container, whether it is read-only, and whether it is a volume (or a file bound in).</summary>
+    /// <param name="Source">A file on this machine, or the run's volume's name.</param>
+    /// <param name="Target">The path in the container.</param>
+    /// <param name="ReadOnly">Whether the container may not write it.</param>
+    /// <param name="Volume">contract-005 · G-17 round 3 (DOC-R3-01) — whether it is a volume the file declares, rather than a file bound in.</param>
+    private sealed record ServiceMount(string Source, string Target, bool ReadOnly, bool Volume);
+
     /// <summary>
     /// contract-005 · G-17 round 1 (DOC-R1-01) — one read-only mount of the file, as the run makes it: the source and the
     /// container path. A file the document gives beside the compose file is that file, as written, with the Text rows
     /// applied; a file it does not give is a row's, in its place (the proxy's certificate and key); anything else — a named
     /// volume, a path outside the compose file's directory, a mount the container may write — is refused, naming it.
+    ///
+    /// contract-005 · G-17 round 3 (DOC-R3-01) — a named volume the file declares at top level is run as written, NAME:/PATH (or
+    /// with :rw or :ro), on the run's own volume of that name (<paramref name="volumes"/>); one it does not declare is refused, as
+    /// Compose refuses it. contract-005 · G-17 round 3 (HAR-R3-05) — and no mount of either kind may lie over a file that decides
+    /// how the container resolves names (<see cref="E2ENetwork.ResolverFileUnder"/>): a hosts file or a resolv.conf of the
+    /// document's would resolve real names while the engine's record of the container shows none.
     /// </summary>
-    private static (string Source, string Target) MountOf(E2EEnvironment environment, string document, string service, string volume, List<string> applied)
+    private static ServiceMount MountOf(
+        E2EEnvironment environment, string document, string service, string volume, List<string> applied, Dictionary<string, string> volumes)
     {
         var parts = volume.Split(':');
+        if (parts.Length is 2 or 3 && (parts.Length == 2 || parts[2] is "rw" or "ro") && volumes.TryGetValue(parts[0], out var runVolume)
+            && parts[1].StartsWith('/'))
+        {
+            RefuseResolverFile(service, volume, parts[1]);
+            var readOnly = parts.Length == 3 && parts[2] == "ro";
+            applied.Add($"'{service}' mounts the volume '{parts[0]}' at {parts[1]}{(readOnly ? ", read-only" : string.Empty)}: the run's {runVolume}, as written");
+            return new ServiceMount(runVolume, parts[1], readOnly, Volume: true);
+        }
+
         if (parts is not [var source, var target, "ro"] || !source.StartsWith("./", StringComparison.Ordinal) || source.Length <= 2
             || source.Contains("..", StringComparison.Ordinal) || !target.StartsWith('/'))
         {
             throw new InvalidOperationException(
                 $"The '{service}' service mounts '{volume}', which the docs profile does not run: it runs a read-only mount of a file "
-                + "beside the compose file, ./NAME:/PATH:ro, and refuses anything else rather than run it otherwise.");
+                + "beside the compose file, ./NAME:/PATH:ro, and a volume the file declares under its top-level volumes, NAME:/PATH, and "
+                + "refuses anything else rather than run it otherwise.");
         }
 
+        RefuseResolverFile(service, volume, target);
         if (Table.FirstOrDefault(r => r.Where == Scope.Mount && r.Document == source) is { } row)
         {
             applied.Add($"'{service}': {row}");
             var leaf = environment.Pki.LeafDirectory(FrontLeaf);
-            return (Path.Combine(leaf, row.Document == ProxyKey ? TestPki.KeyFile : TestPki.CertificateFile), target);
+            return new ServiceMount(Path.Combine(leaf, row.Document == ProxyKey ? TestPki.KeyFile : TestPki.CertificateFile), target, ReadOnly: true, Volume: false);
         }
 
         var name = source[2..];
@@ -866,7 +985,18 @@ public sealed partial class DocsProfile : IAsyncDisposable
         var (file, rows) = Substituted(given, $"'{service}' mounts '{source}': ");
         applied.Add($"'{service}' mounts '{source}': the document's own, the block after **{name}**, as written");
         applied.AddRange(rows);
-        return (environment.Pki.WriteFile($"docs04-{Path.GetFileName(name)}", file), target);
+        return new ServiceMount(environment.Pki.WriteFile($"docs04-{Path.GetFileName(name)}", file), target, ReadOnly: true, Volume: false);
+
+        static void RefuseResolverFile(string service, string volume, string target)
+        {
+            if (E2ENetwork.ResolverFileUnder(target) is { } resolver)
+            {
+                throw new InvalidOperationException(
+                    $"The '{service}' service mounts '{volume}' over {resolver}, which decides how its container resolves names. The run's "
+                    + $"network resolves no real name ({nameof(E2ENetwork)}.{nameof(E2ENetwork.NameServer)}), and a mount there would give the "
+                    + "container a resolver of its own, which the engine's record of how it was started does not show.");
+            }
+        }
     }
 
     /// <summary>The first YAML block after the Docker Compose heading: the document's compose file.</summary>
@@ -920,6 +1050,12 @@ public sealed partial class DocsProfile : IAsyncDisposable
     /// it is stopped. Read as Compose reads it (no, always, on-failure, on-failure:N, unless-stopped) and run as written, as the
     /// engine's restart policy of the service's container; a server that refuses its configuration then exits and is started
     /// again, which every wait for an exit reads as that exit (<see cref="DockerEngine.ExitCodeIfStoppedAsync"/>).
+    ///
+    /// contract-005 · G-17 round 3 (DOC-R3-01) — and two more things, each run as written. A named volume the file declares under a
+    /// top-level volumes section (a name, with nothing under it), which a service mounts as NAME:/PATH (docs/04's server keeps its
+    /// log directory, /app/logs, on one, so its logs outlive a recreated container). And a service's logging block: its driver
+    /// and its options (docs/04 rotates each service's log with json-file's max-size and max-file). A volume's own settings
+    /// (driver, external, name, labels) and every other key stay refused.
     /// </summary>
     internal static partial class Compose
     {
@@ -932,13 +1068,17 @@ public sealed partial class DocsProfile : IAsyncDisposable
             IReadOnlyList<string> Volumes,
             IReadOnlyList<string> DependsOn,
             IReadOnlyList<(string Network, string? Address)> Networks,
-            string? Restart);
+            string? Restart,
+            Logging? Logging);
+
+        /// <summary>contract-005 · G-17 round 3 (DOC-R3-01) — a service's logging block: its driver, when it names one, and its options.</summary>
+        internal sealed record Logging(string? Driver, IReadOnlyDictionary<string, string> Options);
 
         /// <summary>One network the file defines, with its subnet when it names one.</summary>
         internal sealed record Network(string Name, string? Subnet);
 
-        /// <summary>The file: its services and the networks it defines.</summary>
-        internal sealed record Project(IReadOnlyList<Service> Services, IReadOnlyList<Network> Networks);
+        /// <summary>The file: its services, the networks it defines and — contract-005 · G-17 round 3 (DOC-R3-01) — the volumes it declares.</summary>
+        internal sealed record Project(IReadOnlyList<Service> Services, IReadOnlyList<Network> Networks, IReadOnlyList<string> Volumes);
 
         /// <summary>The lists a service may give, one entry a line.</summary>
         private static readonly string[] Lists = ["environment", "ports", "volumes", "depends_on", "networks"];
@@ -947,11 +1087,15 @@ public sealed partial class DocsProfile : IAsyncDisposable
         {
             var services = new List<ServiceLines>();
             var networks = new List<NetworkLines>();
+            var volumes = new List<string>();
             var sections = new HashSet<string>(StringComparer.Ordinal);
             string? section = null;
             string? list = null;
             var fixable = false;
             var ipam = 0;
+
+            // contract-005 · G-17 round 3 (DOC-R3-01) — where in a service's logging block a line is: 0 outside it, 1 in it, 2 in its options.
+            var logging = 0;
 
             foreach (var raw in yaml.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
             {
@@ -971,9 +1115,10 @@ public sealed partial class DocsProfile : IAsyncDisposable
                 fixable = false;
                 switch (indent)
                 {
-                    case 0 when key is "services" or "networks" && value.Length == 0 && sections.Add(key):
+                    case 0 when key is "services" or "networks" or "volumes" && value.Length == 0 && sections.Add(key):
                         section = key;
                         list = null;
+                        logging = 0;
                         break;
 
                     case 2 when section == "services" && property.Success && value.Length == 0:
@@ -984,6 +1129,17 @@ public sealed partial class DocsProfile : IAsyncDisposable
 
                         services.Add(new ServiceLines(key));
                         list = null;
+                        logging = 0;
+                        break;
+
+                    // contract-005 · G-17 round 3 (DOC-R3-01) — a volume the file declares: a name, and nothing under it.
+                    case 2 when section == "volumes" && property.Success && value is "" or "{}":
+                        if (volumes.Contains(key, StringComparer.Ordinal))
+                        {
+                            throw new InvalidOperationException($"The compose file declares the volume '{key}' twice.");
+                        }
+
+                        volumes.Add(key);
                         break;
 
                     case 2 when section == "networks" && property.Success && value is "" or "{}":
@@ -998,6 +1154,7 @@ public sealed partial class DocsProfile : IAsyncDisposable
 
                     case 4 when section == "services" && services.Count > 0 && property.Success:
                         list = null;
+                        logging = 0;
                         if (key == "image" && value.Length > 0 && services[^1].Image is null)
                         {
                             services[^1].Image = Scalar(value);
@@ -1008,6 +1165,12 @@ public sealed partial class DocsProfile : IAsyncDisposable
                             services[^1].Restart = Scalar(value);
                             _ = RestartPolicyOf(services[^1].Restart!, services[^1].Name);
                         }
+                        else if (key == "logging" && value.Length == 0 && services[^1].Logging is null)
+                        {
+                            // contract-005 · G-17 round 3 (DOC-R3-01) — its logging block, read below and run as written.
+                            services[^1].Logging = new LoggingLines();
+                            logging = 1;
+                        }
                         else if (Lists.Contains(key) && value.Length == 0 && services[^1].Given.Add(key))
                         {
                             list = key;
@@ -1016,8 +1179,37 @@ public sealed partial class DocsProfile : IAsyncDisposable
                         {
                             throw new InvalidOperationException(
                                 $"The compose file gives '{services[^1].Name}' '{text}', which the docs profile does not run: it runs "
-                                + "image, restart and the lists environment, ports, volumes, depends_on and networks, once each, and "
-                                + "refuses anything else rather than ignore it.");
+                                + "image, restart, a logging block and the lists environment, ports, volumes, depends_on and networks, "
+                                + "once each, and refuses anything else rather than ignore it.");
+                        }
+
+                        break;
+
+                    // contract-005 · G-17 round 3 (DOC-R3-01) — a logging block's driver, and its options, once each.
+                    case 6 when section == "services" && logging > 0 && property.Success:
+                        logging = 1;
+                        if (key == "driver" && value.Length > 0 && services[^1].Logging!.Driver is null)
+                        {
+                            services[^1].Logging!.Driver = Scalar(value);
+                        }
+                        else if (key == "options" && value.Length == 0 && !services[^1].Logging!.OptionsGiven)
+                        {
+                            services[^1].Logging!.OptionsGiven = true;
+                            logging = 2;
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException(
+                                $"The compose file gives '{services[^1].Name}' the logging line '{text}', which the docs profile does not "
+                                + "run: it runs a logging block's driver and its options, once each, and refuses anything else.");
+                        }
+
+                        break;
+
+                    case 8 when section == "services" && logging == 2 && property.Success && value.Length > 0:
+                        if (!services[^1].Logging!.Options.TryAdd(key, Scalar(value)))
+                        {
+                            throw new InvalidOperationException($"The compose file gives '{services[^1].Name}' the logging option '{key}' twice.");
                         }
 
                         break;
@@ -1078,8 +1270,29 @@ public sealed partial class DocsProfile : IAsyncDisposable
                     s.Volumes,
                     s.DependsOn,
                     s.Networks,
-                    s.Restart))],
-                [.. networks.Select(n => new Network(n.Name, n.Subnet))]);
+                    s.Restart,
+                    s.Logging is { } logging ? new Logging(logging.Driver, logging.Options) : null))],
+                [.. networks.Select(n => new Network(n.Name, n.Subnet))],
+                volumes);
+        }
+
+        /// <summary>
+        /// contract-005 · G-17 round 3 (DOC-R3-01) — the logging drivers the docs profile runs: json-file and local, which keep a
+        /// service's log on this machine, where the run reads it (its diagnostics bundle, and every wait for a line). Any other
+        /// sends it somewhere the run neither reads nor controls, from the engine rather than from the run's network, and is
+        /// refused, naming the service; a block that names none is the engine's default, as Compose runs it.
+        /// </summary>
+        internal static void RefuseLoggingElsewhere(Service service)
+        {
+            ArgumentNullException.ThrowIfNull(service);
+
+            if (service.Logging?.Driver is { } driver && driver is not ("json-file" or "local"))
+            {
+                throw new InvalidOperationException(
+                    $"The '{service.Name}' service logs through the '{driver}' driver, which the docs profile does not run: it runs "
+                    + "json-file and local, which keep the service's log on this machine where the run reads it, and refuses a driver "
+                    + "that sends it anywhere else.");
+            }
         }
 
         /// <summary>
@@ -1232,6 +1445,9 @@ public sealed partial class DocsProfile : IAsyncDisposable
             /// <summary>contract-005 · G-17 round 2 — its restart policy, as written; given once.</summary>
             public string? Restart { get; set; }
 
+            /// <summary>contract-005 · G-17 round 3 (DOC-R3-01) — its logging block, as written; given once.</summary>
+            public LoggingLines? Logging { get; set; }
+
             /// <summary>The lists given so far: each may be given once.</summary>
             public HashSet<string> Given { get; } = new(StringComparer.Ordinal);
 
@@ -1277,6 +1493,17 @@ public sealed partial class DocsProfile : IAsyncDisposable
             public string Name { get; } = name;
 
             public string? Subnet { get; set; }
+        }
+
+        /// <summary>contract-005 · G-17 round 3 (DOC-R3-01) — a service's logging block as its lines are read.</summary>
+        private sealed class LoggingLines
+        {
+            public string? Driver { get; set; }
+
+            /// <summary>Whether its options were given: once.</summary>
+            public bool OptionsGiven { get; set; }
+
+            public Dictionary<string, string> Options { get; } = new(StringComparer.Ordinal);
         }
     }
 

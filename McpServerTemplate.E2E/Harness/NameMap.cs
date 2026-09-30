@@ -141,23 +141,43 @@ public sealed class NameMap
                     $"{uri} is not https. Every name in the environment is served over TLS with the run's test CA.");
             }
 
-            if (clientAddress is not null && uri.Host.Equals(TlsFront.Host, StringComparison.OrdinalIgnoreCase))
+            var front = uri.Host.Equals(TlsFront.Host, StringComparison.OrdinalIgnoreCase);
+            if (clientAddress is not null && front)
             {
                 request.Headers.Remove(TlsFront.ClientAddressHeader);
                 request.Headers.Add(TlsFront.ClientAddressHeader, clientAddress);
             }
 
+            // contract-005 · G-17 round 3 (HAR-R3-01) — every request is logged however it ends: a response, with its status, or none
+            // (status 0). Only a connection or TLS failure used to be logged, so a name that accepted the connection and then did not
+            // answer — hung, paused, or slower than the client's own budget, which cancels the request — left no line, the name map's
+            // log saw every name answered, and the SDK's failed OAuth flow was folded into a claim as the server's answer. And a
+            // service of the environment answers only once its whole answer has come: its body is read here, so an answer that
+            // stops part way is none. The front's answers are not read ahead: an MCP answer can be a stream the client reads as it
+            // comes, and the front is the server's, whose answer a claim judges.
+            HttpResponseMessage? response = null;
             try
             {
-                var response = await base.SendAsync(request, cancellationToken);
-                log?.Request(request.Method, uri, (int)response.StatusCode);
-                return response;
+                response = await base.SendAsync(request, cancellationToken);
+                if (!front)
+                {
+                    await response.Content.LoadIntoBufferAsync(cancellationToken);
+                }
             }
-            catch (Exception ex) when (ex is HttpRequestException or IOException)
+            catch (Exception ex)
             {
-                log?.Request(request.Method, uri, 0);
+                response?.Dispose();
+
+                // A request to the front the client itself gave up on — cancelled as the client is disposed after a claim's failure,
+                // with its event stream still open, or its budget for the server's answer spent — is recorded apart: the front is the
+                // server's, and whether the server answered in time is a claim's to judge, never a name of the environment that gave
+                // no answer.
+                log?.Request(request.Method, uri, front && ex is OperationCanceledException ? NameMapLog.CancelledAtTheFront : 0);
                 throw;
             }
+
+            log?.Request(request.Method, uri, (int)response.StatusCode);
+            return response;
         }
     }
 }
@@ -172,7 +192,17 @@ public sealed class NameMapLog
     /// <summary>"host:port -> published endpoint", one per connection opened.</summary>
     public IReadOnlyList<string> Connections => [.. _connections];
 
-    /// <summary>Every request sent, with its status (0 when no response came back).</summary>
+    /// <summary>
+    /// contract-005 · G-17 round 3 (HAR-R3-01) — the status a request to the front is recorded with when the client itself cancelled
+    /// it before its answer came: not 0, which is a name that gave no answer.
+    /// </summary>
+    public const int CancelledAtTheFront = -1;
+
+    /// <summary>
+    /// Every request sent, with its status: 0 when no whole answer came back — a connection or TLS failure, or a request cancelled
+    /// or timed out before its answer had come (contract-005 · G-17 round 3, HAR-R3-01) — and <see cref="CancelledAtTheFront"/> for
+    /// a request to the front the client itself cancelled.
+    /// </summary>
     public IReadOnlyList<(HttpMethod Method, Uri Uri, int Status)> Requests => [.. _requests];
 
     /// <summary>Names a request asked for that the map does not hold.</summary>
@@ -181,7 +211,9 @@ public sealed class NameMapLog
     /// <summary>
     /// contract-005 · G-17 round 2 (HAR-R2-03) — every request that got no answer from a name the map holds: a connection or TLS
     /// failure at a container of the environment. A request to a name the map refused is not one: it went where it did, and
-    /// where a request may go is a claim's to judge.
+    /// where a request may go is a claim's to judge. contract-005 · G-17 round 3 (HAR-R3-01) — and one the name accepted and did
+    /// not answer, or not in full, or not within the client's time: the SDK's own budget cancelling it counts, where it used to
+    /// leave no line at all.
     /// </summary>
     public IReadOnlyList<(HttpMethod Method, Uri Uri)> Unanswered =>
         [.. Requests
@@ -196,7 +228,9 @@ public sealed class NameMapLog
     /// .well-known/oauth-authorization-server metadata …", with no inner exception — which <see cref="Claim.IsTheServersAnswer"/>
     /// takes for the server's answer; so a stopped or untrusted test issuer was reported as the standard client failing, its
     /// cause unnamed. Throws an <see cref="EnvironmentFaultException"/> of <paramref name="phase"/> naming each request no mapped
-    /// name answered, with <paramref name="failure"/> inside it; returns when there is none.
+    /// name answered, with <paramref name="failure"/> inside it; returns when there is none. contract-005 · G-17 round 3
+    /// (HAR-R3-01) — a name that did not answer in time is among them: the SDK swallows its own cancellation at the authorization
+    /// server's metadata as it swallows a refused connection, and throws the same McpException.
     /// </summary>
     public void ThrowIfAMappedNameGaveNoAnswer(string phase, Exception failure)
     {
@@ -209,8 +243,9 @@ public sealed class NameMapLog
                 phase,
                 $"{string.Join("; ", unanswered.Select(r => $"{r.Method} {r.Uri.GetLeftPart(UriPartial.Path)}"))} got no answer from "
                 + $"{string.Join(", ", unanswered.Select(r => $"{r.Uri.Host}:{r.Uri.Port}").Distinct(StringComparer.OrdinalIgnoreCase))}, a name "
-                + "of the environment: a container that did not answer, or whose certificate did not validate against the run's test "
-                + $"CA — not the server's answer. The client reported: {failure.GetType().Name}: {failure.Message.Split('\n')[0]}",
+                + "of the environment, or none within the client's time: a container that did not answer, answered only in part or too "
+                + "slowly, or whose certificate did not validate against the run's test CA — not the server's answer. The client "
+                + $"reported: {failure.GetType().Name}: {failure.Message.Split('\n')[0]}",
                 failure);
         }
     }

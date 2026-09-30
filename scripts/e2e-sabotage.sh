@@ -89,6 +89,8 @@ engine_answers() { docker ps -q > /dev/null 2>&1; }
 
 # ── What a run created and left (contract-005 · T-13) ─────────────────────────────────────────────────────────────────
 # Every container and network carrying the run label, and every run directory in the temp folder, which holds a run's keys.
+# contract-005 · G-17 round 3 (DOC-R3-01) — and every volume carrying it: the docs profile runs docs/04's named log volume as
+# the run's own, which the teardown, the interruption teardown and the next run's sweep remove by that label.
 #
 # contract-005 · G-17 round 1 (CON-R1-03) — and mcp-server:latest, the name docs/04's compose file deploys, which a developer
 # may well have an image of their own under. A run gives that name to its own build only for the docs profile, and puts it
@@ -102,6 +104,7 @@ left_behind() {
   left=()
   while IFS= read -r c; do [ -n "$c" ] && left+=("container $c"); done < <(docker ps -a --filter "label=$label" --format '{{.Names}}' 2>/dev/null)
   while IFS= read -r n; do [ -n "$n" ] && left+=("network $n"); done < <(docker network ls --filter "label=$label" --format '{{.Name}}' 2>/dev/null)
+  while IFS= read -r v; do [ -n "$v" ] && left+=("volume $v"); done < <(docker volume ls --filter "label=$label" --format '{{.Name}}' 2>/dev/null)
   for dir in "${TMPDIR:-/tmp}"/mcp-e2e-*; do [ -e "$dir" ] && left+=("run directory $dir"); done
   if [ -n "${CI+set}" ]; then
     if docker image inspect "$docs_image" > /dev/null 2>&1; then left+=("image tag $docs_image"); fi

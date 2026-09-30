@@ -213,6 +213,68 @@ public class TokenRejectionTests
             + $"{corp.Issuer}, its discovery document's issuer, while its configured Issuer is {pinned}.");
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-03) — a token of five parts, shaped as an encrypted one, with a part that is not
+    /// base64url: the token reader threw FormatException, which only ArgumentException was caught around, so it left the
+    /// router — 500, no challenge, no authn_login_fail line, and a stack trace in Kestrel's error line for each one sent. It is
+    /// refused as a token the router cannot read: 401, the metadata challenge, its reason in the log and not the token.
+    /// </summary>
+    [Theory]
+    [InlineData("eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkEyNTZHQ00ifQ.a.b.c.d")]
+    [InlineData("eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkEyNTZHQ00ifQ.!.b.c.d")]
+    [InlineData("a.b.c")]
+    public async Task T3_a_token_the_reader_cannot_read_is_refused_with_the_challenge_and_its_reason_logged(string token)
+    {
+        using var corp = Corp();
+        using var log = new McpServerTemplate.Tests.Frame.RequestGateTests.CapturedLog();
+        await using var server = await InProcessServer.StartAsync([corp], logs: log);
+
+        using var response = await server.PostAsync(token);
+
+        Assert.True(
+            response.StatusCode == HttpStatusCode.Unauthorized,
+            $"the token '{token}' got {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+        Assert.Contains("resource_metadata", string.Join(" ", response.Headers.WwwAuthenticate), StringComparison.Ordinal);
+        Assert.Contains(log.Lines, line => line.Contains("authn_login_fail", StringComparison.Ordinal)
+            && line.Contains("the token cannot be read as a JSON web token", StringComparison.Ordinal));
+        Assert.DoesNotContain(log.Lines, line => line.Contains("unhandled exception", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(log.Lines, line => line.Contains(token, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-01) — /mcp's policy names the router, so a refused request is challenged through it,
+    /// and the router hands the challenge to the scheme it routed the token to. Each identity provider's scheme hands it on to
+    /// the MCP scheme: a refused token is told where to get a good one, as a request with none is, not given the bearer
+    /// handler's own error="invalid_token" and its description.
+    /// </summary>
+    [Theory]
+    [InlineData("wrong audience")]
+    [InlineData("expired")]
+    [InlineData("unregistered issuer")]
+    [InlineData("none")]
+    public async Task T1_a_refused_token_gets_the_metadata_challenge(string flaw)
+    {
+        using var corp = Corp();
+        using var stranger = new TestIdentityProvider("stranger", "https://stranger.test/");
+        await using var server = await InProcessServer.StartAsync([corp]);
+
+        var token = flaw switch
+        {
+            "wrong audience" => corp.MintToken("https://another-server.example/mcp"),
+            "expired" => corp.MintToken(Resource, notBefore: DateTime.UtcNow.AddHours(-2), expires: DateTime.UtcNow.AddHours(-1)),
+            "unregistered issuer" => stranger.MintToken(Resource),
+            "none" => null,
+            _ => throw new ArgumentOutOfRangeException(nameof(flaw), flaw, "unknown case"),
+        };
+
+        using var response = await server.PostAsync(token);
+        var challenge = string.Join(" ", response.Headers.WwwAuthenticate);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Contains("resource_metadata", challenge, StringComparison.Ordinal);
+        Assert.DoesNotContain("invalid_token", challenge, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task T2_an_oversized_token_is_refused_before_it_is_parsed()
     {

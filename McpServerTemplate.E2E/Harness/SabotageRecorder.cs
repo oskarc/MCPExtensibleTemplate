@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
@@ -21,7 +20,7 @@ namespace McpServerTemplate.E2E.Harness;
 ///
 /// Nothing a run mints is kept: a JSON web token in a message is replaced by [token] before it is written.
 /// </summary>
-internal sealed partial class SabotageRecorder(IReadOnlyList<Sabotage.Entry> entries, bool control, string directory, IMessageSink inner)
+internal sealed class SabotageRecorder(IReadOnlyList<Sabotage.Entry> entries, bool control, string directory, IMessageSink inner)
     : LongLivedMarshalByRefObject, IMessageSink
 {
     private readonly Lock _gate = new();
@@ -53,7 +52,7 @@ internal sealed partial class SabotageRecorder(IReadOnlyList<Sabotage.Entry> ent
 
     /// <summary>A message with every JSON web token in it replaced: what a failure may be kept as.</summary>
     internal static string Redacted(string message) =>
-        JsonWebToken().Replace(message.Replace("\r\n", "\n", StringComparison.Ordinal), "[token]");
+        JsonWebTokens.Pattern().Replace(message.Replace("\r\n", "\n", StringComparison.Ordinal), "[token]");
 
     /// <summary>
     /// Whether <paramref name="result"/> is the test <paramref name="entry"/> targets. A sabotage run is given its one test
@@ -99,7 +98,4 @@ internal sealed partial class SabotageRecorder(IReadOnlyList<Sabotage.Entry> ent
             File.WriteAllText(Path.Combine(directory, $"{name}.message"), Redacted(message).TrimEnd() + "\n");
         }
     }
-
-    [GeneratedRegex(@"eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*")]
-    private static partial Regex JsonWebToken();
 }

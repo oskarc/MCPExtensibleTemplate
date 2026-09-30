@@ -34,7 +34,9 @@ public static class ToolCallLoggingFilter
 
             // contract-005 · G-17 round 2 (SEC-R2-03) — this filter runs before the gate, so the name is whatever the caller
             // wrote, a tool or not: made safe for a log line and cut (LogSafe.Text), in every line below and in the log context.
-            var toolName = LogSafe.Text(context.Params?.Name ?? "unknown");
+            // Round 3 (SEC-R3-04) — escaped, not stripped, so get_fore + U+200B + cast is not logged as get_forecast; and
+            // SafeText, which the log pipeline passes on as it is, so it is escaped once.
+            var toolName = SafeText.Value(context.Params?.Name ?? "unknown");
 
             var correlationId = Convert.ToHexString(RandomNumberGenerator.GetBytes(6));
 
@@ -65,7 +67,7 @@ public static class ToolCallLoggingFilter
     }
 
     private static void LogToolCallStart(
-        ILogger? logger, string correlationId, string toolName,
+        ILogger? logger, string correlationId, SafeText toolName,
         RequestContext<CallToolRequestParams> context)
     {
         // The guard comes before the argument is built, not after. Joining the argument names
@@ -75,8 +77,8 @@ public static class ToolCallLoggingFilter
 
         // contract-005 · G-17 round 2 (SEC-R2-03) — the names are the caller's to write, as many and as long as they like.
         var argNames = context.Params?.Arguments is { } a
-            ? LogSafe.Text(string.Join(", ", a.Keys))
-            : "(none)";
+            ? SafeText.Value(string.Join(", ", a.Keys))
+            : SafeText.Of("(none)");
 
         logger.LogInformation(
             "[{CorrelationId}] Tool call: {ToolName} with args: [{ArgNames}]",
@@ -84,7 +86,7 @@ public static class ToolCallLoggingFilter
     }
 
     private static void LogToolCallDebugArgs(
-        ILogger? logger, string correlationId, string toolName,
+        ILogger? logger, string correlationId, SafeText toolName,
         RequestContext<CallToolRequestParams> context)
     {
         // Serialising every argument is the most expensive thing this filter does; it must not
@@ -102,7 +104,7 @@ public static class ToolCallLoggingFilter
     }
 
     private static void LogToolCallResult(
-        ILogger? logger, string correlationId, string toolName,
+        ILogger? logger, string correlationId, SafeText toolName,
         long elapsedMs, CallToolResult result)
     {
         if (logger is null)

@@ -31,6 +31,9 @@ public static class GovernedServer
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(modules);
 
+        // contract-005 · G-17 round 3 — no provider's namespace holds another's: what a provider owns is its namespace.
+        FrameIntegrity.VerifyOwnership(modules);
+
         SettingsAllowlist.Validate(configuration, modules);
 
         // contract-005 review round 3 — and read once: the check above holds only if nothing reads the

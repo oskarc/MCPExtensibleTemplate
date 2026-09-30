@@ -101,6 +101,92 @@ public class LogLineSafetyTests
         }
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-04) — the finding's four: a tool name, a resource URI, a principal's subject and a
+    /// token's issuer, each differing from a real one only by an invisible character. The frame's own line removed the
+    /// character, and so named the real tool, resource, principal or issuer — the configured one — which the request did not
+    /// carry, beside the SDK's line, which showed what was sent. The frame's line names what was sent now, escaped; so does the
+    /// reply; and neither names the real one in its place.
+    /// </summary>
+    [Theory]
+    [InlineData("a tool's name")]
+    [InlineData("a resource's URI")]
+    [InlineData("a principal's subject")]
+    [InlineData("a token's issuer")]
+    public async Task A_value_differing_from_a_real_one_by_an_invisible_character_is_logged_as_itself(string route)
+    {
+        using var corp = new TestIdentityProvider("corp", "https://corp.example.com/");
+        using var log = new RequestGateTests.CapturedLog();
+        await using var server = await InProcessServer.StartAsync([corp], modules: Everything, logs: log);
+
+        string reply;
+        string[] shown;
+        string[] notShown;
+        switch (route)
+        {
+            case "a tool's name":
+                reply = GateClient.TextOf(await GateClient.RpcAsync(
+                    server, corp.MintToken(GateClient.Resource, scopes: ["weather:read"]), "tools/call",
+                    new { name = "get_fore​cast", arguments = new { latitude = 59.3, longitude = 18.1 } }));
+                shown = ["target=get_fore\\u200Bcast", "Tool call: get_fore\\u200Bcast"];
+                notShown = ["target=get_forecast", "Tool call: get_forecast"];
+                Assert.Contains("'get_fore\\u200Bcast'", reply, StringComparison.Ordinal);
+                break;
+
+            case "a resource's URI":
+                reply = GateClient.TextOf(await GateClient.RpcAsync(
+                    server, corp.MintToken(GateClient.Resource, scopes: ["weather:read"]), "resources/read", new { uri = "smhi://coverage­-area" }));
+                shown = ["target=smhi://coverage\\u00AD-area"];
+                notShown = ["target=smhi://coverage-area"];
+                Assert.Contains("'smhi://coverage\\u00AD-area'", reply, StringComparison.Ordinal);
+                break;
+
+            case "a principal's subject":
+                reply = GateClient.TextOf(await GateClient.RpcAsync(
+                    server, corp.MintToken(GateClient.Resource, subject: "user⁠-1", scopes: ["weather:read"]), "tools/call",
+                    new { name = "test_echo", arguments = new { text = "hi" } }));
+                shown = ["principal=corp:user\\u2060-1"];
+                notShown = ["principal=corp:user-1"];
+                break;
+
+            case "a token's issuer":
+                // Unsigned, and naming corp's issuer but for one invisible character: refused by the router, before any key is
+                // looked up, and logged naming the issuer the token names.
+                var token = string.Join('.',
+                    Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode("""{"alg":"RS256","typ":"JWT"}"""),
+                    Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode("""{"iss":"https://corp.example.com/​","sub":"user-1"}"""),
+                    "c2lnbmF0dXJl");
+                using (var response = await server.PostAsync(token))
+                {
+                    Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+                }
+
+                reply = string.Empty;
+                shown = ["for issuer 'https://corp.example.com/\\u200B'"];
+                notShown = ["for issuer 'https://corp.example.com/'"];
+                Assert.Equal(0, corp.JwksRequests);
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(route), route, "a route this test sends by");
+        }
+
+        var lines = log.Lines;
+        foreach (var expected in shown)
+        {
+            Assert.True(
+                lines.Any(line => line.Contains(expected, StringComparison.Ordinal)),
+                $"{route}: no line the frame wrote says '{expected}': {string.Join(" | ", lines.Where(l => l.Contains("fail", StringComparison.Ordinal) || l.Contains("Tool call", StringComparison.Ordinal)))}");
+        }
+
+        foreach (var wrong in notShown)
+        {
+            Assert.DoesNotContain(lines, line => line.Contains(wrong, StringComparison.Ordinal));
+        }
+
+        Assert.DoesNotContain("get_forecast'", reply, StringComparison.Ordinal);
+    }
+
     /// <summary>Whether <paramref name="logEvent"/> carries the marker: in its message, a property, or its exception.</summary>
     private static bool Carries(LogEvent logEvent) =>
         logEvent.RenderMessage(CultureInfo.InvariantCulture).Contains(Marker, StringComparison.Ordinal)

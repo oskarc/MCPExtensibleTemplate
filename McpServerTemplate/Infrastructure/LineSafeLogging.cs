@@ -49,6 +49,10 @@ public static class LineSafeLogging
 
         logging.ReadFrom.Configuration(Keeping(configuration, part => !SinkParts.Contains(part, StringComparer.OrdinalIgnoreCase)));
 
+        // contract-005 · G-17 round 3 (SEC-R3-04) — the frame's own values arrive as SafeText, escaped already: kept as they are,
+        // not turned into the string they print as, so the line-safe stage knows them and does not escape their escapes again.
+        logging.Destructure.AsScalar<SafeText>();
+
         if (SinksNamedIn(configuration, "WriteTo") is { } writeTo)
         {
             logging.WriteTo.Sink(new LineSafeSink(writeTo));
@@ -175,10 +179,13 @@ public sealed class LineSafeSink : ILogEventSink, IDisposable, IAsyncDisposable
             logEvent.SpanId ?? default);
     }
 
-    /// <summary>The template with its text escaped, token by token; the same template when there is nothing to escape.</summary>
+    /// <summary>
+    /// The template with its text escaped, token by token; the same template when there is nothing to escape. contract-005 ·
+    /// G-17 round 3 (SEC-R3-07) — a backslash in it counts, so its text is escaped whole or not at all, and reads back.
+    /// </summary>
     private static MessageTemplate LineSafe(MessageTemplate template)
     {
-        if (!LogSafe.BreaksALine(template.Text))
+        if (!LogSafe.NeedsEscaping(template.Text))
         {
             return template;
         }
@@ -201,13 +208,18 @@ public sealed class LineSafeSink : ILogEventSink, IDisposable, IAsyncDisposable
                 or float or double or decimal or DateTime or DateTimeOffset or TimeSpan or Guid or Enum }:
                 return value;
 
+            // contract-005 · G-17 round 3 (SEC-R3-04) — a value the frame escaped itself: nothing but escaping makes a SafeText,
+            // so it holds nothing that breaks a line, and escaped again its escapes would read as text the caller wrote.
+            case ScalarValue { Value: SafeText }:
+                return value;
+
             case ScalarValue { Value: string text }:
                 var escaped = LogSafe.Escaped(text);
                 return ReferenceEquals(escaped, text) ? value : new ScalarValue(escaped);
 
             case ScalarValue { Value: { } other }:
                 var shown = other.ToString() ?? string.Empty;
-                return LogSafe.BreaksALine(shown) ? new ScalarValue(LogSafe.Escaped(shown)) : value;
+                return LogSafe.NeedsEscaping(shown) ? new ScalarValue(LogSafe.Escaped(shown)) : value;
 
             case SequenceValue sequence:
                 var elements = sequence.Elements.Select(LineSafe).ToArray();
@@ -245,11 +257,14 @@ public sealed class LineSafeSink : ILogEventSink, IDisposable, IAsyncDisposable
         private LineSafeException(string message, string text)
             : base(message) => _text = text;
 
-        /// <summary>The escaped text of <paramref name="exception"/>, or <paramref name="exception"/> itself when there is nothing to escape.</summary>
+        /// <summary>
+        /// The escaped text of <paramref name="exception"/>, or <paramref name="exception"/> itself when there is nothing to
+        /// escape. contract-005 · G-17 round 3 (SEC-R3-07) — a backslash counts, so the text is escaped whole or not at all.
+        /// </summary>
         public static Exception For(Exception exception)
         {
             var text = exception.ToString();
-            return LogSafe.BreaksALine(text) ? new LineSafeException(LogSafe.Escaped(exception.Message), LogSafe.Escaped(text)) : exception;
+            return LogSafe.NeedsEscaping(text) ? new LineSafeException(LogSafe.Escaped(exception.Message), LogSafe.Escaped(text)) : exception;
         }
 
         public override string ToString() => _text;

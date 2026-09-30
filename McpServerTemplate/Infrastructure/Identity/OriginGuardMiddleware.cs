@@ -48,9 +48,10 @@ public sealed class OriginGuardMiddleware
             //
             // contract-005 · G-17 round 2 (SEC-R2-03) — both are the caller's to write, before any sign-in: an Origin
             // carrying escape sequences cleared the operator's terminal. Each is made safe for a log line and cut (LogSafe).
+            // Round 3 (SEC-R3-04) — escaped, not stripped, and once (SafeText).
             _logger.LogWarning(
                 "malicious_cors: refused a request from origin {Origin} for {Path}",
-                LogSafe.Text(origin), LogSafe.Text(context.Request.Path.ToString()));
+                SafeText.Value(origin), SafeText.Value(context.Request.Path.ToString()));
 
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;

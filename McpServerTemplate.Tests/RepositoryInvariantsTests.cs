@@ -390,6 +390,108 @@ public partial class RepositoryInvariantsTests
     private static partial Regex PinnedByDigest();
 
     /// <summary>
+    /// contract-005 · G-17 round 3 (CON-R3-02) — the image the shipped server runs on, declared once, here: G-1's runtime, the
+    /// chiseled ASP.NET Core image, with no shell and no package manager, pinned by the digest of its multi-arch index. A change
+    /// of base fails the test below until this is changed with it, on purpose.
+    /// </summary>
+    private const string ShippedRuntime =
+        "mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02";
+
+    /// <summary>contract-005 · G-17 round 3 (CON-R3-02) — the SDK the server is published with: the one global.json names.</summary>
+    private const string BuildSdk =
+        "mcr.microsoft.com/dotnet/sdk:10.0.101-noble@sha256:5504edd1267dd4deab3443f960cfab219249c8bd935fbcc358f1c24aeae23fe0";
+
+    /// <summary>
+    /// A Dockerfile's stages, in order: the image or earlier stage each is FROM, its name if it has one, and its instructions
+    /// after the FROM.
+    /// </summary>
+    private static List<(string From, string? Name, List<string> Instructions)> DockerfileStages(IReadOnlyList<string> instructions)
+    {
+        var stages = new List<(string From, string? Name, List<string> Instructions)>();
+        foreach (var instruction in instructions)
+        {
+            var words = instruction.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words[0].Equals("FROM", StringComparison.OrdinalIgnoreCase))
+            {
+                var operands = words.Skip(1).Where(w => !w.StartsWith("--", StringComparison.Ordinal)).ToArray();
+                stages.Add((operands[0], operands.Length >= 3 && operands[^2].Equals("AS", StringComparison.OrdinalIgnoreCase) ? operands[^1] : null, new List<string>()));
+            }
+            else if (stages.Count > 0)
+            {
+                stages[^1].Instructions.Add(instruction);
+            }
+        }
+
+        return stages;
+    }
+
+    /// <summary>The image the stage at <paramref name="index"/> is built on, following FROM through earlier stages by name.</summary>
+    private static string BaseImageOf(List<(string From, string? Name, List<string> Instructions)> stages, int index)
+    {
+        var reference = stages[index].From;
+        for (var earlier = index - 1; earlier >= 0; earlier--)
+        {
+            if (string.Equals(stages[earlier].Name, reference, StringComparison.OrdinalIgnoreCase))
+            {
+                reference = stages[earlier].From;
+            }
+        }
+
+        return reference;
+    }
+
+    [Fact]
+    public void T13_the_shipped_image_is_built_on_the_pinned_runtime_and_published_by_the_pinned_sdk()
+    {
+        // contract-005 · G-17 round 3 (CON-R3-02) — nothing checked what the shipped image is built on: the digest check asks
+        // only that a reference is pinned, and the image-contents test took its baseline from the Dockerfile itself, so a final
+        // stage FROM the SDK image — pinned, with a shell, a package manager, git, curl and the test platform — passed every
+        // check. The final stage, followed through earlier stages, is ShippedRuntime exactly; the stage its /app is copied from
+        // is BuildSdk exactly.
+        var stages = DockerfileStages(DockerfileInstructions(Path.Combine(RepositoryRoot(), "Dockerfile")));
+        Assert.True(stages.Count >= 2, $"the root Dockerfile has {stages.Count} stage(s), not a build stage and a final one.");
+
+        var final = stages.Count - 1;
+        Assert.Equal(ShippedRuntime, BaseImageOf(stages, final));
+
+        var publishedFrom = stages[final].Instructions
+            .Select(i => i.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Where(words => words[0].Equals("COPY", StringComparison.OrdinalIgnoreCase) && words[^2] is "/app" or "/app/")
+            .Select(words => words.FirstOrDefault(w => w.StartsWith("--from=", StringComparison.OrdinalIgnoreCase))?["--from=".Length..])
+            .ToArray();
+        var source = Assert.Single(publishedFrom);
+        var build = stages.FindIndex(s => string.Equals(s.Name, source, StringComparison.OrdinalIgnoreCase));
+        Assert.True(build >= 0 && build < final, $"the final stage copies /app from '{source}', which is no earlier stage.");
+        Assert.Equal(BuildSdk, BaseImageOf(stages, build));
+    }
+
+    [Fact]
+    public void T13_the_final_stage_sets_every_owner_itself_whichever_builder_builds_it()
+    {
+        // contract-005 · G-17 round 3 (CON-R3-01) — WORKDIR makes a missing directory as the user in force: root under the
+        // engine's classic builder, and under BuildKit the base image's user, 1654. So under BuildKit, how an operator builds,
+        // the server's own user owned /app and could replace its settings files and assemblies, while the image under test
+        // was built by the classic builder and did not show it. In the final stage, the user is root before any WORKDIR or
+        // COPY, every COPY names its owner, and the last USER is the app user.
+        var stages = DockerfileStages(DockerfileInstructions(Path.Combine(RepositoryRoot(), "Dockerfile")));
+        var final = stages[^1].Instructions;
+        static string Keyword(string instruction) => instruction.Split(' ', 2)[0].ToUpperInvariant();
+
+        var firstLayout = final.FindIndex(i => Keyword(i) is "WORKDIR" or "COPY" or "ADD");
+        var root = final.FindIndex(i => Keyword(i) == "USER" && i.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1] is "0" or "0:0" or "root" or "root:root");
+        Assert.True(firstLayout >= 0, "the final stage has no WORKDIR or COPY: the Dockerfile was not read as expected.");
+        Assert.True(
+            root >= 0 && root < firstLayout
+                && !final.Take(firstLayout).Skip(root + 1).Any(i => Keyword(i) == "USER"),
+            $"the final stage lays out its files before it is root: '{final[firstLayout]}' comes with the base image's user in force.");
+
+        var unowned = final.Where(i => Keyword(i) is "COPY" or "ADD" && !i.Contains("--chown=", StringComparison.Ordinal)).ToArray();
+        Assert.True(unowned.Length == 0, $"the final stage copies without naming the owner: {string.Join("; ", unowned)}");
+
+        Assert.Equal("USER 1654", final.Last(i => Keyword(i) == "USER"));
+    }
+
+    /// <summary>
     /// Every image a Dockerfile's <paramref name="instructions"/> name, as the builder pulls it: each FROM that is not an
     /// earlier stage, and — contract-005 · G-17 round 1 (CON-R1-01) — each COPY --from and each RUN --mount's from= that names
     /// neither an earlier stage nor an earlier stage's index. The builder pulls an image named there as it pulls a FROM's, so

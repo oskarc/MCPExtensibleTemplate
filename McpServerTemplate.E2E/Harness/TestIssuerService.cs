@@ -179,22 +179,36 @@ public sealed class TestIssuerService : IAsyncDisposable
     /// same issuers. contract-005 · G-17 round 1 (FLA-R1-05) — from its address and at or after its start: an address Docker
     /// gave an earlier server counts that server's requests too, all made before this one started. contract-005 · G-17 round 2
     /// (HAR-R2-02) — the two now come together (<see cref="RequestSource"/>), so no count is one server's by address alone:
-    /// T-1's was.
+    /// T-1's was. contract-005 · G-17 round 3 (HAR-R3-04) — and <paramref name="from"/> is required: with none, the issuer counted
+    /// every server's lookups in the run, and that was the easiest read to write. The diagnostics bundle's count of every server
+    /// is written, never returned (<see cref="WriteEveryServersCountsAsync"/>).
     /// </summary>
     public static async Task<IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>>> CountsAsync(
-        HttpClient http, string anyHost, RequestSource? from = null, CancellationToken cancellationToken = default)
+        HttpClient http, string anyHost, RequestSource from, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(http);
+        ArgumentNullException.ThrowIfNull(from);
 
-        var query = from is null
-            ? string.Empty
-            : $"?from={Uri.EscapeDataString(from.Address.ToString())}"
-                + $"&since={Uri.EscapeDataString(from.Since.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture))}";
+        var query = $"?from={Uri.EscapeDataString(from.Address.ToString())}"
+            + $"&since={Uri.EscapeDataString(from.Since.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture))}";
         var counts = await http.GetFromJsonAsync<Dictionary<string, Dictionary<string, int>>>(new Uri($"https://{anyHost}/admin/counts{query}"), cancellationToken);
         return counts!.ToDictionary(
             c => c.Key,
             c => (IReadOnlyDictionary<string, int>)c.Value,
             StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (HAR-R3-04) — every server's requests, counted per issuer name and path, written to
+    /// <paramref name="path"/> for the diagnostics bundle (E2EEnvironment). Written and not returned, so the run's whole count is
+    /// no read a test can make of one server's.
+    /// </summary>
+    internal static async Task WriteEveryServersCountsAsync(HttpClient http, string anyHost, string path, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(http);
+
+        var counts = await http.GetFromJsonAsync<JsonElement>(new Uri($"https://{anyHost}/admin/counts"), cancellationToken);
+        await File.WriteAllTextAsync(path, counts.GetRawText(), cancellationToken);
     }
 
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();

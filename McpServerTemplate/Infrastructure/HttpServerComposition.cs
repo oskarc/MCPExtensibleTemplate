@@ -4,7 +4,9 @@ using System.Threading.RateLimiting;
 using McpServerTemplate.Infrastructure.Frame;
 using McpServerTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -89,6 +91,9 @@ public static class HttpServerComposition
 
         // ── Data protection: in memory, and no key ring (contract-005 · G-18) ──
         KeepNoKeyRing(builder.Services);
+
+        // ── No developer exception page, in any environment (contract-005 · G-17 round 3, SEC-R3-05) ──
+        builder.Services.Insert(0, ServiceDescriptor.Singleton<IDeveloperPageExceptionFilter>(new NoDeveloperExceptionPage()));
 
         // ── Kestrel hardening ──
         builder.WebHost.ConfigureKestrel(kestrel =>
@@ -800,6 +805,22 @@ public static class HttpServerComposition
                     + "with the zone of the interface that holds it.";
             }
 
+            // contract-005 · G-17 round 3 (SEC-R3-08) — a zone on any other address is refused whether or not the parser kept
+            // it. The rule below reads the zone the parser resolved (ScopeId), and the parser drops a zone it cannot resolve
+            // without a word, and everything after it: '::1%x:9999' was read as ::1, bound as [::1]:3001, and accepted, the
+            // zone and the port it carried both ignored. So a % on an address that is not link-local is refused as written.
+            if (!parsed.IsIPv6LinkLocal && parsed.ScopeId == 0 && bindAddress.IndexOf('%', StringComparison.Ordinal) is var at and >= 0)
+            {
+                var alone = parsed.ToString();
+                var zone = bindAddress[at..].TrimEnd(']');
+                var port = zone.Contains(':', StringComparison.Ordinal);
+                return $"HttpTransport:BindAddress is '{bindAddress}', an address with a zone, '{zone}', which the address parser "
+                    + $"dropped, unable to read it as one: Kestrel would bind {alone} and ignore everything from the %"
+                    + (port ? ", the port after it included" : string.Empty)
+                    + $". A zone belongs on a link-local address alone, as fe80::1%eth0. Write the address without it, {alone}"
+                    + (port ? ", and the port in HttpTransport:Port." : ".");
+            }
+
             if (parsed.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && parsed.ScopeId != 0 && !parsed.IsIPv6LinkLocal)
             {
                 // Review round 8 — Kestrel dual-binds :: itself alone, so ::%1 is bound for IPv6 alone.
@@ -1291,8 +1312,51 @@ public static class HttpServerComposition
         // contract-005 · G-12 (1) — at the resource's own path. The challenge names the metadata at
         // /.well-known/oauth-protected-resource/mcp, which is also RFC 9728's location for the
         // resource, so the two cannot name different documents.
-        app.MapMcp(McpPath).RequireAuthorization();
+        //
+        // contract-005 · G-17 round 3 (SEC-R3-01) — under a policy that names the router (McpPolicy), not the default one.
+        app.MapMcp(McpPath).RequireAuthorization(McpPolicy);
 
         return app;
     }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-01) — who may reach /mcp: a caller the router authenticated
+    /// (<see cref="IdentityRegistration.RoutingScheme"/>), which is to say one of the identity providers' bearer schemes, and
+    /// no one else. The default policy names no scheme, so it accepted whatever principal the request already carried:
+    /// a provider module that replaced the host's HttpContextFactory made every request with no token a principal of its
+    /// choosing, in whatever trust domain and with whatever scopes it liked, and the gate read that principal. The frame
+    /// refuses such a module now (FrameIntegrity); behind that, a policy that names a scheme authenticates through it and
+    /// puts its result in place of the request's principal, so a principal the bearer schemes did not produce is set aside.
+    /// </summary>
+    private static readonly AuthorizationPolicy McpPolicy = new AuthorizationPolicyBuilder(IdentityRegistration.RoutingScheme)
+        .RequireAuthenticatedUser()
+        .Build();
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-05) — the developer exception page, never. In Development ASP.NET Core's web host
+    /// puts it in front of the whole pipeline, and no setting leaves it out: an unhandled exception was answered with its type,
+    /// its message and its stack, and the request's headers, Authorization and Cookie among them, to whoever sent the request.
+    /// Every exception passes through the page's filters before the page is written, and this one ends the answer there, as a
+    /// server with no page does: the status the page set (500, or a bad request's own) and no body. The exception is still
+    /// logged, by the page's middleware. Registered in every environment, first, so it is the outermost filter; outside
+    /// Development there is no page for it to stop.
+    /// </summary>
+    private sealed class NoDeveloperExceptionPage : IDeveloperPageExceptionFilter
+    {
+        public Task HandleExceptionAsync(ErrorContext errorContext, Func<ErrorContext, Task> next)
+        {
+            ArgumentNullException.ThrowIfNull(errorContext);
+
+            // The page's middleware has cleared the answer and set its status already; the page is 'next', never called.
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-05) — whether <paramref name="bindAddress"/> is one Kestrel binds to loopback
+    /// alone; null when it is none of the forms a bind address is accepted in, which <see cref="AllowedHosts"/> refuses,
+    /// saying what Kestrel would do with it. For the rule that holds Development to loopback (TransportSecurityGuard).
+    /// </summary>
+    internal static bool? BindsLoopbackOnly(string bindAddress) =>
+        BindAddressRefusal(bindAddress) is null ? IsLoopback(bindAddress) : null;
 }

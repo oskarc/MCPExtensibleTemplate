@@ -133,5 +133,5 @@ public sealed class ShippedImageRefusalTests(ShippedImageRefusalTests.Server fix
 
     /// <summary>What the fake has recorded from <paramref name="server"/>: contract-005 · G-17 round 2 (HAR-R2-02) — since it started.</summary>
     private static async Task<IReadOnlyList<WireMockService.JournalEntry>> FromServerAsync(HttpClient http, RequestSource server) =>
-        [.. (await WireMockService.EntriesAsync(http)).Where(server.Made)];
+        await WireMockService.EntriesAsync(http, server);
 }

@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using McpServerTemplate.Infrastructure.Frame;
 using McpServerTemplate.Providers;
+using YamlDotNet.RepresentationModel;
 
 namespace McpServerTemplate.Tests;
 
@@ -326,6 +327,65 @@ public partial class DocumentationTests
             suite.StartsWith("ECDHE-", StringComparison.Ordinal)
                 && (suite.Contains("-GCM-", StringComparison.Ordinal) || suite.EndsWith("-CHACHA20-POLY1305", StringComparison.Ordinal)),
             $"the documented front offers '{suite}', which is not an ECDHE exchange with an AEAD cipher."));
+
+        // contract-005 · G-17 round 3 (DOC-R3-02) — and it issues no TLS session tickets. nginx issues them by default, each
+        // holding its session's secret under a key kept as long as nginx runs, and under TLS 1.2 the ticket is sent in the
+        // clear: that one key would open every recorded connection given one, whatever the cipher suite.
+        Assert.True(
+            Value("ssl_session_tickets") == "off",
+            $"the documented front's ssl_session_tickets is '{Value("ssl_session_tickets") ?? "nginx's own, on"}', not off.");
+    }
+
+    /// <summary>
+    /// contract-005 · G-17 round 3 (DOC-R3-01) — the documented deployment kept its logs only inside the server's container:
+    /// the file logs, security events included, went with the container on every recreate — every new image, every changed
+    /// setting — and on every down, and Docker's own copy of each container's output grew without bound. The server's logs/
+    /// is a named volume, declared at the top level, and every service's own output is rotated: json-file, with a size and a
+    /// count.
+    /// </summary>
+    [Fact]
+    public void G17_the_documented_deployment_keeps_the_servers_logs_on_a_volume_and_rotates_every_services_output()
+    {
+        var stream = new YamlStream();
+        stream.Load(new StringReader(DocumentedComposeFile(ConfigurationGuide())));
+        var root = stream.Documents[0].RootNode;
+
+        static YamlNode? Child(YamlNode? node, string key) =>
+            node is YamlMappingNode mapping ? mapping.Children.FirstOrDefault(c => (c.Key as YamlScalarNode)?.Value == key).Value : null;
+        static string? Scalar(YamlNode? node) => (node as YamlScalarNode)?.Value;
+
+        var services = Assert.IsType<YamlMappingNode>(Child(root, "services"));
+        Assert.Equal(["redis", "mcp-server", "proxy"], services.Children.Keys.Select(Scalar));
+
+        // The server's logs/ on a named volume, declared at the top level.
+        string?[] mounts = (Child(Child(services, "mcp-server"), "volumes") as YamlSequenceNode)?.Children.Select(Scalar).ToArray() ?? [];
+        if (mounts.SingleOrDefault(m => m?.EndsWith(":/app/logs", StringComparison.Ordinal) == true) is not { } logs)
+        {
+            Assert.Fail($"the documented server mounts nothing at /app/logs: {string.Join(", ", mounts)}.");
+            return;
+        }
+
+        var volume = logs[..logs.IndexOf(':', StringComparison.Ordinal)];
+        Assert.False(
+            volume.StartsWith('.') || volume.StartsWith('/') || volume.StartsWith('~'),
+            $"the documented server's /app/logs is '{volume}', a directory of the host's, not a named volume.");
+        Assert.True(
+            Child(root, "volumes") is YamlMappingNode declared && declared.Children.Keys.Any(k => Scalar(k) == volume),
+            $"the documented compose file declares no volume '{volume}' at its top level.");
+
+        // Every service's own output, rotated.
+        foreach (var (key, service) in services.Children)
+        {
+            var name = Scalar(key);
+            var logging = Child(service, "logging");
+            var options = Child(logging, "options");
+            Assert.True(
+                Scalar(Child(logging, "driver")) == "json-file",
+                $"the documented '{name}' service's logging driver is '{Scalar(Child(logging, "driver")) ?? "Docker's default"}', not json-file named with its rotation.");
+            Assert.True(
+                !string.IsNullOrWhiteSpace(Scalar(Child(options, "max-size"))) && !string.IsNullOrWhiteSpace(Scalar(Child(options, "max-file"))),
+                $"the documented '{name}' service's output is not rotated: its logging options name no max-size and max-file.");
+        }
     }
 
     /// <summary>

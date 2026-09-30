@@ -74,6 +74,10 @@ public sealed class InProcessServer : IAsyncDisposable
     /// contract-005 · G-17 round 2 (SEC-R2-03) — the lowest level <paramref name="logs"/> is given: the framework's default,
     /// Information, unless a test reads what the SDK writes below it.
     /// </param>
+    /// <param name="outsideTheFrame">
+    /// contract-005 · G-17 round 3 (SEC-R3-01) — services registered beside the composition, after it, where no provider can
+    /// register them (FrameIntegrity refuses a provider that tries): for a test of what stands behind that refusal.
+    /// </param>
     public static async Task<InProcessServer> StartAsync(
         IEnumerable<TestIdentityProvider> identityProviders,
         string resource = "https://mcp.example.com/mcp",
@@ -83,7 +87,8 @@ public sealed class InProcessServer : IAsyncDisposable
         ILoggerProvider? logs = null,
         TimeProvider? identityClock = null,
         string listenOn = "http://127.0.0.1:0",
-        LogLevel logLevel = LogLevel.Information)
+        LogLevel logLevel = LogLevel.Information,
+        Action<IServiceCollection>? outsideTheFrame = null)
     {
         var providers = identityProviders.ToArray();
         modules ??= BuiltInProviders.Create();
@@ -179,6 +184,8 @@ public sealed class InProcessServer : IAsyncDisposable
                     options.TimeProvider = identityClock;
                 }
             });
+
+        outsideTheFrame?.Invoke(builder.Services);
 
         var app = builder.Build().UseHttpServer();
         await app.StartAsync();

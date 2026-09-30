@@ -169,8 +169,9 @@ internal sealed class RecordingDockerClient(IDockerClient inner, string runDirec
         public Task BuildImageFromDockerfileAsync(ImageBuildParameters parameters, Stream contents, IEnumerable<AuthConfig>? authConfigs, IDictionary<string, string>? headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken = default) =>
             inner.BuildImageFromDockerfileAsync(parameters, contents, authConfigs, headers, progress, cancellationToken);
 
-        // The engine's client marks this overload obsolete (it does not wait for the build to end), and the harness builds its
-        // images through Testcontainers: nothing asks for it.
+        // The engine's client marks this overload obsolete (it does not wait for the build to end), and nothing asks for it: the
+        // harness builds its images with BuildKit, through the command line (contract-005 · G-17 round 3, CON-R3-01, DockerCli), and
+        // the engine's build API, above, only for ShippedImageContentsTests' sabotage of the builder.
         public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("The run's client does not build through this overload, which does not wait for the build to end.");
 

@@ -268,9 +268,11 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
     /// <summary>
     /// contract-005 · T-2, T-3, T-8 — this server's address on the run's network, as Docker gave it: where its
     /// requests to the issuers and the upstream fakes come from, so a witness's record can be read for this server
-    /// alone while every server in the run shares the witness.
+    /// alone while every server in the run shares the witness. contract-005 · G-17 round 3 (HAR-R3-04) — private: a test reads a
+    /// witness through <see cref="RequestSourceAsync"/>, which bounds the address by this server's start, and has no way to ask
+    /// for the address alone.
     /// </summary>
-    public async Task<IPAddress> NetworkAddressAsync()
+    private async Task<IPAddress> NetworkAddressAsync()
     {
         var inspected = await _environment.Docker.Containers.InspectContainerAsync(Container.Id);
         return inspected.NetworkSettings?.Networks is { } networks
@@ -285,9 +287,10 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
     /// test issuer's clock is (every container of the run shares the engine's kernel): the moment from which what a witness
     /// records at this server's address is this server's alone. Docker hands a freed address to the next container at once,
     /// so an earlier server at the same address may have left requests at a witness that counts by address; every one of
-    /// them was made before that server stopped, and so before this one started.
+    /// them was made before that server stopped, and so before this one started. contract-005 · G-17 round 3 (HAR-R3-04) — private,
+    /// as the address is.
     /// </summary>
-    public async Task<DateTimeOffset> StartedAtAsync()
+    private async Task<DateTimeOffset> StartedAtAsync()
     {
         var inspected = await _environment.Docker.Containers.InspectContainerAsync(Container.Id);
         return EngineTime(inspected.State?.StartedAt)
@@ -654,8 +657,12 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
             ? IPNetwork.TryParse(value.Trim(), out var trusted) && trusted.Contains(address)
             : IPAddress.TryParse(value.Trim(), out var proxy) && proxy.Equals(address);
 
-    /// <summary>A container's address on the run's network <paramref name="network"/>, as the engine gave it, or null when it has none.</summary>
-    internal static async Task<IPAddress?> AddressOnRunNetworkAsync(
+    /// <summary>
+    /// A container's address on the run's network <paramref name="network"/>, as the engine gave it, or null when it has none.
+    /// contract-005 · G-17 round 3 (HAR-R3-04) — private to this type: internal, a test could read any container's bare address
+    /// by it, and a witness by that address alone. The docs profile keeps its own, as private.
+    /// </summary>
+    private static async Task<IPAddress?> AddressOnRunNetworkAsync(
         Docker.DotNet.IDockerClient docker, string network, string containerId, CancellationToken cancellationToken)
     {
         var inspected = await docker.Containers.InspectContainerAsync(containerId, cancellationToken);
@@ -706,12 +713,31 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
 /// and the stand-in's record were read by address alone, over the whole run: in saved runs, T-3's and T-15's positive controls
 /// counted a request an earlier server at the same address had made, and nothing kept T-15's claim from doing so. G-17 round 1
 /// (FLA-R1-05) had bounded the issuer's counts so; every read by address goes through this now.
+///
+/// contract-005 · G-17 round 3 (HAR-R3-04) — and nothing else can stand for it. It was a public record: a test could make one of
+/// any address with any start, or widen one with `with`. Its constructor is the harness's, and only ServerUnderTest calls it
+/// (HarnessSelfTests reads what every file of the suite compiles to); its values cannot be changed after; and every witness that
+/// records by address takes one and reads through it — the test issuer's counts, the fake's journal, every upstream owner's
+/// record — so a server's bare address, however a test came by it, reads no witness.
 /// </summary>
-/// <param name="Server">The server's name in the run.</param>
-/// <param name="Address">Its address on the run's network.</param>
-/// <param name="Since">When its container started, by the engine's clock.</param>
-public sealed record RequestSource(string Server, IPAddress Address, DateTimeOffset Since)
+public sealed class RequestSource
 {
+    internal RequestSource(string server, IPAddress address, DateTimeOffset since)
+    {
+        Server = server;
+        Address = address;
+        Since = since;
+    }
+
+    /// <summary>The server's name in the run.</summary>
+    public string Server { get; }
+
+    /// <summary>Its address on the run's network.</summary>
+    public IPAddress Address { get; }
+
+    /// <summary>When its container started, by the engine's clock.</summary>
+    public DateTimeOffset Since { get; }
+
     /// <summary>Whether a request a witness recorded from <paramref name="client"/> at <paramref name="at"/> is this server's.</summary>
     public bool Made(IPAddress? client, DateTimeOffset at) => Address.Equals(client) && at >= Since;
 

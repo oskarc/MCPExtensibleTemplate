@@ -196,6 +196,41 @@ public sealed class LineSafeLoggingTests : IDisposable
         Assert.DoesNotContain(lines, line => line.StartsWith("[99:99:99", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// contract-005 · G-17 round 3 (SEC-R3-04, SEC-R3-07) — through the pipeline the settings describe, and into it as the frame
+    /// logs, through Microsoft.Extensions.Logging. A value the frame escaped itself (SafeText) is written as it is, escaped
+    /// once; the SDK's own value for the same text is escaped once by the line-safe stage, so the two read the same, where the
+    /// frame's line used to be the one that named what was not sent; and text a caller wrote as an escape has its backslash
+    /// doubled, so it is never read as one.
+    /// </summary>
+    [Fact]
+    public void The_frames_own_values_are_escaped_once_and_a_callers_backslash_is_escaped()
+    {
+        var path = Path.Combine(_directory, "frame.log");
+        var settings = new Dictionary<string, string?>
+        {
+            ["Serilog:MinimumLevel:Default"] = "Information",
+            ["Serilog:WriteTo:0:Name"] = "File",
+            ["Serilog:WriteTo:0:Args:path"] = path,
+            ["Serilog:WriteTo:0:Args:outputTemplate"] = "{Message:lj}{NewLine}",
+        };
+
+        const string sent = "get_fore​cast";
+        const string writtenAsAnEscape = "get_fore\\u200Bcast";
+        using (var logger = new LoggerConfiguration()
+            .ReadFromConfigurationLineSafe(new ConfigurationBuilder().AddInMemoryCollection(settings).Build())
+            .CreateLogger())
+        using (var factory = new Serilog.Extensions.Logging.SerilogLoggerFactory(logger))
+        {
+            var frame = factory.CreateLogger("McpServerTemplate.Infrastructure.Frame.RequestGate");
+            Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(frame, "frame={Target}", SafeText.Value(sent));
+            Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(frame, "sdk={Target}", sent);
+            Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(frame, "typed={Target}", writtenAsAnEscape);
+        }
+
+        Assert.Equal(["frame=get_fore\\u200Bcast", "sdk=get_fore\\u200Bcast", "typed=get_fore\\\\u200Bcast"], File.ReadAllLines(path));
+    }
+
     /// <summary>A sink that keeps every event it is given.</summary>
     internal sealed class Capture : ILogEventSink
     {

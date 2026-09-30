@@ -2,7 +2,15 @@
 #
 # Built from the repository root, which .dockerignore narrows to source. Two stages: the SDK
 # publishes the server, and the runtime stage carries only what was published. Nothing test-related
-# is copied: this is the image the end-to-end suite runs and the image that ships, the same bytes.
+# is copied: this is the image the end-to-end suite runs and the image that ships.
+#
+# contract-005 · G-17 round 3 (CON-R3-01) — the same image whichever builder builds it. Every owner and
+# mode the image relies on is set here, not left to a builder's defaults: WORKDIR makes a missing
+# directory as the user in force, which the classic builder takes to be root and BuildKit the base
+# image's user, 1654, so under BuildKit (docker build, docker compose build: how an operator builds
+# it) the server's own user owned /app, and could replace its settings files and assemblies. Now:
+# /app and everything published in it root's, directories 0755 and files 0644; /app/logs alone the
+# app user's, 0755; the process runs as the app user.
 #
 # Both base images are pinned by the digest of their multi-arch index, so a tag moving on the
 # registry cannot change what this file builds, on any architecture:
@@ -11,8 +19,9 @@
 #   aspnet:10.0-noble-chiseled — no shell and no package manager, non-root by default
 # Resolved 2026-09-26 with `docker buildx imagetools inspect <image>:<tag>`.
 #
-# No BuildKit-only syntax: the end-to-end harness builds through Testcontainers, which uses the
-# engine's classic builder. Further hardening (read-only root, diagnostics off) is Phase 6's.
+# No BuildKit-only syntax (COPY --chmod among it): the image is built by the engine's classic builder
+# as well as by BuildKit, and must come out the same from each. Further hardening (read-only root,
+# diagnostics off) is Phase 6's.
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0.101-noble@sha256:5504edd1267dd4deab3443f960cfab219249c8bd935fbcc358f1c24aeae23fe0 AS build
 WORKDIR /src
@@ -28,13 +37,22 @@ RUN dotnet publish McpServerTemplate/McpServerTemplate.csproj -c Release --no-re
 # The runtime image has no shell to create a directory with, so the log directory is made here and
 # copied across owned by the app user. The Production file sink writes logs/ relative to the working
 # directory; without a directory it may write to, the sink writes nothing and says nothing.
-RUN mkdir -p /runtime/logs
+#
+# contract-005 · G-17 round 3 (CON-R3-01) — and every mode is set here, where there is a shell, and
+# carried across by COPY, which keeps a file's mode under either builder: nothing is left to a umask.
+RUN mkdir -p /runtime/logs \
+    && chmod -R u=rwX,go=rX /app \
+    && chmod 0755 /app /runtime/logs
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02 AS final
 
+# contract-005 · G-17 round 3 (CON-R3-01) — root while the image's own tree is laid out, so WORKDIR makes
+# /app root's under either builder, and every COPY names its owner. The app user comes back last.
+USER 0:0
+
 # The content root: appsettings.{Environment}.json is found from here, and so is logs/.
 WORKDIR /app
-COPY --from=build /app ./
+COPY --from=build --chown=0:0 /app ./
 COPY --from=build --chown=1654:1654 /runtime/logs ./logs
 
 # The default port (HttpTransport:Port). Binding and every other setting come from the environment.

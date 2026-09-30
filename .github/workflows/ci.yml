@@ -144,6 +144,11 @@ jobs:
             echo "::error::A network carrying the harness's run label was left: $network"
             left=1
           done
+          # contract-005 · G-17 round 3 (DOC-R3-01) — the docs profile now creates the documented log volume per run.
+          for volume in $(docker volume ls --filter label=org.mcp-server-template.e2e.run --format '{{.Name}}'); do
+            echo "::error::A volume carrying the harness's run label was left: $volume"
+            left=1
+          done
           if docker image inspect mcp-server:latest > /dev/null 2>&1; then
             echo "::error::The docs profile's tag mcp-server:latest was left on the run's image."
             left=1

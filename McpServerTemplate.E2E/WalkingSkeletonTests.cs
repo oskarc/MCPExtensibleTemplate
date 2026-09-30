@@ -27,7 +27,9 @@ namespace McpServerTemplate.E2E;
 /// failure is folded into a claim only when it is the server's answer (<see cref="Claim.IsTheServersAnswer"/>).
 /// contract-005 · G-17 round 2 (HAR-R2-03) — and an OAuth flow's only when every name of the environment it asked answered
 /// (<see cref="NameMapLog.ThrowIfAMappedNameGaveNoAnswer"/>): the SDK's OAuth client reports a connection or TLS failure at
-/// the authorization server as an McpException of its own.
+/// the authorization server as an McpException of its own. contract-005 · G-17 round 3 (HAR-R3-01) — and it reports a name that
+/// did not answer within its own budget the same way; the flow runs through <see cref="StandardClient.RunAsync"/>, which counts
+/// such a name among those that gave no answer.
 /// </summary>
 public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, ITestOutputHelper output)
     : IClassFixture<WalkingSkeletonTests.Server>
@@ -171,29 +173,20 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
         + "protected-resource metadata lists, is https://idp-a.example.com, a name the test's name map does not hold.")]
     public async Task T1_the_sdk_clients_traffic_and_its_oauth_discovery_go_through_the_name_map()
     {
-        var log = new NameMapLog();
-        using var http = fixture.CreateClient(log);
-
         // The SDK client on its own: no token, only OAuth options, so it must discover where to get
         // one. Whether the flow completes is T-4's claim; this test's claim is where the traffic went.
-        var transport = StandardClient.Transport(http, ServerUnderTest.Endpoint, "e2e-standard-client");
-
-        try
-        {
-            await using var client = await McpClient.CreateAsync(transport);
-            await client.ListToolsAsync();
-            output.WriteLine("The SDK client completed its OAuth flow.");
-        }
-        catch (Exception ex) when (Claim.IsTheServersAnswer(ex) || log.Refused.Count > 0)
-        {
-            // contract-005 · G-17 round 2 (HAR-R2-03) — the flow's end is this test's only when it is the server's answer, or the
-            // name map refused where the flow went (which is this claim's to judge); any other failure propagates as what it is.
-            // It caught every exception, and went on to claim the whole flow, so an environment fault in it read as "Filter not
-            // matched" on this test's claim. And the SDK's OAuth client throws an McpException of its own for a connection or TLS
-            // failure at the authorization server: a request no name of the environment answered is thrown as that fault.
-            log.ThrowIfAMappedNameGaveNoAnswer("t1: the sdk client's oauth flow", ex);
-            output.WriteLine($"The SDK client's OAuth attempt ended: {ex.GetType().Name}: {ex.Message.Split('\n')[0]}");
-        }
+        // contract-005 · G-17 round 2 (HAR-R2-03) — the flow's end is this test's only when it is the server's answer, or the name
+        // map refused where the flow went (which is this claim's to judge); any other failure propagates as what it is, and a
+        // request no name of the environment answered is thrown as that fault. contract-005 · G-17 round 3 (HAR-R3-01, HAR-R3-04) —
+        // through the harness's one run of the SDK's OAuth client, which reads the name map's log itself and counts a request a
+        // name did not answer in the client's time: a hung or slow test issuer read here as "Filter not matched" on this claim.
+        var flow = await StandardClient.RunAsync(
+            log => fixture.CreateClient(log), ServerUnderTest.Endpoint, "e2e-standard-client", "t1: the sdk client's oauth flow",
+            async client => await client.ListToolsAsync());
+        var log = flow.Log;
+        output.WriteLine(flow.Failure is { } ended
+            ? $"The SDK client's OAuth attempt ended: {ended.GetType().Name}: {ended.Message.Split('\n')[0]}"
+            : "The SDK client completed its OAuth flow.");
 
         output.WriteLine("Requests through the name map:");
         output.WriteLine(log.ToString());

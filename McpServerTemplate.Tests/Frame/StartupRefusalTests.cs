@@ -283,7 +283,12 @@ public class StartupRefusalTests
         return settings;
     }
 
-    /// <summary>The Smhi provider with one of its two resources left out of its policy.</summary>
+    /// <summary>
+    /// The Smhi provider's resources, with one of its two left out of its policy. contract-005 · G-17 round 3 (SEC-R3-01) —
+    /// its resources alone, which are static and need no service, and it registers nothing: the Smhi client and options are
+    /// the Smhi module's own, declared in its assembly and namespace, and a module declared here may not register them
+    /// (FrameIntegrity). It used to register them through the Smhi module, and serve the Smhi tools too.
+    /// </summary>
     private sealed class UndeclaredResourceModule : IProviderModule
     {
         private readonly SmhiModule _smhi = new();
@@ -292,18 +297,21 @@ public class StartupRefusalTests
 
         public ProviderPolicy Policy => _smhi.Policy with
         {
+            Tools = new Dictionary<string, ToolPolicy>(),
             Resources = new Dictionary<string, ResourcePolicy> { ["smhi://weather-symbols"] = new("weather:read") },
+            Prompts = new Dictionary<string, PromptPolicy>(),
         };
 
-        public IReadOnlyList<Type> ToolTypes => _smhi.ToolTypes;
+        public IReadOnlyList<Type> ToolTypes { get; } = [];
 
         public IReadOnlyList<Type> ResourceTypes => _smhi.ResourceTypes;
 
-        public IReadOnlyList<Type> PromptTypes => _smhi.PromptTypes;
+        public IReadOnlyList<Type> PromptTypes { get; } = [];
 
         public IReadOnlyCollection<string> Settings => _smhi.Settings;
 
-        public void Register(IServiceCollection services, Microsoft.Extensions.Configuration.IConfiguration configuration) =>
-            _smhi.Register(services, configuration);
+        public void Register(IServiceCollection services, Microsoft.Extensions.Configuration.IConfiguration configuration)
+        {
+        }
     }
 }

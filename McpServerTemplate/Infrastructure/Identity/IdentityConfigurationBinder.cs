@@ -299,20 +299,25 @@ public static class IdentityConfigurationBinder
     /// <param name="consequence">What using it as written would do, as a sentence.</param>
     private static void RefuseWhitespace(string key, string? value, string consequence)
     {
-        var at = string.IsNullOrEmpty(value) ? -1 : FirstInvisible(value);
-        if (at < 0)
+        if (string.IsNullOrEmpty(value) || FirstInvisible(value) is not { } found)
         {
             return;
         }
 
-        var c = value![at];
-        var which = c switch
+        var (at, length, codePoint, unpaired) = found;
+        var which = codePoint switch
         {
             ' ' => "a space",
             '\t' => "a tab",
-            _ => $"U+{(int)c:X4}",
+            _ when unpaired => $"U+{codePoint:X4}, half of a surrogate pair with no other half,",
+            _ => $"U+{codePoint:X4}",
         };
-        var where = at == 0 ? "at its start" : at == value.Length - 1 ? "at its end" : $"at character {at + 1}";
+
+        // Counted in characters as a reader counts them: a character beyond the basic plane is one, not the two halves it is
+        // stored as.
+        var where = at == 0 ? "at its start"
+            : at + length == value.Length ? "at its end"
+            : $"at character {value[..at].EnumerateRunes().Count() + 1}";
         throw new ConfigurationException(
             $"{key} is '{LogSafe.Escaped(LogSafe.Url(value))}', which holds {which} {where}. {consequence} Read as a URL, the "
             + "whitespace around it is trimmed and a space inside it escaped, so it looked well formed. Write it without "
@@ -320,22 +325,35 @@ public static class IdentityConfigurationBinder
     }
 
     /// <summary>
-    /// The index of the first whitespace, control or format character in <paramref name="value"/>, or -1 when there is none.
-    /// Letters beyond ASCII are left alone: an internationalised name's are allowed here, and judged by the checks after.
+    /// The first whitespace, control or format character in <paramref name="value"/> — where it starts, how many UTF-16 code
+    /// units it takes, and its code point — or null when there is none. Letters beyond ASCII are left alone: an
+    /// internationalised name's are allowed here, and judged by the checks after.
+    ///
+    /// contract-005 · G-17 round 3 (SEC-R3-06) — read by code point, not by UTF-16 code unit. A format character beyond the
+    /// basic plane (U+E0001, the tag characters U+E0020 to U+E007F, U+1D173 to U+1D17A) is stored as a surrogate pair, and
+    /// neither half was ever classed as a format character: an Issuer ending in U+E0020 was accepted, published as written,
+    /// and matched by no token. And half of a surrogate pair with no other half is refused as well: it is no character at all.
     /// </summary>
-    private static int FirstInvisible(string value)
+    private static (int At, int Length, int CodePoint, bool Unpaired)? FirstInvisible(string value)
     {
-        for (var i = 0; i < value.Length; i++)
+        var at = 0;
+        while (at < value.Length)
         {
-            var c = value[i];
-            if (char.IsWhiteSpace(c) || char.IsControl(c)
-                || System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Format)
+            if (System.Text.Rune.DecodeFromUtf16(value.AsSpan(at), out var rune, out var consumed) != System.Buffers.OperationStatus.Done)
             {
-                return i;
+                return (at, 1, value[at], true);
             }
+
+            if (System.Text.Rune.IsWhiteSpace(rune) || System.Text.Rune.IsControl(rune)
+                || System.Text.Rune.GetUnicodeCategory(rune) == System.Globalization.UnicodeCategory.Format)
+            {
+                return (at, consumed, rune.Value, false);
+            }
+
+            at += consumed;
         }
 
-        return -1;
+        return null;
     }
 
     /// <summary><paramref name="items"/> as a sentence lists them: "a", "a and b", "a, b and c".</summary>
