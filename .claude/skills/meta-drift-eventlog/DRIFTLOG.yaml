@@ -80,13 +80,28 @@ entries:
       Auditor A-001, form.moments_named and form.spec_lock_when_due; observation O-008. The
       contract's revisions list carries all three deviations; no turn in the implementation
       stretch names M-05 or M-08.
+
+      Recurrence, 2026-09-30 — contract-005, G-17 round 4 (finding DOC-R4-04, which its second reader
+      let stand), recorded by the main agent (M-18). Worse than the original: this time the departure
+      never reached the pioneer. G-8 as approved says the server under test is "built with the
+      Testcontainers Dockerfile builder, tagged by a hash of the whole build context as .dockerignore
+      filters it". The main agent's own fix brief for round 3 (scratchpad g17-r3-fixH-brief.md, item 1,
+      for CON-R3-01) told the builder to build with BuildKit "through `docker buildx build`", and commit
+      9425c13 did: images built on the command line, the context hash following BuildKit's context, an
+      image BuildKit did not build refused. The brief was drawn as a fix and never read against the
+      approved clauses; M-08 was not named, and no pioneer statement authorised the change.
     reaction: |
       None in-session; the deviations were written into revisions at the end rather than named
       when they arose.
+      2026-09-30: named when round 4 reported it, and put to the pioneer the same turn with its reason
+      (CON-R3-01: the classic builder's image is not the one operators build) and the choice: authorise
+      it after the fact, written here as a dated authorisation, or return to the Testcontainers builder.
+      The work that builds on it waits for the answer. Per The Approval Gate, it is recorded here and
+      not as a revision of contract-005.
     status: open
     elevation: []
     reviewed: null
-    recurrence_count: 0
+    recurrence_count: 1
     related_drifts: []
 
   - drift_id: drift-003

@@ -809,7 +809,10 @@ public static class HttpServerComposition
             // it. The rule below reads the zone the parser resolved (ScopeId), and the parser drops a zone it cannot resolve
             // without a word, and everything after it: '::1%x:9999' was read as ::1, bound as [::1]:3001, and accepted, the
             // zone and the port it carried both ignored. So a % on an address that is not link-local is refused as written.
-            if (!parsed.IsIPv6LinkLocal && parsed.ScopeId == 0 && bindAddress.IndexOf('%', StringComparison.Ordinal) is var at and >= 0)
+            // contract-005 · G-17 round 4 (SEC-R4-01) — IPv6 only, as the rules either side: ScopeId throws on an IPv4 address,
+            // which stopped every IPv4 bind, 0.0.0.0 among them, with exit 70. IPv4 text with a % never parses as standard form.
+            if (parsed.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6
+                && !parsed.IsIPv6LinkLocal && parsed.ScopeId == 0 && bindAddress.IndexOf('%', StringComparison.Ordinal) is var at and >= 0)
             {
                 var alone = parsed.ToString();
                 var zone = bindAddress[at..].TrimEnd(']');
