@@ -578,7 +578,169 @@ contracts:
         so this was also the check that it can fail at all.
     approval: approved-at-gate
     status: implemented
-    verification_state: none
+    verification_state: reported
+    verification:
+      date: 2026-09-30
+      by: kit-verifier
+      method: mixed
+      method_note: |
+        No build or test was run by the verifier (the pioneer's ruling, relayed at launch: nothing is
+        tested until the current implementation work is complete). Test results are read from the
+        CI run at contract-004's own commit a8e57a6 - GitHub Actions run 36058028132, 2026-09-24,
+        conclusion success - whose log names each test. T-5 is a git diff, read directly. Prose was
+        read from the committed files at a8e57a6 (git show / git archive), not the working tree.
+      tests: {T-1: pass, T-2: pass, T-3: pass, T-4: pass, T-5: pass, T-6: pass, T-7: pass}
+      corrections_from_tests: 0
+      corrections_from_reading: 4
+      clauses:
+        - clause: UC-1
+          verdict: verified
+          evidence: |
+            T-1 passed in CI run 36058028132 (DocumentationTests.T1_every_governed_setting_a_document_names_is_one_the_server_reads).
+            T-1 only matches colon or double-underscore notation, so the JSON blocks were read by
+            hand: docs/04-CONFIGURATION.md at a8e57a6 names Authentication:Resource,
+            IdentityProviders:{name}:*, Providers:Enabled, Providers:{Name}:IdentityProvider,
+            Limits:Redis, Confirmation:Key, and every key in its JSON examples is in
+            SettingsAllowlist.FrameKeys or a module's settings. The non-governed keys it names
+            (HttpTransport:Port, BindAddress, AllowedHosts, AllowedOrigins, KnownProxies,
+            KnownNetworks) are all read (HttpServerComposition.cs:87-151, ConfigurationGuard.cs:22,
+            Program.cs:162-164). Retired keys appear only inside the retired block at 04:322-329.
+            Minor: 04:7 and README:225 list the governed sections without RateLimit, which the
+            code also governs (SettingsAllowlist.cs GovernedSections); its only key is retired.
+        - clause: UC-2
+          verdict: verified
+          evidence: |
+            Read at a8e57a6: README.md:320-346, docs/05:364-401, docs/02 section 10 and docs/01
+            section 4 give module, policy, BuiltInProviders list, Providers:Enabled and the
+            startup refusals. The refusals named (tool without policy, policy for nothing,
+            unissuable scope, BaseUrl outside hosts, unknown enabled provider) exist in
+            PolicyRegistry.cs:78-116, 285, 301, 356 and GovernedServer.cs:150-158.
+        - clause: UC-3
+          verdict: corrected
+          evidence: |
+            The stdio first run holds: .NET 10 (05:131), Development required (05:149), the
+            Development principal (05:167), and error examples 1-3 quote real messages
+            (JsonPlaceholderTools.cs:56; RequestGate.cs:197-199, 300-303 via Caller.cs:87).
+            What is actually true elsewhere in the guide:
+            (a) 05:313-322, Scenario 2 "Running on the Network": in Development all three
+            providers are enabled and bound to corp (appsettings.json, appsettings.Development.json),
+            but the example's corp catalog holds only demo:read. PolicyRegistry.cs:298-301 refuses
+            startup for every scope the bound identity provider cannot issue - weather:read,
+            observations:read and demo:write here - so following the guide exits 78. This was
+            written by contract-004 (the pre-contract text had no such block).
+            (b) 05:279, Error 4 quotes "External service is unavailable", which the server never
+            says; the real upstream-down message is JsonPlaceholderApiClient.cs:110 ("The upstream
+            is temporarily unavailable and could not serve ..."). Left from before the contract.
+            (c) 05:418-419 show log lines "ToolCallLoggingFilter: [abc123] Calling tool ... with
+            arguments: postId"; the real format is "[{CorrelationId}] Tool call: {ToolName} with
+            args: [{ArgNames}]" (ToolCallLoggingFilter.cs:78), logged under ILogger<McpServer>.
+            Left from before the contract.
+            Whether the guide works end to end was declared untested and was not run.
+        - clause: UC-4
+          verdict: corrected
+          evidence: |
+            The middleware and gate order hold: docs/01:36-45 matches HttpServerComposition.cs:187-203;
+            docs/01:62-72 and docs/02 sections 2 and 5 match RequestGate.cs:176-240 (binding, scope,
+            freshness, confirmation, limits, arguments) and GovernedServer.cs:93-104 (request-kind
+            gate, logging filter, gate). No removed component is drawn in docs/01 or docs/02.
+            What is actually true in the README's Architecture text (README.md at a8e57a6):
+            (a) README:297-299 state "3 attempts ... 500 ms", "circuit breaker opens after 5 failures
+            in 30 s, half-opens after 15 s" and "Timeout 15 s per request, 30 s total". Timeouts are
+            per provider in each module's egress policy: Smhi 10 s / 35 s (SmhiModule.cs:24-26),
+            SmhiObs 20 s / 70 s, JsonPlaceholder 5 s / 20 s; the breaker is a 0.5 failure ratio over
+            a minimum of 5 calls in a sampling window derived per provider
+            (ProviderResilience.cs:100-113). Left unchanged by contract-004.
+            (b) README:289 lists the prompt as ForecastBriefing; the served name is forecast_briefing
+            (SmhiModule.cs:42, which the startup check requires to match a served prompt). T-7
+            checks tool names only, so nothing caught it.
+        - clause: UC-5
+          verdict: verified
+          evidence: |
+            docs/03-TESTING-STRATEGY.md at a8e57a6: the tree at 03:52-74 matches the committed
+            McpServerTemplate.Tests layout file for file (Frame/, Identity/, Infrastructure/,
+            Providers/, ServerProcessTests, DocumentationTests, RepositoryInvariantsTests,
+            TestRedis); Docker for Redis via Testcontainers at 03:34 and 03:272; the CI description
+            at 03:518-531 matches .github/workflows/ci.yml (locked restore, -warnaserror build, test,
+            audit, scripts/secret-scan.sh).
+        - clause: UC-6
+          verdict: corrected
+          evidence: |
+            The survey's comments were rewritten (verified under G-6). What is actually true:
+            McpServerTemplate/Infrastructure/HealthEndpoints.cs:11-12 at a8e57a6 still says
+            "Both are registered before authentication on purpose. An orchestrator's probe carries
+            no API key" - a comment describing the removed API key as the credential in force.
+            T-2 does not fail on it (see G-3).
+        - clause: UC-7
+          verdict: verified
+          evidence: |
+            T-5 (below). Read: the roadmap amendment at 06:421-435 records the spec-lock answers
+            (two contracts, every request kind, Redis now, confirmation gate now), the challenge
+            findings (single-use confirmation, providers cannot remove the frame, unknown settings
+            refuse) and the remaining departures; 07 gains four dated amendments. The
+            Development principal counting as fresh (contract-003 UC-6) has no amendment; the plan
+            (06:313, 06:367) is silent on its freshness, so it is not a decision against the plan
+            text.
+        - clause: G-1
+          verdict: verified
+          evidence: |
+            git show --stat a8e57a6: every document touched is modified, none added; the section
+            structure of 04 and 05 is kept (Configuration Keys Reference, Scenarios, Troubleshooting;
+            Getting Started, Error Handling, FAQ, Pitfalls). The only new file is
+            McpServerTemplate.Tests/DocumentationTests.cs, a test.
+        - clause: G-2
+          verdict: verified
+          evidence: |
+            Verified by T-1 (pass, CI run 36058028132). The matcher is the server's own:
+            SettingsAllowlist.IsKnown uses the same Patterns() that Validate uses
+            (SettingsAllowlist.cs at a8e57a6).
+        - clause: G-3
+          verdict: corrected
+          evidence: |
+            T-2 passes (CI run 36058028132), but the guarantee is not what it checks. G-3 says a test
+            fails if documents or C# comments name a retired mechanism, API key first among them.
+            The Retired term list in DocumentationTests.cs at a8e57a6 holds identifiers only
+            (Authentication:ApiKey, X-Api-Key, ApiKeyMiddleware, WithToolsFromAssembly, ...); it has no
+            entry for the plain words "API key" or "assembly scanning", and the comment check reads
+            only text after "//". HealthEndpoints.cs:12 names the API key in a comment and T-2 stays
+            green. What is true: T-2 fails on the listed identifiers, not on the mechanisms G-3 names.
+        - clause: G-4
+          verdict: verified
+          evidence: |
+            Verified by T-3 (pass, CI run 36058028132). The red_test record (a misspelled anchor
+            turning T-3 red) is the builder's account and was not reproduced; T-3's code at a8e57a6
+            does report a missing heading as a failure (DocumentationTests.cs, T3 method).
+        - clause: G-5
+          verdict: verified
+          evidence: |
+            The refusal examples in the beginner's guide use real rule names in the server's own
+            format "{event} (rule: {rule}). {message}" (Caller.cs:87): 05:260 tool-rate and 05:268
+            insufficient_scope match RequestGate.cs:298-303 and 195-199 word for word, with
+            create_blog_post at 10 per minute (JsonPlaceholderModule.cs:35) and get_forecast under
+            weather:read (SmhiModule.cs:31). 04:260 caller-rate matches RequestGate.cs:289-293.
+        - clause: G-6
+          verdict: verified
+          evidence: |
+            Verified by T-4 (all five phrases pass, CI run 36058028132). Read in git show a8e57a6:
+            StartupExit.cs, DevelopmentPrincipal.cs, Program.cs header, SmhiConfig.cs and the three
+            service registrations are rewritten; the two timeout rationale comments are removed from
+            the registrations and the Smhi one now sits beside the value in SmhiModule.cs:23; the
+            tool-design guidance gains a POLICY rule in SmhiTools.cs and JsonPlaceholderTools.cs.
+        - clause: G-7
+          verdict: verified
+          evidence: |
+            Verified by T-5: git diff --numstat a8e57a6~1 a8e57a6 on 06-SECURITY-ROADMAP.md and
+            07-SECURITY-FLOWCHARTS.md gives 16 0 and 8 0 - additions only, each a dated amendment.
+        - clause: G-8
+          verdict: verified
+          evidence: |
+            Verified by T-6: CI run 36058028132 at a8e57a6 - locked restore, build with -warnaserror
+            (0 warnings, 0 errors), 262 of 262 tests passed, no vulnerable packages, conclusion
+            success. No behaviour change: the only non-comment code change, in SettingsAllowlist.cs,
+            moves the pattern list into Patterns() unchanged and adds read-only IsKnown,
+            IsKnownSection and IsRetired; the other source changes are comment lines. Committed
+            alone: a8e57a6 touches only contract-004's documents, comments and test, plus kit records.
+      summary: {verified: 11, corrected: 4, open: 0}
+      open_needs: []
     audited: true
     file: docs/contracts/contract-004-docs-that-match.html
     artifact: https://claude.ai/artifact/ERF8TjyxtC1yCMMfL3ehzM
