@@ -883,6 +883,100 @@ precedents:
     overruled_by: null
     check: "not checkable — the holding asks for adversarial rounds to continue until resolved, a judgement about when a round has found nothing new and issues are fixed, not a fixed shape, log line or file a script can verify"
 
+  - prec_id: P-034
+    date: 2026-09-29
+    from: [C-034, contract-005]
+    moments: [M-25]
+    tier: project
+    facts: |
+      In contract-005's paused-work planning (M-25), the agent presented a batch cost table naming
+      "Batch C, documentation (the documented deployment rewritten around a TLS front, plus about
+      11 smaller document fixes)" at an estimated 2-3 hours, with no stated basis for the figure.
+    question: |
+      Whether a batch's stated time estimate stands as presented, without justification.
+    holding: |
+      The estimate does not stand as given: "it sounds insane that batch c that checks
+      documentation is estimated to 2-3 hours. How can it take that long? what defends that?"
+    reasons: |
+      none given
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — whether a stated time estimate is defensible is a judgement about the estimate's basis, not a fixed shape a script can verify"
+
+  - prec_id: P-035
+    date: 2026-09-29
+    from: [C-035, contract-005]
+    moments: [M-25, M-12]
+    tier: project
+    facts: |
+      During contract-005's build, with implementation ongoing and the agent proposing to pause
+      only the documentation-checking work during attack rounds and run one documentation pass at
+      the end, the pioneer set a broader rule for the rest of the contract: no suite run,
+      end-to-end run, sabotage-record run, red-first run or documentation pass runs until the
+      implementation work is complete.
+    question: |
+      Whether testing and documentation runs continue alongside implementation, or wait until
+      implementation is complete.
+    holding: |
+      Don't test anything until the implementation work is complete; then run one verification
+      pass covering everything.
+    reasons: |
+      i cant defent the cost of doing test and documentation runs that takes hours and hundreds of
+      thousands of tokens that must be rerun after a few hours because we implemented something
+      new. this is a really inefficient way, and we cant be doing it.
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — whether test, suite, end-to-end, sabotage-record, red-first or documentation runs were deferred until implementation completed is a fact about session sequencing, not a fixed file or log shape a script can verify"
+
+  - prec_id: P-036
+    date: 2026-09-29
+    from: [C-036, contract-005]
+    moments: [M-04]
+    tier: project
+    facts: |
+      During contract-005's build (UC-13/G-17 adversarial rounds), the agent offered to run the
+      attack rounds reading-only now, with one verification run at the end, recommending
+      reading-only now over waiting until after that verification run.
+    question: |
+      Whether the adversarial attack rounds run reading-only before the implementation and
+      verification work is finished, or run with containers only once everything is done.
+    holding: |
+      The attackers can run the containers, when all is done.
+    reasons: |
+      none given
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable — whether adversarial rounds ran reading-only versus with containers, and when, is a fact about session sequencing, not a fixed file or log shape a script can verify"
+
+  - prec_id: P-037
+    date: 2026-09-29
+    from: [C-037, contract-005]
+    moments: [M-08]
+    tier: project
+    facts: |
+      Among contract-005's revision decisions, item 3 put the weekly re-proof run for T-12's
+      sabotage record to the pioneer: A, keep it and revise the contract's wording to "push and
+      pull-request CI refuses the breakage switch; a scheduled run re-proves the record"; B, drop
+      it and re-prove only by hand. The agent recommended A.
+    question: |
+      Whether CI keeps a scheduled job that re-proves the sabotage record, or the record is
+      re-proved only by hand.
+    holding: |
+      3. B — drop the scheduled re-proof; re-prove only by hand.
+    reasons: |
+      none given
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "P-037.sh: passes"
+
 scenarios:
   - card_id: S-001
     date: 2026-09-17
@@ -1244,6 +1338,72 @@ scenarios:
         text: |
           run both, but after the contract run adversarial agents and fix bugs and issues and
           rerun agents until its resolved.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-016
+    date: 2026-09-29
+    from: [C-035, P-035]
+    moment: M-25
+    situation: |
+      During contract-005's build, the agent had proposed a change to save time: pause the
+      documentation attacker during attack rounds, run no documentation batches, and do one
+      documentation pass at the end once the product stopped changing.
+    options:
+      - key: A
+        text: |
+          A change that would save real time: during the attack rounds, pause the documentation
+          attacker, and have no documentation batches. Do one documentation pass at the end, once
+          the product has stopped changing, and run the deployment test then. ... Shall I switch
+          to documentation-once-at-the-end?
+      - key: B
+        text: |
+          dont test anything until the implementation work is complete, i cant defent the cost of
+          doing test and documentation runs that takes hours and hundreds of thousands of tokens
+          that must be rerun after a few hours because we implemented something new. this is a
+          really inefficient way, and we cant be doing it.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-017
+    date: 2026-09-29
+    from: [C-036, P-036]
+    moment: M-04
+    situation: |
+      During contract-005's build, the agent set out how the G-17 adversarial attack rounds should
+      run relative to the implementation and verification work still in progress.
+    options:
+      - key: A
+        text: |
+          Under your instruction I'd run them as reading only: attackers reading the code and the
+          contract, fixes written as code, repeated until a round finds nothing new. ... 1. The
+          attack rounds: reading only, now, with one verification run at the end; or wait until
+          after that verification run. I suggest reading only now.
+      - key: B
+        text: |
+          the attackers can run the containers, when all is done.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-018
+    date: 2026-09-29
+    from: [C-037, P-037]
+    moment: M-08
+    situation: |
+      Among contract-005's revision decisions, the agent put the weekly re-proof run for T-12's
+      sabotage record to the pioneer as item 3 of a numbered list.
+    options:
+      - key: A
+        text: |
+          3. The weekly re-proof run. A: keep it, and revise the contract's wording to "push and
+          pull-request CI refuses the breakage switch; a scheduled run re-proves the record". B:
+          drop it, and re-prove only by hand. I recommend A.
+      - key: B
+        text: |
+          3. B
     pioneer_ranking: pending
     rationale: ""
     dissent: ""

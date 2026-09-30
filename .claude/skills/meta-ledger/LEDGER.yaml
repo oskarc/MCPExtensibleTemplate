@@ -1986,6 +1986,78 @@ observations:
     merged_into: null
     stewarded: n/a
 
+  - obs_id: O-075
+    date: 2026-09-30
+    source: pioneer
+    contract_id: contract-005
+    refs: [C-034]
+    statement: |
+      M-25
+
+      To me it sounds insane that batch c that checks documentation is estimated to 2-3 hours. How
+      can it take that long? what defends that?
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-076
+    date: 2026-09-30
+    source: pioneer
+    contract_id: contract-005
+    refs: [C-035]
+    statement: |
+      M-25
+
+      dont test anything until the implementation work is complete, i cant defent the cost of doing
+      test and documentation runs that takes hours and hundreds of thousands of tokens that must be
+      rerun after a few hours because we implemented something new. this is a really inefficient
+      way, and we cant be doing it.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-077
+    date: 2026-09-30
+    source: pioneer
+    contract_id: contract-005
+    refs: [C-036]
+    statement: |
+      M-04
+
+      the attackers can run the containers, when all is done.
+    level_guess: principle
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-078
+    date: 2026-09-30
+    source: pioneer
+    contract_id: contract-005
+    refs: [C-037]
+    statement: |
+      M-08
+
+      3. B
+    level_guess: product-detail
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
 
 candidates:
   - cand_id: K-001
