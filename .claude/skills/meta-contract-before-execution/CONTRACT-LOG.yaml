@@ -579,7 +579,7 @@ contracts:
     approval: approved-at-gate
     status: implemented
     verification_state: none
-    audited: false
+    audited: true
     file: docs/contracts/contract-004-docs-that-match.html
     artifact: https://claude.ai/artifact/ERF8TjyxtC1yCMMfL3ehzM
     observations: [O-070, O-071, O-072]

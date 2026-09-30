@@ -2058,6 +2058,48 @@ observations:
     merged_into: null
     stewarded: n/a
 
+  - obs_id: O-079
+    date: 2026-09-30
+    source: auditor
+    contract_id: contract-004
+    refs: [A-003, C-038]
+    statement: |
+      A mid-draw pioneer message widening contract-004's scope — "update comments as well"
+      (transcript 40478952-60db-48c0-8fd4-97b093d57259, line 12691, 2026-09-23T23:06:46Z), sent
+      while the agent was surveying the documents for the docs-and-comments contract — has no
+      CORRECTIONS.yaml entry. The agent's own next turn ("Noted: code comments are in scope too")
+      shows it was received and acted on, but meta-correction-log's "immediately, before
+      continuing the work" rule was not followed; the record was recovered only by this audit and
+      written as C-038, recorded_by: kit-session-auditor, with the three incident questions
+      unanswered ("not asked") since the moment to ask has passed.
+    level_guess: pattern
+    stated_confidence: 0.65
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-080
+    date: 2026-09-30
+    source: auditor
+    contract_id: contract-004
+    refs: [A-003]
+    statement: |
+      contract-004's own learnings (O-070, O-071, O-072) are, without exception, defects found in
+      the running product while correcting the documents against it: a first-run command that
+      exits 78, HTTP examples pointed at an endpoint that answers 404, two sources of truth for one
+      byte limit, and an OAuth resource identifier that disagrees with the server's real MCP
+      endpoint. Each is a failure caught, not a reach upward restated from clarity. Scored from
+      outside: elevation_not_recovery is ABSENT for this contract's span.
+    level_guess: pattern
+    stated_confidence: 0.6
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
 
 candidates:
   - cand_id: K-001
@@ -4216,6 +4258,24 @@ audits:
     agreement: 4/5
     form: {contract_before_code: "pass — first Write to a non-kit file (ResourceMetadataTests.cs, raw line 4447) follows the pioneer's approval ('then we proceed with contract-002', raw line 4429/4440)", bearing_present: "pass — two sentences, reads against FOUNDING.md's identity-before-policy-frame statement", spec_lock_when_due: "pass — the TLS/G-12 placement question was drafted, withdrawn and reinstated with the pioneer's reasoning demanded (revisions log, 'Withdrawn before approval when the pioneer asked for the reasoning') before the 21:52 approval; its later reopening was a discovered defect (drift-007, decorative guard) handled as a deviation (M-08) and revision, not an unlocked design choice", observations_recorded: "pass — O-028 (contract_id: contract-002, stated_confidence: 0.85, LEDGER.yaml line ~816)", moments_named: "pass — M-04, M-08, M-11, M-12, M-14, M-24, M-25, M-30 named throughout with the loaded target stated at each (e.g. raw 5362 'M-11 then M-12 — recording contract-002 as implemented...', raw 5598 'M-04. Drawing contract-002 in full')", corrections_recorded: "fail — two pioneer redirects in the span carry no CORRECTIONS.yaml entry: raw line 4271 ('go for A so we have a clean slate before we begin...'), an option-override of the agent's recommended path (b) at raw 4267; and raw line 4912 ('i wont judge on them now, lets look at why the ci in github is failing'), a stop-grade redirect off the five-item review batch the agent had just named due (raw 4908)", precedent_check: "pass — tier_3's precedent block reads P-001 to P-010 against CASEBOOK.yaml, applies P-007/P-008/P-010 by id, and explicitly distinguishes P-001-006 and P-009 as governing other moments rather than silently skipping them", presented_for_pioneer: "fail, one instance — raw ~7634 quotes the agent's own prior turn back at it: 'M-15 is clear. What remains is M-14 (consolidation, unblocked but its output queues behind the blocked batch), M-12 (verification, retryable), and the two blocked by mechanism' — records named by map id and status word alone, nothing said about what any of them is; self-recorded as C-017. Compared against a readable record (the verifier's clause findings) elsewhere in the same span, raw ~5434 translates them faithfully in the record's own terms (missing tiers, G-12 decorative, G-5 untested, miscounted tests) rather than by id — so the failure is not the pattern throughout, but it did recur at least once uncaught until the pioneer named it", sealed_access: "pass, main session only — kit-sealed/ appears in this transcript only in early skill-reading passages (raw ~1027-1210, 2026-09-17, before contract-002 existed); no review batch was ever opened, closed or revealed for contract-002 in this span (the pioneer held judgment on it throughout, e.g. raw 4912, 5331), so no tool input touches the sealed key for this contract"}
     findings: [O-041, O-042]
+
+  - audit_id: A-003
+    date: 2026-09-30
+    contract_id: contract-004
+    transcript: |
+      C:/Users/Windows/.claude/projects/d--projects-mcp/40478952-60db-48c0-8fd4-97b093d57259.jsonl
+      — the path recorded on the contract-004 entry's `transcript` field, a real session id
+      matching the one given for this audit, not the placeholder "this session". This is the same
+      long-running session as A-001 and A-002; the span audited here runs from the pioneer's
+      "update the docs, then draw the next contract" (raw line 12671) through the observations
+      written at implementation-complete (raw line 13236). Subagent transcripts under
+      ~/.claude/projects/<session>/subagents/ were not read; sealed_access below covers only the
+      main session.
+    outside: {lay_of_the_land: "PRESENT — the docs and comments were surveyed file by file before the contract was drawn (raw lines 12683-12745: directory listing, line counts, grep for stale terms and concepts), and the contract's ground field records the count of retired-mechanism references per file", stop_on_triggers: "PRESENT — a flagged concern from the prior contract (two undecided test changes) was named and held open rather than let drop: 'Until you approve, that contract stays \"approved\" rather than \"implemented\", and its audit and verification don't start' (raw line 12748)", partner_mirror: "PRESENT — the contract draft closes with three explicit asks in one reply (per-guarantee disappointment lines, a pre-mortem, and approval; raw line 12748), matching meta-contract-before-execution's Approval Gate wording exactly", elevation_not_recovery: "ABSENT — the contract's own observations (O-070, O-071, O-072) are all defects caught while correcting the documents against the running program (a first-run command exiting 78, mismatched byte limits, an OAuth endpoint mismatch); none is a learning restated from a position of prior clarity", evidence_as_work: "PRESENT — a deliberate red test (one anchor misspelled on purpose) was run to confirm T-3 could fail before trusting it green (raw line 13220-13229), and O-070 records that the stale-command and 404 findings came from running the real program, 'not by reading them or the code'"}
+    approvals: []
+    deviations: []
+    form: {contract_before_code: "pass — the first Edit/Write to a non-kit file (McpServerTemplate.Tests/DocumentationTests.cs, raw line 12851) follows the pioneer's approval ('Its approved...', raw line 12758); the only earlier write in the span (c004.yaml, raw line 12801) is the contract-log entry itself, a kit file", bearing_present: "pass — CONTRACT-LOG.yaml lines 489-495, two sentences", spec_lock_when_due: "n/a — the docs-and-comments contract was fully determined by survey against the running server; no open design choice (content, direction, tunable number) required an M-05 spec lock before the tiers", observations_recorded: "pass — O-070, O-071, O-072 (LEDGER.yaml lines 1891-1952), each carrying a stated_confidence (0.65, 0.6, 0.5)", moments_named: "pass — M-04 (raw line 12682), M-06 and M-07 (raw line 12772), M-11 implicit in the closing 'Recording what this contract taught, then marking it implemented' (raw line 13226) beside the observations tagged M-11", corrections_recorded: "fail — the mid-draw scope-widening message 'update comments as well' (raw line 12691, 2026-09-23T23:06:46Z) has no CORRECTIONS.yaml entry; recovered by this audit as C-038, recorded_by: kit-session-auditor", precedent_check: "pass — the draft names the precedents in force ('Precedents: the same four as last time... I draft the tests and you adjust or confirm', raw line 12748), applying P-007's holding (draft Tier 4 by default) faithfully; no matching CASEBOOK.yaml precedent for this span's moments was found ignored", presented_for_pioneer: "pass — the contract draft (raw 12748), the approval acknowledgement (raw 12772) and the completion line (raw 13226) each name what is happening and why without a bare id or an unexplained figure; compared against the one record readable here, meta-contract-before-execution/SKILL.md's Approval Gate line, the three asks offered (disappointment lines, pre-mortem, approval) are exactly the ones the record allows, nothing dropped or softened", sealed_access: "pass — no tool input anywhere in this transcript touches kit-sealed/; main session only"}
+    findings: [O-079, O-080]
 
 scores:
   updated: 2026-09-20

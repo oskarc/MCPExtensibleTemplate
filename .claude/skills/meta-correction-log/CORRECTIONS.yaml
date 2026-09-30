@@ -1197,6 +1197,34 @@ corrections:
     precedent: "P-037, S-018"
     clerk_note: null
 
+
+  - corr_id: C-038
+    date: 2026-09-23
+    contract_id: contract-004
+    moment: M-04
+    grade: scope
+    intervention: hinted
+    agent_offered: |
+      Moment: M-04. You've asked for two changes, and each needs a contract. I'm drawing the docs
+      one first, as you ordered them. One thing is still open from last time, and it comes first
+      below.
+    pioneer_said: |
+      update comments as well
+    reason_given: |
+      none given
+    noticed: |
+      not asked - recorded after the fact by the session auditor (A-003); the moment to ask has
+      passed
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: kit-session-auditor
+    clerked: false
+    precedent: null
+    clerk_note: null
+
 trajectory:
   updated: 2026-09-30
   by_contract:

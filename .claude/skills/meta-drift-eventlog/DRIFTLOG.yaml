@@ -327,15 +327,25 @@ entries:
       LEDGER.yaml O-028 through O-033; CORRECTIONS.yaml C-011 through C-016; CASEBOOK.yaml P-011
       through P-016, every one of which carries check: not checkable. The session's own drift score
       blocks across the span score this aspect ABSENT with no argument against it.
+
+      Recurrence, 2026-09-30 — audit A-003 of contract-004 (post-hoc), recorded by the main agent on
+      reading the auditor's report (M-18): elevation_not_recovery ABSENT again, the only aspect
+      marked so. In the auditor's words, contract-004's own observations O-070, O-071 and O-072
+      "are all defects caught while correcting the documents against the running server (a
+      first-run command exiting 78, mismatched byte limits, an OAuth endpoint mismatch), none a
+      learning restated from prior clarity". The auditor's observation on it is O-080. Same aspect,
+      same shape as the entry above: the contract's learnings are scars of what it found broken.
     reaction: |
       Not named as a trigger in-session at the point each recovery-shaped learning was recorded;
       surfaced only by this audit — which was itself impossible to run until the kit shipped the
       transcript digest today. The first audit this project has completed found it immediately,
       which is the argument for the mechanism rather than for the agent's self-reporting.
+      2026-09-30: the recurrence was again surfaced only by a post-hoc audit, a week after the
+      contract; nothing in-session named it. Counted here as a recurrence rather than a new entry.
     status: open
     elevation: []
     reviewed: null
-    recurrence_count: 0
+    recurrence_count: 1
     related_drifts: [drift-006, drift-007, drift-008]
 
   - drift_id: drift-010
@@ -438,3 +448,31 @@ entries:
     reviewed: null
     recurrence_count: 2
     related_drifts: [drift-009, drift-010]
+
+  - drift_id: drift-012
+    surfaced_in: 2026-09-30 / contract-004 audit (A-003)
+    surfaced_by: post-hoc
+    aspect: stop-on-triggers
+    description: |
+      While contract-004 was being drawn, the pioneer widened its scope with "update comments as
+      well". The agent acted on it in its next turn ("Noted: code comments are in scope too") and
+      wrote no correction record. meta-correction-log asks for a scope change to be recorded
+      verbatim immediately, before the work continues (M-07); the work continued past that
+      deviation from an active skill without naming it. The discipline-aligned alternative was to
+      record it as a scope correction in that turn, then carry on.
+    evidence: |
+      Session 40478952-60db-48c0-8fd4-97b093d57259, raw transcript line 12691
+      (2026-09-23T23:06:46Z): "update comments as well"; acted on at raw line 12696 (both per the
+      auditor's report). No CORRECTIONS.yaml entry existed until audit A-003 recovered it as C-038
+      (recorded_by: kit-session-auditor; the three incident questions "not asked", the moment having
+      passed). The auditor's observation on it is O-079. No pioneer statement authorised skipping
+      the record.
+    reaction: |
+      Surfaced only by the post-hoc audit, a week after the moment; nothing in-session caught it.
+      The auditor recovered the record as C-038, and the main agent wrote this entry on reading the
+      audit (M-18). C-038 goes to the case clerk like any other correction (M-15).
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 0
+    related_drifts: []
