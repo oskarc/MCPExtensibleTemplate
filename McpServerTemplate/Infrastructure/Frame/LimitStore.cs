@@ -56,7 +56,22 @@ public sealed class RedisLimitStore : ILimitStore, IDisposable
     /// </summary>
     public static RedisLimitStore Connect(string connectionString)
     {
-        var options = ConfigurationOptions.Parse(connectionString);
+        ConfigurationOptions options;
+        try
+        {
+            options = ConfigurationOptions.Parse(connectionString);
+        }
+        catch (ArgumentException e)
+        {
+            // contract-005 verify phase (SEC-V-01) — a connection string the client cannot read is configuration (exit 78),
+            // not a crash (exit 70). Neither the value nor the keyword is shown: a password holding ',X=' splits into a
+            // keyword, so the parser's own message can carry part of the password.
+            throw new McpServerTemplate.Infrastructure.ConfigurationException(
+                "Limits:Redis is not a connection string the Redis client can read: a keyword or a value in it is not one it "
+                + "accepts. Its value is not shown, as it may hold a password; a password containing ',' or '=' must be quoted.",
+                e);
+        }
+
         options.AbortOnConnectFail = false;
         options.ConnectTimeout = 2_000;
         options.SyncTimeout = 2_000;
