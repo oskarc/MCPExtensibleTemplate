@@ -473,6 +473,17 @@ contracts:
           anything it finds below high goes to a follow-up list, not into another round; (4) the single
           verification and documentation pass, push, CI, close. Still open with the pioneer: G-8's BuildKit
           builds (drift-002, recurrence), the network cut, contract-004's corrected clauses.
+      - date: 2026-10-01
+        pioneer_decisions: |
+          "i approved dockers newer builder" / "fix the documentation after everything else"
+        applied_as: |
+          G-8: the server under test is built by BuildKit (docker buildx), as operators build it; authorised after
+          the fact, recorded in drift-002. contract-004's corrected clauses (UC-3, UC-4, UC-6, G-3) are fixed in
+          this contract's single documentation pass, the last step before push: the beginner's guide network
+          example, error example and log lines; the README's architecture timings, breaker and prompt name; the
+          health-check comment's API key; and a stronger retired-terms test (plain words "API key" and "assembly
+          scanning", whole comments). contract-004 is closed by this follow-up.
+    follows: contract-004
     progress: |
       Paused 2026-09-27 at the pioneer's instruction, to preserve capacity. Status stays approved.
       Built: phase 1 (G-1..G-9, G-11 self-checks, G-16 shapes, G-14 with the budget, T-1) and phase 2
@@ -594,7 +605,8 @@ contracts:
         so this was also the check that it can fail at all.
     approval: approved-at-gate
     status: implemented
-    verification_state: reported
+    verification_state: closed-by-follow-up
+    led_to: contract-005
     verification:
       date: 2026-09-30
       by: kit-verifier
