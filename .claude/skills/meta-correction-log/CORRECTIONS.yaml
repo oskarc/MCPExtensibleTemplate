@@ -1224,6 +1224,34 @@ corrections:
     clerked: false
     precedent: null
     clerk_note: null
+  - corr_id: C-039
+    date: 2026-10-01
+    contract_id: contract-005
+    moment: M-25
+    grade: frame-reset
+    intervention: reviewed-after
+    agent_offered: |
+      My opinion on the next step. I'm changing my last recommendation... 1. One fix batch... 2. Let builders run
+      the fast suite after their changes... 3. One last, narrower attack round on the product and the fixes only,
+      with a fixed stop rule... 4. Then the single verification and documentation pass, push, CI and close.
+      (Earlier in the contract: attack rounds run on code-only fixes, round after round, until a round finds
+      nothing new.)
+    pioneer_said: |
+      OK your 4 steps are approved. Part of the issue here is you overthinking and over engineering.
+      The builder may run the test suite when useful, but im hesitant to allow many rounds of attack agents on a partly built feature that will require the same amount of attack rounds later, better to save the attack rounds until the thing is built and done. think of it like this: Phase 1: design, Phase 2: build, Phase 3: verify, Phase 4 finish and launch.
+    reason_given: |
+      "im hesitant to allow many rounds of attack agents on a partly built feature that will require the same amount of attack rounds later"
+    noticed: |
+      not asked
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked
+    supersedes: [C-035]
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
 
 trajectory:
   updated: 2026-09-30

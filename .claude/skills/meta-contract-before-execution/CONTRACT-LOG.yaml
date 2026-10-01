@@ -457,6 +457,22 @@ contracts:
           CI refuses MCP_E2E_SABOTAGE on every run, as the contract words it.
           4 (review B-004, the card): not ruled yet; the batch stays open.
           5 (settings read once at startup, built in phase 2 round 2-3): approved.
+      - date: 2026-10-01
+        pioneer_decision: |
+          "OK your 4 steps are approved. Part of the issue here is you overthinking and over engineering.
+          The builder may run the test suite when useful, but im hesitant to allow many rounds of attack agents
+          on a partly built feature that will require the same amount of attack rounds later, better to save the
+          attack rounds until the thing is built and done. think of it like this: Phase 1: design, Phase 2:
+          build, Phase 3: verify, Phase 4 finish and launch." (C-039)
+        applied_as: |
+          G-17 ends after one more attack round. The four steps: (1) one fix batch - the product's
+          double-escaped log values, and the harness items that are real breakage or would mislead by
+          accident; the harness gaps that need a test author deliberately walking round a self-check are
+          written down as known limits, not chased; (2) builders may run the test suites when useful
+          (narrows C-035); (3) one last attack round, on the product and the fixes only, with a stop rule:
+          anything it finds below high goes to a follow-up list, not into another round; (4) the single
+          verification and documentation pass, push, CI, close. Still open with the pioneer: G-8's BuildKit
+          builds (drift-002, recurrence), the network cut, contract-004's corrected clauses.
     progress: |
       Paused 2026-09-27 at the pioneer's instruction, to preserve capacity. Status stays approved.
       Built: phase 1 (G-1..G-9, G-11 self-checks, G-16 shapes, G-14 with the budget, T-1) and phase 2

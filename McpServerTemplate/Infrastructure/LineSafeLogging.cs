@@ -210,8 +210,10 @@ public sealed class LineSafeSink : ILogEventSink, IDisposable, IAsyncDisposable
 
             // contract-005 · G-17 round 3 (SEC-R3-04) — a value the frame escaped itself: nothing but escaping makes a SafeText,
             // so it holds nothing that breaks a line, and escaped again its escapes would read as text the caller wrote.
-            case ScalarValue { Value: SafeText }:
-                return value;
+            // contract-005 · G-17 round 4 (SEC-R4-02) — passed on as the string it holds: a sink renders any other value as
+            // JSON, quoted and with every backslash escaped a second time, which the File sink did under {Message:lj}.
+            case ScalarValue { Value: SafeText safe }:
+                return new ScalarValue(safe.ToString());
 
             case ScalarValue { Value: string text }:
                 var escaped = LogSafe.Escaped(text);
