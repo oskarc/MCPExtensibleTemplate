@@ -1252,6 +1252,32 @@ corrections:
     clerked: false
     precedent: null
     clerk_note: null
+  - corr_id: C-040
+    date: 2026-10-01
+    contract_id: contract-005
+    moment: M-04
+    grade: option-override
+    intervention: redirected
+    agent_offered: |
+      A. Keep it as it is. Nothing more to build.
+      B. A real cut. The test network gets no route out at all. That's about 1-2 hours of extra test setup.
+      I recommended B before. After your note about over-engineering, I recommend A: every call is already faked,
+      and the gap needs code that deliberately uses a raw address.
+    pioneer_said: |
+      oh yea, no internet access mock everything
+    reason_given: |
+      none given
+    noticed: |
+      not asked
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
 
 trajectory:
   updated: 2026-09-30
