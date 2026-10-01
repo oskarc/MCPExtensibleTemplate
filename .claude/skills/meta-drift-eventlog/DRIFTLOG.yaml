@@ -98,6 +98,7 @@ entries:
       it after the fact, written here as a dated authorisation, or return to the Testcontainers builder.
       The work that builds on it waits for the answer. Per The Approval Gate, it is recorded here and
       not as a revision of contract-005.
+      2026-10-01: the pioneer authorised it after the fact - "i approved dockers newer builder". The entry stays.
     status: open
     elevation: []
     reviewed: null
