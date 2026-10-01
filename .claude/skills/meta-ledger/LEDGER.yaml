@@ -2126,8 +2126,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-079
     stewarded: n/a
 
   - obs_id: O-082
@@ -2144,8 +2144,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-080
     stewarded: n/a
 
   - obs_id: O-083
@@ -2161,8 +2161,8 @@ observations:
     stated_confidence: null
     loaded_candidates: []
     prompted: false
-    consolidated: false
-    merged_into: null
+    consolidated: true
+    merged_into: K-081
     stewarded: n/a
 
 
@@ -4837,6 +4837,82 @@ candidates:
     decision: null
     outcome: null
 
+  - cand_id: K-079
+    created: 2026-10-01
+    statement: |
+      M-04
+
+      update comments as well
+    level: product-detail
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-081"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: moderate
+    certainty_codes: [single-contract, pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-10-01
+    decision: null
+    outcome: null
+
+  - cand_id: K-080
+    created: 2026-10-01
+    statement: |
+      M-25
+
+      OK your 4 steps are approved. Part of the issue here is you overthinking and over engineering.
+      The builder may run the test suite when useful, but im hesitant to allow many rounds of attack agents on a partly built feature that will require the same amount of attack rounds later, better to save the attack rounds until the thing is built and done. think of it like this: Phase 1: design, Phase 2: build, Phase 3: verify, Phase 4 finish and launch.
+    level: pattern
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-082"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: moderate
+    certainty_codes: [single-contract, pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-10-01
+    decision: null
+    outcome: null
+
+  - cand_id: K-081
+    created: 2026-10-01
+    statement: |
+      M-04
+
+      oh yea, no internet access mock everything
+    level: product-detail
+    tier: undecided
+    target: [meta-contract-before-execution]
+    stage: assess
+    contradicts: []
+    review_due: false
+    disposition_proposed: null
+    evidence_refs: ["O-083"]
+    helpful: {independent: 0, loaded: 0}
+    harmful: {independent: 0, loaded: 0}
+    independent_uses: 0
+    certainty: moderate
+    certainty_codes: [single-contract, pioneer-unprompted]
+    stated_confidence: null
+    restatements: 1
+    last_moved: 2026-10-01
+    decision: null
+    outcome: null
+
 
 batches:
   - batch_id: B-001
@@ -4950,16 +5026,16 @@ scores:
       corrections_from_tests: 0
       corrections_from_reading: 0
     - contract_id: contract-004
-      observations: 5
-      candidates_created: 5
+      observations: 6
+      candidates_created: 6
       audited: true
       verified: false   # verification_state closed-by-follow-up
       cost: null
       corrections_from_tests: 0
       corrections_from_reading: 4
     - contract_id: contract-005
-      observations: 4
-      candidates_created: 4
+      observations: 6
+      candidates_created: 6
       audited: false
       verified: false
       cost: null
