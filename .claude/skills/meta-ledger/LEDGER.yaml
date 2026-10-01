@@ -2113,6 +2113,58 @@ observations:
     merged_into: K-078
     stewarded: n/a
 
+  - obs_id: O-081
+    date: 2026-10-01
+    source: pioneer
+    contract_id: contract-004
+    refs: [C-038]
+    statement: |
+      M-04
+
+      update comments as well
+    level_guess: product-detail
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-082
+    date: 2026-10-01
+    source: pioneer
+    contract_id: contract-005
+    refs: [C-039]
+    statement: |
+      M-25
+
+      OK your 4 steps are approved. Part of the issue here is you overthinking and over engineering.
+      The builder may run the test suite when useful, but im hesitant to allow many rounds of attack agents on a partly built feature that will require the same amount of attack rounds later, better to save the attack rounds until the thing is built and done. think of it like this: Phase 1: design, Phase 2: build, Phase 3: verify, Phase 4 finish and launch.
+    level_guess: pattern
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
+  - obs_id: O-083
+    date: 2026-10-01
+    source: pioneer
+    contract_id: contract-005
+    refs: [C-040]
+    statement: |
+      M-04
+
+      oh yea, no internet access mock everything
+    level_guess: product-detail
+    stated_confidence: null
+    loaded_candidates: []
+    prompted: false
+    consolidated: false
+    merged_into: null
+    stewarded: n/a
+
 
 candidates:
   - cand_id: K-001

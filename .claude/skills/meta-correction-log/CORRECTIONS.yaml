@@ -1221,8 +1221,8 @@ corrections:
       not asked
     supersedes: []
     recorded_by: kit-session-auditor
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-038"
     clerk_note: null
   - corr_id: C-039
     date: 2026-10-01
@@ -1249,8 +1249,8 @@ corrections:
       not asked
     supersedes: [C-035]
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-039, S-019"
     clerk_note: null
   - corr_id: C-040
     date: 2026-10-01
@@ -1275,12 +1275,12 @@ corrections:
       not asked
     supersedes: []
     recorded_by: main-agent
-    clerked: false
-    precedent: null
+    clerked: true
+    precedent: "P-040, S-020"
     clerk_note: null
 
 trajectory:
-  updated: 2026-09-30
+  updated: 2026-10-01
   by_contract:
     - contract_id: null
       corrections: 14
@@ -1298,8 +1298,12 @@ trajectory:
       corrections: 1
       bearing_reevaluations: 0
       interventions: {did-it: 0, redirected: 0, hinted: 1, reviewed-after: 0}
-    - contract_id: contract-005
-      corrections: 4
+    - contract_id: contract-004
+      corrections: 1
       bearing_reevaluations: 0
-      interventions: {did-it: 0, redirected: 3, hinted: 0, reviewed-after: 1}
-  moments: {M-27: 3, M-07: 1, M-15: 1, M-14: 1, M-04: 4, M-12: 6, M-03: 4, M-06: 2, M-25: 3, M-24: 1, M-28: 1, M-16: 6, M-01: 1, M-09: 1, M-05: 1, M-08: 1}
+      interventions: {did-it: 0, redirected: 0, hinted: 1, reviewed-after: 0}
+    - contract_id: contract-005
+      corrections: 6
+      bearing_reevaluations: 0
+      interventions: {did-it: 0, redirected: 4, hinted: 0, reviewed-after: 2}
+  moments: {M-01: 1, M-03: 4, M-04: 6, M-05: 1, M-06: 2, M-07: 1, M-08: 1, M-09: 1, M-12: 6, M-14: 1, M-15: 1, M-16: 6, M-24: 1, M-25: 4, M-27: 3, M-28: 1}

@@ -926,6 +926,7 @@ precedents:
       i cant defent the cost of doing test and documentation runs that takes hours and hundreds of
       thousands of tokens that must be rerun after a few hours because we implemented something
       new. this is a really inefficient way, and we cant be doing it.
+    conflict: P-039
     binding: true
     distinguished_by: []
     status: active
@@ -976,6 +977,86 @@ precedents:
     status: active
     overruled_by: null
     check: "P-037.sh: passes"
+
+  - prec_id: P-038
+    date: 2026-10-01
+    from: [C-038, contract-004]
+    moments: [M-04]
+    tier: project
+    facts: |
+      Two changes had been asked for and the agent was drawing the first contract, the one that
+      brings the documents in line with the server, having surveyed the documents for it. Mid-draw
+      the pioneer sent a message widening what that work covers to the code comments. The agent
+      had not offered comments as in or out of scope. The contract was then drawn as
+      "docs-and-comments-describe-the-server".
+    question: |
+      Whether a contract to bring the documents in line with the server covers the code comments
+      too, or only the documents.
+    holding: |
+      "update comments as well" - the code comments are in the contract's scope with the documents.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable - whether a contract's scope names code comments beside documents is a judgement about what the contract covers, not a fixed file or log shape a script can verify"
+
+  - prec_id: P-039
+    date: 2026-10-01
+    from: [C-039, contract-005]
+    moments: [M-25, M-12]
+    tier: project
+    conflict: P-035
+    facts: |
+      In contract-005, after the build's remaining work had been planned, the agent changed its
+      last recommendation to four steps: one fix batch; builders run the fast suite after their
+      changes; one last, narrower attack round on the product and the fixes only, with a fixed
+      stop rule; then the single verification and documentation pass, push, CI and close. Earlier
+      in the contract the plan had been attack rounds on code-only fixes, round after round, until
+      a round finds nothing new. The feature was partly built.
+    question: |
+      Whether attack rounds run repeatedly on a partly built feature, and whether builders may run
+      the test suite during the build, or the work is held to phases.
+    holding: |
+      The four steps are approved. The builder may run the test suite when useful. Many rounds of
+      attack agents on a partly built feature are not allowed; the attack rounds are saved until
+      the thing is built and done: Phase 1 design, Phase 2 build, Phase 3 verify, Phase 4 finish
+      and launch. (C-039 names C-035 in supersedes; P-035 held that no test runs until the
+      implementation is complete.)
+    reasons: |
+      "im hesitant to allow many rounds of attack agents on a partly built feature that will require the same amount of attack rounds later"
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "not checkable - when attack rounds and test runs happen relative to the build is a fact about session sequencing, not a fixed file or log shape a script can verify"
+
+  - prec_id: P-040
+    date: 2026-10-01
+    from: [C-040, contract-005]
+    moments: [M-04]
+    tier: project
+    facts: |
+      In contract-005, on whether the end-to-end test network is cut off from the internet, the
+      agent offered A, keep it as it is (every call already faked; the gap needs code that
+      deliberately uses a raw address), and B, a real cut: the test network gets no route out at
+      all, about 1-2 hours of extra test setup. The agent had recommended B, then, after the
+      pioneer's note about over-engineering, recommended A. The work that followed (commit
+      f4663e9) made the run network internal.
+    question: |
+      Whether the test network is only mocked, or is also cut off from the internet by the
+      network itself.
+    holding: |
+      "oh yea, no internet access mock everything" - the tests have no internet access, and
+      everything is mocked.
+    reasons: |
+      none recorded
+    binding: true
+    distinguished_by: []
+    status: active
+    overruled_by: null
+    check: "P-040.sh: passes"
 
 scenarios:
   - card_id: S-001
@@ -1404,6 +1485,57 @@ scenarios:
       - key: B
         text: |
           3. B
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-019
+    date: 2026-10-01
+    from: [C-039, P-039]
+    moment: M-25
+    situation: |
+      In contract-005, with the feature partly built, the agent set out the next steps and how
+      attack rounds and test runs should be timed against the build.
+    options:
+      - key: A
+        text: |
+          My opinion on the next step. I'm changing my last recommendation... 1. One fix batch...
+          2. Let builders run the fast suite after their changes... 3. One last, narrower attack
+          round on the product and the fixes only, with a fixed stop rule... 4. Then the single
+          verification and documentation pass, push, CI and close. (Earlier in the contract: attack
+          rounds run on code-only fixes, round after round, until a round finds nothing new.)
+      - key: B
+        text: |
+          OK your 4 steps are approved. Part of the issue here is you overthinking and over
+          engineering. The builder may run the test suite when useful, but im hesitant to allow
+          many rounds of attack agents on a partly built feature that will require the same amount
+          of attack rounds later, better to save the attack rounds until the thing is built and
+          done. think of it like this: Phase 1: design, Phase 2: build, Phase 3: verify, Phase 4
+          finish and launch.
+    pioneer_ranking: pending
+    rationale: ""
+    dissent: ""
+
+  - card_id: S-020
+    date: 2026-10-01
+    from: [C-040, P-040]
+    moment: M-04
+    situation: |
+      In contract-005, the agent put to the pioneer whether the end-to-end test network is cut
+      off from the internet or only mocked.
+    options:
+      - key: A
+        text: |
+          A. Keep it as it is. Nothing more to build. (Recommended, after the over-engineering
+          note: every call is already faked, and the gap needs code that deliberately uses a raw
+          address.)
+      - key: B
+        text: |
+          B. A real cut. The test network gets no route out at all. That's about 1-2 hours of
+          extra test setup. (Recommended earlier.)
+      - key: C
+        text: |
+          oh yea, no internet access mock everything
     pioneer_ranking: pending
     rationale: ""
     dissent: ""
