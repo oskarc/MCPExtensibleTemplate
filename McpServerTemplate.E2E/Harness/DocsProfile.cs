@@ -1563,9 +1563,10 @@ public sealed partial class DocsProfile : IAsyncDisposable
                     await _docker.Images.TagImageAsync(_before, new ImageTagParameters { RepositoryName = _name[..colon], Tag = _name[(colon + 1)..] });
                 }
             }
-            catch (DockerApiException)
+            catch (Exception e) when (e is DockerApiException or EnvironmentFaultException)
             {
-                // Best effort, as every teardown step: the tag is a name, and the run's result does not depend on it.
+                // Best effort, as every teardown step: the tag is a name, and the run's result does not depend on it. Once
+                // an interrupted run is stopping, the tag call is refused and the stop handler has put the name back.
             }
         }
     }

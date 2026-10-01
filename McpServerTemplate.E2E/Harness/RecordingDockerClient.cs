@@ -140,6 +140,7 @@ internal sealed class RecordingDockerClient(IDockerClient inner, string runDirec
         public async Task TagImageAsync(string name, ImageTagParameters parameters, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(parameters);
+            E2EEnvironment.RefuseWhileStopping($"give {parameters.RepositoryName} to {name}");
 
             var given = $"{parameters.RepositoryName}:{(string.IsNullOrEmpty(parameters.Tag) ? "latest" : parameters.Tag)}";
             var before = await IdOfAsync(inner, given, cancellationToken) ?? "-";

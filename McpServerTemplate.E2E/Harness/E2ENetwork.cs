@@ -226,6 +226,8 @@ public static class E2ENetwork
             .WithLabel(RunLabels(runId))
             .WithCreateParameterModifier(parameters =>
             {
+                // contract-005 · G-17 round 4 (FLA-R4-03) — run as the engine is asked to create it: none once the run is stopping.
+                E2EEnvironment.RefuseWhileStopping($"create a container of {image}");
                 parameters.HostConfig ??= new HostConfig();
                 parameters.HostConfig.DNS = [NameServer];
                 parameters.HostConfig.DNSSearch = [NoSearchDomain];

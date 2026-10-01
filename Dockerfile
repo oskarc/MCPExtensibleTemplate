@@ -9,8 +9,9 @@
 # directory as the user in force, which the classic builder takes to be root and BuildKit the base
 # image's user, 1654, so under BuildKit (docker build, docker compose build: how an operator builds
 # it) the server's own user owned /app, and could replace its settings files and assemblies. Now:
-# /app and everything published in it root's, directories 0755 and files 0644; /app/logs alone the
-# app user's, 0755; the process runs as the app user.
+# /app and everything published in it root's and writable by root alone: directories 0755, files 0644
+# or 0755 (chmod u=rwX,go=rX keeps an execute bit a file arrives with, as NuGet's DLLs and files from a
+# Windows build context do); /app/logs alone the app user's, 0755; the process runs as the app user.
 #
 # Both base images are pinned by the digest of their multi-arch index, so a tag moving on the
 # registry cannot change what this file builds, on any architecture:

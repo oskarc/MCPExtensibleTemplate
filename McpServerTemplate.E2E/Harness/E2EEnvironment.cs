@@ -1067,6 +1067,19 @@ public sealed class E2EEnvironment : IAsyncDisposable
     }
 
     /// <summary>
+    /// contract-005 · G-17 round 4 (FLA-R4-03) — refuses, as an environment fault, to <paramref name="what"/> once the run's teardown
+    /// on its way out has begun, so that nothing of the run is made while it is removed: checked as the harness creates a container
+    /// of the run (<see cref="E2ENetwork.OnTheRunNetwork"/>) and gives an image a name (<see cref="RecordingDockerClient"/>).
+    /// </summary>
+    internal static void RefuseWhileStopping(string what)
+    {
+        if (OnExit.Stopping)
+        {
+            throw new EnvironmentFaultException("environment: stopping", $"the run is being taken down on its way out, so it does not {what}.");
+        }
+    }
+
+    /// <summary>
     /// contract-005 · G-17 round 2 (CON-R2-05) — a run stopped before its teardown takes itself down on its way out, best effort.
     ///
     /// The resource reaper is off (it published its port on every interface), and the teardown runs only when the assembly
@@ -1088,6 +1101,11 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// tests start and remove containers while the process exits; then its networks, tried again while they still hold an
     /// endpoint; then its volumes (<see cref="RunRemoval"/>, which HarnessSelfTests holds to this with an engine of its own); and
     /// whatever still carries the label when the time runs out is written to interrupted.txt as left.
+    ///
+    /// contract-005 · G-17 round 4 (FLA-R4-03) — tests kept creating containers while it ran, after its container step had found
+    /// none. Now it first says it is stopping, and the harness refuses to create a container of the run or name an image after
+    /// that (<see cref="RefuseWhileStopping"/>); and the container, network and volume steps are repeated as one pass until a
+    /// pass lists nothing, so "left" is read after the last.
     /// </summary>
     private static class OnExit
     {
@@ -1097,6 +1115,10 @@ public sealed class E2EEnvironment : IAsyncDisposable
         private static string? _repositoryRoot;
         private static int _done;
         private static int _registered;
+        private static int _stopping;
+
+        /// <summary>contract-005 · G-17 round 4 (FLA-R4-03) — the teardown on the way out has begun: nothing of the run may be made after.</summary>
+        public static bool Stopping => Volatile.Read(ref _stopping) == 1;
 
         /// <summary>From the moment the run <paramref name="runId"/> may create anything, until its own teardown is done.</summary>
         public static void Register(string runId, string repositoryRoot)
@@ -1129,6 +1151,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 return;
             }
 
+            Interlocked.Exchange(ref _stopping, 1);
             try
             {
                 Task.Run(() => RemoveAsync(run, root, why)).Wait(Within);
@@ -1267,10 +1290,17 @@ internal static class RunRemoval
     {
         ArgumentNullException.ThrowIfNull(engine);
 
+        // contract-005 · G-17 round 4 (FLA-R4-03) — the whole pass again until one lists nothing: a test may create a container
+        // while the networks or volumes are being removed.
         var said = new List<string>();
-        await RemoveEveryAsync("container", engine.Containers, engine.RemoveContainer, [HttpStatusCode.NotFound, HttpStatusCode.Conflict], said, cancellationToken);
-        await RemoveEveryAsync("network", engine.Networks, engine.RemoveNetwork, [HttpStatusCode.NotFound], said, cancellationToken);
-        await RemoveEveryAsync("volume", engine.Volumes, engine.RemoveVolume, [HttpStatusCode.NotFound], said, cancellationToken);
+        var listedAny = true;
+        while (listedAny && !cancellationToken.IsCancellationRequested)
+        {
+            var containers = await RemoveEveryAsync("container", engine.Containers, engine.RemoveContainer, [HttpStatusCode.NotFound, HttpStatusCode.Conflict], said, cancellationToken);
+            var networks = await RemoveEveryAsync("network", engine.Networks, engine.RemoveNetwork, [HttpStatusCode.NotFound], said, cancellationToken);
+            var volumes = await RemoveEveryAsync("volume", engine.Volumes, engine.RemoveVolume, [HttpStatusCode.NotFound], said, cancellationToken);
+            listedAny = containers || networks || volumes;
+        }
 
         // What is left, asked once more whatever the deadline did, briefly.
         using var last = new CancellationTokenSource(TimeSpan.FromSeconds(2));
@@ -1294,9 +1324,9 @@ internal static class RunRemoval
     /// <summary>
     /// Removes every <paramref name="kind"/> <paramref name="list"/> gives, each on its own, listing again after each pass, until it
     /// gives none or the time is up. A removal the engine answers with one of <paramref name="gone"/> is of one gone, or going; any
-    /// other failure leaves it to the next pass.
+    /// other failure leaves it to the next pass. Whether its first listing gave any.
     /// </summary>
-    private static async Task RemoveEveryAsync(
+    private static async Task<bool> RemoveEveryAsync(
         string kind,
         Func<CancellationToken, Task<IReadOnlyList<RunResource>>> list,
         Func<string, CancellationToken, Task> remove,
@@ -1304,6 +1334,7 @@ internal static class RunRemoval
         List<string> said,
         CancellationToken cancellationToken)
     {
+        var listedAny = false;
         try
         {
             while (true)
@@ -1311,8 +1342,10 @@ internal static class RunRemoval
                 var listed = await list(cancellationToken);
                 if (listed.Count == 0)
                 {
-                    return;
+                    return listedAny;
                 }
+
+                listedAny = true;
 
                 foreach (var resource in listed)
                 {
@@ -1342,5 +1375,7 @@ internal static class RunRemoval
         {
             said.Add($"{kind}s: not listed ({ex.GetType().Name}: {ex.Message})");
         }
+
+        return false;
     }
 }

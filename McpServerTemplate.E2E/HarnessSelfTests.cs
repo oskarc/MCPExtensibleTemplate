@@ -1022,6 +1022,8 @@ public sealed partial class HarnessSelfTests
     /// issuer and WireMock running. Held here with an engine of the test's own, which answers as Docker does: after the first listing,
     /// one container is removed by its class's teardown (404 when the routine asks), one is already being removed (409, then gone),
     /// and a test starts another; the network refuses while it still holds an endpoint, and the volume while a container holds it.
+    /// contract-005 · G-17 round 4 (FLA-R4-03) — and a test creates one more while the network is being removed, after the container
+    /// step had found none: the whole pass is repeated until one lists nothing.
     /// </summary>
     [Fact]
     public async Task An_interrupted_run_removes_every_container_network_and_volume_it_labelled_whatever_is_removed_under_it()
@@ -1033,6 +1035,7 @@ public sealed partial class HarnessSelfTests
             engine.BeingRemoved("c3");
             engine.Started("c4");
         };
+        engine.AtFirstNetworkRemoval = () => engine.Started("c5");
 
         using var within = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var said = await RunRemoval.RemoveAsync(engine.Engine, within.Token);
@@ -1043,6 +1046,7 @@ public sealed partial class HarnessSelfTests
         Assert.Contains("c3: 409", engine.Answered);
         Assert.Contains("n1: 403", engine.Answered);
         Assert.Contains("v1: 409", engine.Answered);
+        Assert.True(engine.Created("c5"), "the engine created no container during the network step.");
 
         var left = engine.Left();
         Assert.True(
@@ -1063,10 +1067,15 @@ public sealed partial class HarnessSelfTests
         private readonly List<string> _volumes = [.. volumes];
         private readonly HashSet<string> _removing = [];
         private readonly HashSet<string> _refusedOnce = [];
+        private readonly HashSet<string> _created = [];
         private int _listings;
+        private int _networkRemovals;
 
         /// <summary>What happens once the containers have first been listed.</summary>
         public Action? AfterFirstListing { get; set; }
+
+        /// <summary>What happens when a network is first asked to be removed.</summary>
+        public Action? AtFirstNetworkRemoval { get; set; }
 
         /// <summary>Each refusal the engine gave, "name: status".</summary>
         public ConcurrentQueue<string> Answered { get; } = new();
@@ -1094,6 +1103,16 @@ public sealed partial class HarnessSelfTests
             lock (_gate)
             {
                 _containers.Add(container);
+                _created.Add(container);
+            }
+        }
+
+        /// <summary>Whether <paramref name="container"/> was started after the engine was made.</summary>
+        public bool Created(string container)
+        {
+            lock (_gate)
+            {
+                return _created.Contains(container);
             }
         }
 
@@ -1142,8 +1161,15 @@ public sealed partial class HarnessSelfTests
 
         private Task<IReadOnlyList<RunResource>> ListNetworksAsync(CancellationToken cancellationToken) => List(_networks);
 
-        private Task RemoveNetworkAsync(string id, CancellationToken cancellationToken) =>
-            RemoveHeldOnceAsync(_networks, id, HttpStatusCode.Forbidden, $"error while removing network: network {id} has active endpoints");
+        private Task RemoveNetworkAsync(string id, CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref _networkRemovals) == 1)
+            {
+                AtFirstNetworkRemoval?.Invoke();
+            }
+
+            return RemoveHeldOnceAsync(_networks, id, HttpStatusCode.Forbidden, $"error while removing network: network {id} has active endpoints");
+        }
 
         private Task<IReadOnlyList<RunResource>> ListVolumesAsync(CancellationToken cancellationToken) => List(_volumes);
 
@@ -1195,7 +1221,8 @@ public sealed partial class HarnessSelfTests
     [Fact]
     public void A_compose_files_named_volume_and_logging_block_are_read_as_written_and_what_it_refused_stays_refused()
     {
-        const string compose = """
+        // Line endings as Compose reads them, whatever the checkout gave this file (HAR-R4-07: a CRLF checkout left the forms equal to it).
+        const string raw = """
             services:
               mcp-server:
                 image: mcp-server:latest
@@ -1210,6 +1237,7 @@ public sealed partial class HarnessSelfTests
             volumes:
               mcp-logs:
             """;
+        var compose = raw.ReplaceLineEndings("\n");
 
         var project = DocsProfile.Compose.Parse(compose);
         var server = Assert.Single(project.Services);

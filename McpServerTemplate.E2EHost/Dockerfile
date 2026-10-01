@@ -11,8 +11,9 @@
 # contract-005 · G-17 round 3 (CON-R3-01) — built by BuildKit, as the harness builds every image now and as operators build
 # the shipped one, and laid out as the root Dockerfile lays the shipped image out: owners and modes are set here rather than
 # left to a builder's defaults (WORKDIR makes /app as the user in force, root under the classic builder and the base
-# image's user, 1654, under BuildKit), so /app is root's, its files 0644 and its directories 0755, and logs/ alone the app
-# user's, whichever builder builds it. No BuildKit-only syntax, as the root Dockerfile.
+# image's user, 1654, under BuildKit), so /app is root's and writable by root alone, its directories 0755 and its files 0644
+# or 0755 (an execute bit a file arrives with is kept, as in the root Dockerfile), and logs/ alone the app user's, whichever
+# builder builds it. No BuildKit-only syntax, as the root Dockerfile.
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0.101-noble@sha256:5504edd1267dd4deab3443f960cfab219249c8bd935fbcc358f1c24aeae23fe0 AS build
 WORKDIR /src
