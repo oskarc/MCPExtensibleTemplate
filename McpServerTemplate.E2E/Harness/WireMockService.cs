@@ -62,8 +62,6 @@ public sealed class WireMockService : IUpstreamService
         var tls = pki.LeafDirectory(Owner.Name);
         var container = E2ENetwork.OnTheRunNetwork(Image, docker, network, runId)
             .WithNetworkAliases([.. hosts])
-            .WithPortBinding(Port, true)
-            .WithLoopbackPortsOnly()
             // One PEM holding the certificate and its key, so no password has to be passed around.
             .WithBindMount(Path.Combine(tls, TestPki.BundleFile), "/e2e/tls/tls.pem", AccessMode.ReadOnly)
             // The image's entrypoint listens on http://*:80; the later --Urls replaces it, so the fake
@@ -77,7 +75,9 @@ public sealed class WireMockService : IUpstreamService
         try
         {
             await container.StartAsync(cancellationToken);
-            names = names.With(Alias, Port, container.Hostname, container.GetMappedPublicPort(Port));
+            // contract-005 · UC-6 — reached through the run's door.
+            var published = Door.Open.Published(container, Port);
+            names = names.With(Alias, Port, published.Host, published.Port);
 
             var service = new WireMockService(docker, container, names);
             await service.WaitUntilReadyAsync(cancellationToken);

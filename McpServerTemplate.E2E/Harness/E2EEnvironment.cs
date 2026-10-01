@@ -159,6 +159,15 @@ public sealed class E2EEnvironment : IAsyncDisposable
     /// <summary>contract-005 · G-17 round 3 (CON-R3-01) — the build context's hash, as every image of the run was checked to carry.</summary>
     public string ContextHash { get; private init; } = string.Empty;
 
+    /// <summary>contract-005 · UC-6 — the run's one way in from the test process (<see cref="Harness.Door"/>).</summary>
+    internal Door Door { get; private init; } = null!;
+
+    /// <summary>
+    /// contract-005 · UC-6 — the live witness taken at the environment's start: a TCP connect to a public address from a container
+    /// of the run's network, and from the door, on an ordinary network (<see cref="Door.WitnessAsync"/>).
+    /// </summary>
+    public InternetWitness Internet { get; private init; } = null!;
+
     public KeycloakService Keycloak { get; }
 
     public TestIssuerService TestIssuer { get; }
@@ -274,6 +283,7 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 await service.DisposeAsync();
             }
 
+            await Door.DisposeAsync();
             await Network.DisposeAsync();
         }
         finally
@@ -327,6 +337,10 @@ public sealed class E2EEnvironment : IAsyncDisposable
 
             var network = await Timings.MeasureEnvironmentAsync("environment: network", () => E2ENetwork.CreateAsync(runId, docker, cancellationToken));
             created.Add(("network", network));
+
+            // contract-005 · UC-6 — the network is internal and publishes nothing: the test process reaches it through the door.
+            var door = await Timings.MeasureEnvironmentAsync("environment: door", () => E2ENetwork.OpenDoorAsync(runId, docker, network, pki, cancellationToken));
+            created.Add(("door", door));
 
             var names = new NameMap(pki.Ca);
             var start = new UpstreamStart(docker, network, pki, names, runId);
@@ -393,6 +407,9 @@ public sealed class E2EEnvironment : IAsyncDisposable
             // every container the environment started, as the engine records it, resolves no real name (E2ENetwork.NameServer).
             await Timings.MeasureEnvironmentAsync("environment: no real names", () => CheckNoRealNamesAsync(docker, network, cancellationToken));
 
+            // contract-005 · UC-6 — "no internet access mock everything": the live witness, read by NetworkCutTests.
+            var internet = await Timings.MeasureEnvironmentAsync("environment: no internet", () => door.WitnessAsync(redis.Result.Container, cancellationToken));
+
             // contract-005 · G-8 — before any test runs: every image carries this checkout's revision
             // and its build context's hash.
             await Timings.MeasureEnvironmentAsync("environment: revision labels", async () =>
@@ -410,6 +427,8 @@ public sealed class E2EEnvironment : IAsyncDisposable
             {
                 Revision = revision,
                 ContextHash = contextHash,
+                Door = door,
+                Internet = internet,
             };
 
             await Timings.MeasureEnvironmentAsync("environment: clock self-check", () => environment.CheckClockAsync(cancellationToken));
@@ -708,32 +727,25 @@ public sealed class E2EEnvironment : IAsyncDisposable
     }
 
     /// <summary>
-    /// contract-005 · T-6 (G-7, G-16) — the registered upstream host names whose owner publishes no port, in a stable order: the
-    /// names <see cref="WithoutNameAsync"/> can take off the run's network and give back.
+    /// contract-005 · T-6 (G-7, G-16) — the registered upstream host names whose owner the test process does not reach (UC-6:
+    /// through the run's door, <see cref="Harness.Door.Reaches"/>), in a stable order: the names <see cref="WithoutNameAsync"/> can
+    /// take off the run's network and give back.
     /// </summary>
-    internal async Task<IReadOnlyList<string>> RemovableNamesAsync(CancellationToken cancellationToken = default)
-    {
-        var names = new List<string>();
-        foreach (var (host, owner) in Upstreams.Owners.OrderBy(o => o.Key, StringComparer.Ordinal))
-        {
-            if (!await PublishesPortsAsync(UpstreamServices[owner].Container.Id, cancellationToken))
-            {
-                names.Add(host);
-            }
-        }
-
-        return names;
-    }
+    internal Task<IReadOnlyList<string>> RemovableNamesAsync() => Task.FromResult<IReadOnlyList<string>>(
+        [.. Upstreams.Owners
+            .OrderBy(o => o.Key, StringComparer.Ordinal)
+            .Where(o => !Door.Reaches(UpstreamServices[o.Value].Container.Id))
+            .Select(o => o.Key)]);
 
     /// <summary>
     /// contract-005 · T-6 (G-7, G-16) — the run's network without the name <paramref name="host"/>: "with one fake's alias
     /// removed". The owner the upstream registry gives <paramref name="host"/> is taken off the network and put back on it under
     /// every other name the registry gives it, so no container of the run answers <paramref name="host"/> and a lookup of it
     /// fails (<see cref="E2ENetwork.NameServer"/>); disposing what is returned puts the owner back under every one of its
-    /// names. Both are checked from the engine's own view of the network. Only an owner that publishes no port can be: Docker
-    /// gives a container that rejoins a network new published ports, or none (moby#44137), and the test process reaches
-    /// WireMock's journal through its port. Every server of the run resolves the name through the one network, so a test that
-    /// takes one away runs alone, after every other (UpstreamNamesTests' collection).
+    /// names. Both are checked from the engine's own view of the network. Only an owner the test process does not reach can be
+    /// (UC-6: through the run's door): it reaches WireMock's journal, which must not move under it. Every server of the run
+    /// resolves the name through the one network, so a test that takes one away runs alone, after every other
+    /// (UpstreamNamesTests' collection).
     /// </summary>
     internal async Task<IAsyncDisposable> WithoutNameAsync(string host, CancellationToken cancellationToken = default)
     {
@@ -744,12 +756,12 @@ public sealed class E2EEnvironment : IAsyncDisposable
         }
 
         var id = UpstreamServices[owner].Container.Id;
-        if (await PublishesPortsAsync(id, cancellationToken))
+        if (Door.Reaches(id))
         {
             throw new EnvironmentFaultException(
                 "upstream names",
-                $"'{host}' is answered by {owner.Name}, which publishes a port the test process reaches it by: a container that rejoins a "
-                + "network is given new published ports, or none (moby#44137), so its name cannot be taken off the network and given back.");
+                $"'{host}' is answered by {owner.Name}, which the test process reaches through the run's door: its name is not taken off "
+                + "the network and given back under it.");
         }
 
         var names = Upstreams.HostsOf(owner);
@@ -782,10 +794,6 @@ public sealed class E2EEnvironment : IAsyncDisposable
                 + $"[{string.Join(", ", names)}]{(removed is null ? string.Empty : $" and not '{removed}'")}.");
         }
     }
-
-    /// <summary>Whether the container <paramref name="id"/> publishes any port on this machine, as the engine records how it was created.</summary>
-    private async Task<bool> PublishesPortsAsync(string id, CancellationToken cancellationToken) =>
-        (await Docker.Containers.InspectContainerAsync(id, cancellationToken)).HostConfig?.PortBindings is { Count: > 0 };
 
     /// <summary>What <see cref="WithoutNameAsync"/> returns: disposing it gives the name back, once.</summary>
     private sealed class NameGivenBack(Func<Task> giveBack) : IAsyncDisposable

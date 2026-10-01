@@ -102,7 +102,17 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
     /// The server itself, on its published port, not through the front: plain http, from the test
     /// process. A request sent here comes from outside KnownProxies, so what it forwards is not trusted.
     /// </summary>
-    public Uri DirectEndpoint => new($"http://{Container.Hostname}:{Container.GetMappedPublicPort(Port)}{Endpoint.AbsolutePath}");
+    public Uri DirectEndpoint => Direct(Container, Endpoint.AbsolutePath);
+
+    /// <summary>
+    /// <paramref name="path"/> on <paramref name="container"/>'s server port, from the test process: plain http, through the run's
+    /// door (contract-005 · UC-6).
+    /// </summary>
+    internal static Uri Direct(IContainer container, string path)
+    {
+        var published = Door.Open.Published(container, Port);
+        return new Uri($"http://{published.Host}:{published.Port}{path}");
+    }
 
     /// <summary>
     /// The configuration every server in the environment starts from. The front's address is part of
@@ -155,8 +165,6 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
 
         var container = E2ENetwork.OnTheRunNetwork(environment.ImageOf(build), environment.Docker, environment.Network, environment.RunId)
             .WithNetworkAliases(alias)
-            .WithPortBinding(Port, true)
-            .WithLoopbackPortsOnly()
             // contract-005 · G-3 — the CA certificate alone, by read-only bind mount.
             .WithBindMount(environment.Pki.CaPath, $"{TrustMount}/{TestPki.CaFile}", AccessMode.ReadOnly)
             .WithEnvironment(settings)
@@ -367,8 +375,6 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
         var settings = delta.ApplyTo(BaseSettings(E2EEnvironment.Issuers, E2ENetwork.NoFront));
         var container = E2ENetwork.OnTheRunNetwork(environment.ImageOf(build), environment.Docker, environment.Network, environment.RunId)
             .WithNetworkAliases($"server-{name}")
-            .WithPortBinding(Port, true)
-            .WithLoopbackPortsOnly()
             .WithBindMount(environment.Pki.CaPath, $"{TrustMount}/{TestPki.CaFile}", AccessMode.ReadOnly)
             .WithEnvironment(settings)
             .Build();
@@ -428,7 +434,7 @@ public sealed partial class ServerUnderTest : IAsyncDisposable
             // Asked of a container not seen to have stopped: one that has exited has no port mapped, and a refusal at once
             // is an outcome, not a missing port (seen 2026-09-29: "Exposed port 3001/tcp is not mapped" where three servers
             // had refused, exit 78, and Testcontainers' start had given up on them — DockerEngine.StartServerAsync).
-            readyz ??= new Uri($"http://{container.Hostname}:{container.GetMappedPublicPort(Port)}/readyz");
+            readyz ??= Direct(container, "/readyz");
 
             try
             {

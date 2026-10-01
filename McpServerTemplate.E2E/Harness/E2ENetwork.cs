@@ -4,7 +4,9 @@ using System.Net.Sockets;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Networks;
+using McpServerTemplate.Testing;
 
 namespace McpServerTemplate.E2E.Harness;
 
@@ -27,9 +29,10 @@ namespace McpServerTemplate.E2E.Harness;
 /// mock any calls"), as implemented: the network resolves no real name. Every container joins it one way
 /// (<see cref="OnTheRunNetwork"/>), with its own loopback address as its only name server (<see cref="NameServer"/>) and no
 /// search domain, so every call a server makes by name is answered by a fake of the run or fails at the name lookup.
-/// contract-005 · G-17 round 2 (CON-R2-01) — that is all it holds: the network itself is not cut, and a container of the run
-/// still reaches the internet by an address written as one. Names only or a real cut is put back to the pioneer
-/// (contract-005's log, the correction of 2026-09-30); until then the harness claims no more than names.
+/// contract-005 · UC-6 — the pioneer's ruling on names versus a real cut, "no internet access mock everything": the network
+/// itself is cut as well. It is created internal (<see cref="CreateAsync"/>), so no container on it has a route off it, by name
+/// or by an address written as one; the test process reaches it through the run's one door (<see cref="Door"/>), and a live
+/// witness at the environment's start tries a public address from both sides (<see cref="Door.WitnessAsync"/>).
 /// </summary>
 public static class E2ENetwork
 {
@@ -87,21 +90,11 @@ public static class E2ENetwork
     /// loopback address", Docker's networking guide; moby's resolvconf marks only the host's own resolvers for the host's
     /// namespace). Nothing listens on port 53 there, so the forward is refused at once, the embedded DNS answers SERVFAIL
     /// (moby, libnetwork/resolver.go), and the lookup fails without a packet leaving the container: a host no fake of the run
-    /// answers fails at the name lookup, and a real name never reaches a real address. The published ports the test process
-    /// reaches every service through are untouched.
+    /// answers fails at the name lookup, and a real name never reaches a real address.
     ///
-    /// Why this and not a stricter cut, on Docker Desktop and on the runner alike: an internal network (--internal, and the
-    /// isolated gateway mode, which requires it) publishes no port at all (moby#36174, moby#27441), and the test process
-    /// reaches the front, the issuers, Keycloak and the fake's journal only through ports published on loopback. The routed
-    /// gateway mode, or a network without masquerading, sends a container's packets out with its own address and relies on
-    /// the network beyond to drop them, which a Linux runner's does and Docker Desktop's user-space networking does not
-    /// promise. A firewall rule (DOCKER-USER) needs root on the host and has no equivalent on Docker Desktop. An unroutable
-    /// name server would cut the same names, but each lookup would wait out the embedded DNS's four-second forward, and
-    /// would rely on nothing routing or answering that address. What this does not cut is a connection to an address
-    /// written as one: nothing the suite configures is — a provider's BaseUrl must name its policy's host, an identity
-    /// provider's Authority names a host — so no call reaches the internet by name. contract-005 · G-17 round 2 (CON-R2-01) — the
-    /// narrowing of "cut it" to names was the agent's, not the pioneer's; whether a connection by address must be cut as well is
-    /// the pioneer's to decide, and this cuts names only.
+    /// contract-005 · UC-6 — a connection to an address written as one is cut by the network itself, which is internal
+    /// (<see cref="CreateAsync"/>): an internal network publishes no port (moby#36174, moby#27441), so the test process reaches the
+    /// front, the issuers, Keycloak and the fake's journal through the run's door (<see cref="Door"/>) instead.
     /// </summary>
     public const string NameServer = "127.0.0.1";
 
@@ -139,6 +132,19 @@ public static class E2ENetwork
     /// address handed out, like <see cref="NoFront"/>, and never handed out: one docs profile runs in a run.
     /// </summary>
     public static IPAddress DocsProxy => Offset(8);
+
+    /// <summary>
+    /// contract-005 · UC-6 — the static address of the run's door (<see cref="Door"/>) on the run's network: the address every
+    /// request the test process sends to a container of the run arrives from. Below the first static address handed out, and
+    /// never handed out: one door opens in a run.
+    /// </summary>
+    public static IPAddress DoorAddress => Offset(7);
+
+    /// <summary>
+    /// contract-005 · UC-6 — the sabotage of the network cut (NetworkCutTests): the run's network is created as an ordinary
+    /// bridge network, not internal, so its containers have a route off it.
+    /// </summary>
+    internal const string NotInternal = "t6-run-network-not-internal";
 
     /// <summary>The upper half of the subnet, from which Docker assigns addresses on its own.</summary>
     public static string DynamicRange => $"{Offset(Size / 2)}/{PrefixLength + 1}";
@@ -505,6 +511,8 @@ public static class E2ENetwork
             .WithLabel(RunLabels(runId))
             .WithCreateParameterModifier(parameters =>
             {
+                // contract-005 · UC-6 — "no internet access mock everything": no container on it has a route off it.
+                parameters.Internal = !Sabotage.Applies(NotInternal);
                 parameters.EnableIPv6 = false;
                 parameters.IPAM = new IPAM
                 {
@@ -551,6 +559,52 @@ public static class E2ENetwork
                         + "off the subnet (docker network rm " + holder.Name + ").",
                 },
                 ex);
+        }
+    }
+
+    /// <summary>
+    /// contract-005 · UC-6 — opens the run's door (<see cref="Door"/>): an ordinary network of its own, carrying the run's labels so
+    /// a run's sweep removes it with the rest, and the door's container, made the one way on the run's network at
+    /// <see cref="DoorAddress"/>, joined to that ordinary network as well, and publishing <see cref="Door.Port"/> on 127.0.0.1.
+    /// </summary>
+    internal static async Task<Door> OpenDoorAsync(string runId, IDockerClient docker, INetwork network, TestPki pki, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(network);
+        ArgumentNullException.ThrowIfNull(pki);
+
+        var outside = new NetworkBuilder()
+            .WithName($"mcp-e2e-{runId}-door")
+            .WithLabel(RunLabels(runId))
+            .Build();
+        await outside.CreateAsync(cancellationToken);
+
+        var runAddresses = Enumerable.Range(2, Size - 3).Select(Offset).Where(a => !a.Equals(DoorAddress));
+        var configuration = pki.WriteFile("door.conf", Door.Configuration(runAddresses));
+        var container = OnTheRunNetwork(TlsFront.Image, docker, network, runId)
+            .WithNetwork(outside)
+            .WithPortBinding(Door.Port, true)
+            .WithLoopbackPortsOnly()
+            .WithBindMount(configuration, "/etc/nginx/nginx.conf", AccessMode.ReadOnly)
+            // The static address on the run's network alone: Testcontainers gives every network of a container one endpoint object.
+            .WithCreateParameterModifier(parameters =>
+                parameters.NetworkingConfig!.EndpointsConfig![network.Name] = new EndpointSettings
+                {
+                    Aliases = parameters.NetworkingConfig.EndpointsConfig[network.Name].Aliases,
+                    IPAMConfig = new EndpointIPAMConfig { IPv4Address = DoorAddress.ToString() },
+                })
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("start worker process", wait => wait.WithTimeout(TimeSpan.FromMinutes(1))))
+            .Build();
+
+        try
+        {
+            await container.StartAsync(cancellationToken);
+            return new Door(docker, container, outside, network.Name);
+        }
+        catch
+        {
+            await container.DisposeAsync();
+            await outside.DisposeAsync();
+            throw;
         }
     }
 

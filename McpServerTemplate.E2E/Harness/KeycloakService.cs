@@ -98,9 +98,6 @@ public sealed class KeycloakService : IAsyncDisposable
         var tls = pki.LeafDirectory("keycloak");
         var container = E2ENetwork.OnTheRunNetwork(Image, docker, network, runId)
             .WithNetworkAliases(Host)
-            .WithPortBinding(Port, true)
-            .WithPortBinding(ManagementPort, true)
-            .WithLoopbackPortsOnly()
             // contract-005 · G-3 — key material by read-only bind mount, never copied into the container.
             .WithBindMount(Path.Combine(tls, TestPki.CertificateFile), "/e2e/tls/tls.crt", AccessMode.ReadOnly)
             .WithBindMount(Path.Combine(tls, TestPki.KeyFile), "/e2e/tls/tls.key", AccessMode.ReadOnly)
@@ -120,9 +117,12 @@ public sealed class KeycloakService : IAsyncDisposable
         {
             await container.StartAsync(cancellationToken);
 
+            // contract-005 · UC-6 — reached through the run's door.
+            var https = Door.Open.Published(container, Port);
+            var management = Door.Open.Published(container, ManagementPort);
             names = names
-                .With(Host, Port, container.Hostname, container.GetMappedPublicPort(Port))
-                .With(Host, ManagementPort, container.Hostname, container.GetMappedPublicPort(ManagementPort));
+                .With(Host, Port, https.Host, https.Port)
+                .With(Host, ManagementPort, management.Host, management.Port);
 
             var service = new KeycloakService(docker, container, secrets, names);
             await service.WaitUntilReadyAsync(cancellationToken);

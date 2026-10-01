@@ -42,7 +42,7 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
         .Sabotaged(KeycloakIssuerElsewhere, d => d.Set($"Authentication:IdentityProviders:{E2EEnvironment.KeycloakIssuer}:Issuer", $"https://{KeycloakService.Host}:{KeycloakService.Port}/realms/other"))
         .Sabotaged(IdpAByAnotherName, d => d.Set($"Authentication:IdentityProviders:{E2EEnvironment.IdpA}:Authority", "https://stranger.e2e.test"))
         .Sabotaged(AuthorizationServerOutside, d => d.Set($"Authentication:IdentityProviders:{E2EEnvironment.IdpA}:Issuer", "https://idp-a.example.com"))
-        .Sabotaged(GatewayTrusted, d => d.Set("HttpTransport:KnownProxies:1", E2ENetwork.Gateway.ToString())));
+        .Sabotaged(DoorTrusted, d => d.Set("HttpTransport:KnownProxies:1", E2ENetwork.DoorAddress.ToString())));
 
     private const string IssuerA = "idp-a.e2e.test";
 
@@ -50,7 +50,7 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
     private const string IdpAByAnotherName = "t1-idp-a-reached-by-another-name";
     private const string AuthorizationServerOutside = "t1-authorization-server-outside-the-environment";
     private const string SecondAsFirst = "t1-second-address-forwarded-as-the-first";
-    private const string GatewayTrusted = "t1-gateway-trusted-as-a-proxy";
+    private const string DoorTrusted = "t1-door-trusted-as-a-proxy";
 
     [Fact]
     [Sabotage(KeycloakIssuerElsewhere, SabotageActs.ContainerEnvironment,
@@ -289,8 +289,8 @@ public sealed class WalkingSkeletonTests(WalkingSkeletonTests.Server fixture, IT
     /// Its sabotage is added beside the front, so the fixture's self-checks still pass and the red is this test's.
     /// </summary>
     [Fact]
-    [Sabotage(GatewayTrusted, SabotageActs.ContainerEnvironment,
-        "The class's server also trusts the run network's gateway (198.51.100.1), the address a request to a published port "
+    [Sabotage(DoorTrusted, SabotageActs.ContainerEnvironment,
+        "The class's server also trusts the run's door (198.51.100.7), the address a request sent straight from the test process "
         + "arrives from, as a proxy: HttpTransport:KnownProxies:1, beside the front.")]
     public async Task T1_forwarded_headers_sent_straight_to_the_server_are_ignored()
     {

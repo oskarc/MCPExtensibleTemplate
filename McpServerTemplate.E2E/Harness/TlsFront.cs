@@ -51,8 +51,8 @@ public sealed class TlsFront : IAsyncDisposable
 
     public IContainer Container => _container;
 
-    /// <summary>Where the test process reaches the front: its published port.</summary>
-    public DnsEndPoint Published => new(_container.Hostname, _container.GetMappedPublicPort(Port));
+    /// <summary>Where the test process reaches the front: its port, through the run's door (contract-005 · UC-6).</summary>
+    public DnsEndPoint Published => Door.Open.Published(_container, Port);
 
     internal static async Task<TlsFront> StartAsync(
         Docker.DotNet.IDockerClient docker,
@@ -68,8 +68,6 @@ public sealed class TlsFront : IAsyncDisposable
 
         var tls = pki.LeafDirectory("front");
         var container = E2ENetwork.OnTheRunNetwork(Image, docker, network, runId)
-            .WithPortBinding(Port, true)
-            .WithLoopbackPortsOnly()
             .WithBindMount(configuration, "/etc/nginx/nginx.conf", AccessMode.ReadOnly)
             .WithBindMount(Path.Combine(tls, TestPki.CertificateFile), "/e2e/tls/tls.crt", AccessMode.ReadOnly)
             .WithBindMount(Path.Combine(tls, TestPki.KeyFile), "/e2e/tls/tls.key", AccessMode.ReadOnly)

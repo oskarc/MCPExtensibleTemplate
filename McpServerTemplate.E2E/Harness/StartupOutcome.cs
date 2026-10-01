@@ -85,7 +85,7 @@ public sealed partial class StartupOutcome : IAsyncDisposable
 
         using var http = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(10) };
         using var request = new HttpRequestMessage(
-            HttpMethod.Get, new Uri($"http://{_container.Hostname}:{_container.GetMappedPublicPort(ServerUnderTest.Port)}{path}"));
+            HttpMethod.Get, ServerUnderTest.Direct(_container, path));
         request.Headers.Host = host;
         using var response = await http.SendAsync(request);
         return response.StatusCode;
@@ -96,7 +96,7 @@ public sealed partial class StartupOutcome : IAsyncDisposable
     /// http from the test process, sent under the Host the server allows (<see cref="TlsFront.Host"/>).
     /// </summary>
     public Uri DirectEndpoint => Started
-        ? new($"http://{_container.Hostname}:{_container.GetMappedPublicPort(ServerUnderTest.Port)}{ServerUnderTest.Endpoint.AbsolutePath}")
+        ? ServerUnderTest.Direct(_container, ServerUnderTest.Endpoint.AbsolutePath)
         : throw new InvalidOperationException($"The server exited with code {ExitCode}; nothing answers. {Describe()}");
 
     /// <summary>

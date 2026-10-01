@@ -12,13 +12,14 @@ namespace McpServerTemplate.E2E;
 /// only name server and no search domain (<see cref="E2ENetwork.NameServer"/>), so Docker's embedded DNS answers the network's
 /// own names and fails every other at once. T-6's "that tool's call fails TLS" reads "fails at the name lookup".
 ///
-/// contract-005 · G-17 round 2 (CON-R2-01) — what this proves is that no container of the run resolves a real name, and no more:
-/// the network itself is not cut, and a container of the run still reaches the internet by an address written as one, which
-/// no check here tries. This test was named for "nothing reaches the internet", which the agent had read "cut it" to mean by
-/// name; the pioneer never ruled on names versus a real cut, and the question is put back to them (contract-005's log, the
-/// correction of 2026-09-30). Until they rule, it is named for what it proves.
+/// contract-005 · UC-6 — the pioneer has since ruled on names versus a real cut: "no internet access mock everything". The network
+/// itself is cut as well: it is internal (<see cref="E2ENetwork.CreateAsync"/>), so no container of the run reaches the internet
+/// by an address written as one either, and the test process reaches the run through its one door (<see cref="Door"/>). That
+/// half of T-6's "nothing reaches the internet" is witnessed live at the environment's start, a public address tried from a
+/// container of the run and, as the positive control, from the door, and claimed by NetworkCutTests; this test proves the
+/// names half.
 ///
-/// The test takes a provider host of this server's whose owner publishes no port — the stand-in, in an ordinary run — and
+/// The test takes a provider host of this server's whose owner the test process does not reach — the stand-in, in an ordinary run — and
 /// its witness first: with the name on the network, the owner records this server's call under it (G-11: an absence is
 /// asserted only on a witness seen recording in the same test). Then the name is taken off the network
 /// (<see cref="E2EEnvironment.WithoutNameAsync"/>) and the same tool is called again; the stand-in closed its connection
@@ -72,7 +73,7 @@ public sealed class UpstreamNamesTests(UpstreamNamesTests.Server fixture, ITestO
         var server = await fixture.Server.RequestSourceAsync();
 
         // What the image serves, from its own startup line (G-11), and the first of its tools whose provider's host is answered by
-        // an owner that publishes no port: the one kind of owner a name can be taken from and given back.
+        // an owner the test process does not reach through the run's door: the one kind of owner a name can be taken from and given back.
         var line = FrameLine.Parse(await fixture.Server.StartupLineAsync());
         var tools = line.Entries(E2EEnvironment.Issuers.Entries.SelectMany(e => e.ScopeCatalog))
             .Where(e => e.Kind == "tool" && ProviderCalls.Hosts.ContainsKey(e.Provider))
@@ -81,7 +82,7 @@ public sealed class UpstreamNamesTests(UpstreamNamesTests.Server fixture, ITestO
         var tool = tools.FirstOrDefault(t => removable.Contains(ProviderCalls.Hosts[t.Provider], StringComparer.OrdinalIgnoreCase))
             ?? throw new EnvironmentFaultException(
                 "upstream names",
-                $"no tool this server serves calls a host whose owner publishes no port (such owners answer [{string.Join(", ", removable)}]; "
+                $"no tool this server serves calls a host whose owner the test process does not reach through the door (such owners answer [{string.Join(", ", removable)}]; "
                 + $"the upstream registry: [{string.Join(", ", E2EEnvironment.Upstreams.Owners.Select(o => $"{o.Key} -> {o.Value.Name}"))}]).");
         var host = ProviderCalls.Hosts[tool.Provider];
         var owner = environment.UpstreamFor(host);

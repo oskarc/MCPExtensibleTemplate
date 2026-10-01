@@ -61,8 +61,6 @@ public sealed class TestIssuerService : IAsyncDisposable
         var tls = pki.LeafDirectory("issuer");
         var builder = E2ENetwork.OnTheRunNetwork(image, docker, network, runId)
             .WithNetworkAliases([.. hosts])
-            .WithPortBinding(Port, true)
-            .WithLoopbackPortsOnly()
             .WithBindMount(Path.Combine(tls, TestPki.CertificateFile), "/e2e/tls/tls.crt", AccessMode.ReadOnly)
             .WithBindMount(Path.Combine(tls, TestPki.KeyFile), "/e2e/tls/tls.key", AccessMode.ReadOnly)
             .WithEnvironment("TestIssuer__Certificate", "/e2e/tls/tls.crt")
@@ -79,9 +77,11 @@ public sealed class TestIssuerService : IAsyncDisposable
         {
             await container.StartAsync(cancellationToken);
 
+            // contract-005 · UC-6 — reached through the run's door.
+            var published = Door.Open.Published(container, Port);
             foreach (var host in hosts)
             {
-                names = names.With(host, Port, container.Hostname, container.GetMappedPublicPort(Port));
+                names = names.With(host, Port, published.Host, published.Port);
             }
 
             var service = new TestIssuerService(docker, container, hosts, names);

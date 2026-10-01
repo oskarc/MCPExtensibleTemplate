@@ -183,10 +183,10 @@ public sealed partial class DocsProfile : IAsyncDisposable
         new(HostOrAddress, Scope.Text, "172.16.238.10", E2ENetwork.DocsProxy.ToString(),
             "The proxy's fixed address on that network, the one address the server takes forwarded headers from (its "
             + "KnownProxies): an address of the run's network's static half that the harness gives nothing else (G-4)."),
-        new(HostOrAddress, Scope.PublishedPorts, "the host side of a published port", "127.0.0.1, at a port Docker chooses",
-            "Where the file publishes a service on this machine: docs/04, the proxy's 443. Nothing a run starts is published "
-            + "beyond loopback, and a fixed host port can be held by another process or need privileges; the container side is "
-            + "unchanged, and the run's clients reach it as https://mcp.e2e.test through their name map (G-6)."),
+        new(HostOrAddress, Scope.PublishedPorts, "the host side of a published port", "none: the run's door, on 127.0.0.1",
+            "Where the file publishes a service on this machine: docs/04, the proxy's 443. The run's network is internal and "
+            + "publishes no port (contract-005 · UC-6, \"no internet access mock everything\"); the container side is unchanged, "
+            + "and the run's clients reach it through the run's door (Door), as https://mcp.e2e.test through their name map (G-6)."),
         new(HostOrAddress, Scope.EveryService, "a name server", $"{E2ENetwork.NameServer}, the container's own loopback, and no search domain",
             "The run's network resolves no real name — the pioneer's decision of 2026-09-29 (contract-005 revision, \"2. yes, cut "
             + "it and mock any calls\"). The file sets no name server, so Compose would give each service the host's; every container "
@@ -540,11 +540,9 @@ public sealed partial class DocsProfile : IAsyncDisposable
 
         foreach (var mapping in service.Ports)
         {
-            builder = builder.WithPortBinding(PortOf(mapping, service.Name), assignRandomHostPort: true);
+            _ = PortOf(mapping, service.Name);
             applied.Add($"'{service.Name}' publishes '{mapping}': {Table.Single(r => r.Where == Scope.PublishedPorts)}");
         }
-
-        builder = builder.WithLoopbackPortsOnly();
 
         foreach (var mount in mounts.Where(m => !m.Volume))
         {
@@ -667,7 +665,7 @@ public sealed partial class DocsProfile : IAsyncDisposable
                 {
                     (http, readyz) = front is { } through
                         ? (NamesThrough(environment.Names, through.Container, through.Port).CreateClient(), new Uri($"https://{TlsFront.Host}/readyz"))
-                        : (new HttpClient(new SocketsHttpHandler { UseProxy = false }), new Uri($"http://{server.Hostname}:{server.GetMappedPublicPort(direct!.Value)}/readyz"));
+                        : (new HttpClient(new SocketsHttpHandler { UseProxy = false }), Readyz(Door.Open.Published(server, direct!.Value)));
                     http.Timeout = TimeSpan.FromSeconds(5);
                 }
 
@@ -778,8 +776,14 @@ public sealed partial class DocsProfile : IAsyncDisposable
     }
 
     /// <summary>The environment's name map, with mcp.e2e.test:443 sent to what <paramref name="front"/> publishes of <paramref name="port"/>.</summary>
-    private static NameMap NamesThrough(NameMap names, IContainer front, int port) =>
-        names.With(TlsFront.Host, TlsFront.Port, front.Hostname, front.GetMappedPublicPort(port));
+    private static NameMap NamesThrough(NameMap names, IContainer front, int port)
+    {
+        var published = Door.Open.Published(front, port);
+        return names.With(TlsFront.Host, TlsFront.Port, published.Host, published.Port);
+    }
+
+    /// <summary>/readyz at <paramref name="published"/>, where the test process reaches the server's own port (contract-005 · UC-6).</summary>
+    private static Uri Readyz(DnsEndPoint published) => new($"http://{published.Host}:{published.Port}/readyz");
 
     /// <summary>contract-005 · G-17 round 2 (CON-R2-04) — an image reference pinned by digest: it ends in @sha256: and 64 hex digits.</summary>
     [GeneratedRegex("@sha256:[0-9a-f]{64}$")]
