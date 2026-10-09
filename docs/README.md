@@ -8,7 +8,7 @@ Welcome to the MCP Server Template documentation! This folder contains comprehen
 **For**: Developers who want to understand how the system works internally
 
 **What you'll learn**:
-- The 4-layer architecture (Transport, Middleware, MCP Protocol, Provider)
+- The 4-layer architecture (Transport & Identity, The Frame, MCP Protocol, Provider)
 - How data flows through the system
 - Dependency injection and service registration
 - Extension points for customization
@@ -56,7 +56,7 @@ Welcome to the MCP Server Template documentation! This folder contains comprehen
 
 **What you'll find**:
 - Complete reference of all configuration keys
-- Configuration hierarchy (environment variables > env-specific files > base)
+- Configuration hierarchy (command line > environment variables > user secrets > env-specific files > base)
 - How to set up for Development, Testing, and Production
 - Troubleshooting common configuration issues
 - Common deployment scenarios
@@ -217,9 +217,9 @@ Test coverage → [03-TESTING-STRATEGY.md](03-TESTING-STRATEGY.md)
 6. Write tests (15 min)
 
 ### Path 4: "I Want to Deploy This to Production" (45 min)
-1. [HTTP Transport Setup](05-USAGE-GUIDE-BEGINNERS.md#scenario-2-running-on-the-network-testing) (5 min)
+1. [HTTP mode on your own machine](05-USAGE-GUIDE-BEGINNERS.md#scenario-2-running-over-http-testing) (5 min)
 2. [Complete Configuration Reference](04-CONFIGURATION.md) (25 min)
-3. [Production Scenario](04-CONFIGURATION.md#scenario-3-production-deployment) (15 min)
+3. [The Docker Compose deployment](04-CONFIGURATION.md#setting-environment-variables) — the server, Redis and a proxy that terminates TLS, whole — and the [Production Scenario](04-CONFIGURATION.md#scenario-3-production-deployment) (15 min)
 
 ---
 
@@ -231,7 +231,7 @@ Test coverage → [03-TESTING-STRATEGY.md](03-TESTING-STRATEGY.md)
 
 ### Running the Server
 - [Local Development](05-USAGE-GUIDE-BEGINNERS.md#scenario-1-running-locally-development)
-- [HTTP Mode](05-USAGE-GUIDE-BEGINNERS.md#scenario-2-running-on-the-network-testing)
+- [HTTP Mode](05-USAGE-GUIDE-BEGINNERS.md#scenario-2-running-over-http-testing)
 - [Production](04-CONFIGURATION.md#scenario-3-production-deployment)
 
 ### Architecture & Design

@@ -194,6 +194,8 @@ flowchart TB
 
 > **Amended 2026-09-24 (contract-003 as built).** Before any of the refusals above, an incoming-message gate refuses any request kind the frame does not govern. The binding and scope refusals apply to resources, prompts and completions as well as tools, and a hidden item is refused in the same words as a forbidden one, so a refusal does not confirm it exists.
 
+> **Amended 2026-10-09 (contract-005 as built).** Two corrections to the paragraph above. A tool whose scope the caller lacks is refused as `insufficient_scope`, naming the tool and the scope: to a caller of the tool's own trust domain, that does confirm the tool exists. And an item of another trust domain — a tool, a resource or a prompt — is refused in the words for one that does not exist (the pioneer's decision of 2026-09-29), so a refusal never confirms what another trust domain holds; the log keeps the rule that refused it, `idp-binding`.
+
 ## 4. Routing a token to its identity provider
 
 Several identity providers, each with its own keys and claim names. The subtle part is at the top: the `iss` claim is read **without being trusted**, purely to pick a scheme. All real validation happens after the fork.
@@ -222,6 +224,8 @@ flowchart TB
 ```
 
 > **Amended 2026-09-27 (contract-005 as built).** The client claim is no longer "azp or client_id" for every provider: each provider names its own in `ClientIdClaim`, which must be exactly one of `azp` (Keycloak, Entra ID v2), `cid` (Okta), `appid` (Entra ID v1) or `client_id` (RFC 9068), and a token without that claim is refused. The issuer is pinned on each provider's own check as well as by routing, and the protected-resource metadata lists each provider's issuer, which must be an https URI with no query, fragment or userinfo.
+
+> **Amended 2026-10-09 (contract-005 as built).** No two identity providers may share an issuer: a token's issuer picks the one provider that checks it, so startup refuses two providers with one. A token whose `iat` lies more than 30 seconds in the future is refused, and a token no reader can parse is refused with the metadata challenge, not an error.
 
 **What to notice.** Reading `iss` before validating it sounds dangerous and is not: it selects a scheme, nothing more. A token naming issuer A but signed by B dies at the signature check. And an unregistered issuer is refused *before* any network call, so an attacker cannot use a made-up issuer to make the server fetch a URL.
 
@@ -586,6 +590,8 @@ flowchart TB
 ---
 
 > **Amended 2026-09-24 (contract-003 as built).** Startup also refuses: a setting in a governed section the server does not read (a typo or a retired key, named with the nearest real one); a provider that removed a registration, or registered one belonging to the frame, the SDK, the identity layer or the host; request checks installed that are not the frame's; and a primitive a module declares that the server does not serve.
+
+> **Amended 2026-10-09 (contract-005 as built).** Three corrections, and what startup refuses since. No `sys_startup` event exists yet: a refusal is written as `MCP Server cannot start: {reason}` at Fatal on the process's error output and exits 78, and a crash as `MCP Server terminated unexpectedly` with exit 70 — an alert on `sys_startup` fires on neither. A trusted proxy is required in every environment but Development, not in Production alone. And a retired key is named with why it is gone; only an unknown key is named with the nearest real one. Startup also refuses: a resource whose path is not `/mcp` or that is not written as clients connect to it; an `http` issuer or authority, two identity providers with one issuer, and whitespace or an invisible character in a resource, authority or issuer; a client claim other than `azp`, `cid`, `appid` or `client_id`; a bind address not in an accepted form, or one the machine cannot bind; any bind address that is not loopback in Development, or without `HttpTransport:AllowedHosts` anywhere; an allowed host that is not one exact name; a proxy or network entry that is not what its key says, or a network broader than any proxy needs; ASP.NET Core's own `AllowedHosts`, `ForwardedHeaders_Enabled`, `urls`, `http_ports` and `https_ports`, and any `Kestrel` key; a request to read settings again, or a settings source that can; `shutdownTimeoutSeconds` for the HTTP server; a log file the server cannot write; a `Limits:Redis` the Redis client cannot read; a provider that registers anything but its own types, its HTTP client's plumbing and options over those; and a provider whose namespace holds another provider's.
 
 ## 14. What happens when a dependency is down
 

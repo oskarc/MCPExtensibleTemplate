@@ -4,7 +4,7 @@
 
 The MCP Server Template uses a hierarchical configuration system where settings can come from multiple sources, with clear precedence rules. This guide explains every setting the server reads and how to set them.
 
-One rule shapes everything below: **in the sections the frame governs — `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development`, `HttpTransport` and `Kestrel` — a key the server does not read stops it from starting.** A misspelled key is otherwise ignored silently, and an operator believes it is in force. The startup message names the key and the nearest real one. `Kestrel` holds no key the server reads: the server configures its own listener from `HttpTransport`, so any `Kestrel` key stops it, with the reason.
+One rule shapes everything below: **in the sections the frame governs — `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development`, `RateLimit`, `HttpTransport` and `Kestrel` — a key the server does not read stops it from starting.** A misspelled key is otherwise ignored silently, and an operator believes it is in force. The startup message names the key: an unknown one with the nearest real key, a retired one with why it is gone. `Kestrel` holds no key the server reads: the server configures its own listener from `HttpTransport`, so any `Kestrel` key stops it, with the reason.
 
 ---
 
@@ -156,6 +156,7 @@ export HttpTransport__Port=8080
 - **Description**: The address to bind to
   - `"localhost"` or `"127.0.0.1"`: Only accessible from this machine
   - `"0.0.0.0"`: Accessible from any address — only behind a proxy and firewall, and only with `HttpTransport:AllowedHosts` set: on any bind that is not loopback the server refuses to start without it
+  - **In Development only a loopback address is accepted.** Development switches the deployment rules off — no proxy, no Redis, every provider — so it is held to this machine: any other bind address stops the server, saying so and naming what a deployed server needs (an environment other than Development, with `HttpTransport:AllowedHosts`, a declared proxy, `Limits:Redis` and `Providers:Enabled`). The developer error page, which shows exception text and request headers, is never switched on, in any environment
   - It must be one of three forms, exactly: an IP address Kestrel reads as one (IPv4 in its standard form alone, four decimal parts without leading zeros, as in `127.0.0.1`: any other spelling, `127.1`, `0x7f.0.0.1`, `010.0.0.1`, is refused, saying how it would be read, `010.0.0.1` as `8.0.0.1`; IPv6, bare or bracketed, such as `::1` or `[::1]`, with a zone only on a link-local address, which needs its interface's zone, as `fe80::1%eth0` or `fe80::1%2`: one without, or with a zone the address parser cannot resolve and so drops, is refused); `localhost`, in any case; or an explicit all-interfaces spelling: `0.0.0.0`, `::`, `[::]`, `*` or `+`. Anything else stops the server, saying what Kestrel would do with it: a path or a scheme (`127.0.0.1/x`, `http://127.0.0.1`), a Unix socket or a named pipe (`unix:/...`, `pipe:/...`) would stop Kestrel; a host name (`myhost.example`), or text Kestrel does not read as an address (`[127.0.0.1]`, whitespace around an address), would have it listen on every interface; a name under `.localhost` it reads as `localhost`; and a zone on any other address (`::1%1`) it ignores on Linux and cannot bind on Windows. A broadcast or multicast address (`255.255.255.255`, `224.0.0.0/4`, `ff00::/8`) stops the server too: it cannot accept connections. A loopback address (`::1`, `[::1]`, `0::1`, `127.0.0.1`, `127.0.0.2`) or `localhost` needs no allowed hosts; any other accepted form does. An accepted address the server then cannot bind stops it too, with the operating system's reason in plain words: an address this machine does not hold, an address and port already in use, an invalid argument, or a port it may not use
   - Write the address alone: the port is `HttpTransport:Port`. The server refuses to start on an empty bind address, or one of whitespace alone (an unset variable in a compose file leaves it empty: set `HttpTransport__BindAddress` to the address), on a bind address that carries a port (`[::1]:9999`, `127.0.0.1:9999`, `localhost:9999`), which it would otherwise ignore, and on an IPv4-mapped address, bracketed or not (`::ffff:127.0.0.1`, `[::ffff:127.0.0.1]`), which Kestrel cannot listen on: write the IPv4 address itself (`127.0.0.1`)
 
@@ -163,6 +164,7 @@ export HttpTransport__Port=8080
 - **Type**: `string[]`
 - **Default**: `localhost`, `127.0.0.1`, `[::1]` when bound to `localhost`, `127.0.0.1` or `::1`, however the IPv6 one is written (`0::1`, `[::1]`); that address alone when bound to any other IPv4 loopback address (`127.0.0.2`: Kestrel binds that address alone, and it is the `Host` a request reaching it carries); an IPv4-mapped address, `::ffff:127.0.0.1` or `[::ffff:127.0.0.1]`, is refused as a bind address before any default is made. The default is held to the rules below like an entry written out; **required** on any other bind address
 - **Description**: The `Host` header values this server answers for. Stops DNS rebinding. Set it to the host names clients use, for example `mcp.example.com`, each one name written exactly as the host filter matches it: ASCII (an internationalised name in its punycode form, which begins `xn--`), with no `*` anywhere and no trailing dot. The server refuses to start on any other entry — `*.example.com` admits every name under `example.com`, `*.com` nearly any host, and a non-ASCII entry can fold into `*` as the filter converts it — and on `0.0.0.0`, `[::]` or `::`: the first two switch host filtering off entirely, and the last is the IPv6 any-address. Nor does it start on an entry no request can match, which would leave it answering `400` to every request meant for that name without saying why: an empty entry (an unset variable leaves one, as `HttpTransport__AllowedHosts__0=${MCP_HOST}` does in a compose file when `MCP_HOST` is not set), whitespace around a name, a port (`mcp.example.com:443`; the filter compares a request's host without its port), an IPv6 address without its brackets (`::1`; write `[::1]`), or anything else Kestrel never lets a request carry as its `Host`, such as a path, a user name or two names in one entry.
+- **Not ASP.NET Core's `AllowedHosts`**: the framework has a host list of its own, the top-level `AllowedHosts` key its templates put in `appsettings.json` (`ASPNETCORE_ALLOWEDHOSTS` in the environment). The server would ignore it — it always sets the filter from this setting — so it refuses to start on it, by any route, naming where it came from. Set `HttpTransport:AllowedHosts`.
 
 #### `Kestrel`
 - **Description**: Not read. The server configures its listener itself, from `HttpTransport:BindAddress` and `HttpTransport:Port`; Kestrel's own endpoints would bind around them and around the host allowlist chosen for that address. Any `Kestrel` key stops the server from starting.
@@ -175,7 +177,8 @@ export HttpTransport__Port=8080
 #### `HttpTransport:KnownProxies` and `HttpTransport:KnownNetworks`
 - **Type**: `string[]` — addresses, and networks in CIDR form (`10.0.0.0/8`)
 - **Default**: none (only loopback is trusted for forwarded headers)
-- **Description**: The proxies allowed to set forwarded headers. **In Production the server refuses to start unless one is set**: it must sit behind a proxy it trusts explicitly, which terminates TLS. Every entry is read at startup, and one that is not what its key says stops the server, naming the key and index: a `KnownProxies` entry must be an IP address, and a `KnownNetworks` entry a network in CIDR form, its prefix length 0-32 for IPv4 or 0-128 for IPv6. An IPv4 address, alone or as a network's, is written in its standard form (`010.0.0.1` would be read as `8.0.0.1`, and is refused, saying so). An IPv4 address alone in `KnownNetworks` is that one address; an IPv6 one needs its prefix length (`fd00::1/128`).
+- **Description**: The proxies allowed to set forwarded headers. **In every environment but Development the server refuses to start unless one is set**: it must sit behind a proxy it trusts explicitly, which terminates TLS. Every entry is read at startup, and one that is not what its key says stops the server, naming the key and index: a `KnownProxies` entry must be an IP address, and a `KnownNetworks` entry a network in CIDR form, its prefix length 0-32 for IPv4 or 0-128 for IPv6. An IPv4 address, alone or as a network's, is written in its standard form (`010.0.0.1` would be read as `8.0.0.1`, and is refused, saying so). An IPv4 address alone in `KnownNetworks` is that one address; an IPv6 one needs its prefix length (`fd00::1/128`). A network must also be one a proxy can be in, written as it will be read: a prefix length of 0, or a network broader than `/8` for IPv4 or `/32` for IPv6, is refused (it would trust more addresses than any proxy needs); so is an address with bits set past its prefix length (`10.1.2.3/8` would be read as `10.0.0.0/8`), an IPv6 network that covers or lies inside the IPv4-mapped range `::ffff:0:0/96` (write the IPv4 network itself), an IPv4-mapped proxy address (write the IPv4 address), and an unspecified, broadcast or multicast entry, which no connection comes from.
+- **Not ASP.NET Core's switch**: `ForwardedHeaders_Enabled` (`ASPNETCORE_FORWARDEDHEADERS_ENABLED` in container guidance) would make the framework believe every client's forwarded headers. The server takes them from the proxies named here alone and would ignore the switch, so it refuses to start on it, by any route.
 
 ---
 
@@ -188,7 +191,7 @@ Required for `Transport=http`. Callers present a bearer token issued by one of t
 #### `Authentication:Resource`
 - **Type**: `string` — an absolute `https` URI whose path is `/mcp`, for example `https://mcp.example.com/mcp`
 - **Description**: This server's identity as an OAuth resource, and the URL a client connects to: MCP answers at `/mcp`, and the server refuses to start when the resource's path (a trailing slash aside) is anything else. Every identity provider must issue tokens whose audience is exactly this value. Published in the protected-resource metadata at `/.well-known/oauth-protected-resource/mcp` — RFC 9728's location for the resource, and the URL the `401` challenge names.
-- **Written exactly**: it is published as written, and every token's audience must equal it character for character, so the server holds the string, not what it parses to. A query, a fragment, user information, a backslash, percent-encoding or a dot-segment (`/./`, `/../`) stops the server from starting, as does a path of `/mcp` with more than one trailing slash.
+- **Written exactly**: it is published as written, and every token's audience must equal it character for character, so the server holds the string, not what it parses to. A query, a fragment, user information, a backslash, percent-encoding or a dot-segment (`/./`, `/../`) stops the server from starting, as does a path of `/mcp` with more than one trailing slash, and so does whitespace, a control character or an invisible (format) character anywhere in it — a zero-width space pasted in with the address, for one, which the message names by its code point.
 
 #### `Authentication:IdentityProviders:{name}:*`
 
@@ -196,14 +199,14 @@ One section per identity provider, under a name of your choosing (the examples u
 
 | Key | Required | Description |
 |-----|----------|-------------|
-| `Authentication:IdentityProviders:{name}:Authority` | Yes | Absolute `https` URI with no query, fragment or user information; discovery and signing keys are fetched from it |
-| `Authentication:IdentityProviders:{name}:Issuer` | Yes | Absolute `https` URI with no query, fragment or user information; the exact `iss` value tokens must carry, and the authorization server the protected-resource metadata sends clients to (which may differ from the authority, for example by a trailing slash) |
+| `Authentication:IdentityProviders:{name}:Authority` | Yes | Absolute `https` URI with no query, fragment or user information, and no whitespace, control or invisible character; discovery and signing keys are fetched from it |
+| `Authentication:IdentityProviders:{name}:Issuer` | Yes | Absolute `https` URI with no query, fragment or user information, and no whitespace, control or invisible character; the exact `iss` value tokens must carry, and the authorization server the protected-resource metadata sends clients to (which may differ from the authority, for example by a trailing slash). No two identity providers may share an issuer: a token's issuer picks the one provider that checks it |
 | `Authentication:IdentityProviders:{name}:Algorithms` | Yes | One or more of `RS256`, `PS256`, `ES256` |
 | `Authentication:IdentityProviders:{name}:ScopeCatalog` | Yes | Every scope this identity provider may assert; no wildcards |
 | `Authentication:IdentityProviders:{name}:ScopeClaim` | No | The claim carrying scopes: `scope` (default; Keycloak, Auth0) or `scp` (Entra ID) |
 | `Authentication:IdentityProviders:{name}:ClientIdClaim` | No | The claim naming the calling client, which every token must carry. It must be exactly one of four, the one your identity provider puts the client in: `azp` (Keycloak, Entra ID v2), `cid` (Okta), `appid` (Entra ID v1) or `client_id` (RFC 9068's JWT access token profile; the default). Anything else is refused at startup |
 
-Tokens must also carry `sub`, `jti`, the claim `ClientIdClaim` names, and `iat`, and are refused over 8 KB. The default is `client_id`; Keycloak and Entra ID v2 name the client in `azp`, Okta in `cid` and Entra ID v1 in `appid`, so set `ClientIdClaim` for those, as the Keycloak examples below do — a token without the claim it names is refused.
+Tokens must also carry `sub`, `jti`, the claim `ClientIdClaim` names, and `iat`, and are refused over 8 KB. A token whose `iat` lies more than 30 seconds in the future is refused. The default is `client_id`; Keycloak and Entra ID v2 name the client in `azp`, Okta in `cid` and Entra ID v1 in `appid`, so set `ClientIdClaim` for those, as the Keycloak examples below do — a token without the claim it names is refused.
 
 #### `Authentication:AdminIdentityProvider`
 - **Type**: `string`
@@ -264,7 +267,7 @@ Tools' scopes, risk classes, per-tool limits and allowed hosts are **not** confi
 #### `Limits:Redis`
 - **Type**: `string` — a StackExchange.Redis connection string, for example `redis.internal:6379,password=...`
 - **Default**: not set; **required outside Development**
-- **Description**: Where per-caller limits and used confirmations are kept, so they hold on every instance. Without it, Development keeps them in memory; any other environment refuses to start. If Redis becomes unreachable while running, requests are refused, not let through unlimited.
+- **Description**: Where per-caller limits and used confirmations are kept, so they hold on every instance. Without it, Development keeps them in memory; any other environment refuses to start. If Redis becomes unreachable while running, requests are refused, not let through unlimited. A connection string the Redis client cannot read stops the server, naming this key and showing none of its value. A password cannot contain a comma: the client reads one as the end of the value, quoted or not, and takes what follows as another server to connect to.
 
 #### `Limits:PerPrincipalPerMinute`
 - **Type**: `int` (1–1,000,000)
@@ -276,7 +279,7 @@ Tools' scopes, risk classes, per-tool limits and allowed hosts are **not** confi
 excess_rate_limit_exceeded (rule: caller-rate). You have made 120 requests in the last minute, which is your limit. Wait and try again.
 ```
 
-Separately, HTTP requests are limited to 60 per minute per client address before any token is examined; over that, the server answers `429 Too Many Requests`.
+Separately, HTTP requests are limited to 60 per minute per client address before any token is examined; over that, the server answers `429 Too Many Requests`. Behind a proxy that address is the one the proxy reports. The documented nginx has a limit of its own, 20 requests in flight from one address, and answers `429` with an HTML body of its own.
 
 ---
 
@@ -419,7 +422,8 @@ services:
         max-size: "10m"
         max-file: "3"
     # The server's log files, which it writes to logs/ under /app, on a named volume, mcp-logs (declared at the end): a
-    # volume outlives the container, so recreating it, for a new image or a changed setting, keeps them.
+    # volume outlives the container, so recreating it, for a new image or a changed setting, keeps them. One server's
+    # files: a second server on the same volume would write the same daily file over the first's.
     volumes:
       - mcp-logs:/app/logs
     environment:
@@ -476,7 +480,8 @@ networks:
         - subnet: 172.16.238.0/24
 
 volumes:
-  # The server's log files. Docker fills it, the first time, from the image's own logs/, which the server's user owns.
+  # The server's log files. Docker fills it, the first time, from the image's own logs/, which the server's user owns,
+  # and lists it under the project's name, as <project>_mcp-logs.
   mcp-logs:
 ```
 
@@ -508,7 +513,7 @@ http {
         ssl_protocols       TLSv1.2 TLSv1.3;
         # Under TLS 1.2, only forward-secret, authenticated ciphers; TLS 1.3's are all of that kind.
         ssl_ciphers         ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
-        # No session tickets. A ticket holds its session's secret, sealed with a key nginx keeps for as long as it runs,
+        # No ticket carries a session's secret. Such a ticket is sealed with a key nginx keeps for as long as it runs,
         # and under TLS 1.2 it is sent in the clear: whoever later read that one key could open every recorded
         # connection that was given a ticket, whatever the cipher, which would undo the forward secrecy above.
         ssl_session_tickets off;
@@ -541,9 +546,11 @@ http {
 }
 ```
 
-Put your certificate for `MCP_HOST`, with its chain, at `tls/tls.crt` beside the compose file, and its key at `tls/tls.key`. Put the host name in a file named `.env` beside the compose file, the one line `MCP_HOST=mcp.example.com`: Compose reads it for every command run in that directory (`up`, `ps`, `logs`, `stop`, `down`), where a variable given on one command line is gone by the next and each later command stops, asking for `MCP_HOST`. Then start it with `docker compose up -d`: clients connect to `https://mcp.example.com/mcp`, through the proxy, and nothing else of the deployment is published. Each service is started again after a failure, and when the Docker daemon restarts or the host reboots, until you stop it. The server's log files, its security events among them, live on the named volume `mcp-logs`, which survives the server's container being recreated for a new image or a changed setting, and is deleted by `docker compose down -v`; each container's own output is kept to three files of 10 MB, so ship the logs elsewhere to keep them longer.
+Put your certificate for `MCP_HOST`, with its chain, at `tls/tls.crt` beside the compose file, and its key at `tls/tls.key`. Put the host name in a file named `.env` beside the compose file, the one line `MCP_HOST=mcp.example.com`: Compose reads it for every command run in that directory (`up`, `ps`, `logs`, `stop`, `down`), where a variable given on one command line is gone by the next and each later command stops, asking for `MCP_HOST`. Build the server's image first, from the repository's root: `docker build -t mcp-server:latest .` — the compose file names that image and no registry holds it, so without the build `up` stops with `pull access denied`. Then start it with `docker compose up -d`: clients connect to `https://mcp.example.com/mcp`, through the proxy, and nothing else of the deployment is published. Each service is started again after a failure, and when the Docker daemon restarts or the host reboots, until you stop it. The server's log files, its security events among them, live on the named volume `mcp-logs` — Docker lists it under the project's name, as `<project>_mcp-logs`, the project being this directory's name unless you set one — which survives the server's container being recreated for a new image or a changed setting, and is deleted by `docker compose down -v`; each container's own output is kept to three files of 10 MB, so ship the logs elsewhere to keep them longer. Why a server would not start is in that output, not in the files: most refusals at startup (a setting, the transport, an identity provider, a log sink) and an early crash are written before the files open, so read them with `docker compose logs mcp-server`. The volume holds one server's files. To run more than one server, give each its own file name — `Serilog__WriteTo__1__Args__path=logs/mcp-server-%HOSTNAME%-.log`, where Docker sets `HOSTNAME` to the container's id — or a volume each: two servers on one file write over each other's lines.
 
-What the proxy holds: a worker per CPU core, each with up to 1024 connections (a request on its way to the server holds two, the client's and the server's); a client that takes more than 10 seconds for its TLS handshake or its request header, or stalls its body for 10, is dropped, and an idle connection after 30; one client address has at most 20 requests in flight, and the rest are answered 429. That address is the one nginx sees, and so is the address the server's own limit counts, 60 requests a minute per client address. Where every client reaches nginx from one address, as through Docker Desktop's port forwarding or a load balancer that rewrites the source address, both limits are one limit shared by every client: carry each client's own address to nginx there, with the PROXY protocol or `real_ip` from a balancer you trust. The proxy names no nginx version in its responses, and offers TLS 1.2 only with forward-secret, authenticated ciphers. It issues no session tickets: a ticket's key lasts as long as nginx runs, and under TLS 1.2, where the ticket is sent in the clear, that key alone would open every recorded connection given one, forward secrecy or not.
+Redis here has no password. It is reachable only from the other two services, on the file's own network, which publishes nothing of it. If anything else joins that network, or Redis runs elsewhere, give it a password and put it in `Limits:Redis` (`redis:6379,password=…`).
+
+What the proxy holds: a worker per CPU core, each with up to 1024 connections (a request on its way to the server holds two, the client's and the server's); a client that takes more than 10 seconds for its TLS handshake or its request header, or stalls its body for 10, is dropped, and an idle connection after 30; one client address has at most 20 requests in flight, and the rest are answered 429. That address is the one nginx sees, and so is the address the server's own limit counts, 60 requests a minute per client address. Where every client reaches nginx from one address, as through Docker Desktop's port forwarding or a load balancer that rewrites the source address, both limits are one limit shared by every client: carry each client's own address to nginx there, with the PROXY protocol or `real_ip` from a balancer you trust. The proxy names no nginx version in its responses, and offers TLS 1.2 only with forward-secret, authenticated ciphers. No ticket it sends carries a session's secret (`ssl_session_tickets off`): such a ticket's key lasts as long as nginx runs, and under TLS 1.2, where the ticket is sent in the clear, that key alone would open every recorded connection given one, forward secrecy or not. Under TLS 1.2 it sends no ticket at all; under TLS 1.3 nginx still sends ticket messages, and they resume nothing: every connection is a full handshake.
 
 The server listens where `HttpTransport:BindAddress` and `HttpTransport:Port` say, and nowhere else. ASP.NET Core's own listening settings, `ASPNETCORE_URLS`, `ASPNETCORE_HTTP_PORTS` and `ASPNETCORE_HTTPS_PORTS` (or `urls`, `http_ports` and `https_ports` by any other route), are settings it would ignore, so it refuses to start on any of them, naming where it came from; an empty one asks for nothing. The image clears the port its base image sets, `ASPNETCORE_HTTP_PORTS=8080`, that way.
 
@@ -556,8 +563,9 @@ The server selects configuration from `ASPNETCORE_ENVIRONMENT`, or `DOTNET_ENVIR
 ### Default Behavior
 
 1. If neither is set → **Production**
-2. `Development` → loads `appsettings.Development.json`; stdio allowed; limits may be in memory
+2. `Development` → loads `appsettings.Development.json`; stdio allowed; limits may be in memory; listens on loopback only
 3. `Production` → loads `appsettings.Production.json`; stdio refused; Redis, `Providers:Enabled` and a declared proxy required
+4. Any other name (`Staging`, a misspelled `Developmnt`) → no environment file unless you add one, and everything Production requires: the deployment rules are switched off by `Development` alone
 
 ### Setting the Environment
 
@@ -633,6 +641,8 @@ curl -X POST http://localhost:3001/mcp \
 
 Without a token the server answers `401` with a `WWW-Authenticate` header naming its resource metadata, which tells a client where to get one.
 
+This run is for calling the server with a token you fetched yourself. It listens on plain http, while `Authentication:Resource` is, as it must be, an `https` address: a standard MCP client that signs in on its own follows that address from the metadata and does not reach a plain-http listener. For that, put TLS in front, as the Docker Compose deployment above does. And it stays on this machine: in Development a bind address that is not loopback stops the server.
+
 ---
 
 ### Scenario 3: Production Deployment
@@ -644,7 +654,7 @@ export ASPNETCORE_ENVIRONMENT=Production
 export Transport=http
 export HttpTransport__BindAddress=0.0.0.0
 export HttpTransport__AllowedHosts__0=mcp.example.com
-export HttpTransport__KnownNetworks__0=10.0.0.0/8      # the proxy that terminates TLS
+export HttpTransport__KnownProxies__0=10.0.0.2         # the one proxy that terminates TLS; a network (KnownNetworks) trusts every address in it
 export Limits__Redis=redis.internal:6379
 export Authentication__Resource=https://mcp.example.com/mcp
 export Authentication__IdentityProviders__corp__Authority=https://login.example.com/realms/corp
@@ -703,6 +713,8 @@ Every one of these stops the server at startup, with a message saying what to fi
 | A governed key the server does not read, or a retired one | A setting that is ignored answers a question falsely |
 | `Transport=stdio` outside Development | stdio authenticates nobody |
 | HTTP with no identity provider, or with a non-`https` authority, issuer or resource | The server could verify no token, would fetch keys over plaintext, or would send clients to a plaintext issuer |
+| Whitespace, a control character or an invisible (format) character in a resource, authority or issuer | It is published and compared as written, and such a character cannot be seen where it was pasted |
+| Two identity providers with one issuer | A token's issuer picks the one provider that checks it |
 | An authority or issuer with a query, a fragment or user information | An issuer identifier has neither (RFC 8414), and is published as written; discovery is fetched from paths appended to the authority |
 | A resource whose path is not `/mcp`, or that is not written as clients connect to it (a query, fragment, user information, backslash, percent-encoding or dot-segment) | MCP answers at `/mcp`; the resource is published as written, and every audience must equal it exactly |
 | A `ClientIdClaim` other than `azp`, `cid`, `appid` or `client_id`, or equal to the provider's `ScopeClaim` | A claim every token carries, or one that means something else, would switch the client requirement off |
@@ -711,13 +723,19 @@ Every one of these stops the server at startup, with a message saying what to fi
 | A bind address that is none of its three accepted forms (a path, a scheme, a Unix socket or named pipe, a host name, text Kestrel does not read as an address, an IPv4 address not in its standard form, a link-local address without its interface's zone, a zone on an address that is not link-local, a broadcast or multicast address), is empty or whitespace alone, carries a port (`[::1]:9999`, `127.0.0.1:9999`), or is IPv4-mapped (`::ffff:127.0.0.1`, bracketed or not) | Kestrel would not start on it, would listen on every interface, or would not bind it as written; an empty one names nothing to listen on; the server listens on `HttpTransport:Port` and would ignore the port; Kestrel cannot listen on an IPv4-mapped address |
 | An accepted bind address the server cannot bind: one this machine does not hold, an address and port already in use, one the operating system refuses as an invalid argument, or a port it may not use | The server could not listen at all; the refusal says why in the operating system's terms, not with a stack trace |
 | A `HttpTransport:KnownProxies` entry that is not an IP address, or a `KnownNetworks` entry that is not a network in CIDR form (an address that is not one, a prefix length outside 0-32 or 0-128, an IPv6 address with no prefix length), or either with an IPv4 address not in its standard form | Forwarded headers would be trusted from somewhere other than written, or the server would stop later, with a stack trace |
+| A `KnownNetworks` entry with a prefix length of 0, broader than `/8` (IPv4) or `/32` (IPv6), with bits set past its prefix, or covering or inside the IPv4-mapped range; an IPv4-mapped `KnownProxies` entry; an unspecified, broadcast or multicast entry in either | Every client's forwarded headers would be believed, or a network other than the one written would be trusted, or nothing would be while the server started as if a proxy were named |
 | Any `Kestrel` key | Kestrel's endpoints would bind around `HttpTransport:BindAddress` and the host allowlist chosen for it |
-| Production without a declared proxy | Bearer tokens over plaintext can be read and replayed |
+| ASP.NET Core's own `AllowedHosts`, `ForwardedHeaders_Enabled`, `urls`, `http_ports` or `https_ports`, by any route | The server sets its host filter, its trusted proxies and its listener itself, and would ignore each of them |
+| A request to read settings again (`hostBuilder:reloadConfigOnChange`), or a settings source that can read again | Settings are checked once, at startup; a later read would be unchecked |
+| Development on a bind address that is not loopback | Development switches the deployment rules off, so it is for this machine alone |
+| Any environment but Development without a declared proxy | Bearer tokens over plaintext can be read and replayed |
 | `Providers:Enabled` missing outside Development, or naming an unknown provider | A deployment says which providers it serves |
 | A provider with no `IdentityProvider`, or one not configured | A provider with no trust domain would be reachable from all of them |
 | A scope a provider's identity provider cannot issue | The tool would be unreachable, and nobody would know |
+| A provider that registers anything but its own types, its HTTP client's plumbing and options over those, or that removes a registration | A provider adds its own services and changes no part of the frame, the identity layer, the host or the log |
+| A provider declared in a namespace that holds another provider's | What a provider owns is its namespace, so the outer one would own the inner one's types |
 | A `BaseUrl` that is not `https`, or whose host the policy does not allow | Keeps upstream calls to the declared hosts |
-| `Limits:Redis` missing outside Development | Limits must hold on every instance |
+| `Limits:Redis` missing outside Development, or a connection string the Redis client cannot read | Limits must hold on every instance; an unreadable one is refused without showing its value |
 | An irreversible tool without `Confirmation:Key` | It could never run safely |
 | `shutdownTimeoutSeconds` set for the HTTP server, by any route | The server stops within its own 6 seconds, inside a container's stop grace, and would ignore it |
 
@@ -727,7 +745,7 @@ Every one of these stops the server at startup, with a message saying what to fi
 
 ### "'…' is not a setting this server reads. Did you mean '…'?"
 
-**Cause**: A key in `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development` or `HttpTransport` is misspelled, or belongs to a provider this server does not have.
+**Cause**: A key in `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development`, `RateLimit` or `HttpTransport` is misspelled, or belongs to a provider this server does not have.
 
 **Fix**: Use the key the message suggests, or remove it.
 
@@ -771,7 +789,7 @@ Every one of these stops the server at startup, with a message saying what to fi
 
 ### Rate Limit Exceeded
 
-**Cause**: `caller-rate` — the caller's requests per minute; `tool-rate` — the caller's calls to one tool per minute, from its policy; `429` — the per-address HTTP limit.
+**Cause**: `caller-rate` — the caller's requests per minute; `tool-rate` — the caller's calls to one tool per minute, from its policy; `429` — the per-address HTTP limit, or, with an HTML body, the documented nginx's own limit of 20 requests in flight from one address.
 
 **Fix**: Wait a minute, or raise `Limits:PerPrincipalPerMinute`. A tool's own limit is in its provider's policy.
 
@@ -779,7 +797,7 @@ Every one of these stops the server at startup, with a message saying what to fi
 
 ### Logs Not Appearing
 
-**Cause**: Log level too high (filtering out messages)
+**Cause**: Log level too high (filtering out messages). A server that refused to start wrote its reason to its output (stderr; `docker compose logs mcp-server`), as `MCP Server cannot start: …`, and most such refusals are not in the log files.
 
 **Check**: Is `Serilog:MinimumLevel:Default` set to `"Warning"` or higher?
 
@@ -804,6 +822,6 @@ The configuration system provides:
 - ✅ Flexibility (JSON files or environment variables)
 
 Use this for:
-- **Development**: stdio as the Development principal, every provider, limits in memory
+- **Development**: stdio as the Development principal, every provider, limits in memory, this machine only
 - **Testing**: HTTP against a real identity provider
 - **Production**: identity providers, Redis, a declared proxy, the providers you serve

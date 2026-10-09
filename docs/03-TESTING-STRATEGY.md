@@ -31,6 +31,7 @@ The testing strategy covers **4 layers**:
 - Two forms, and the difference matters:
   - **In-process server** (`Identity/InProcessServer.cs`) — the shipped HTTP server, composed by the same method the program calls, with each identity provider's key lookups answered in-process. This is how a test can present a token the server accepts. Tests drive it with the SDK's own client or with raw JSON-RPC.
   - **Real process** (`ServerProcessTests.cs`) — the built program started as a child process, over stdio or HTTP. It cannot be given a token (it fetches signing keys from a real identity provider over HTTPS), so it proves startup, refusals before authentication, local-mode behaviour, and that it installs exactly the frame the in-process tests exercise.
+  - **The shipped image** (`McpServerTemplate.E2E/`, a suite of its own) — the image built from the repository's `Dockerfile`, run in containers as a deployment runs it. See [The End-to-End Suite](#the-end-to-end-suite) below.
 - Redis runs in a container started by **Testcontainers**, so Docker must be running
 
 **Example**: The SDK's client calls an irreversible tool, confirms, and the tool runs once; the captured confirmation is then replayed, altered and aged, and the tool never runs again (`Frame/ConfirmationTests.cs`)
@@ -38,9 +39,10 @@ The testing strategy covers **4 layers**:
 ### 4. **Security & Load Tests** (non-functional)
 - Every refusal the frame can make, one test each (`Frame/RequestGateTests.cs`)
 - Startup refusals: every way a policy or setting can disagree with what is served (`Frame/StartupRefusalTests.cs`)
-- A provider that tries to remove or add to the frame's checks (`Frame/FrameIntegrityTests.cs`)
+- A provider that tries to remove or add to the frame's checks, or to register anything but its own services and its HTTP client's plumbing (`Frame/FrameIntegrityTests.cs`)
 - Per-caller limits across two server instances sharing one Redis (`Frame/LimitsTests.cs`)
-- Token validation: the six ways a token is refused (`Identity/TokenRejectionTests.cs`)
+- Token validation: every way a token is refused — nine rejection cases, and beside them an oversized token, an unregistered issuer and a token no reader can parse (`Identity/TokenRejectionTests.cs`)
+- Log safety: nothing a caller sends can break or forge a log line (`Frame/LogLineSafetyTests.cs`, `Infrastructure/LineSafeLoggingTests.cs`, `Infrastructure/LogSafeTests.cs`)
 
 **Example**: A caller at their limit on one instance is refused on the other; another caller is not; with Redis stopped, requests are refused rather than let through
 
@@ -49,29 +51,47 @@ The testing strategy covers **4 layers**:
 ## Current Test Structure
 
 ```
-McpServerTemplate.Tests/
+McpServerTemplate.Tests/            # The fast suite
 ├── Frame/                          # The policy frame
 │   ├── StartupRefusalTests.cs      # Declarations the server refuses to start with
 │   ├── RequestGateTests.cs         # Every refusal on the request path
 │   ├── ConfirmationTests.cs        # The irreversible-tool round-trip
 │   ├── LimitsTests.cs              # Limits across instances, failing closed
 │   ├── FrameIntegrityTests.cs      # Providers that reach into the frame; settings typos
+│   ├── LogLineSafetyTests.cs       # A caller's values cannot break or forge a log line
+│   ├── RedisConnectionStringTests.cs # An unreadable Limits:Redis is refused without showing it
 │   ├── FrameHarness.cs             # Composes the frame without a transport
 │   ├── GateClient.cs               # SDK client and raw JSON-RPC helpers
-│   └── TestModules.cs              # Provider modules that exist only in the tests
+│   ├── TestModules.cs              # Provider modules that exist only in the tests
+│   └── …NamespaceModule.cs         # Three more, each declared in a namespace chosen to test what a provider owns
 ├── Identity/                       # Bearer tokens, trust domains, transport
 │   ├── InProcessServer.cs          # The shipped HTTP server, in-process
-│   ├── TestIdentityProvider.cs     # Mints tokens; answers discovery and key lookups in-process
 │   └── ...Tests.cs
-├── Infrastructure/                 # Configuration failures, resilience budgets
+├── Infrastructure/                 # Configuration failures, resilience budgets, log sinks, line-safe logging
 ├── Providers/                      # Formatters, validation, round trips per provider
 │   ├── JsonPlaceholder/
 │   ├── Smhi/
 │   └── SmhiObs/
 ├── ServerProcessTests.cs           # The real program, as a child process
+├── SpawnedServer.cs                # Starts that child process and reads its output
 ├── DocumentationTests.cs           # Documents and comments match the server
-├── RepositoryInvariantsTests.cs    # Build settings, secrets, provider declarations
+├── RepositoryInvariantsTests.cs    # Build settings, secrets, provider declarations, the Dockerfile
 └── TestRedis.cs                    # One Redis container for the test run
+
+McpServerTemplate.Testing/          # Shared by both suites
+├── TestIdentityProvider.cs         # Mints tokens; answers discovery and key lookups in-process
+└── TestPki.cs                      # A test certificate authority, made fresh for each run
+
+McpServerTemplate.E2E/              # The end-to-end suite: the shipped image in containers
+├── Harness/                        # The environment: images, network, services, the server under test
+├── ...Tests.cs                     # One class per promise the shipped image makes
+├── HarnessSelfTests.cs             # Checks of the harness itself; these start no container
+├── SABOTAGE-RECORD.md              # Every test shown to fail when its claim is broken
+└── HELD.md                         # Tests held back by a recorded decision (none today)
+
+McpServerTemplate.E2EHost/          # A test-only host with test-only providers; never in the shipped image
+McpServerTemplate.TestIssuer/       # A test-only token issuer; never in the shipped image
+scripts/e2e-sabotage.sh             # Retakes the sabotage record
 ```
 
 ---
@@ -272,8 +292,12 @@ public class WeatherSymbolTests
 Docker must be running: the tests start Redis in a container, and a missing Redis fails them rather than skipping them.
 
 ```bash
-dotnet test McpServerTemplate.sln
+dotnet test McpServerTemplate.Tests    # the fast suite, about half a minute
+dotnet test McpServerTemplate.E2E      # the end-to-end suite, a few minutes
+dotnet test McpServerTemplate.sln      # both
 ```
+
+The end-to-end suite needs more than a running Docker: see [The End-to-End Suite](#the-end-to-end-suite).
 
 ### Run Tests with Verbose Output
 ```bash
@@ -513,6 +537,49 @@ public class YourProviderToolsTests : IClassFixture<YourProviderTestFixture>
 
 ---
 
+## The End-to-End Suite
+
+`McpServerTemplate.E2E` tests the thing that ships: the image built from the repository's `Dockerfile`, started in containers the way a deployment starts it, and called over the network.
+
+**What a run starts**, each in its own container:
+- the server's image, in Production, behind an nginx that terminates TLS with a certificate from a test authority made for that run
+- Redis, for the limits
+- Keycloak, a real identity provider, over HTTPS, and a small test issuer for the tokens a real identity provider will not mint, such as one with the wrong audience
+- fakes for every upstream the providers call
+
+**No internet.** The run's network has no route off it. Every outbound call a test makes is answered by a fake, and each run begins by proving the cut: a container on the run's network tries a public address and must fail, while the same attempt from an ordinary network succeeds. The test process reaches the containers through one door, published on `127.0.0.1` only.
+
+**What it needs.** Docker, with the Docker CLI's `buildx` plugin, talking to the same engine the tests reach: the images are built by BuildKit (`docker buildx build`), as `docker build` builds them for an operator, and an image some other builder made is rebuilt, never run. One run at a time on a machine: the run's network uses a fixed address range.
+
+**What it proves**, a class per promise: a standard MCP client signs in and lists tools; every refusal the earlier contracts promised, on the image; trust domains; limits across two servers; the documented deployment in [04-CONFIGURATION.md](04-CONFIGURATION.md), run as written; every startup refusal with exit code 78; what is in the image and what is not.
+
+### Every test is shown to fail
+
+A test that cannot fail proves nothing. Every end-to-end test declares a **sabotage**: one thing the harness weakens for that test alone — a setting left out, a container's environment, the network — when `MCP_E2E_SABOTAGE` names it. No code is edited. `McpServerTemplate.E2E/SABOTAGE-RECORD.md` holds, for each one, the test passing without the sabotage and failing with it, on the assertion that carries its claim.
+
+```bash
+bash scripts/e2e-sabotage.sh            # retake the entries whose test file has changed, or that are missing
+bash scripts/e2e-sabotage.sh --all      # retake every entry afresh
+bash scripts/e2e-sabotage.sh --dry-run  # list what would be retaken
+```
+
+On every push, a self-test checks that each end-to-end test has a sabotage, that each sabotage has an entry, and that each entry was taken on its test's file as that file is now. CI refuses to run with a sabotage switched on, so the reds themselves are retaken by hand, with `--all`. A test held back by decision is listed in `McpServerTemplate.E2E/HELD.md`, with the decision.
+
+### What the harness does not hold
+
+The harness checks itself — that the self-tests start no container, that each test reads only its own server's evidence, that every image is pinned by digest. Those checks are held against mistakes, not against a test author who sets out to get round them, and they have known gaps:
+
+- Some read the source's spelling where others read compiled code: a class split across files that adds a fixture, a namespace-qualified spelling, or an image named in an unusual place can pass them.
+- Two helpers still hand a test more than its own server's evidence if it asks for it.
+- Project references are read as the Debug build has them, and one added inside a build target is not seen.
+- Dockerfile inputs only BuildKit reads (a `# syntax=` or `# escape=` line, a `Dockerfile.dockerignore`) are not modelled by the fast checks. What reaches the image is still compared, file by file, by the end-to-end suite.
+- Hard links, FIFOs and devices under `/app` are not compared; some of the test host's own refusals have no test of their own.
+- A run killed outright leaves its containers behind until the next run sweeps them; an interrupted one (Ctrl+C) removes them itself.
+
+The guard against a dishonest test is the sabotage record: a test whose claim can be broken without the test failing does not get an entry.
+
+---
+
 ## CI/CD Integration
 
 The repository's workflow (`.github/workflows/ci.yml`) runs on every push, on a runner with Docker:
@@ -525,10 +592,12 @@ The repository's workflow (`.github/workflows/ci.yml`) runs on every push, on a 
   run: dotnet build McpServerTemplate.sln --no-restore --configuration Release -warnaserror
 
 - name: Test
-  run: dotnet test McpServerTemplate.sln --no-build --configuration Release --verbosity normal
+  run: dotnet test McpServerTemplate.Tests/McpServerTemplate.Tests.csproj --no-build --configuration Release --verbosity normal
 ```
 
-followed by a vulnerable-package audit and a secret scan. The Redis tests run there as they do locally.
+followed by a vulnerable-package audit and a secret scan. The Redis tests run there as they do locally. The fast suite is tested by its project's path, so that job stays fast.
+
+A second job runs the end-to-end suite (`McpServerTemplate.E2E`) within a ten-minute budget. It refuses to run with a sabotage switched on, fails if a run leaves a container, network, volume or key directory behind, and uploads the containers' logs when a test fails.
 
 ---
 

@@ -128,14 +128,14 @@ are limited.
 
 ### Step 1: Install Prerequisites
 
-You need **the .NET 10 SDK** — and, to run the tests, **Docker**.
+You need **the .NET SDK, version 10.0.101** — exactly that one: the repository's `global.json` pins it, and a newer SDK is not used in its place — and, to run the tests, **Docker**. The fast tests start Redis in a container. The end-to-end tests also build the server's image, which needs Docker's `buildx` plugin; Docker Desktop includes it.
 
 Download from: https://dotnet.microsoft.com/download/dotnet/10.0
 
-Verify it's installed:
+Verify it's installed, from the repository's folder:
 ```bash
 dotnet --version
-# Output: 10.0.x
+# Output: 10.0.101
 ```
 
 ### Step 2: Open the Project
@@ -276,7 +276,7 @@ Claude: Calls get_blog_post(1)
 MCP Server: Makes HTTP request to external API
 External API: (no response - server is down)
 MCP Server: Tries up to 3 times with backoff, within the provider's time limits
-MCP Server: "😞 External service is unavailable"
+MCP Server: "Unable to reach the JSONPlaceholder API for post 1. Check network connectivity and try again; if it persists, confirm Providers:JsonPlaceholder:BaseUrl."
 Claude: "The blog service is currently unavailable."
 ```
 
@@ -304,24 +304,27 @@ dotnet run
 
 ---
 
-### Scenario 2: Running on the Network (Testing)
+### Scenario 2: Running over HTTP (Testing)
 
-Want to test from another computer? Switch to HTTP mode. HTTP mode needs one more thing than stdio: an **identity provider** — a sign-in service such as Keycloak, Entra ID or Auth0 — that issues the tokens callers present. Nobody can call the server without one.
+Want to see the server as a network client does? Switch to HTTP mode. HTTP mode needs one more thing than stdio: an **identity provider** — a sign-in service such as Keycloak, Entra ID or Auth0 — that issues the tokens callers present. Nobody can call the server without one.
 
 **Step 1**: Tell the server about your identity provider and switch to HTTP. The exact settings are in [Configuration Guide → Scenario 2](04-CONFIGURATION.md#scenario-2-local-testing-http-mode); in short:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
 export Transport=http
-export HttpTransport__BindAddress=0.0.0.0
-export HttpTransport__AllowedHosts__0=<your-computer-name>   # required once the server listens beyond this machine
-export Authentication__Resource=https://<your-computer-name>:3001/mcp
+export Authentication__Resource=https://localhost:3001/mcp
 export Authentication__IdentityProviders__corp__Authority=https://<your-identity-provider>
 export Authentication__IdentityProviders__corp__Issuer=https://<your-identity-provider>
 export Authentication__IdentityProviders__corp__ClientIdClaim=azp   # where your provider names the client: azp (Keycloak, Entra ID v2), cid (Okta), appid (Entra ID v1) or client_id
 export Authentication__IdentityProviders__corp__Algorithms__0=RS256
-export Authentication__IdentityProviders__corp__ScopeCatalog__0=demo:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__0=weather:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__1=observations:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__2=demo:read
+export Authentication__IdentityProviders__corp__ScopeCatalog__3=demo:write
 ```
+
+Development enables all three providers, and each needs its scopes in the catalog: leave one out and the server refuses to start, saying which provider needs a scope its identity provider cannot issue.
 
 **Step 2**: Run the server
 
@@ -329,12 +332,11 @@ export Authentication__IdentityProviders__corp__ScopeCatalog__0=demo:read
 dotnet run
 ```
 
-**Step 3**: Test from another computer, with a token from your identity provider
+**Step 3**: Test it, with a token from your identity provider
 
 ```bash
-# From another computer on the same network
-curl http://<your-computer-name>:3001/healthz        # "alive" — no token needed
-curl -X POST http://<your-computer-name>:3001/mcp \
+curl http://localhost:3001/healthz        # "alive" — no token needed
+curl -X POST http://localhost:3001/mcp \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
@@ -343,17 +345,22 @@ curl -X POST http://<your-computer-name>:3001/mcp \
 
 Without a token you get `401`, with a header telling your client where to sign in.
 
+**Two limits of this local run**:
+- **This machine only.** Development switches the deployment rules off — no proxy, no Redis — so the server listens on `localhost` and refuses any other bind address. To reach it from another computer, deploy it as Scenario 3 does.
+- **Bring your own token.** The server listens on plain http here, while its resource address is `https`. A client that signs in by itself follows the `https` address and will not reach this listener; that works once TLS is in front, as in Scenario 3.
+
 ---
 
 ### Scenario 3: Production Deployment (Secure, Internet-Facing)
 
-`appsettings.Production.json` already exists: it enables only the weather providers and keeps logging minimal. Production also **requires**, and refuses to start without:
+`appsettings.Production.json` already exists: it enables only the weather providers and keeps logging minimal. Production — and every environment other than Development — also **requires**, and refuses to start without:
 
 - **An identity provider** — `Authentication:IdentityProviders:…`, as in Scenario 2
 - **Redis** — `Limits:Redis`, so each caller's limits hold on every copy of the server you run
 - **A trusted proxy in front** — `HttpTransport:KnownProxies` or `HttpTransport:KnownNetworks`, the proxy that handles HTTPS
+- **The host names clients use** — `HttpTransport:AllowedHosts`, once the server listens beyond this machine
 
-The full example is in [Configuration Guide → Scenario 3](04-CONFIGURATION.md#scenario-3-production-deployment).
+The full example is in [Configuration Guide → Scenario 3](04-CONFIGURATION.md#scenario-3-production-deployment), and a complete Docker Compose deployment — the server, Redis and an nginx that terminates TLS — is in the same guide under [Setting Environment Variables](04-CONFIGURATION.md#setting-environment-variables).
 
 **Why these requirements**?
 - Tokens instead of shared passwords: the server knows *who* is calling, and each provider answers only to its own identity provider
@@ -417,8 +424,8 @@ When the server starts, tool registrations and requests are logged to the `logs/
 The server logs every tool call with a correlation ID:
 
 ```
-[12:34:57 INF] ToolCallLoggingFilter: [abc123] Calling tool get_blog_post with arguments: postId
-[12:34:57 INF] ToolCallLoggingFilter: [abc123] Tool get_blog_post completed in 234ms
+[12:34:57 INF] ModelContextProtocol.Server.McpServer 4F9C2A7E1B3D: [4F9C2A7E1B3D] Tool call: get_blog_post with args: [postId]
+[12:34:57 INF] ModelContextProtocol.Server.McpServer 4F9C2A7E1B3D: [4F9C2A7E1B3D] Tool get_blog_post completed in 234ms
 ```
 
 ### 3. Enable More Detailed Logging

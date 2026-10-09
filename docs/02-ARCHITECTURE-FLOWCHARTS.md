@@ -118,12 +118,12 @@ sequenceDiagram
     Main->>Config: Load appsettings.json, appsettings.{Environment}.json,<br/>environment variables, command line
     Main->>Transport: Select transport (stdio: Development only)
     alt HTTP Transport
-        Transport->>Transport: Validate identity providers and resource URI
+        Transport->>Transport: Validate identity providers and resource URI;<br/>refuse the framework's own listening, host-list<br/>and forwarded-header settings
     end
     Main->>Frame: Compose the governed MCP server
-    Frame->>Frame: Every governed setting known? Enabled providers exist?
+    Frame->>Frame: Every governed setting known? Settings read once?<br/>Enabled providers exist? No provider's namespace inside another's?
     Frame->>Modules: Each enabled module registers its services — watched
-    Modules-->>Frame: Nothing removed, nothing of the frame's added
+    Modules-->>Frame: Nothing removed; added only its own types,<br/>its HTTP client's plumbing and options over those
     Frame->>Frame: Register the frame last: limits (Redis or, in Development, memory),<br/>confirmation key, request gate, MCP server with the modules' types
     alt HTTP Transport
         Transport->>Transport: Kestrel limits, forwarded headers, host allowlist,<br/>CORS, per-IP rate limiting, identity schemes
@@ -190,7 +190,7 @@ graph LR
 
 ```mermaid
 graph LR
-    Request["Incoming<br/>HTTP Request"] -->|1| Pipeline["Forwarded headers → HSTS →<br/>host allowlist → CORS →<br/>per-IP limit → origin guard"]
+    Request["Incoming<br/>HTTP Request"] -->|1| Pipeline["Forwarded headers → HSTS and HTTPS redirection →<br/>host allowlist → CORS →<br/>per-IP limit → health endpoints → origin guard"]
 
     Pipeline -->|2| Auth["Authentication<br/>────────────<br/>Bearer token from a<br/>configured identity provider"]
 
@@ -368,7 +368,7 @@ graph TB
         Config2["Transport: http<br/>Port: 3001<br/>Identity providers, Providers:Enabled,<br/>Limits:Redis"]
         Clients2["Multiple Clients<br/>(AI assistants,<br/>tools, services)"]
         IdP["Identity provider<br/>(issues bearer tokens)"]
-        Server2["MCP Server<br/>(endpoint at /)"]
+        Server2["MCP Server<br/>(endpoint at /mcp)"]
 
         IdP -.->|token| Clients2
         Clients2 -->|HTTP + Bearer token| Server2
@@ -376,7 +376,7 @@ graph TB
     end
 
     subgraph "Security Stack (HTTP)"
-        TLS["TLS/SSL<br/>(at the proxy; Production<br/>requires a declared proxy)"]
+        TLS["TLS/SSL<br/>(at the proxy; every environment<br/>but Development requires<br/>a declared proxy)"]
         KestrelLimits["Kestrel Limits<br/>- Max body: 1MB<br/>- Max connections: 100<br/>- Header timeout: 30s"]
         CORS["CORS Policy<br/>Deny-all by default"]
         RateLimit["Per-IP Rate Limit<br/>60 req/min"]
@@ -427,7 +427,7 @@ graph LR
 
     C --> D["4. Add Providers:Github<br/>and add it to<br/>Providers:Enabled"]
 
-    D --> E{"5. Start: the frame checks<br/>every tool has a policy,<br/>scopes are issuable,<br/>hosts are declared"}
+    D --> E{"5. Start: the frame checks<br/>every tool has a policy,<br/>scopes are issuable,<br/>hosts are declared, and the<br/>module registered only its own<br/>types and its HTTP client's plumbing"}
 
     E -->|All holds| F["✅ GitHub Tools<br/>Available to callers<br/>who hold their scopes"]
     E -->|Something wrong| G["Refuses to start,<br/>saying what to fix"]
