@@ -16,9 +16,11 @@ namespace McpServerTemplate.Infrastructure;
 /// This is TEMPLATE INFRASTRUCTURE — it works for any provider and does not need
 /// modification when swapping providers.
 ///
-/// Security: tool arguments are logged at Information level with argument NAMES only.
-/// Full argument values are logged at Debug level to avoid leaking secrets/PII in
-/// production logs where a future provider might accept sensitive parameters.
+/// Security: tool arguments are logged with argument NAMES only, at every level.
+///
+/// contract-006 · G-13 (roadmap P3.5) — the Debug-level line that wrote every argument's value is gone. The ordinary log
+/// is for operating the server and goes wherever an operator points it; a caller's values belong on the audit trail
+/// alone, which redacts them (AuditRedaction) before any destination sees them.
 /// </summary>
 public static class ToolCallLoggingFilter
 {
@@ -44,7 +46,6 @@ public static class ToolCallLoggingFilter
             using (LogContext.PushProperty("ToolName", toolName))
             {
                 LogToolCallStart(logger, correlationId, toolName, context);
-                LogToolCallDebugArgs(logger, correlationId, toolName, context);
 
                 var stopwatch = Stopwatch.StartNew();
                 try
@@ -83,24 +84,6 @@ public static class ToolCallLoggingFilter
         logger.LogInformation(
             "[{CorrelationId}] Tool call: {ToolName} with args: [{ArgNames}]",
             correlationId, toolName, argNames);
-    }
-
-    private static void LogToolCallDebugArgs(
-        ILogger? logger, string correlationId, SafeText toolName,
-        RequestContext<CallToolRequestParams> context)
-    {
-        // Serialising every argument is the most expensive thing this filter does; it must not
-        // happen unless the message will actually be written.
-        if (logger is null || !logger.IsEnabled(LogLevel.Debug))
-            return;
-
-        var argsJson = context.Params?.Arguments is { } args
-            ? JsonSerializer.Serialize(args)
-            : "{}";
-
-        logger.LogDebug(
-            "[{CorrelationId}] Tool {ToolName} full args: {Args}",
-            correlationId, toolName, argsJson);
     }
 
     private static void LogToolCallResult(

@@ -26,6 +26,9 @@ public sealed class ArgumentGuard
         _maxStringLength = maxStringLength;
     }
 
+    /// <summary>contract-006 · G-7 — whether the tool's input schema declares an argument of this name.</summary>
+    public bool Declares(string name) => _declared.Contains(name);
+
     /// <summary>Builds the guard from a tool's declared input schema.</summary>
     public static ArgumentGuard For(JsonElement inputSchema, int maxStringLength)
     {

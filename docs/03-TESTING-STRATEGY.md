@@ -64,6 +64,18 @@ McpServerTemplate.Tests/            # The fast suite
 │   ├── GateClient.cs               # SDK client and raw JSON-RPC helpers
 │   ├── TestModules.cs              # Provider modules that exist only in the tests
 │   └── …NamespaceModule.cs         # Three more, each declared in a namespace chosen to test what a provider owns
+├── Audit/                          # The audit trail (docs/08)
+│   ├── AuditDecisionTests.cs       # One test per refusal rule, each reading the record it left
+│   ├── AuditFailClosedTests.cs     # A change is refused when its record cannot be written
+│   ├── AuditChainTests.cs          # The chain, each kind of tampering, midnight, retention
+│   ├── AuditRedactionTests.cs      # Secrets kept out, lines that cannot be forged, the trace
+│   ├── AuditHttpTests.cs           # Real tokens and the HTTP layer's refusals
+│   ├── AuditExportTests.cs         # The copy sent to a collector
+│   ├── AuditSettingsTests.cs       # Audit settings the server refuses
+│   ├── AuditProgramTests.cs        # The real program checks the file it wrote
+│   ├── AuditAlertRulesTests.cs     # The shipped alert rules name only events the server writes
+│   ├── AuditHarness.cs             # The whole frame over an in-memory stream; needs no container
+│   └── AuditTestModule.cs          # Tools, a prompt and a resource that exist only for these tests
 ├── Identity/                       # Bearer tokens, trust domains, transport
 │   ├── InProcessServer.cs          # The shipped HTTP server, in-process
 │   └── ...Tests.cs

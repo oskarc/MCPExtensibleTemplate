@@ -110,6 +110,21 @@ Welcome to the MCP Server Template documentation! This folder contains comprehen
 
 ---
 
+### [08-AUDIT-TRAIL.md](08-AUDIT-TRAIL.md)
+**For**: Operators, security teams, anyone investigating what a caller did
+
+**What you'll find**:
+- What the server records about every request, and when
+- One record, member by member, and every event it can carry
+- What happens when the trail cannot be written
+- Checking a file with `--verify-audit`, and what that does and does not prove
+- What is kept out of a record, the copy sent to a collector, and the settings
+- Alert rules for a monitoring system, under [siem/](siem/README.md)
+
+**Best for**: Running the server where its decisions must be accounted for
+
+---
+
 ### [MCP Hardening Field Guide](artifacts/security-guide/index.html) (interactive)
 **For**: Anyone who wants to *see* the hardened design work, one mechanism at a time
 
@@ -190,6 +205,7 @@ Test coverage → [03-TESTING-STRATEGY.md](03-TESTING-STRATEGY.md)
 | [04-CONFIGURATION](04-CONFIGURATION.md) | Configure for any environment | DevOps/Developers | ~20 min | No (references) |
 | [06-SECURITY-ROADMAP](06-SECURITY-ROADMAP.md) | Harden for a security-sensitive environment | Security/Developers | ~40 min | Yes (pipeline diagram, tables) |
 | [07-SECURITY-FLOWCHARTS](07-SECURITY-FLOWCHARTS.md) | Follow the hardened flows visually | Everyone | ~20 min | Yes (17 diagrams) |
+| [08-AUDIT-TRAIL](08-AUDIT-TRAIL.md) | Read, check and ship the audit trail | Operators/Security | ~15 min | No (references) |
 | [Field Guide](artifacts/security-guide/index.html) | Explore each flow and phase interactively | Everyone | ~45 min | Yes (17 interactive chapters) |
 
 ---
@@ -247,6 +263,7 @@ Test coverage → [03-TESTING-STRATEGY.md](03-TESTING-STRATEGY.md)
 ### Security
 - [Security Hardening Roadmap](06-SECURITY-ROADMAP.md)
 - [Security Flowcharts](07-SECURITY-FLOWCHARTS.md)
+- [The Audit Trail](08-AUDIT-TRAIL.md)
 - [MCP Hardening Field Guide (interactive)](artifacts/security-guide/index.html)
 - [Security Model](01-ARCHITECTURE.md#security-model)
 - [What Stops the Server Starting](04-CONFIGURATION.md#validation--security)

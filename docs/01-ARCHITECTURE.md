@@ -59,7 +59,9 @@ The server is organized in **4 key layers**:
   - every served tool, resource and prompt has a policy, and every policy names something served
   - every scope is one the provider's identity provider can issue
   - every outbound host is an exact domain name, and the provider's configured `BaseUrl` is one of them
-  - the request checks actually installed are the frame's own, and the request-kind gate is first
+  - the request checks actually installed are the frame's own, with the audit step first and the request-kind gate straight behind it
+  - the audit trail's directory can be written
+- **Every decision is recorded before it takes effect.** The audit step is the first thing every message meets. Each check below writes its decision to the audit trail — allowed, or refused and by which rule — before the tool runs or the caller is answered, and a request that changes something is refused when its record cannot be written. See [08-AUDIT-TRAIL.md](08-AUDIT-TRAIL.md).
 - **On every request**, in this order:
   1. **Request kind** — only the kinds the frame governs go further (listing and using tools, resources, templates, prompts and completions; initialize, discovery, ping, cancellation). Anything else is refused.
   2. **Signed in** — the request carries a principal the server can attribute
@@ -73,6 +75,8 @@ The server is organized in **4 key layers**:
 - Each refusal is logged as a security event under its rule (for example `insufficient_scope`, `idp-binding`, `extraneous-argument`), and the caller is told the rule — with one exception: an item whose provider is bound to another identity provider is refused in the same words as an item that does not exist, so a refusal never confirms what another trust domain holds. The log keeps the real rule, `idp-binding`.
 
 **Files**: `Infrastructure/Frame/` — `Policy.cs`, `IProviderModule.cs`, `GovernedServer.cs`, `RequestGate.cs`, `PolicyRegistry.cs`, `ArgumentGuard.cs`, `Confirmation.cs`, `LimitStore.cs`, `SettingsAllowlist.cs`, `FrameIntegrity.cs`
+
+**The audit trail**: `Infrastructure/Audit/` — the events, the record and its redaction, the chained file, the check behind `--verify-audit`, and the copy sent to a collector
 
 ---
 
@@ -334,7 +338,7 @@ stdio is refused outside Development. HTTP needs at least one identity provider 
 3. **Limits in Redis**: One atomic script per window per request — a caller's whole-server window and, for a tool call, the tool's own window
 4. **Policies frozen at startup**: The frame's lookups are frozen dictionaries, built once
 5. **Resilience**: Retry + circuit breaker prevents cascading failures
-6. **Structured Logging**: One line per event; a call's argument values are serialised only when Debug logging is on
+6. **Structured Logging**: One line per event; the ordinary log names a call's arguments and never holds their values, which go to the audit trail with secrets removed
 
 ---
 

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using McpServerTemplate.Infrastructure.Audit;
 using McpServerTemplate.Infrastructure.Identity;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
@@ -23,7 +24,8 @@ public sealed class RequestGate(
     TimeProvider clock,
     int perPrincipalPerMinute,
     ConfirmationService? confirmation,
-    ILogger<RequestGate> logger)
+    ILogger<RequestGate> logger,
+    AuditTrail audit)
 {
     /// <summary>A write needs a token issued within this long (roadmap §3.3).</summary>
     public static readonly TimeSpan WriteFreshness = TimeSpan.FromMinutes(5);
@@ -58,7 +60,27 @@ public sealed class RequestGate(
         NotificationMethods.CancelledNotification,
     };
 
-    /// <summary>The first incoming message filter: request kinds nobody governs go no further.</summary>
+    /// <summary>
+    /// contract-006 · G-2 — the governed kinds that name an item or a list, each with a request filter of its own that
+    /// records its decision. Every other governed kind (sign-on, discovery, ping, a notification) is decided by its kind
+    /// alone, so the request-kind gate records it.
+    /// </summary>
+    private static readonly HashSet<string> ItemMethods = new(StringComparer.Ordinal)
+    {
+        RequestMethods.ToolsList,
+        RequestMethods.ToolsCall,
+        RequestMethods.ResourcesList,
+        RequestMethods.ResourcesTemplatesList,
+        RequestMethods.ResourcesRead,
+        RequestMethods.PromptsList,
+        RequestMethods.PromptsGet,
+        RequestMethods.CompletionComplete,
+    };
+
+    /// <summary>
+    /// The request-kind gate: request kinds nobody governs go no further. The second incoming message filter, behind the
+    /// audit step (contract-006 · G-1).
+    /// </summary>
     public static McpMessageFilter RequestKinds() => next => async (context, cancellationToken) =>
     {
         var method = context.JsonRpcMessage switch
@@ -68,8 +90,31 @@ public sealed class RequestGate(
             _ => null,
         };
 
+        var scope = AuditScope.Enter(context);
+        var trail = context.Services?.GetService<AuditTrail>();
+
         if (method is not null && GovernedMethods.Contains(method))
         {
+            // contract-006 · G-2 — recorded before it is handed on. While the trail cannot be written, a kind decided
+            // here is one that changes nothing, so it follows Audit:ReadWhenUnavailable: refused unless that says allow.
+            if (!ItemMethods.Contains(method) && scope is not null && trail is not null
+                && !scope.Record(trail, AuditEvents.McpRequest, "The request kind is one the frame governs; it is handed on after this record.", AuditOutcome.Allow)
+                && !trail.ReadWhenUnavailable)
+            {
+                var unrecorded = AuditUnavailable();
+                context.Services?.GetService<ILogger<RequestGate>>()?.LogWarning(
+                    "{Event}: rule={Rule} method={Method} — {Detail}",
+                    unrecorded.SecurityEvent, unrecorded.Rule, SafeText.Value(method), unrecorded.Message);
+
+                if (context.JsonRpcMessage is JsonRpcRequest)
+                {
+                    throw unrecorded.ToException();
+                }
+
+                // A notification gets no answer; it simply goes no further.
+                return;
+            }
+
             await next(context, cancellationToken).ConfigureAwait(false);
             return;
         }
@@ -78,6 +123,13 @@ public sealed class RequestGate(
         // (LogSafe.Text), in the line and in the reply, which the SDK logs with the exception. Round 3 (SEC-R3-04) — escaped,
         // not stripped, and once: as SafeText, which the log pipeline passes on as it is.
         var shown = SafeText.Value(method ?? context.JsonRpcMessage.GetType().Name);
+
+        // contract-006 · G-2 — the refusal goes on the audit trail first, as every refusal does (Refuse).
+        if (scope is not null && trail is not null)
+        {
+            scope.Record(trail, AuditEvents.AuthzFail, SafeText.Line($"The frame does not govern '{shown}' requests, so it refuses them.").ToString(), AuditOutcome.Deny, "request-kind");
+        }
+
         context.Services?.GetService<ILogger<RequestGate>>()?.LogWarning(
             "authz_fail: rule=request-kind method={Method} — refused, the frame does not govern it",
             shown);
@@ -96,7 +148,12 @@ public sealed class RequestGate(
     public static McpRequestFilter<CallToolRequestParams, CallToolResult> CallTool() => next => async (context, cancellationToken) =>
     {
         var gate = GateOf(context.Services);
+        AuditScope.Enter(context);
         var claim = await gate.AdmitCallAsync(context, cancellationToken).ConfigureAwait(false);
+
+        // contract-006 · G-8 — the tool's span, under the request's: what the tool calls carries the same trace.
+        using var span = AuditFilter.Source.StartActivity("mcp.tool");
+        span?.SetTag("mcp.tool", context.Params?.Name);
         var result = await next(context, cancellationToken).ConfigureAwait(false);
         return gate.CheckOutput(context.Params?.Name ?? string.Empty, CallerOf(context, gate.Clock), result, claim);
     };
@@ -104,9 +161,10 @@ public sealed class RequestGate(
     /// <summary>The tool-list filter: a caller sees what it may call.</summary>
     public static McpRequestFilter<ListToolsRequestParams, ListToolsResult> ListTools() => next => async (context, cancellationToken) =>
     {
-        var result = await next(context, cancellationToken).ConfigureAwait(false);
         var gate = GateOf(context.Services);
         var caller = CallerOf(context, gate.Clock);
+        gate.AdmitList(context, caller);
+        var result = await next(context, cancellationToken).ConfigureAwait(false);
         result.Tools = [.. result.Tools.Where(t => gate.Registry.Tools.TryGetValue(t.Name, out var e) && Sees(caller, e.IdentityProvider, e.Policy.Scope))];
         return result;
     };
@@ -114,9 +172,10 @@ public sealed class RequestGate(
     /// <summary>The resource-list filter.</summary>
     public static McpRequestFilter<ListResourcesRequestParams, ListResourcesResult> ListResources() => next => async (context, cancellationToken) =>
     {
-        var result = await next(context, cancellationToken).ConfigureAwait(false);
         var gate = GateOf(context.Services);
         var caller = CallerOf(context, gate.Clock);
+        gate.AdmitList(context, caller);
+        var result = await next(context, cancellationToken).ConfigureAwait(false);
         result.Resources = [.. result.Resources.Where(r => SeesScoped(caller, gate.Registry.Resources, r.Uri))];
         return result;
     };
@@ -124,9 +183,10 @@ public sealed class RequestGate(
     /// <summary>The resource-template-list filter.</summary>
     public static McpRequestFilter<ListResourceTemplatesRequestParams, ListResourceTemplatesResult> ListResourceTemplates() => next => async (context, cancellationToken) =>
     {
-        var result = await next(context, cancellationToken).ConfigureAwait(false);
         var gate = GateOf(context.Services);
         var caller = CallerOf(context, gate.Clock);
+        gate.AdmitList(context, caller);
+        var result = await next(context, cancellationToken).ConfigureAwait(false);
         result.ResourceTemplates = [.. result.ResourceTemplates.Where(r => SeesScoped(caller, gate.Registry.Resources, r.UriTemplate))];
         return result;
     };
@@ -134,9 +194,10 @@ public sealed class RequestGate(
     /// <summary>The prompt-list filter.</summary>
     public static McpRequestFilter<ListPromptsRequestParams, ListPromptsResult> ListPrompts() => next => async (context, cancellationToken) =>
     {
-        var result = await next(context, cancellationToken).ConfigureAwait(false);
         var gate = GateOf(context.Services);
         var caller = CallerOf(context, gate.Clock);
+        gate.AdmitList(context, caller);
+        var result = await next(context, cancellationToken).ConfigureAwait(false);
         result.Prompts = [.. result.Prompts.Where(p => SeesScoped(caller, gate.Registry.Prompts, p.Name))];
         return result;
     };
@@ -154,7 +215,7 @@ public sealed class RequestGate(
     {
         var gate = GateOf(context.Services);
         var key = context.MatchedPrimitive is McpServerResource resource ? PolicyRegistry.KeyOf(resource) : context.Params?.Uri;
-        await gate.AdmitScopedAsync(context, gate.Registry.Resources, key, context.Params?.Uri, "resource", cancellationToken).ConfigureAwait(false);
+        await gate.AdmitScopedAsync(context, gate.Registry.Resources, key, context.Params?.Uri, "resource", AuditEvents.McpResourceRead, cancellationToken).ConfigureAwait(false);
         return await next(context, cancellationToken).ConfigureAwait(false);
     };
 
@@ -163,7 +224,7 @@ public sealed class RequestGate(
     {
         var gate = GateOf(context.Services);
         var key = context.MatchedPrimitive is McpServerPrompt prompt ? prompt.ProtocolPrompt.Name : context.Params?.Name;
-        await gate.AdmitScopedAsync(context, gate.Registry.Prompts, key, context.Params?.Name, "prompt", cancellationToken).ConfigureAwait(false);
+        await gate.AdmitScopedAsync(context, gate.Registry.Prompts, key, context.Params?.Name, "prompt", AuditEvents.McpPromptGet, cancellationToken).ConfigureAwait(false);
         return await next(context, cancellationToken).ConfigureAwait(false);
     };
 
@@ -174,12 +235,13 @@ public sealed class RequestGate(
         switch (context.Params?.Ref)
         {
             case PromptReference prompt:
-                await gate.AdmitScopedAsync(context, gate.Registry.Prompts, prompt.Name, prompt.Name, "prompt", cancellationToken).ConfigureAwait(false);
+                await gate.AdmitScopedAsync(context, gate.Registry.Prompts, prompt.Name, prompt.Name, "prompt", AuditEvents.McpRequest, cancellationToken).ConfigureAwait(false);
                 break;
             case ResourceTemplateReference resource:
-                await gate.AdmitScopedAsync(context, gate.Registry.Resources, resource.Uri, resource.Uri, "resource", cancellationToken).ConfigureAwait(false);
+                await gate.AdmitScopedAsync(context, gate.Registry.Resources, resource.Uri, resource.Uri, "resource", AuditEvents.McpRequest, cancellationToken).ConfigureAwait(false);
                 break;
             default:
+                AuditScope.Enter(context)?.Describe(kind: "completion");
                 throw gate.Refuse(CallerOf(context, gate.Clock), "completion", Refusal.Of("unknown-item", "authz_fail", "Completion is available only for a prompt or a resource template you may use."));
         }
 
@@ -193,12 +255,19 @@ public sealed class RequestGate(
     private async Task<string?> AdmitCallAsync(RequestContext<CallToolRequestParams> context, CancellationToken cancellationToken)
     {
         var name = context.Params?.Name ?? string.Empty;
+
+        // contract-006 · G-2 — what is asked for, told to the audit scope as it is learned: every record of this request,
+        // whichever check refuses it, then says what it was for. The arguments are redacted by the record's writer.
+        var scope = AuditScope.Enter(context);
+        scope?.Describe(kind: "tool", target: name, arguments: context.Params?.Arguments);
         var caller = CallerOf(context, clock) ?? throw Refuse(null, name, NotSignedIn());
 
         if (!registry.Tools.TryGetValue(name, out var entry))
         {
             throw Refuse(caller, name, NotPermitted("tool", name));
         }
+
+        scope?.Describe(provider: entry.Provider, risk: entry.Policy.Risk.ToString(), sensitive: entry.Policy.SensitiveArgs);
 
         if (caller.IdentityProvider != entry.IdentityProvider)
         {
@@ -273,6 +342,18 @@ public sealed class RequestGate(
                 "This confirmation has already been used. Each confirmation runs the tool once; call the tool again to be asked afresh."));
         }
 
+        // contract-006 · G-2 — the last thing before the tool runs: its admission, on the audit trail. After the
+        // confirmation is claimed, so one request leaves one admission; a confirmation spent on a call the trail could not
+        // record is spent, and the caller is asked afresh.
+        RecordAdmission(
+            caller,
+            name,
+            confirmationId is null ? AuditEvents.McpToolCall : AuditEvents.McpToolConfirmed,
+            confirmationId is null
+                ? "The tool call was admitted; the tool runs after this record."
+                : "The irreversible tool call was admitted on a verified, unused confirmation; the tool runs once, after this record.",
+            change: entry.Policy.Risk != RiskClass.Read);
+
         return confirmationId;
     }
 
@@ -295,6 +376,13 @@ public sealed class RequestGate(
                     $"The tool '{name}' cannot be undone and runs only after a confirmation round-trip, which your client does not support. Use a client that supports input requests."));
             }
 
+            // contract-006 · G-2 — asking is a decision too: recorded before the question goes out. An irreversible tool's
+            // request the trail cannot record is refused, as its run would be.
+            if (!TryRecord(AuditEvents.McpConfirmationRequired, "The tool cannot be undone; the caller was asked to confirm, and nothing ran.", AuditOutcome.Challenge, "confirmation"))
+            {
+                throw Refuse(caller, name, AuditUnavailable());
+            }
+
             throw new InputRequiredException(
                 new Dictionary<string, InputRequest> { [ConfirmationService.InputKey] = ConfirmationService.Question(name) },
                 confirmation.Issue(caller, name, context.Params?.Arguments));
@@ -309,6 +397,7 @@ public sealed class RequestGate(
     /// <param name="key">What the caller asked for is governed under: the matched resource's URI or URI template, the prompt's name.</param>
     /// <param name="sent">What the caller asked for, as they wrote it.</param>
     /// <param name="kind">resource or prompt.</param>
+    /// <param name="admitted">contract-006 — the event its admission is recorded as.</param>
     /// <param name="cancellationToken">The request's cancellation.</param>
     private async Task AdmitScopedAsync<TParams>(
         RequestContext<TParams> context,
@@ -316,16 +405,23 @@ public sealed class RequestGate(
         string? key,
         string? sent,
         string kind,
+        string admitted,
         CancellationToken cancellationToken)
     {
         // contract-005 · G-17 round 2 (SEC-R2-02) — a refusal names what the caller asked for as they wrote it, never the key
         // it was matched to: a missing item's reply names what was sent, and so must a hidden one's. The log names the key.
         var asked = sent ?? key ?? string.Empty;
+
+        // contract-006 · G-2 — as for a tool (AdmitCallAsync): the audit scope is told what is asked for as it is learned.
+        var scope = AuditScope.Enter(context);
+        scope?.Describe(kind: kind, target: key ?? asked);
         var caller = CallerOf(context, clock) ?? throw Refuse(null, key ?? kind, NotSignedIn());
         if (key is null || !entries.TryGetValue(key, out var entry))
         {
             throw Refuse(caller, key ?? kind, NotPermitted(kind, asked));
         }
+
+        scope?.Describe(provider: entry.Provider);
 
         if (caller.IdentityProvider != entry.IdentityProvider)
         {
@@ -345,7 +441,48 @@ public sealed class RequestGate(
         }
 
         await WithinLimitsAsync(caller, null, 0, cancellationToken).ConfigureAwait(false);
+
+        // contract-006 · G-2 — admitted: on the audit trail before the resource is read or the prompt built.
+        RecordAdmission(caller, key, admitted, $"The {kind} was admitted; it is served after this record.", change: false);
     }
+
+    /// <summary>
+    /// contract-006 · G-2 — a list's admission, recorded before the list is built. A list shows a caller what they may
+    /// use and changes nothing, so while the trail cannot be written it follows Audit:ReadWhenUnavailable.
+    /// </summary>
+    private void AdmitList<TParams>(RequestContext<TParams> context, Caller? caller)
+    {
+        AuditScope.Enter(context)?.Describe(kind: "list");
+        RecordAdmission(caller, "list", AuditEvents.McpRequest, "The list was admitted; it shows the caller what they may use.", change: false);
+    }
+
+    /// <summary>
+    /// contract-006 · G-2, G-4 — writes the admission of a request to the audit trail, and returns only if what follows
+    /// may run. When the trail cannot take the record, a request that changes something is refused, and any other is
+    /// refused too unless Audit:ReadWhenUnavailable says allow: nothing the frame governs takes effect on a decision that
+    /// is not on the record. The trail is asked every time; whether it took the last record is never remembered here.
+    /// </summary>
+    private void RecordAdmission(Caller? caller, string target, string name, string description, bool change)
+    {
+        if (TryRecord(name, description, AuditOutcome.Allow, rule: null) || (!change && audit.ReadWhenUnavailable))
+        {
+            return;
+        }
+
+        throw Refuse(caller, target, AuditUnavailable());
+    }
+
+    /// <summary>Writes one record about the request being decided on this path. False when the trail could not take it.</summary>
+    private bool TryRecord(string name, string description, AuditOutcome outcome, string? rule) =>
+        AuditScope.Current is { } scope
+            ? scope.Record(audit, name, description, outcome, rule)
+            : audit.Record(new AuditEvent(name, description) { Decision = new AuditDecision(outcome, rule) });
+
+    private static Refusal AuditUnavailable() =>
+        Refusal.Of(
+            "audit-unavailable",
+            AuditEvents.SysMonitorDisabled,
+            "The server cannot record this request right now, so it refuses it rather than act unrecorded. Try again shortly.");
 
     private async Task WithinLimitsAsync(Caller caller, string? tool, int toolLimit, CancellationToken cancellationToken)
     {
@@ -414,8 +551,20 @@ public sealed class RequestGate(
     // and cut (LogSafe.Text). The message names what the caller wrote only through the refusals built for it, which make it
     // safe themselves (NotPermitted, ArgumentGuard). Round 3 (SEC-R3-04) — escaped, not stripped: a target or a subject
     // that differs from a real one by an invisible character is logged as what it is, and each is SafeText, escaped once.
+    //
+    // contract-006 · G-2 — and every refusal goes on the audit trail here, before the caller is answered: the one path all
+    // of the gate's refusals take, so none can be made that is not recorded. In the log's words, never the words a
+    // concealed refusal is shown as. A refusal the trail cannot take is a refusal still.
     private McpException Refuse(Caller? caller, string target, Refusal refusal)
     {
+        var scope = AuditScope.Current;
+        scope?.Describe(target: scope.Target ?? target);
+        TryRecord(
+            AuditEvents.IsKnown(refusal.SecurityEvent) ? refusal.SecurityEvent : AuditEvents.AuthzFail,
+            refusal.Message.ToString(),
+            AuditOutcome.Deny,
+            refusal.Rule);
+
         logger.LogWarning(
             "{Event}: rule={Rule} principal={Principal} target={Target} — {Detail}",
             refusal.SecurityEvent, refusal.Rule, SafeText.Value(caller?.Key ?? "anonymous"), SafeText.Value(target), refusal.Message);

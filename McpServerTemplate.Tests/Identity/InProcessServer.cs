@@ -29,11 +29,18 @@ public sealed class InProcessServer : IAsyncDisposable
 {
     private readonly WebApplication _app;
 
-    private InProcessServer(WebApplication app, HttpClient client)
+    private InProcessServer(WebApplication app, HttpClient client, string auditDirectory)
     {
         _app = app;
         Client = client;
+        AuditDirectory = auditDirectory;
     }
+
+    /// <summary>
+    /// contract-006 — where this server writes its audit trail: a directory of its own, removed with it, so no test's
+    /// records land beside another's or stay behind in the test output.
+    /// </summary>
+    public string AuditDirectory { get; }
 
     public HttpClient Client { get; }
 
@@ -111,6 +118,9 @@ public sealed class InProcessServer : IAsyncDisposable
             // contract-003 — limits in Redis, as Production requires, and a confirmation key.
             ["Limits:Redis"] = redis ?? await TestRedis.ConnectionStringAsync(),
             ["Confirmation:Key"] = ConfirmationKey,
+
+            // contract-006 — the audit trail, in a directory of this server's own.
+            ["Audit:Path"] = Path.Combine(Path.GetTempPath(), $"mcp-audit-tests-{Guid.NewGuid():N}"),
         };
 
         for (var i = 0; i < modules.Count; i++)
@@ -193,7 +203,7 @@ public sealed class InProcessServer : IAsyncDisposable
         var address = app.Urls.First();
         var client = new HttpClient { BaseAddress = new Uri(address), Timeout = TimeSpan.FromSeconds(20) };
 
-        return new InProcessServer(app, client);
+        return new InProcessServer(app, client, Path.GetFullPath(builder.Configuration["Audit:Path"]!));
     }
 
     /// <summary>Posts an initialize request, optionally bearing a token.</summary>
@@ -226,5 +236,11 @@ public sealed class InProcessServer : IAsyncDisposable
         Client.Dispose();
         await _app.StopAsync();
         await _app.DisposeAsync();
+
+        // Once the server has stopped: on Windows a file it held open could not be removed before.
+        if (AuditDirectory.StartsWith(Path.GetTempPath(), StringComparison.OrdinalIgnoreCase) && Directory.Exists(AuditDirectory))
+        {
+            Directory.Delete(AuditDirectory, recursive: true);
+        }
     }
 }

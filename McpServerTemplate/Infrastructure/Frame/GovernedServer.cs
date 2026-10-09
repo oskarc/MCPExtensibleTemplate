@@ -1,4 +1,5 @@
 using System.Reflection;
+using McpServerTemplate.Infrastructure.Audit;
 using McpServerTemplate.Infrastructure.Identity;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
@@ -62,6 +63,25 @@ public static class GovernedServer
             configuration, "Limits:PerPrincipalPerMinute", minimum: 1, maximum: 1_000_000,
             fallback: DefaultPerPrincipalPerMinute, because: "requests per caller per minute");
 
+        // ── The audit trail (contract-006) ──
+        // Its settings are read and its directory proved writable here, with every other setting: a server that could not
+        // record a decision would refuse every change, so it does not start. No file is opened until the first record, and
+        // the first record is the host's own start (AuditLifecycle), so a composition that starts no host writes nothing.
+        var audit = AuditSettings.Read(configuration, environment, Directory.GetCurrentDirectory());
+        services.AddSingleton(audit);
+        services.AddSingleton(AuditIdentity.Create());
+        services.AddSingleton<IAuditSink>(sp => new FileAuditSink(audit, sp.GetRequiredService<AuditIdentity>()));
+        if (audit.Otlp is not null)
+        {
+            services.AddSingleton<IAuditSink>(sp => new OtlpAuditSink(
+                audit.Otlp, sp.GetRequiredService<AuditIdentity>(), audit.AppId, sp.GetRequiredService<ILogger<OtlpAuditSink>>()));
+        }
+
+        services.AddSingleton<AuditTrail>();
+        services.AddSingleton<AuditInFlight>();
+        services.AddSingleton(sp => new AuditHttpCapture.RejectedAddresses(sp.GetRequiredService<TimeProvider>()));
+        services.AddHostedService<AuditLifecycle>();
+
         services.AddSingleton(sp => PolicyRegistry.Build(
             sp,
             enabled,
@@ -76,7 +96,8 @@ public static class GovernedServer
             sp.GetRequiredService<TimeProvider>(),
             perPrincipal,
             sp.GetService<ConfirmationService>(),
-            sp.GetRequiredService<ILogger<RequestGate>>()));
+            sp.GetRequiredService<ILogger<RequestGate>>(),
+            sp.GetRequiredService<AuditTrail>()));
 
         var builder = services.AddMcpServer(options => options.ServerInfo = new()
         {
@@ -97,7 +118,17 @@ public static class GovernedServer
         }
 
         return builder
-            .WithMessageFilters(filters => filters.AddIncomingFilter(manifest.OwnGate(RequestGate.RequestKinds())))
+            .WithMessageFilters(filters =>
+            {
+                // contract-006 · G-1 — the audit step first, so every message has its audit scope before anything decides
+                // on it; the request-kind gate second. Startup holds them to that order (FrameIntegrity.VerifyInstalled).
+                filters.AddIncomingFilter(manifest.OwnAudit(AuditFilter.Message()));
+                filters.AddIncomingFilter(manifest.OwnGate(RequestGate.RequestKinds()));
+
+                // contract-006 · G-2 — and on the way out, the one place a request the SDK turned away before any incoming
+                // filter ran can still be recorded (AuditFilter.Outgoing).
+                filters.AddOutgoingFilter(manifest.Own(AuditFilter.Outgoing()));
+            })
             .WithRequestFilters(filters =>
             {
                 filters.AddCallToolFilter(manifest.Own(ToolCallLoggingFilter.Create()));
@@ -128,6 +159,9 @@ public static class GovernedServer
         FrameIntegrity.VerifyInstalled(options, manifest, enabled.Modules);
         var registry = services.GetRequiredService<PolicyRegistry>();
         services.GetRequiredService<RequestGate>();
+
+        // contract-006 — the trail the gate records to is built now, so a sink that cannot be built stops the server here.
+        services.GetRequiredService<AuditTrail>();
 
         var description = FrameManifest.Describe(options, manifest, registry);
         var logger = services.GetRequiredService<ILogger<RequestGate>>();
