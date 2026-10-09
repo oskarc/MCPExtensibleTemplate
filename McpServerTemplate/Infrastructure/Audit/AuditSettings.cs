@@ -108,7 +108,7 @@ public sealed partial record AuditSettings(string Directory, bool ReadWhenUnavai
 
 /// <summary>The collector a copy of each record is sent to (contract-006 · G-11).</summary>
 /// <param name="Endpoint">The OTLP/HTTP logs endpoint, whole: for a collector, <c>https://collector.example.com:4318/v1/logs</c>.</param>
-/// <param name="Headers">Headers sent with every export, an API key among them. Never logged.</param>
+/// <param name="Headers">Headers sent with every export, the collector's credential among them. Never logged.</param>
 public sealed record AuditOtlpSettings(Uri Endpoint, IReadOnlyDictionary<string, string> Headers)
 {
     /// <summary>Reads <c>Audit:Otlp</c>; null when no endpoint is set.</summary>
