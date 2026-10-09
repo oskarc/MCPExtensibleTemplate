@@ -97,6 +97,9 @@ For the two contracts being drawn beside this one:
 - One flushed write per request: measured here at 1.8 ms each (300 in 531 ms, one run, this machine). That is a ceiling
   of a few hundred recorded requests a second through one server. It is one figure, not a load test.
 - Survival of a power cut rests on the flush to disk and was not tested.
+- An audit file is created with the process's default mode: in the image, readable by any user inside the container.
+  The records hold argument values. Narrowing it is a few lines that run only on Linux, which could not be run today, so
+  it is left for the hardening phase with the rest of the image's file modes.
 - Over a stream or stdio connection, a client on a protocol version with no way to answer a confirmation gets a generic
   error for an irreversible tool instead of the refusal that names the reason. Nothing runs. Over HTTP it is refused by
   name. Found while testing; not this contract's to change.

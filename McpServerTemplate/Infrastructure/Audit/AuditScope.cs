@@ -159,36 +159,59 @@ public sealed class AuditScope
 
 /// <summary>
 /// Which requests the audit step has met and not yet seen answered (contract-006 · G-2). A request's id is its client's to
-/// choose and unique only among that client's requests in flight, so over HTTP the ids are kept per HTTP request — the one
-/// thing the way in and the way out of a stateless request share — and held weakly, so they go when the request does. With
-/// no HTTP request there is one client, on the stream the server was started with, and one set of ids. Each set is bounded,
-/// so a client that sends requests and never reads an answer cannot grow it without end; emptied, a request refused by a
-/// check of the frame's may be recorded once more on its way out, never less.
+/// choose and unique only among that client's requests in flight, so over HTTP the ids are kept with the HTTP request
+/// itself — in its Items, which the way in and the way out of a stateless request share and which end with it. With no
+/// HTTP request there is one client, on the stream the server was started with, and one set of ids, bounded: a client
+/// that sends requests and never reads an answer cannot grow it without end, and when it is emptied a request refused by
+/// a check of the frame's may be recorded once more on its way out, never less.
 /// </summary>
 public sealed class AuditInFlight
 {
     private const int Capacity = 10_000;
 
-    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, System.Collections.Concurrent.ConcurrentDictionary<string, byte>> _perHttpRequest = [];
+    private static readonly object ItemsKey = new();
+
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _onTheStream = new(StringComparer.Ordinal);
 
     /// <summary>Notes that the audit step met request <paramref name="id"/>, arriving in <paramref name="httpRequest"/> or, when null, on the stream.</summary>
     public void Met(object? httpRequest, string id)
     {
-        var ids = httpRequest is null ? _onTheStream : _perHttpRequest.GetOrCreateValue(httpRequest);
-        if (ids.Count >= Capacity)
+        if (httpRequest is HttpContext http)
         {
-            ids.Clear();
+            lock (http.Items)
+            {
+                if (http.Items[ItemsKey] is not HashSet<string> ids)
+                {
+                    http.Items[ItemsKey] = ids = new HashSet<string>(StringComparer.Ordinal);
+                }
+
+                ids.Add(id);
+            }
+
+            return;
         }
 
-        ids[id] = 0;
+        if (_onTheStream.Count >= Capacity)
+        {
+            _onTheStream.Clear();
+        }
+
+        _onTheStream[id] = 0;
     }
 
     /// <summary>Whether request <paramref name="id"/> was met; it is forgotten as it is answered.</summary>
-    public bool Answered(object? httpRequest, string id) =>
-        httpRequest is null
-            ? _onTheStream.TryRemove(id, out _)
-            : _perHttpRequest.TryGetValue(httpRequest, out var ids) && ids.TryRemove(id, out _);
+    public bool Answered(object? httpRequest, string id)
+    {
+        if (httpRequest is HttpContext http)
+        {
+            lock (http.Items)
+            {
+                return http.Items[ItemsKey] is HashSet<string> ids && ids.Remove(id);
+            }
+        }
+
+        return _onTheStream.TryRemove(id, out _);
+    }
 }
 
 /// <summary>
