@@ -373,8 +373,10 @@ contracts:
       rules), dae252e (the operator's document, the deferred file), 8b33938 (the met requests kept with the
       HTTP request; audit tests 97 of 97 after it), cb857f8 (epic/security-hardening merged into the branch
       as of 3d00983, to take in contract-005's documentation pass; no conflict), 85213c2 (the documentation
-      owed in the files that pass had held). Not merged into epic/security-hardening and not pushed: the
-      sessions agreed nothing merges there before contract-005's closing pass has pushed.
+      owed in the files that pass had held), 47a32ff (credential-shaped test values written in parts: the
+      repository's secret scan, run before the push, had failed on three of them). Merged into
+      epic/security-hardening at 94eda73 and pushed on 2026-10-09, on the pioneer's word "merge the branches
+      and push" (C-043), ahead of contract-005's closing pass, which the sessions had agreed to wait for.
     tests_run:
       date: 2026-10-09
       command: dotnet test McpServerTemplate.Tests/McpServerTemplate.Tests.csproj -c Release

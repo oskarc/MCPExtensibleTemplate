@@ -3,9 +3,9 @@
 Written 2026-10-09 by the session that built it, on the pioneer's instruction to finish each task as well as it can be
 finished and to put what could not be finished, or was not this session's to decide, in a file instead of a question.
 
-The work is on the branch `roadmap/phase-3-audit`, in its own worktree. It is not merged into the shared branch, not
-pushed, and has never run in a container. It has taken in the shared branch as of 2026-10-09 (3d00983), so it holds the
-open contract's documentation pass and merges forward without that step.
+The work was built on the branch `roadmap/phase-3-audit`, in its own worktree. On 2026-10-09 the pioneer said "merge the
+branches and push", and it was merged into `epic/security-hardening` (94eda73) and pushed, ahead of the open contract's
+closing pass, which the sessions had agreed to wait for. It has never run in a container on the machine it was built on.
 
 ## 1. Choices that were yours, and what I chose
 
@@ -41,7 +41,7 @@ seconds.
 | 136 existing tests of the fast suite | They need Redis in a container. They failed the same way before any change. | The same. Until they run, nothing shows this work left them unbroken. I kept every existing log line and reply as it was for that reason. |
 | The adversarial rounds your ruling puts after every build | They are subagents; you told the sessions to use none. | Your word that they may run, or another way to attack the work. |
 | The kit's own steps after a build: the session audit, the independent verification, and writing what was learned to the ledger | The first two are kit agents. The third needs the ledger, which is closed while a review is open, or a kit agent. | Your word on whether the kit's own agents count as subagents, which three sessions have asked. The contract is recorded as implemented and unverified. |
-| Merging and pushing | The sessions agreed nothing is merged until the open contract's closing pass has pushed. | That pass. Then egress, this, tool lock, in that order. |
+| Merging and pushing | Done on 2026-10-09, on the pioneer's word, ahead of the open contract's closing pass. The push carried that contract's unpushed commits too, and its sabotage record is stale until the container engine is back. | Nothing. |
 
 ## 3. What was owed in files another session held
 
