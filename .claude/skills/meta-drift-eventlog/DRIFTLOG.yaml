@@ -509,14 +509,23 @@ entries:
       for was made at about 13:42. After the stop: "request returned 500 Internal Server Error for API route ...
       dockerDesktopLinuxEngine". scratchpad sabotage-all.log: "The Docker engine stopped answering before
       t7-other-caller-minted-for-the-same-subject (39 of 113): the runs stopped there."
+
+      Recurrence, 2026-10-09 - the same shape in shipped text: the refusal message added on 2026-10-01 for an
+      unreadable Limits:Redis (ec8bb13) told operators that "a password containing ',' or '=' must be quoted". It
+      was written without running the Redis client's parser. Run on 2026-10-09 (scratchpad redisparse.fsx,
+      StackExchange.Redis 3.3.1): an '=' is read as written; a comma ends the value quoted or not, and what
+      follows is taken as another server to connect to - so following the message's advice would have left a
+      wrong password and a fragment of it looked up as a host name, with no refusal.
     reaction: |
       Work stopped the moment the engine's error was seen, and the pioneer was told the same turn, with the choice of
       who restarts a shared engine left to them. Nothing else was stopped or restarted. As of 2026-10-09 the engine is
       still down and the question unanswered; the retake waits, its partial record uncommitted in the working tree.
+      2026-10-09: found while writing the documentation, by running the client's parser before describing it; the
+      message was corrected and rebuilt the same hour (its three tests pass), and the guide says what is true.
     status: open
     elevation: []
     reviewed: null
-    recurrence_count: 0
+    recurrence_count: 1
     related_drifts: []
 
   - drift_id: drift-014
