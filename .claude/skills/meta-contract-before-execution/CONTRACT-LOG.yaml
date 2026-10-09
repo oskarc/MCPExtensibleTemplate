@@ -98,6 +98,264 @@
 # contract it led to). See meta-contract-artifact/SKILL.md.
 
 contracts:
+  - contract_id: contract-006
+    feature: audit-pipeline
+    type: contract
+    date_proposed: 2026-10-09
+    date_approved: 2026-10-09
+    bearing: |
+      After this contract, nothing the frame governs takes effect before the decision that let it through, or
+      refused it, is on a record an operator can check: one line per decision, attributed to the caller,
+      chained so that a changed line is found by the server's own check. The bet is that writing the record
+      first, and refusing the act when the record cannot be written, is worth one flushed write per request,
+      and that a chained file plus a background copy to a collector is enough of a trail without a keyed
+      signature.
+    ground: |
+      Roadmap Phase 3 (docs/06, P3.1-P3.7, section 3.5, invariants I5 and I8, decisions D6 and D7 at their
+      stated defaults - never decided by the pioneer). Surveyed in the tree at 56aee9f before drawing:
+      refusals are text lines written by RequestGate.Refuse (one path) and by the request-kind message
+      filter; ToolCallLoggingFilter is the only step in front of the gate, for tool calls only
+      (GovernedServer.cs:103); an allowed resource read, prompt get or completion leaves no line; nothing
+      named audit exists in the product; HTTP-layer refusals are text lines (IdentityRegistration.LogRefusal,
+      OriginGuardMiddleware) and the per-address limiter logs nothing when it rejects. SDK 2.2.0's own
+      documentation read: MessageContext.Items is shared between message filters and request filters; the
+      first registered message filter is outermost and can catch what inner handlers throw; stream
+      transports exist for both ends (WithStreamServerTransport, StreamClientTransport).
+      Precedents read in full, P-001 to P-040. Applied: P-012 (a contract for every change), P-016 (no
+      branch that satisfies a check without the protection), P-024 (which understanding is the roadmap's and
+      which the code's), P-032 (testing is central), P-040 (tests reach no internet), P-007 (tiers drafted,
+      the pioneer adjusts), P-039 (the builder may run the suites when useful; one verification at the end).
+      Distinguished: P-010 (see the casebook entry of this date). Owed and not runnable today: P-033 (the
+      adversarial rounds are subagents) and the end-to-end half of P-032 (the container engine is down).
+      Trial and adopted candidates could not be read: a review batch is open and the ledger is closed to
+      this session.
+      Drawn by session mcp-28, one of three building from the roadmap as a team (C-041): contract ids,
+      branches and the seams between the three contracts were agreed between the sessions before the draw.
+    tier_1: |
+      Who: the people who run the server for an organisation and its security team; an investigator after an
+      incident; the pioneer judging whether the frame holds; and the next phase, which takes access away on
+      the strength of these records.
+      What they want: to answer, for any request, who made it, what it asked for, whether it was let through
+      and by which rule, from a record they can trust; and to be told when the record itself has stopped.
+      Success: every request leaves one line. A change is never made before its line is written. A line
+      someone alters is found by a check the server ships. No line carries a secret. The lines use the
+      vocabulary a security monitoring system already knows, with alerts ready.
+      What it does not promise: proof against someone who can rewrite the whole file (that needs the copy
+      outside the machine compared, or a keyed signature - neither is built here); spotting hostile
+      instructions in tool output (Phase 4); taking access away (Phase 4); the same shown on the shipped
+      image (owed - the container engine is down).
+      Cost today: refusals are text lines in the ordinary log; an allowed tool call leaves a text line, and
+      an allowed resource read, prompt or completion leaves none; no line names the token or the trace it
+      belongs to; any line can be edited unnoticed; and if the log cannot be written the server serves on.
+    tier_2: |
+      UC-1 Every request leaves one record. Any JSON-RPC request or notification the server receives - a
+           tool call, a resource read, a prompt, a completion, a list, sign-on, discovery, ping, a
+           notification, a kind nobody governs - leaves exactly one decision record: allowed, refused, or
+           asked to confirm. Edge: a request rejected before any check runs still leaves one. An answer
+           withheld after the tool ran (the output cap) is a second decision and leaves a second record.
+      UC-2 The record says who and what. Time (UTC, ISO 8601), application id, event name, level,
+           description, the caller (identity provider, subject, client, a hash of the token's id, scopes -
+           never the token), the MCP method, provider, target, risk, the decision and its rule, the
+           arguments with secrets removed, trace id, request id, source address, host name, request URI and
+           method, user agent. Edge: over stdio the HTTP facts are empty; a refusal before sign-in has no
+           caller.
+      UC-3 Record first; refuse when it cannot be written. An allowed request's record is written and flushed
+           before the tool, resource or prompt runs. If it cannot be written, a Write or Irreversible tool is
+           refused (rule audit-unavailable) and the server says the trail is down (sys_monitor_disabled);
+           every other request follows Audit:ReadWhenUnavailable, whose default is deny. A refusal whose
+           record cannot be written is still a refusal. The server recovers by itself when the trail accepts.
+      UC-4 A chain an operator can check. One file per server instance per day; each line carries the hash
+           of the line before, its own hash and a running number. The server's --verify-audit walks one or
+           more files and names the first line that breaks. Edge: the chain continues across midnight into
+           the next file; files older than the retention are removed.
+      UC-5 Nothing secret, nothing forged. An argument a tool's policy marks sensitive is replaced by a short
+           hash tag; a value shaped like a credential is always replaced; a long string is cut and carries a
+           hash of the whole; the token appears only as a hash of its id. A line break or escape character a
+           caller sends cannot start a new line. A sensitive argument name the tool does not declare stops
+           startup.
+      UC-6 One trace through. Each record carries the request's trace id - the caller's own when a traceparent
+           is sent - and a request id; the server opens named spans for the request and the tool under one
+           activity source, so what a tool calls carries the same trace.
+      UC-7 The server's own life is on the trail: sys_startup when it begins serving, with a hash of the
+           build and of the installed frame and policies (and the tool-lock hash once Phase 5 supplies one);
+           sys_shutdown on a clean stop; sys_crash on an unhandled failure; sys_monitor_disabled when the
+           trail stops accepting.
+      UC-8 The HTTP layer's refusals are on the trail too: a refused token (authn_login_fail), a refused
+           origin (malicious_cors) and the per-address limit (excess_rate_limit_exceeded).
+      UC-9 A copy leaves the machine. When Audit:Otlp:Endpoint is set, each record is also sent to that
+           collector as an OTLP log record, in the background. A failing collector never delays or refuses a
+           request and is reported; the file stays the record.
+      UC-10 The ordinary log holds no argument values: the switch that wrote a tool call's full arguments at
+            Debug is removed; the line naming the arguments stays.
+      UC-11 Alerts ship with the repository, as detection rules over these events: first use of a tool by a
+            caller; many refusals in ten minutes; any prompt injection, token reuse, egress denial or
+            revocation failure; the trail stopping, and a gap in the running number.
+      UC-12 Audit settings are checked like every other: an unknown key, a bad value or a directory that
+            cannot be written stops startup, naming it.
+      Decided at the draw - the agent's to make, shown here so the pioneer can overturn any of them; each is
+      also in docs/deferred/phase-3-audit.md:
+      (1) The roadmap words mcp_tool_call as "allowed and completed". Here it is written when the call is
+          admitted, before it runs: a record written after the act leaves a moment in which an irreversible
+          act has happened and has no record. How long the call took and how it ended stay in the ordinary
+          log and the trace, joined to the record by the trace id.
+      (2) A failing collector does not refuse requests; a failing file does. The file is the record, the
+          collector a copy.
+      (3) One file per server instance, named with the host and an instance id, so no two processes ever
+          write one chain.
+      (4) A plain SHA-256 chain as the roadmap states, not a keyed one.
+      (5) The default directory is logs/audit under the working directory - the one place the image's user
+          can write, so the Dockerfile is not touched.
+      (6) Ping, sign-on and notifications are recorded like everything else; the per-address limit bounds
+          how many there can be.
+      (7) The collector copy is OTLP over HTTP in JSON, written with the platform's own HTTP client, so no
+          package is added.
+      (8) Retention is 400 days and the mode for reads when the trail is down is deny - the roadmap's
+          defaults for D6 and D7.
+      (9) Output heuristics for hostile instructions are not here: the roadmap's amendment of 2026-09-23
+          moved them to Phase 4.
+    tier_3: |
+      G-1 (UC-1) The audit step is the first incoming message filter and the request-kind gate the second;
+          startup refuses any other order (FrameIntegrity.VerifyInstalled). A request's audit state travels
+          in the message's own Items, which the SDK shares with the request filters, and in an ambient value
+          for code that runs under a request without the context (an outbound call); never in a static.
+      G-2 (UC-1, 3) A decision is recorded where it is made. The gate records "allowed" before it hands on
+          and "refused" inside its one refusal path; the request-kind gate records for kinds that have no
+          item of their own; the audit step records only when a request ends with no record. Exactly one
+          admission record per request; the output cap is a second, later decision.
+      G-3 (UC-2) One event type and one writer, with the roadmap's field names (section 3.5) plus a running
+          number and the instance id. Event names come from one closed list - the OWASP names and the
+          project's documented extensions - and a name outside it cannot be written.
+      G-4 (UC-3) The file sink's append is synchronous to disk and throws when it fails. The trail turns a
+          failure into "unavailable" for that record only and tries again on the next; the gate asks the
+          trail on every request, and "available" is never cached.
+      G-5 (UC-4) One JSON object per line, members in a fixed order, prev_hash and hash last; hash is the
+          SHA-256 of the line as written without the hash member. The check recomputes from the bytes on
+          disk and re-serialises nothing. The file is created new and exclusive to its instance, and is
+          readable while open so a forwarder can follow it.
+      G-6 (UC-5) Redaction happens in the writer, before any destination sees the event. JSON encoding is the
+          only escaping; no JSON is assembled from strings.
+      G-7 (UC-5) ToolPolicy gains an optional list of sensitive argument names; the policy registry refuses
+          startup when a name is not in the tool's input schema.
+      G-8 (UC-6) One activity source, "McpServer". Every record has a trace id: the current activity's, or
+          one generated when there is none.
+      G-9 (UC-7) Lifecycle events hang on the host's own started and stopped moments, so a composition that
+          starts no host (the tests' bare harness) writes nothing; sys_crash comes from the program's fatal
+          path, best effort.
+      G-10 (UC-8) One middleware, after forwarded headers, captures the HTTP facts once per request; the
+           HTTP layer's refusals are recorded through the same trail as the gate's.
+      G-11 (UC-9) The exporter is a bounded queue and one background sender. Its endpoint must be https
+           (http only for loopback in Development) and carry no credential, and a refusal never prints one;
+           headers come from settings. What it drops it counts and reports. It never throws into a request.
+      G-12 (UC-12) Audit joins the governed settings sections: Audit:Path, Audit:ReadWhenUnavailable,
+           Audit:RetentionDays, Audit:AppId, Audit:Otlp:Endpoint, Audit:Otlp:Headers:{name}. Every value is
+           checked at startup, and a failure is a configuration refusal (exit 78).
+      G-13 (UC-10) No ordinary log line carries an argument value. Existing log lines and replies are
+           otherwise left exactly as they are: the suites that read them need a container and cannot be run
+           today.
+      G-14 (UC-11) Alert rules are Sigma files under docs/siem/alerts; a test fails when a rule names an
+           event the server cannot emit.
+      G-15 (all) No new package; the lock files do not change. No provider can register or replace an audit
+           part: they live under McpServerTemplate.Infrastructure, which FrameIntegrity already refuses to
+           providers.
+      G-16 (all) Product code only on this session's branch (roadmap/phase-3-audit, its own worktree). The
+           frame files the other two contracts also touch - GovernedServer.cs, FrameIntegrity.cs,
+           SettingsAllowlist.cs, Policy.cs, PolicyRegistry.cs - are changed as little as the guarantees
+           allow, and each change is listed in the deferred file for the merge.
+      applies P-012, P-016, P-024, P-032, P-040, P-007, P-039. distinguished from P-010: the open contract's
+      build is complete and only its one verification pass is owed; another session holds that pass; the
+      pioneer, told of the ruling by three sessions, answered "just keep on working on the roadmap until you
+      are done" (C-042).
+      Novel, observations due after: G-1, G-2, G-5, G-11.
+    disappointment: |
+      None given: the gate was waived (see approval_note). No line was asked.
+    premortem: |
+      Not asked: the gate was waived. The nearest standing answer is the one the pioneer gave for
+      contract-003 and carried to contract-005 - "Pre mortem is if there are holes or security issues as a
+      result of our work here." - and the tests were drafted against it. It was not asked again for this
+      contract.
+    tier_4: |
+      T-1 (G-1, G-2 - UC-1) Every rule the gate can refuse by is driven through a real client, one at a time.
+          Fails if any leaves other than exactly one record carrying that rule, with the wrong event name or
+          level, or if the tool ran. A refusal rule found in the product's source with no driver in the test
+          fails it.
+      T-2 (G-2 - UC-1) A mixed run of N requests - an allowed tool call, a list, a resource read, a prompt, a
+          completion, a ping, sign-on, a notification, a kind nobody governs, a malformed call - leaves
+          exactly N records, each naming its method, plus one for an answer withheld by the output cap.
+      T-3 (G-3 - UC-2) Every record carries every required field. Over HTTP with a real token: the source
+          address, user agent, request URI and method, the caller's identity provider, subject, client and
+          scopes are right, jti_sha256 is the SHA-256 of the token's id, and neither the token nor its id is
+          anywhere in the file.
+      T-4 (G-2, G-4 - UC-3) With a trail that cannot write: a Write tool is refused with audit-unavailable
+          and did not run, and sys_monitor_disabled is on the ordinary log; a read is refused by default and
+          allowed with Audit:ReadWhenUnavailable=allow; once the trail accepts again the next write runs and
+          is recorded. Order: at the moment the "allowed" record is appended, the tool's run counter has not
+          moved.
+      T-5 (G-5 - UC-4) The real program's --verify-audit passes a file the server wrote and exits 0; after
+          one byte is flipped in line k it names line k and exits 65; the same for a line removed, two lines
+          swapped and a last line cut short; a file that is not there exits 66.
+      T-6 (G-5 - UC-4) With a test clock crossing midnight, the next record opens a new file whose first
+          prev_hash is the last hash of the file before; the two verify in order. Files older than
+          Audit:RetentionDays are removed at that moment and newer ones kept.
+      T-7 (G-6, G-7 - UC-5) A sensitive argument comes out as [redacted:sha256:8 hex]; a JWT-shaped value, a
+          "Bearer ..." value, an AKIA... value and an sk-... value are replaced wherever they sit, nested
+          included; a 10 KB string is cut to 2 KB and carries the whole value's hash. CR, LF and ESC sent in
+          a tool name, an argument and a user agent leave a file with exactly as many lines as records, each
+          one valid JSON. A sensitive name the tool does not declare stops startup, naming it.
+      T-8 (G-8 - UC-6) A request sent with a traceparent has that trace id in its record, and code inside the
+          tool sees the same trace id; a listener on "McpServer" observes a request span and a tool span.
+      T-9 (G-9 - UC-7) The real program, started over stdio and stopped: sys_startup is the first record and
+          carries the SHA-256 of the server's own assembly file and a frame hash, sys_shutdown is the last,
+          and the file verifies. A bare composition that starts no host leaves no file.
+      T-10 (G-10 - UC-8) A foreign Origin leaves one malicious_cors record; a token from an unregistered
+           issuer and an expired token each leave one authn_login_fail record, with no caller and no token
+           text; the 61st request from one address in a minute leaves one excess_rate_limit_exceeded record.
+      T-11 (G-11 - UC-9) With an in-process collector, each record arrives as an OTLP log record whose body
+           is the same line as the file's. With the collector failing, requests are unaffected, the failure
+           is on the ordinary log, and the file holds every record. A plain-http endpoint outside
+           Development, and an endpoint carrying a credential, each stop startup, and the credential is in
+           no output.
+      T-12 (G-12 - UC-12) An unknown Audit key stops startup naming the nearest real key; a directory that
+           cannot be written stops it naming the resolved path; Audit:ReadWhenUnavailable=maybe and
+           Audit:RetentionDays=0 each stop it.
+      T-13 (G-13 - UC-10) With the ordinary log at Debug, a tool call whose argument holds a marker value
+           leaves the marker in no ordinary log line, while the line naming the arguments is still there.
+      T-14 (G-14 - UC-11) Every alert file parses as YAML and names only events in the server's list; the
+           roadmap's four alert cases each have a rule.
+      T-15 (G-1 - UC-1) With the installed filters tampered so that the audit step is not first, or the
+           request-kind gate not second, startup refuses and says which.
+      T-16 (G-15, G-16) The solution builds with warnings as errors; git shows every packages.lock.json
+           unchanged; every test of the fast suite that needs no container passes.
+      untested: anything on the shipped image - audit in Production behind the TLS front with Redis, the
+      file's owner and mode in the image, the last records on SIGTERM (the container engine is down; the
+      end-to-end tests are owed and named in the deferred file); the existing fast-suite tests that need a
+      container, which could not be run, so nothing shows this work left them unbroken; survival of a power
+      cut (the write is flushed to disk, and no test cuts the power); a real upstream receiving the trace
+      header (the platform's own HTTP client adds it); behaviour under load (one append time is measured,
+      which is not a load test); two instances side by side beyond their file names; the adversarial rounds
+      a ruling of the pioneer's puts after every build (they are subagents, and the team rule forbids them
+      today).
+      realigned: none - the gate was waived and no disappointment line was given.
+    red_test: null
+    approval: waived-at-spec-lock
+    approval_note: |
+      No spec lock was held and no gate stopped the work. The pioneer was told, by this session and two
+      others, that a ruling of theirs (P-010) barred work beyond the open contract, and that nothing would
+      be built before they approved a contract. They answered, in this session, 2026-10-09: "finish each task
+      as well as you can and add a deferred file. just keep on working on the roadmap until you are done."
+      and then "work as a team with the other agents" (C-042). Recorded as a waiver so this entry does not
+      claim tiers the pioneer approved: the contract was drawn in full in the conversation before any code,
+      and every choice that would have been put to them is under "Decided at the draw" and in
+      docs/deferred/phase-3-audit.md.
+    status: approved
+    verification_state: none
+    audited: false
+    transcript: null
+    observations: []
+    revisions: []
+    cost: {turns: null, tokens: null, pioneer_minutes: null}
+    file: docs/contracts/contract-006-every-decision-on-the-record.html
+    artifact: null
+    work_id: null
   - contract_id: contract-005
     feature: shipped-image-under-test
     type: contract
