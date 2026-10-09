@@ -371,12 +371,14 @@ contracts:
       Branch roadmap/phase-3-audit, in its own worktree (D:/projects/mcp.worktrees/phase-3-audit), cut from
       56aee9f: 3b627c7 (the trail, the chain, the gate's records), 33789b2 (the acceptance tests, the alert
       rules), dae252e (the operator's document, the deferred file), 8b33938 (the met requests kept with the
-      HTTP request; audit tests 97 of 97 after it). Not merged and not pushed: the sessions agreed nothing
-      merges into epic/security-hardening before contract-005's closing pass has pushed.
+      HTTP request; audit tests 97 of 97 after it), cb857f8 (epic/security-hardening merged into the branch
+      as of 3d00983, to take in contract-005's documentation pass; no conflict), 85213c2 (the documentation
+      owed in the files that pass had held). Not merged into epic/security-hardening and not pushed: the
+      sessions agreed nothing merges there before contract-005's closing pass has pushed.
     tests_run:
       date: 2026-10-09
       command: dotnet test McpServerTemplate.Tests/McpServerTemplate.Tests.csproj -c Release
-      result: 757 passed, 136 failed, of 893
+      result: 757 passed, 136 failed, of 893; and after the merge and the documentation, 760 passed, 136 failed, of 896
       note: |
         A baseline was taken on the branch before any change: 660 passed, 136 failed, of 796. Compared test by
         test: every one of the 660 still passes; the 97 new tests all pass; the same 136 fail, each because
@@ -388,6 +390,10 @@ contracts:
         (13); T-3, T-8, T-10 AuditHttpTests (6); T-11 AuditExportTests (4) and AuditSettingsTests; T-12
         AuditSettingsTests (22 with T-11's settings half); T-9 AuditProgramTests; T-14 AuditAlertRulesTests (3).
         Measured once, on this machine: one flushed append takes 1.8 ms (300 in 531 ms).
+        Run again at 85213c2, with the shared branch merged in and the documents edited: every test that
+        passed at the baseline still passes, 100 tests are new (97 of this contract, 3 from contract-005's
+        documentation pass) and all pass, and the same 136 fail. The documentation tests, the stronger
+        retired-terms rows of that pass included, pass over the new and the edited documents.
     revisions:
       - what: |
           UC-1 and G-2 said every request leaves one record written where its decision is made. Found while
@@ -438,6 +444,16 @@ contracts:
           and the deferred file lists each edit owed.
         authorised_by: |
           agent, as above.
+        date: 2026-10-09
+        tests_changed: []
+      - what: |
+          The documentation the revision above left owed was added the same day, once the session that held
+          those files had committed its pass (3b2228f) and said they were free: the branch took the shared
+          branch in by merge, and the README, docs/01 to 04, docs/README, and dated amendments in docs/06
+          and docs/07 were edited on it (85213c2). Two sentences this contract had made false - that argument
+          values are logged at Debug - are corrected there. No test of this contract changed.
+        authorised_by: |
+          agent, as above; the files were released by the session that held them.
         date: 2026-10-09
         tests_changed: []
     cost: {turns: null, tokens: null, pioneer_minutes: null}
