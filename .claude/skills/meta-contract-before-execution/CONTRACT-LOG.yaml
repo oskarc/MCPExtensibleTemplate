@@ -354,7 +354,7 @@ contracts:
     revisions: []
     cost: {turns: null, tokens: null, pioneer_minutes: null}
     file: docs/contracts/contract-006-every-decision-on-the-record.html
-    artifact: null
+    artifact: https://claude.ai/artifact/7eWwrzrET4UGV948cK3y4u
     work_id: null
   - contract_id: contract-005
     feature: shipped-image-under-test
