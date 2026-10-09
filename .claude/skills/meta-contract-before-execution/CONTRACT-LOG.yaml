@@ -355,7 +355,8 @@ contracts:
       and every choice that would have been put to them is under "Decided at the draw" and in
       docs/deferred/phase-3-audit.md.
     status: implemented
-    verification_state: none
+    verification_state: awaiting-evidence
+    evidence_needed: the 136 fast tests that need a container and the audit trail's end-to-end tests on the shipped image (both wait on the container engine) - and the verifier is a kit agent, so it also waits on the pioneer's word on whether those may run (written 2026-10-09 by the session closing contract-005, at the stop-gate's hand-over; set back to none when the evidence exists)
     audited: blocked
     blocked_since: 2026-10-09
     blocked_reason: the session auditor is a subagent, and the pioneer told the sessions building from the roadmap to use none (C-041); the same holds for the verifier and for the recorder that writes observations while a review is open
