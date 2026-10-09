@@ -7,6 +7,10 @@ The work was built on the branch `roadmap/phase-3-audit`, in its own worktree. O
 branches and push", and it was merged into `epic/security-hardening` (94eda73) and pushed, ahead of the open contract's
 closing pass, which the sessions had agreed to wait for. It has never run in a container on the machine it was built on.
 
+CI ran it on that push (run 37979974537). The fast suite, which has a container engine there: 896 of 896 passed. The
+end-to-end suite, on the shipped image with the audit trail in it: 135 of 136 passed, and the one that failed is the
+open contract's stale sabotage record, which was expected and is not this work's.
+
 ## 1. Choices that were yours, and what I chose
 
 No approval gate was held for this contract. Each of these would have been a question to you. Each has a default in
@@ -37,8 +41,8 @@ seconds.
 
 | What | Why not | What unblocks it |
 |---|---|---|
-| The audit trail shown on the shipped image | The container engine is down, and restarting it is yours. | Docker Desktop running. Then end-to-end tests, each with its sabotage: the trail in Production behind the TLS front with Redis; the file's owner and mode in the image; the last records on SIGTERM; a tool call with a real token leaving one record; the trail unwritable (a read-only mount) refusing a write. |
-| 136 existing tests of the fast suite | They need Redis in a container. They failed the same way before any change. | The same. Until they run, nothing shows this work left them unbroken. I kept every existing log line and reply as it was for that reason. |
+| The audit trail itself shown on the shipped image | No end-to-end test reads the audit trail yet. Writing one needs the container engine on this machine, to see it fail first and to take its sabotage, and the engine is down. CI did run the image with the trail in it, and every existing end-to-end test but the stale record passed, so nothing that was tested broke. | Docker Desktop running. Then end-to-end tests, each with its sabotage: the trail in Production behind the TLS front with Redis; the file's owner and mode in the image; the last records on SIGTERM; a tool call with a real token leaving one record; the trail unwritable (a read-only mount) refusing a write. |
+| ~~136 existing tests of the fast suite~~ | Shown since: they need Redis in a container, could not run where this was built, and all passed in CI on the push (896 of 896). | Nothing. |
 | The adversarial rounds your ruling puts after every build | They are subagents; you told the sessions to use none. | Your word that they may run, or another way to attack the work. |
 | The kit's own steps after a build: the session audit, the independent verification, and writing what was learned to the ledger | The first two are kit agents. The third needs the ledger, which is closed while a review is open, or a kit agent. | Your word on whether the kit's own agents count as subagents, which three sessions have asked. The contract is recorded as implemented and unverified. |
 | Merging and pushing | Done on 2026-10-09, on the pioneer's word, ahead of the open contract's closing pass. The push carried that contract's unpushed commits too, and its sabotage record is stale until the container engine is back. | Nothing. |
@@ -103,6 +107,9 @@ For the two contracts being drawn beside this one:
 - One flushed write per request: measured here at 1.8 ms each (300 in 531 ms, one run, this machine). That is a ceiling
   of a few hundred recorded requests a second through one server. It is one figure, not a load test.
 - Survival of a power cut rests on the flush to disk and was not tested.
+- The fast suite's test step took 36 seconds in CI on the push. The contract before this one promised it would stay within
+  31 seconds; the 97 tests of this contract took it past that. No check fails on it. Bringing it back is a choice between
+  moving the two tests that start the real program out of the fast suite and accepting the new figure.
 - An audit file is created with the process's default mode: in the image, readable by any user inside the container.
   The records hold argument values. Narrowing it is a few lines that run only on Linux, which could not be run today, so
   it is left for the hardening phase with the rest of the image's file modes.

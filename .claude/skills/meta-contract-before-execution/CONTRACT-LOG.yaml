@@ -356,7 +356,7 @@ contracts:
       docs/deferred/phase-3-audit.md.
     status: implemented
     verification_state: awaiting-evidence
-    evidence_needed: the 136 fast tests that need a container and the audit trail's end-to-end tests on the shipped image (both wait on the container engine) - and the verifier is a kit agent, so it also waits on the pioneer's word on whether those may run (written 2026-10-09 by the session closing contract-005, at the stop-gate's hand-over; set back to none when the evidence exists)
+    evidence_needed: end-to-end tests that read the audit trail on the shipped image - none is written yet, and writing one needs the container engine on the building machine - and the verifier is a kit agent, so it also waits on the pioneer's word on whether those may run. The 136 fast tests that need a container are no longer needed as evidence - they ran in CI on the push and pass (written 2026-10-09 by the session closing contract-005, at the stop-gate's hand-over; reworded the same day by the building session after CI run 37979974537; set back to none when the evidence exists)
     audited: blocked
     blocked_since: 2026-10-09
     blocked_reason: the session auditor is a subagent, and the pioneer told the sessions building from the roadmap to use none (C-041); the same holds for the verifier and for the recorder that writes observations while a review is open
@@ -396,6 +396,14 @@ contracts:
         passed at the baseline still passes, 100 tests are new (97 of this contract, 3 from contract-005's
         documentation pass) and all pass, and the same 136 fail. The documentation tests, the stronger
         retired-terms rows of that pass included, pass over the new and the edited documents.
+        In CI, on the push of 338cda9 (run 37979974537, 2026-10-09): the fast job - locked restore, build with
+        warnings as errors, the fast suite, the package audit, the secret scan - succeeded, 896 of 896 tests,
+        the 136 that need a container among them, so those are now shown unbroken. Its test step took 36 s;
+        contract-005's T-14 promised it within 31 s, and this contract's 97 tests took it past that. The
+        end-to-end job failed on one test of 136, HarnessSelfTests.Every_named_sabotage_has_a_recorded_red_on_
+        its_claim - contract-005's stale sabotage record, expected by the session that holds it. The other 135
+        passed on the image with the audit trail in it, the frame-line comparison and the image's file-by-file
+        check included. No end-to-end test reads the audit trail itself.
     revisions:
       - what: |
           UC-1 and G-2 said every request leaves one record written where its decision is made. Found while
