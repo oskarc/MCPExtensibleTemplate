@@ -53,6 +53,13 @@ public sealed class OriginGuardMiddleware
                 "malicious_cors: refused a request from origin {Origin} for {Path}",
                 SafeText.Value(origin), SafeText.Value(context.Request.Path.ToString()));
 
+            // contract-006 · G-10 — and on the audit trail, as every refusal is.
+            Audit.AuditHttpCapture.Refused(
+                context,
+                Audit.AuditEvents.MaliciousCors,
+                SafeText.Line($"A request from origin '{origin}' was refused: this server does not answer for that origin.").ToString(),
+                "origin");
+
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
         }

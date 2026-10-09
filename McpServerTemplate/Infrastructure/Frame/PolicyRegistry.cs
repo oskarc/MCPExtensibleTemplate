@@ -125,9 +125,17 @@ public sealed class PolicyRegistry
                 problems.Add($"The tool '{name}' has a limit below 1 in its policy, which would refuse every call.");
             }
 
+            // contract-006 · G-7 — a sensitive argument the tool does not declare would hide nothing: the argument the
+            // provider meant to keep out of the audit trail would be recorded whole, under its real name.
+            var guard = ArgumentGuard.For(tool.ProtocolTool.InputSchema, policy.MaxStringArgLength);
+            foreach (var undeclared in (policy.SensitiveArgs ?? []).Where(argument => !guard.Declares(argument)))
+            {
+                problems.Add($"The tool '{name}' marks the argument '{undeclared}' as sensitive, and its input schema declares no such argument. Name the argument as the schema does, or the audit trail would record its value.");
+            }
+
             if (bindings.TryGetValue(owner.Name, out var idp))
             {
-                tools[name] = new ToolEntry(owner.Name, idp, policy, ArgumentGuard.For(tool.ProtocolTool.InputSchema, policy.MaxStringArgLength));
+                tools[name] = new ToolEntry(owner.Name, idp, policy, guard);
             }
         }
 

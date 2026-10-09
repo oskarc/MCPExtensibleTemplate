@@ -28,13 +28,18 @@ public enum RiskClass
 /// <param name="MaxOutputBytes">An answer larger than this is refused rather than returned.</param>
 /// <param name="MaxStringArgLength">The longest string any argument may carry.</param>
 /// <param name="Idempotent">Whether calling twice has the effect of calling once; shown to clients.</param>
+/// <param name="SensitiveArgs">
+/// contract-006 · G-7 — the arguments whose values the audit trail must not keep: each is recorded as a short hash tag
+/// (roadmap §3.2, P3.3). Each must be an argument the tool's input schema declares, or startup refuses.
+/// </param>
 public sealed record ToolPolicy(
     string Scope,
     RiskClass Risk,
     int PerPrincipalPerMinute,
     int MaxOutputBytes = 32_768,
     int MaxStringArgLength = 512,
-    bool Idempotent = false);
+    bool Idempotent = false,
+    IReadOnlyList<string>? SensitiveArgs = null);
 
 /// <summary>What one resource is allowed, keyed by its URI or URI template.</summary>
 /// <param name="Scope">The scope a token must carry to list or read it.</param>

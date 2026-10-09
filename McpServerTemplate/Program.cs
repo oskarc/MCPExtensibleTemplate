@@ -52,6 +52,15 @@ Log.Logger = new LoggerConfiguration()
         outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
     .CreateBootstrapLogger();
 
+// ── The audit trail's check (contract-006 · G-5; roadmap P3.2) ──
+// --verify-audit <file> [<next file> ...] walks an audit file's chain and names the first line that breaks it. It starts
+// no server and reads no settings: an operator, or a job, runs it against the files a server wrote.
+//   0 the chain is intact · 64 no file was named · 65 a line breaks the chain · 66 a file cannot be read
+if (args.Length > 0 && args[0] == "--verify-audit")
+{
+    return McpServerTemplate.Infrastructure.Audit.AuditVerifier.Run(args[1..], Console.Out);
+}
+
 try
 {
     // The transport decides which kind of host is built, so it has to be read before either
@@ -147,7 +156,16 @@ static async Task<int> RunStdioAsync(string[] args, string environmentName)
     // honoured stops the server rather than surfacing when a call is wrongly allowed.
     GovernedServer.ValidateAtStartup(host.Services);
 
-    await host.RunAsync();
+    try
+    {
+        await host.RunAsync();
+    }
+    catch (Exception ex) when (ex is not ConfigurationException)
+    {
+        RecordCrash(host.Services, ex);
+        throw;
+    }
+
     return ExitCode.Ok;
 }
 
@@ -192,8 +210,21 @@ static async Task<int> RunHttpAsync(string[] args)
         // fix, said in plain words (exit 78), not a stack trace; anything else at startup stays unexpected (exit 70).
         throw refusal;
     }
+    catch (Exception ex) when (ex is not ConfigurationException)
+    {
+        RecordCrash(app.Services, ex);
+        throw;
+    }
 
-    await app.WaitForShutdownAsync();
+    try
+    {
+        await app.WaitForShutdownAsync();
+    }
+    catch (Exception ex) when (ex is not ConfigurationException)
+    {
+        RecordCrash(app.Services, ex);
+        throw;
+    }
 
     // contract-005 · T-10 — the stop said aloud, as the start is ("Frame installed"). docker stop sends SIGTERM, the host
     // stops accepting requests and finishes its work, and this line is the record, written only once the host has stopped:
@@ -205,6 +236,27 @@ static async Task<int> RunHttpAsync(string[] args)
     }
 
     return ExitCode.Ok;
+}
+
+// ── A failure nobody handled, on the audit trail (contract-006 · G-9) ──
+// Written here, while the host's services still exist: by the time the failure reaches the top of the program the host
+// has been disposed, and its trail with it. Best effort — a server crashing because its disk is gone cannot record that
+// either — and the fatal line on stderr is written whatever happens here. Only the kind of failure goes on the trail, not
+// its message, which can quote anything.
+static void RecordCrash(IServiceProvider services, Exception failure)
+{
+    try
+    {
+        services.GetService<McpServerTemplate.Infrastructure.Audit.AuditTrail>()?.Record(
+            McpServerTemplate.Infrastructure.Audit.AuditEvent.System(
+                McpServerTemplate.Infrastructure.Audit.AuditEvents.SysCrash,
+                $"The server stopped on a failure nobody handled ({failure.GetType().FullName}). It exits with code {ExitCode.Software}.",
+                new Dictionary<string, string?> { ["exception"] = failure.GetType().FullName }));
+    }
+    catch (ObjectDisposedException)
+    {
+        // The host took its services down before this ran: there is no trail left to write to.
+    }
 }
 
 // ── Shared registration ──

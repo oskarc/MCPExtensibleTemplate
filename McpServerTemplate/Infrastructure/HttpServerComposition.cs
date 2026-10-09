@@ -157,6 +157,14 @@ public static class HttpServerComposition
         builder.Services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            // contract-006 · G-10 — the limit turning an address away goes on the audit trail, once per address per minute
+            // (AuditHttpCapture.RateLimited). It used to leave nothing anywhere.
+            options.OnRejected = (rejected, _) =>
+            {
+                Audit.AuditHttpCapture.RateLimited(rejected.HttpContext);
+                return ValueTask.CompletedTask;
+            };
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -1296,6 +1304,11 @@ public static class HttpServerComposition
         GovernedServer.ValidateAtStartup(app.Services);
 
         app.UseForwardedHeaders();
+
+        // contract-006 · G-10 — the request's facts for the audit trail, captured once, straight after forwarded headers
+        // have established the real client address: every record of this request, whichever stage below makes it, then
+        // names the same address, path and user agent. It refuses nothing and is no stage of the order above.
+        Audit.AuditHttpCapture.UseAuditHttpCapture(app);
 
         // contract-002 revision, 2026-09-20 — roadmap P1.6 names UseHsts() and it was absent from
         // the source entirely: in no clause, no test and no verification pass. It emits

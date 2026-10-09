@@ -322,13 +322,24 @@ public static class IdentityRegistration
     /// (LogSafe.Text), and the path, the caller's too, is written escaped for a URL and cut. Round 3 (SEC-R3-04) — both
     /// escaped, not stripped, and once: each is SafeText, which the log pipeline passes on as it is.
     /// </summary>
-    private static void LogRefusal(HttpContext context, string scheme, SafeText reason) =>
+    private static void LogRefusal(HttpContext context, string scheme, SafeText reason)
+    {
         context.RequestServices
             .GetRequiredService<ILoggerFactory>()
             .CreateLogger("McpServerTemplate.Identity")
             .LogWarning(
                 "authn_login_fail: {Scheme} refused a token for {Path} — {Reason}",
                 scheme, SafeText.Value(context.Request.Path.ToString()), reason);
+
+        // contract-006 · G-10 — and on the audit trail, as every refusal is: the reason, the scheme that refused, never
+        // the token, and no caller, since a refused token vouches for nobody.
+        Audit.AuditHttpCapture.Refused(
+            context,
+            Audit.AuditEvents.AuthnLoginFail,
+            reason.ToString(),
+            "token",
+            new Dictionary<string, string?> { ["scheme"] = scheme });
+    }
 
     /// <summary>
     /// Picks the scheme for a presented token by reading its issuer without validating anything.

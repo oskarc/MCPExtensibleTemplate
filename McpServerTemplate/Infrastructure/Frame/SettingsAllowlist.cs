@@ -44,6 +44,15 @@ public static partial class SettingsAllowlist
         "HttpTransport:AllowedOrigins:{n}",
         "HttpTransport:KnownProxies:{n}",
         "HttpTransport:KnownNetworks:{n}",
+
+        // contract-006 · G-12 — the audit trail's settings, each read and checked in AuditSettings. A misspelt
+        // Audit:ReadWhenUnavailable would leave the default in force while the operator believed otherwise.
+        "Audit:Path",
+        "Audit:ReadWhenUnavailable",
+        "Audit:RetentionDays",
+        "Audit:AppId",
+        "Audit:Otlp:Endpoint",
+        "Audit:Otlp:Headers:{*}",
     ];
 
     // contract-005 · G-12 (2) — the certificate settings are retired rather than known. Once they were
@@ -83,7 +92,7 @@ public static partial class SettingsAllowlist
 
     /// <summary>The sections this check governs. Anything else in configuration is left alone.</summary>
     public static readonly IReadOnlyList<string> GovernedSections =
-        ["Authentication", "Providers", "Limits", "Confirmation", "Development", "RateLimit", "HttpTransport", "Kestrel"];
+        ["Authentication", "Providers", "Limits", "Confirmation", "Development", "RateLimit", "HttpTransport", "Kestrel", "Audit"];
 
     /// <summary>
     /// Whether <paramref name="key"/> is a setting the server reads in a governed section. The same

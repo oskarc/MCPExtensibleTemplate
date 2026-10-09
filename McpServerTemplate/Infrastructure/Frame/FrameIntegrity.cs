@@ -283,10 +283,18 @@ public static class FrameIntegrity
             foreign.Add($"{missing.Length} of the frame's own filters are not installed");
         }
 
+        // contract-006 · G-1 — the audit step first and the request-kind gate straight behind it. Anything in front of the
+        // audit step would see a message before its audit scope exists; anything between the two would decide on a message
+        // before the frame knows whether it governs that kind at all.
         var incoming = options.Filters.Message.IncomingFilters;
-        if (incoming.Count == 0 || !ReferenceEquals(incoming[0], manifest.Gate))
+        if (incoming.Count == 0 || !ReferenceEquals(incoming[0], manifest.Audit))
         {
-            foreign.Add("the frame's request-kind gate is not the first incoming message filter");
+            foreign.Add("the frame's audit step is not the first incoming message filter");
+        }
+
+        if (incoming.Count < 2 || !ReferenceEquals(incoming[1], manifest.Gate))
+        {
+            foreign.Add("the frame's request-kind gate is not the second incoming message filter, straight behind the audit step");
         }
 
         if (foreign.Count > 0)
@@ -368,7 +376,10 @@ public sealed class FrameManifest
 {
     private readonly HashSet<Delegate> _owned = new(ReferenceEqualityComparer.Instance);
 
-    /// <summary>The request-kind gate, which must be the first incoming message filter.</summary>
+    /// <summary>contract-006 · G-1 — the audit step, which must be the first incoming message filter.</summary>
+    public Delegate? Audit { get; private set; }
+
+    /// <summary>The request-kind gate, which must be the second incoming message filter, straight behind the audit step.</summary>
     public Delegate? Gate { get; private set; }
 
     /// <summary>Every filter the frame installed.</summary>
@@ -379,6 +390,13 @@ public sealed class FrameManifest
     {
         _owned.Add(filter);
         return filter;
+    }
+
+    /// <summary>contract-006 · G-1 — records the audit step.</summary>
+    public T OwnAudit<T>(T audit) where T : Delegate
+    {
+        Audit = Own(audit);
+        return audit;
     }
 
     /// <summary>Records the request-kind gate.</summary>
