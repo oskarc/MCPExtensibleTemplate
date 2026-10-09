@@ -369,8 +369,9 @@ contracts:
     built_on: |
       Branch roadmap/phase-3-audit, in its own worktree (D:/projects/mcp.worktrees/phase-3-audit), cut from
       56aee9f: 3b627c7 (the trail, the chain, the gate's records), 33789b2 (the acceptance tests, the alert
-      rules), dae252e (the operator's document, the deferred file). Not merged and not pushed: the sessions
-      agreed nothing merges into epic/security-hardening before contract-005's closing pass has pushed.
+      rules), dae252e (the operator's document, the deferred file), 8b33938 (the met requests kept with the
+      HTTP request; audit tests 97 of 97 after it). Not merged and not pushed: the sessions agreed nothing
+      merges into epic/security-hardening before contract-005's closing pass has pushed.
     tests_run:
       date: 2026-10-09
       command: dotnet test McpServerTemplate.Tests/McpServerTemplate.Tests.csproj -c Release
