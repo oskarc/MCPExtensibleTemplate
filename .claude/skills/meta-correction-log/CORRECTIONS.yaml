@@ -1278,6 +1278,31 @@ corrections:
     clerked: true
     precedent: "P-040, S-020"
     clerk_note: null
+  - corr_id: C-041
+    date: 2026-10-09
+    contract_id: null
+    moment: M-04
+    grade: scope
+    intervention: redirected
+    agent_offered: |
+      Naming the moment: session start (M-01) with a backlog to put to you first, then a feature request
+      (M-04) — picking a roadmap item leads into a contract before any code. Starting with the backlog check
+      and locating the roadmap.
+    pioneer_said: |
+      There are 3 sessions building from the roadmap now and id like you to work as a team together, support one another but use no subagents.
+    reason_given: |
+      none given
+    noticed: |
+      not asked
+    would_have_been_right: |
+      not asked
+    seen_before: |
+      not asked
+    supersedes: []
+    recorded_by: main-agent
+    clerked: false
+    precedent: null
+    clerk_note: null
 
 trajectory:
   updated: 2026-10-01
