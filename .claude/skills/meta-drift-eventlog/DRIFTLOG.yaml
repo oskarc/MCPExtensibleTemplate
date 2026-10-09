@@ -492,3 +492,29 @@ entries:
     reviewed: null
     recurrence_count: 0
     related_drifts: []
+
+  - drift_id: drift-013
+    surfaced_in: 2026-10-01 / contract-005, the sabotage retake
+    surfaced_by: self
+    aspect: evidence-as-work
+    description: |
+      Restarting the sabotage retake detached, the agent launched it through `bash` from PowerShell, which on this
+      machine is WSL's, not Git Bash. To clean up it stopped the two wsl.exe processes it found, taking them for its
+      own without reading when they had started. They were Docker Desktop's. The engine stopped answering, which also
+      ended the first retake - still running, though the tool had reported it stopped - and may have stopped other
+      work's containers on the machine. The discipline-aligned alternative: read a process's start time and parent
+      before stopping it, and stop nothing this session did not start.
+    evidence: |
+      The stopped processes (ids 14368 and 45472) carried StartTime 2026-10-01 12:14:49; the launch they were taken
+      for was made at about 13:42. After the stop: "request returned 500 Internal Server Error for API route ...
+      dockerDesktopLinuxEngine". scratchpad sabotage-all.log: "The Docker engine stopped answering before
+      t7-other-caller-minted-for-the-same-subject (39 of 113): the runs stopped there."
+    reaction: |
+      Work stopped the moment the engine's error was seen, and the pioneer was told the same turn, with the choice of
+      who restarts a shared engine left to them. Nothing else was stopped or restarted. As of 2026-10-09 the engine is
+      still down and the question unanswered; the retake waits, its partial record uncommitted in the working tree.
+    status: open
+    elevation: []
+    reviewed: null
+    recurrence_count: 0
+    related_drifts: []
