@@ -564,7 +564,7 @@ public sealed class ServerProcessTests(ServerProcessTests.SharedServers shared) 
     [Fact]
     public async Task T3_http_without_identity_configured_is_a_configuration_failure()
     {
-        // Replaces the API-key check this contract deleted. The guarantee is unchanged: a server
+        // Replaces the credential check this contract deleted. The guarantee is unchanged: a server
         // that cannot authenticate anyone must refuse to start rather than come up and discover
         // it on the first request.
         // Valid in every respect except the one under test, so the refusal that comes back is

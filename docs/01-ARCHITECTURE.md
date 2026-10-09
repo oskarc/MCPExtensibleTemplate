@@ -45,16 +45,17 @@ The server is organized in **4 key layers**:
 
 **Files**: `Program.cs`, `Infrastructure/HttpServerComposition.cs`, `Infrastructure/Identity/`
 
-**Identity, in short**: each configured identity provider gets its own JWT bearer scheme. A routing scheme reads the token's issuer and hands it to that provider's scheme, which validates signature, issuer, audience, lifetime and algorithm. Tokens must carry `sub`, `jti`, the client claim their identity provider's `ClientIdClaim` names (`client_id`, `azp`, `cid` or `appid`) and `iat`. The validated principal is normalized to one shape — which identity provider issued it, its scopes, and the `{idp}:{sub}` key limits are kept under. MCP answers at `/mcp`, the path of the configured resource, and the server publishes its OAuth protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`, so a client that is refused learns where to get a token.
+**Identity, in short**: each configured identity provider gets its own JWT bearer scheme. A routing scheme reads the token's issuer and hands it to that provider's scheme, which validates signature, issuer, audience, lifetime and algorithm. Tokens must carry `sub`, `jti`, the client claim their identity provider's `ClientIdClaim` names (`client_id`, `azp`, `cid` or `appid`) and `iat`; one whose `iat` lies more than 30 seconds in the future is refused. The validated principal is normalized to one shape — which identity provider issued it, its scopes, and the `{idp}:{sub}` key limits are kept under. MCP answers at `/mcp`, the path of the configured resource, and the server publishes its OAuth protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`, so a client that is refused learns where to get a token.
 
 ---
 
 ### 2. **The Frame** (Policy & Enforcement)
 - **Purpose**: Enforces each provider's declared policy on every request
 - **At startup** it refuses to start rather than start open. It checks:
-  - every setting in the sections it governs is one it reads — a typo or retired key is named, with the nearest real key
+  - every setting in the sections it governs is one it reads — an unknown key is named with the nearest real one, a retired key with why it is gone
   - every provider named in `Providers:Enabled` exists
-  - no provider, while registering its services, removed or replaced anything, or registered anything that belongs to the frame, the MCP SDK, the identity layer or the host pipeline
+  - no provider, while registering its services, removed anything, or registered anything but its own types (those of its own assembly, in its namespace or below), the HTTP-client and resilience plumbing its client is built from, and options over those — so nothing of the frame, the MCP SDK, the identity layer, the host pipeline or the log can be replaced
+  - no provider's namespace holds another provider's, since its namespace is what a provider owns
   - every served tool, resource and prompt has a policy, and every policy names something served
   - every scope is one the provider's identity provider can issue
   - every outbound host is an exact domain name, and the provider's configured `BaseUrl` is one of them
@@ -69,7 +70,7 @@ The server is organized in **4 key layers**:
   7. **Limits** — per caller, and per caller per tool, in sliding one-minute windows held in Redis so they apply on every instance
   8. **Argument shape** — no argument the tool does not declare, values that fit its schema, strings within the policy's length, numbers that are numbers
   9. **Output cap** — an answer larger than the policy allows is withheld, not cut short
-- Each refusal names its rule (for example `insufficient_scope`, `idp-binding`, `extraneous-argument`) and is logged as a security event.
+- Each refusal is logged as a security event under its rule (for example `insufficient_scope`, `idp-binding`, `extraneous-argument`), and the caller is told the rule — with one exception: an item whose provider is bound to another identity provider is refused in the same words as an item that does not exist, so a refusal never confirms what another trust domain holds. The log keeps the real rule, `idp-binding`.
 
 **Files**: `Infrastructure/Frame/` — `Policy.cs`, `IProviderModule.cs`, `GovernedServer.cs`, `RequestGate.cs`, `PolicyRegistry.cs`, `ArgumentGuard.cs`, `Confirmation.cs`, `LimitStore.cs`, `SettingsAllowlist.cs`, `FrameIntegrity.cs`
 
@@ -239,7 +240,9 @@ public static async Task<string> GetBlogPost(
 
 The system supports multiple configuration sources in order of precedence:
 
-1. **Environment Variables** (highest priority)
+1. **Command-line arguments** (highest priority), for example `--Transport http`
+
+2. **Environment Variables**
    ```powershell
    $env:Transport = "http"
    $env:Limits__Redis = "localhost:6379"
@@ -251,16 +254,18 @@ The system supports multiple configuration sources in order of precedence:
    export Limits__Redis=localhost:6379
    ```
 
-2. **appsettings.{Environment}.json**
+3. **appsettings.{Environment}.json**
    ```text
    ASPNETCORE_ENVIRONMENT=Development  -> loads appsettings.Development.json
    ASPNETCORE_ENVIRONMENT=Production   -> loads appsettings.Production.json
    ```
    With neither variable set, the server runs as **Production**.
 
-3. **appsettings.json** (base/default)
+4. **appsettings.json** (base/default)
 
-In the sections the frame governs — `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development` — a key the server does not read stops it from starting. See [04-CONFIGURATION.md](04-CONFIGURATION.md).
+User secrets (Development only) and the host's own `McpServerTemplate.settings` files sit between the environment and `appsettings`; the full order is in [04-CONFIGURATION.md](04-CONFIGURATION.md#configuration-hierarchy-top-priority-first). Settings are read once, at startup.
+
+In the sections the frame governs — `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development`, `RateLimit`, `HttpTransport` and `Kestrel` — a key the server does not read stops it from starting. See [04-CONFIGURATION.md](04-CONFIGURATION.md).
 
 ---
 
@@ -270,7 +275,7 @@ The server implements **defense in depth**:
 
 | Layer | Mechanism | Purpose |
 |-------|-----------|---------|
-| **Transport** | TLS at the proxy; HSTS; Production refuses to start without a declared trusted proxy | Encrypt data in transit |
+| **Transport** | TLS at the proxy; HSTS; every environment but Development refuses to start without a declared trusted proxy, and Development listens on loopback only | Encrypt data in transit |
 | **Authentication** | Bearer tokens from configured identity providers, one scheme each | Verify caller identity |
 | **Trust domains** | Each provider answers to exactly one identity provider | Contain what each identity provider can reach |
 | **Authorization** | A scope per tool, resource and prompt, from the provider's policy | Least privilege |
@@ -279,7 +284,7 @@ The server implements **defense in depth**:
 | **Rate Limiting** | Per IP before authentication; per caller and per caller per tool in Redis | Prevent abuse and agentic loops, across instances |
 | **Input Validation** | Argument shape against the tool's schema, plus each tool's own checks | Reject invalid requests early |
 | **Output caps** | Per-tool answer size from the policy | Bound what reaches the model |
-| **Frame integrity** | Providers cannot remove or add to the frame's checks | The policy cannot be switched off by a provider |
+| **Frame integrity** | Providers cannot remove or add to the frame's checks, and may register only their own services and their HTTP client's plumbing | The policy cannot be switched off by a provider, nor the identity layer, the host or the log replaced by one |
 | **HTTP Resilience** | Retry + circuit breaker on upstream calls | Handle failures gracefully |
 | **Logging & Monitoring** | A named security event per refusal; correlation IDs | Detect suspicious patterns |
 
@@ -304,6 +309,8 @@ To add a new API provider (e.g., GitHub API):
 4. Add a `Providers:Github` section (`BaseUrl`, `UserAgent`, `IdentityProvider`) and add `Github` to `Providers:Enabled`
 5. Start the server. If anything is undeclared, mis-scoped or points at a host the policy does not allow, it refuses to start and says what to fix.
 
+**What a provider may register.** `Register` adds the provider's own types — those of its assembly, in its namespace or below — the HTTP-client and resilience plumbing its client is built from, and options over those. Anything else (a logger, a cache, an authentication or hosting service, a type from another package) stops the server at startup, naming the provider and the type; so does a provider whose namespace holds another provider's. Logging, options, metrics and the one shared `IMemoryCache` are laid by the frame before any provider runs: take them as constructor parameters, and register none of your own. A provider that needs more has it added to the frame's list on purpose, in `Infrastructure/Frame/FrameIntegrity.cs`.
+
 ### Adding Logging/Monitoring
 
 The request checks are the frame's. A provider cannot add its own — the frame refuses to start with a check it did not install. To add a cross-cutting check, add it to the frame in `Infrastructure/Frame/GovernedServer.cs`, registered through the frame's manifest so the startup comparison recognizes it. Middleware that runs before the MCP endpoint belongs in `Infrastructure/HttpServerComposition.cs`.
@@ -316,7 +323,7 @@ Switch from stdio to HTTP (or vice versa) by changing one config setting:
   "Transport": "stdio"  // or "http"
 }
 ```
-stdio is refused outside Development. HTTP needs at least one identity provider configured, and outside Development, Redis.
+stdio is refused outside Development. HTTP needs at least one identity provider configured; outside Development it also needs Redis, `Providers:Enabled` and a declared proxy, and on any bind address that is not loopback, `HttpTransport:AllowedHosts`. In Development the server listens on loopback only.
 
 ---
 
@@ -327,7 +334,7 @@ stdio is refused outside Development. HTTP needs at least one identity provider 
 3. **Limits in Redis**: One atomic script per window per request — a caller's whole-server window and, for a tool call, the tool's own window
 4. **Policies frozen at startup**: The frame's lookups are frozen dictionaries, built once
 5. **Resilience**: Retry + circuit breaker prevents cascading failures
-6. **Structured Logging**: Async file writes minimize blocking
+6. **Structured Logging**: One line per event; a call's argument values are serialised only when Debug logging is on
 
 ---
 

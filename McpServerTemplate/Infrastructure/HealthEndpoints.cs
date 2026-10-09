@@ -9,7 +9,7 @@ namespace McpServerTemplate.Infrastructure;
 /// out of rotation for a fault it has no part in.
 ///
 /// Both are registered before authentication on purpose. An orchestrator's probe carries no
-/// API key, and neither endpoint discloses anything beyond whether this process is serving.
+/// token, and neither endpoint discloses anything beyond whether this process is serving.
 /// </summary>
 public static class HealthEndpoints
 {

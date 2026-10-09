@@ -294,7 +294,16 @@ precedents:
     reasons: |
       (carried in the statement: the contract was not completed)
     binding: true
-    distinguished_by: []
+    distinguished_by:
+      - date: 2026-10-09
+        contract_id: contract-006
+        how_facts_differ: |
+          The open contract (contract-005) is built, and only its one verification pass is owed; a different
+          session holds that pass, and it is blocked on the container engine being down. Three sessions told
+          the pioneer of this ruling and held; the pioneer answered "finish each task as well as you can and
+          add a deferred file. just keep on working on the roadmap until you are done." (C-042). In this
+          ruling's own facts the same agent was to finish the open contract and proposed looking ahead
+          instead, unasked.
     status: active
     overruled_by: null
     check: "P-010.sh: passes"

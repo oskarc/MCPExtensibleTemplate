@@ -123,18 +123,56 @@ public partial class DocumentationTests
         ".NET 8", "net8.0",
     ];
 
+    // contract-005, following contract-004 · G-3 — the same mechanisms in the plain words a sentence uses, in any case. The
+    // list above holds their code names alone, so a comment saying a probe carries no such credential passed it, as the
+    // documentation contract's verifier found.
+    private static readonly string[] RetiredInPlainWords = ["API key", "API-key", "assembly scanning"];
+
+    /// <summary>
+    /// The retired terms that begin on <paramref name="line"/>, read together with the line after it, so that a term broken
+    /// across two lines is found, and found once.
+    /// </summary>
+    private static IEnumerable<string> RetiredTermsStartingOn(string line, string? next)
+    {
+        var text = next is null ? line : line + " " + next;
+        foreach (var term in Retired)
+        {
+            var at = text.IndexOf(term, StringComparison.Ordinal);
+            if (at >= 0 && at < line.Length)
+            {
+                yield return term;
+            }
+        }
+
+        foreach (var term in RetiredInPlainWords)
+        {
+            var at = text.IndexOf(term, StringComparison.OrdinalIgnoreCase);
+            if (at >= 0 && at < line.Length)
+            {
+                yield return term;
+            }
+        }
+    }
+
+    /// <summary>A line's comment, without the slashes that open it; null when the line has none.</summary>
+    private static string? CommentOn(string line)
+    {
+        var at = line.IndexOf("//", StringComparison.Ordinal);
+        return at < 0 ? null : line[at..].TrimStart('/').Trim();
+    }
+
     [Fact]
     public void T2_no_document_describes_a_removed_mechanism_outside_a_retired_block()
     {
         var problems = new List<string>();
         foreach (var file in CurrentDocuments())
         {
-            var lines = OutsideRetiredBlocks(File.ReadAllText(file)).Split('\n');
+            var lines = OutsideRetiredBlocks(File.ReadAllText(file)).Split('\n').Select(l => l.Trim()).ToArray();
             for (var i = 0; i < lines.Length; i++)
             {
-                foreach (var term in Retired.Where(t => lines[i].Contains(t, StringComparison.Ordinal)))
+                foreach (var term in RetiredTermsStartingOn(lines[i], i + 1 < lines.Length ? lines[i + 1] : null))
                 {
-                    problems.Add($"{Path.GetRelativePath(RepositoryRoot(), file)}: '{term}' in \"{lines[i].Trim()}\"");
+                    problems.Add($"{Path.GetRelativePath(RepositoryRoot(), file)}: '{term}' in \"{lines[i]}\"");
                 }
             }
         }
@@ -151,14 +189,12 @@ public partial class DocumentationTests
             var lines = File.ReadAllLines(file);
             for (var i = 0; i < lines.Length; i++)
             {
-                var at = lines[i].IndexOf("//", StringComparison.Ordinal);
-                if (at < 0)
+                if (CommentOn(lines[i]) is not { } comment)
                 {
                     continue;
                 }
 
-                var comment = lines[i][at..];
-                foreach (var term in Retired.Where(t => comment.Contains(t, StringComparison.Ordinal)))
+                foreach (var term in RetiredTermsStartingOn(comment, i + 1 < lines.Length ? CommentOn(lines[i + 1]) : null))
                 {
                     problems.Add($"{Path.GetRelativePath(RepositoryRoot(), file)}:{i + 1}: '{term}'");
                 }
@@ -166,6 +202,18 @@ public partial class DocumentationTests
         }
 
         Assert.True(problems.Count == 0, "comments describe removed mechanisms:\n  " + string.Join("\n  ", problems));
+    }
+
+    // contract-005 — two rules a reader must be told, each said where they look for it.
+    [Theory]
+    [InlineData("README.md", "A provider registers its own services and nothing of the server's")]
+    [InlineData("docs/01-ARCHITECTURE.md", "What a provider may register")]
+    [InlineData("docs/04-CONFIGURATION.md", "In Development only a loopback address is accepted")]
+    public void The_documents_say_what_a_provider_may_register_and_where_development_listens(string document, string says)
+    {
+        var text = File.ReadAllText(Path.Combine(RepositoryRoot(), document.Replace('/', Path.DirectorySeparatorChar)));
+
+        Assert.Contains(says, text, StringComparison.Ordinal);
     }
 
     // ── T-3 (G-4): every relative link and anchor resolves ──

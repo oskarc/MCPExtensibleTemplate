@@ -1,0 +1,340 @@
+<title>Every Decision on the Record</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one reading column; status (kept / new / open) is carried by chips and stripes, never by the accent. */
+  :root {
+    --paper:#F2F4F1; --surface:#FFFFFF; --ink:#17201D; --muted:#5F706B;
+    --rule:#CFD8D4; --rule-strong:#AEBBB6;
+    --accent:#0E6B66; --accent-ink:#0B5551; --accent-soft:#DDEDEA; --on-accent:#FFFFFF;
+    --kept:#2F7D4F; --kept-soft:#E0F0E6;
+    --new:#B7791F; --new-soft:#F7ECD9;
+    --open:#B3352C; --open-soft:#F6E3E1;
+    --code-bg:#E3EAE7;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#141B18; --surface:#1C2522; --ink:#E6ECE9; --muted:#9AABA5;
+      --rule:#2B3733; --rule-strong:#3B4945;
+      --accent:#58C4BB; --accent-ink:#7FD6CE; --accent-soft:#1E3B38; --on-accent:#0B1512;
+      --kept:#6CC08B; --kept-soft:#1E3427;
+      --new:#E0AE5A; --new-soft:#3A2F1C;
+      --open:#E37A72; --open-soft:#3A2321;
+      --code-bg:#101614;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#141B18; --surface:#1C2522; --ink:#E6ECE9; --muted:#9AABA5;
+    --rule:#2B3733; --rule-strong:#3B4945;
+    --accent:#58C4BB; --accent-ink:#7FD6CE; --accent-soft:#1E3B38; --on-accent:#0B1512;
+    --kept:#6CC08B; --kept-soft:#1E3427;
+    --new:#E0AE5A; --new-soft:#3A2F1C;
+    --open:#E37A72; --open-soft:#3A2321;
+    --code-bg:#101614;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Source Sans 3", system-ui, "Segoe UI", sans-serif;
+    font-size:16.5px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:940px; margin:0 auto; padding-inline:24px; padding-block:32px 96px; }
+  h1,h2,h3 { font-family:"Archivo","Helvetica Neue",Arial,sans-serif; line-height:1.15; letter-spacing:-0.01em; text-wrap:balance; margin:0; }
+  h1 { font-size:40px; font-weight:800; }
+  h2 { font-size:24px; font-weight:700; margin-block:52px 12px; padding-top:22px; border-top:1px solid var(--rule-strong); }
+  h3 { font-size:16px; font-weight:700; margin-block:22px 8px; }
+  p { margin:0 0 12px; max-width:68ch; }
+  a { color:var(--accent-ink); }
+  code, .mono { font-family:"IBM Plex Mono","Cascadia Mono",Consolas,monospace; font-size:0.86em; }
+  code { background:var(--code-bg); padding:1px 5px; border-radius:3px; }
+  .eyebrow { font-family:"IBM Plex Mono",monospace; font-size:12.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 10px; }
+  .lede { font-size:19px; line-height:1.45; max-width:60ch; margin-top:14px; }
+
+  .state { display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline;
+    margin-top:22px; padding:12px 16px; border-left:4px solid var(--new); background:var(--new-soft); }
+  .state b { font-weight:700; }
+  .state span { font-size:14.5px; min-width:0; }
+
+  .tally { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px; background:var(--rule);
+    border:1px solid var(--rule); margin-top:20px; }
+  .tally div { background:var(--surface); padding:12px 14px; }
+  .tally .v { font-family:"Archivo",sans-serif; font-weight:700; font-size:26px; line-height:1; font-variant-numeric:tabular-nums; }
+  .tally .k { font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--muted); margin-top:7px; }
+  .tally .hot .v { color:var(--open); }
+
+  blockquote { margin:0 0 12px; padding:10px 16px; border-left:3px solid var(--accent); background:var(--surface); font-size:15.5px; }
+  blockquote p { margin:0 0 8px; }
+  blockquote p:last-child { margin:0; }
+  blockquote cite { display:block; margin-top:8px; font-style:normal; font-size:13px; color:var(--muted); }
+
+  .table-wrap { overflow-x:auto; margin:12px 0 18px; }
+  table { border-collapse:collapse; width:100%; font-size:14.5px; }
+  th, td { text-align:left; vertical-align:top; padding:8px 12px 8px 0; border-bottom:1px solid var(--rule); }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--muted); border-bottom:1px solid var(--rule-strong); font-weight:600; }
+  td.id { font-family:"IBM Plex Mono",monospace; font-size:13px; white-space:nowrap; color:var(--accent-ink); }
+  td.holds { font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--muted); white-space:nowrap; }
+  td.num { font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+  .chip { display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:11.5px; padding:1px 7px; border-radius:3px; border:1px solid; white-space:nowrap; }
+  .chip.new { background:var(--new-soft); color:var(--new); border-color:var(--new); }
+  .chip.kept { background:var(--kept-soft); color:var(--kept); border-color:var(--kept); }
+  .chip.open { background:var(--open-soft); color:var(--open); border-color:var(--open); }
+
+  figure { margin:18px 0 8px; }
+  .fig-scroll { overflow-x:auto; }
+  figure svg { display:block; width:100%; min-width:640px; height:auto; color:var(--ink); }
+  figcaption { font-size:13px; color:var(--muted); padding-top:8px; max-width:78ch; }
+  .nd rect { fill:var(--surface); stroke:var(--rule-strong); stroke-width:1.25; }
+  .nd text { fill:currentColor; font:500 12.5px "Source Sans 3",system-ui,sans-serif; }
+  .nd .m { font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--muted); }
+  .nd.new rect { fill:var(--new-soft); stroke:var(--new); }
+  .nd.stop rect { fill:var(--open-soft); stroke:var(--open); }
+  .edge { fill:none; stroke:var(--muted); stroke-width:1.3; }
+  .edge.stop { stroke:var(--open); }
+  .edge.new { stroke:var(--new); }
+  .elabel { fill:var(--muted); font:500 11px "Source Sans 3",sans-serif; }
+  .ahead { fill:var(--muted); }
+  .ahead.stop { fill:var(--open); }
+  .ahead.new { fill:var(--new); }
+
+  .mat td, .mat th { text-align:center; padding:5px 6px; font-size:12.5px; }
+  .mat td:first-child, .mat th:first-child { text-align:left; padding-right:10px; white-space:nowrap; }
+  .mat .hit { color:var(--accent-ink); font-weight:700; }
+  .mat .all { color:var(--muted); }
+
+  ul { padding-left:20px; max-width:68ch; }
+  li { margin-bottom:6px; }
+  .gate { border:1px solid var(--rule-strong); border-radius:3px; background:var(--surface); padding:18px 20px; margin-top:16px; }
+  .gate h3 { margin-top:0; }
+  .foot { margin-top:44px; padding-top:18px; border-top:1px solid var(--rule-strong); font-size:13.5px; color:var(--muted); }
+  .foot b { color:var(--ink); }
+
+  @media (max-width:760px) {
+    .wrap { padding-inline:16px; }
+    h1 { font-size:30px; }
+    .tally { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
+</style>
+<div class="wrap">
+<p class="eyebrow">contract-006 &middot; execution contract &middot; roadmap Phase 3</p>
+<h1>Every Decision on the Record</h1>
+<p class="lede">Today the server can refuse a request and leave only a line of text, allow a resource read and leave nothing, and go on serving when its log cannot be written. This contract makes every decision a record that is written before the decision takes effect.</p>
+<div class="state"><b>No gate was held. Approval waived on the pioneer&rsquo;s words, 2026-10-09.</b><span>Three sessions told the pioneer that an earlier ruling barred this work and that nothing would be built unapproved. The answer is quoted below. The contract was drawn in full in the conversation before any code; status lives in the contract log.</span></div>
+<div class="tally">
+<div><div class="v">12</div><div class="k">use cases</div></div>
+<div><div class="v">16</div><div class="k">guardrails</div></div>
+<div><div class="v">16</div><div class="k">tests</div></div>
+<div><div class="v">0</div><div class="k">new packages</div></div>
+<div class="hot"><div class="v">9</div><div class="k">choices the pioneer has not seen</div></div>
+</div>
+
+<h2>Direction</h2>
+<blockquote><p>After this contract, nothing the frame governs takes effect before the decision that let it through, or refused it, is on a record an operator can check: one line per decision, attributed to the caller, chained so that a changed line is found by the server&rsquo;s own check. The bet is that writing the record first, and refusing the act when the record cannot be written, is worth one flushed write per request, and that a chained file plus a background copy to a collector is enough of a trail without a keyed signature.</p></blockquote>
+<p>Everything below is derived from that. If a clause and the direction disagree, the clause is wrong.</p>
+
+<h2>What this rests on</h2>
+<p>A clause that cannot be traced to one of these is wrong, not merely debatable.</p>
+<blockquote><p>finish each task as well as you can and add a deferred file. just keep on working on the roadmap until you are done.</p><p>work as a team with the other agents</p><cite>The pioneer, 2026-10-09, in this session, answering &ldquo;nothing is built before you approve it&rdquo;.</cite></blockquote>
+<blockquote><p>The core of the application is the frame that governs the providers, it must actually hold the integrity over time, making sure there are no loopholes or workarounds.</p><cite>The founding statement, 2026-09-17.</cite></blockquote>
+<div class="table-wrap"><table>
+<tr><th>Source</th><th>What it fixes here</th></tr>
+<tr><td>Roadmap, Phase 3 and &sect;3.5</td><td>The seven work items, the event&rsquo;s field names, the event names, and &ldquo;every decision is audited&rdquo;.</td></tr>
+<tr><td>Roadmap, decisions D6 and D7</td><td>Never decided. Their stated defaults are used: keep 400 days and export by OTLP; refuse reads when the trail is down.</td></tr>
+<tr><td>The pioneer ruled that a branch which satisfies a check without giving the protection is a loophole</td><td>The record is written before the act, not after.</td></tr>
+<tr><td>The pioneer ruled that testing is central, and that tests reach no internet</td><td>End-to-end tests on the image are owed; the collector in the tests runs in-process.</td></tr>
+<tr><td>The pioneer ruled that an approved contract is finished before anything beyond it</td><td>Distinguished: the open contract is built, another session holds its one verification pass, and the pioneer said to keep working.</td></tr>
+<tr><td>The pioneer ruled that adversarial rounds follow a build</td><td>Owed. They are subagents, and the team rule forbids those today.</td></tr>
+</table></div>
+
+<h2>How one request is recorded</h2>
+<figure><div class="fig-scroll">
+<svg viewBox="0 0 900 330" role="img" aria-label="A request passes the audit step, the request-kind gate and the request gate. The gate writes an allowed record before the tool runs, or a refused record before it answers. If the record cannot be written, the request is refused.">
+  <defs>
+    <marker id="a1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path class="ahead" d="M0,0 L8,4 L0,8 z"/></marker>
+    <marker id="a2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path class="ahead stop" d="M0,0 L8,4 L0,8 z"/></marker>
+    <marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path class="ahead new" d="M0,0 L8,4 L0,8 z"/></marker>
+  </defs>
+  <g class="nd new"><rect x="10" y="40" width="150" height="56" rx="3"/><text x="22" y="63">Audit step</text><text class="m" x="22" y="81">first, opens the state</text></g>
+  <g class="nd"><rect x="200" y="40" width="150" height="56" rx="3"/><text x="212" y="63">Request-kind gate</text><text class="m" x="212" y="81">second</text></g>
+  <g class="nd"><rect x="390" y="40" width="150" height="56" rx="3"/><text x="402" y="63">Request gate</text><text class="m" x="402" y="81">binding, scope, limits&hellip;</text></g>
+  <g class="nd new"><rect x="580" y="40" width="150" height="56" rx="3"/><text x="592" y="63">Record &ldquo;allowed&rdquo;</text><text class="m" x="592" y="81">flushed to disk</text></g>
+  <g class="nd"><rect x="770" y="40" width="120" height="56" rx="3"/><text x="782" y="63">Tool runs</text><text class="m" x="782" y="81">or resource, prompt</text></g>
+  <path class="edge" d="M160,68 H198" marker-end="url(#a1)"/>
+  <path class="edge" d="M350,68 H388" marker-end="url(#a1)"/>
+  <path class="edge new" d="M540,68 H578" marker-end="url(#a3)"/>
+  <path class="edge" d="M730,68 H768" marker-end="url(#a1)"/>
+  <text class="elabel" x="545" y="60">admit</text>
+  <text class="elabel" x="733" y="60">then</text>
+
+  <g class="nd new"><rect x="390" y="150" width="150" height="56" rx="3"/><text x="402" y="173">Record &ldquo;refused&rdquo;</text><text class="m" x="402" y="191">with its rule</text></g>
+  <g class="nd stop"><rect x="390" y="250" width="150" height="56" rx="3"/><text x="402" y="273">Caller is refused</text><text class="m" x="402" y="291">nothing ran</text></g>
+  <path class="edge stop" d="M465,96 V148" marker-end="url(#a2)"/>
+  <path class="edge stop" d="M465,206 V248" marker-end="url(#a2)"/>
+  <path class="edge stop" d="M275,96 V178 H388" marker-end="url(#a2)"/>
+  <text class="elabel" x="472" y="126">refuse</text>
+  <text class="elabel" x="282" y="150">a kind nobody governs</text>
+
+  <g class="nd stop"><rect x="580" y="150" width="310" height="56" rx="3"/><text x="592" y="173">The record cannot be written</text><text class="m" x="592" y="191">Write, Irreversible: refused &middot; others: one setting, default refuse</text></g>
+  <path class="edge stop" d="M655,96 V148" marker-end="url(#a2)"/>
+  <path class="edge stop" d="M655,206 V278 H542" marker-end="url(#a2)"/>
+  <text class="elabel" x="662" y="126">write fails</text>
+  <text class="elabel" x="12" y="24">Amber: added by this contract. Plain: exists today. Red: a path that ends in refusal.</text>
+</svg></div>
+<figcaption>What exists today is the two gates and the tool. The contract adds the audit step in front, the two records, and the branch that refuses when a record cannot be written. The tool never runs on the amber arrow&rsquo;s failure.</figcaption></figure>
+
+<h2>How the file is chained and checked</h2>
+<figure><div class="fig-scroll">
+<svg viewBox="0 0 900 220" role="img" aria-label="Each line holds the hash of the line before and its own hash. The check recomputes each hash from the bytes on disk and compares.">
+  <defs><marker id="b1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path class="ahead new" d="M0,0 L8,4 L0,8 z"/></marker></defs>
+  <g class="nd new"><rect x="10" y="30" width="270" height="70" rx="3"/><text x="22" y="52">Line 41</text><text class="m" x="22" y="70">{ &hellip; "seq":41, "prev_hash":"7c1e&hellip;",</text><text class="m" x="22" y="86">  "hash":"b7e2&hellip;" }</text></g>
+  <g class="nd new"><rect x="315" y="30" width="270" height="70" rx="3"/><text x="327" y="52">Line 42</text><text class="m" x="327" y="70">{ &hellip; "seq":42, "prev_hash":"b7e2&hellip;",</text><text class="m" x="327" y="86">  "hash":"51c9&hellip;" }</text></g>
+  <g class="nd new"><rect x="620" y="30" width="270" height="70" rx="3"/><text x="632" y="52">Line 43</text><text class="m" x="632" y="70">{ &hellip; "seq":43, "prev_hash":"51c9&hellip;",</text><text class="m" x="632" y="86">  "hash":"0d4a&hellip;" }</text></g>
+  <path class="edge new" d="M280,86 H313" marker-end="url(#b1)"/>
+  <path class="edge new" d="M585,86 H618" marker-end="url(#b1)"/>
+  <g class="nd"><rect x="10" y="140" width="880" height="56" rx="3"/><text x="22" y="163">The check, <tspan class="m">--verify-audit</tspan>: for each line, SHA-256 of the bytes as written without the hash member must equal its hash, its prev_hash must equal the</text><text x="22" y="181">hash of the line before, and its number must be one more. The first line that fails is named. Nothing is re-written to compare.</text></g>
+</svg></div>
+<figcaption>All of this is new. One file belongs to one server instance for one day; the first line of the next day&rsquo;s file carries the last hash of the day before.</figcaption></figure>
+
+<h2>Tier 1 &mdash; who it is for</h2>
+<p><b>Who.</b> The people who run the server for an organisation and its security team; an investigator after an incident; the pioneer judging whether the frame holds; and the next phase, which takes access away on the strength of these records.</p>
+<p><b>What they want.</b> To answer, for any request, who made it, what it asked for, whether it was let through and by which rule, from a record they can trust; and to be told when the record itself has stopped.</p>
+<p><b>Success.</b> Every request leaves one line. A change is never made before its line is written. A line someone alters is found by a check the server ships. No line carries a secret. The lines use the vocabulary a security monitoring system already knows, with alerts ready.</p>
+<p><b>Cost today.</b> Refusals are text lines in the ordinary log. An allowed tool call leaves a text line; an allowed resource read, prompt or completion leaves none. No line names the token or the trace it belongs to. Any line can be edited unnoticed. If the log cannot be written, the server serves on.</p>
+
+<h2>Tier 2 &mdash; use cases</h2>
+<div class="table-wrap"><table>
+<tr><th></th><th>Use case</th></tr>
+<tr><td class="id">UC-1</td><td><b>Every request leaves one record.</b> A tool call, a resource read, a prompt, a completion, a list, sign-on, discovery, ping, a notification, a kind nobody governs: each leaves exactly one decision record &mdash; allowed, refused, or asked to confirm. A request rejected before any check still leaves one. An answer withheld after the tool ran is a second decision and a second record.</td></tr>
+<tr><td class="id">UC-2</td><td><b>The record says who and what.</b> Time, application id, event name, level, description, the caller (identity provider, subject, client, a hash of the token&rsquo;s id, scopes &mdash; never the token), the method, provider, target, risk, the decision and its rule, the arguments with secrets removed, trace id, request id, source address, host name, request URI and method, user agent. Over stdio the HTTP facts are empty; a refusal before sign-in has no caller.</td></tr>
+<tr><td class="id">UC-3</td><td><b>Record first; refuse when it cannot be written.</b> An allowed request&rsquo;s record is flushed before anything runs. If it cannot be written, a Write or Irreversible tool is refused and the server says the trail is down; every other request follows <code>Audit:ReadWhenUnavailable</code>, default deny. A refusal whose record cannot be written is still a refusal. The server recovers by itself.</td></tr>
+<tr><td class="id">UC-4</td><td><b>A chain an operator can check.</b> One file per server instance per day; each line carries the hash of the line before, its own hash and a running number. <code>--verify-audit</code> names the first line that breaks. The chain continues across midnight; files past the retention are removed.</td></tr>
+<tr><td class="id">UC-5</td><td><b>Nothing secret, nothing forged.</b> A sensitive argument becomes a short hash tag; a value shaped like a credential is always replaced; a long string is cut and carries a hash of the whole. A line break or escape character a caller sends cannot start a new line. A sensitive name the tool does not declare stops startup.</td></tr>
+<tr><td class="id">UC-6</td><td><b>One trace through.</b> Each record carries the request&rsquo;s trace id &mdash; the caller&rsquo;s own when one is sent &mdash; and a request id; the server opens named spans for the request and the tool.</td></tr>
+<tr><td class="id">UC-7</td><td><b>The server&rsquo;s own life is on the trail.</b> Started, with a hash of the build and of the installed frame; stopped cleanly; crashed; trail down.</td></tr>
+<tr><td class="id">UC-8</td><td><b>The HTTP layer&rsquo;s refusals too.</b> A refused token, a refused origin, and the per-address limit.</td></tr>
+<tr><td class="id">UC-9</td><td><b>A copy leaves the machine.</b> When a collector is configured, each record is also sent there in the background. A failing collector never delays or refuses a request, and is reported. The file stays the record.</td></tr>
+<tr><td class="id">UC-10</td><td><b>The ordinary log holds no argument values.</b> The switch that wrote a tool call&rsquo;s full arguments at Debug is removed.</td></tr>
+<tr><td class="id">UC-11</td><td><b>Alerts ship with the repository:</b> first use of a tool by a caller; many refusals in ten minutes; any prompt injection, token reuse, egress denial or revocation failure; the trail stopping, and a gap in the running number.</td></tr>
+<tr><td class="id">UC-12</td><td><b>Audit settings are checked like every other.</b> An unknown key, a bad value or a directory that cannot be written stops startup, naming it.</td></tr>
+</table></div>
+
+<h3>Decided at the draw, without the pioneer</h3>
+<p>Each of these would have been a question at a spec lock. Each is also in <code>docs/deferred/phase-3-audit.md</code> with what overturning it would cost.</p>
+<div class="table-wrap"><table>
+<tr><th></th><th>Choice</th><th>Why</th></tr>
+<tr><td class="id">1</td><td>The tool-call event is written when the call is admitted, not when it completes, as the roadmap words it.</td><td>A record written after the act leaves a moment in which an irreversible act has happened with no record. How the call ended stays in the ordinary log, joined by the trace id.</td></tr>
+<tr><td class="id">2</td><td>A failing collector does not refuse requests; a failing file does.</td><td>The file is the record, the collector a copy. Tying every write to a remote system&rsquo;s uptime is a choice the pioneer should make knowingly.</td></tr>
+<tr><td class="id">3</td><td>One file per server instance.</td><td>No two processes ever write one chain.</td></tr>
+<tr><td class="id">4</td><td>A plain SHA-256 chain, not a keyed one.</td><td>It is what the roadmap states. It does not stop someone who can rewrite the whole file.</td></tr>
+<tr><td class="id">5</td><td>The default directory is <code>logs/audit</code>.</td><td>The one place the image&rsquo;s user can write, so the Dockerfile is untouched.</td></tr>
+<tr><td class="id">6</td><td>Ping, sign-on and notifications are recorded.</td><td>One rule with no exceptions; the per-address limit bounds the volume.</td></tr>
+<tr><td class="id">7</td><td>The collector copy is OTLP over HTTP in JSON, written by hand.</td><td>No package is added while another session is drawing the supply-chain contract.</td></tr>
+<tr><td class="id">8</td><td>400 days of files; reads refused when the trail is down.</td><td>The roadmap&rsquo;s defaults for two decisions never made.</td></tr>
+<tr><td class="id">9</td><td>No scan of tool output for hostile instructions.</td><td>The roadmap&rsquo;s amendment of 2026-09-23 moved it to Phase 4.</td></tr>
+</table></div>
+
+<h2>Tier 3 &mdash; guardrails</h2>
+<div class="table-wrap"><table>
+<tr><th></th><th>Holds</th><th>Guardrail</th><th></th></tr>
+<tr><td class="id">G-1</td><td class="holds">UC-1</td><td>The audit step is the first incoming message filter and the request-kind gate the second; startup refuses any other order. A request&rsquo;s audit state travels with the message, never in a static.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-2</td><td class="holds">UC-1, 3</td><td>A decision is recorded where it is made: the gate records &ldquo;allowed&rdquo; before it hands on and &ldquo;refused&rdquo; inside its one refusal path; the audit step records only when a request ends with no record.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-3</td><td class="holds">UC-2</td><td>One event type and one writer, with the roadmap&rsquo;s field names plus a running number and the instance id. Event names come from one closed list.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-4</td><td class="holds">UC-3</td><td>The file write is synchronous to disk and throws when it fails. The gate asks the trail on every request; &ldquo;available&rdquo; is never cached.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-5</td><td class="holds">UC-4</td><td>One JSON object per line, members in a fixed order, the two hashes last. The check recomputes from the bytes on disk and re-serialises nothing. The file is created new, exclusive to its instance, and readable while open.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-6</td><td class="holds">UC-5</td><td>Secrets are removed in the writer, before any destination sees the event. JSON encoding is the only escaping.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-7</td><td class="holds">UC-5</td><td>A tool&rsquo;s policy gains an optional list of sensitive argument names; startup refuses a name the tool&rsquo;s schema does not hold.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-8</td><td class="holds">UC-6</td><td>One activity source. Every record has a trace id, generated when none arrives.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-9</td><td class="holds">UC-7</td><td>Lifecycle events hang on the host&rsquo;s own start and stop, so a composition that starts no host writes nothing.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-10</td><td class="holds">UC-8</td><td>One middleware, after forwarded headers, captures the HTTP facts once; HTTP refusals go to the same trail as the gate&rsquo;s.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-11</td><td class="holds">UC-9</td><td>A bounded queue and one background sender. HTTPS only outside Development; a URL carrying a credential is refused without printing it. Drops are counted and reported. It never throws into a request.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-12</td><td class="holds">UC-12</td><td><code>Audit</code> joins the governed settings; every value is checked at startup.</td><td><span class="chip kept">kept rule</span></td></tr>
+<tr><td class="id">G-13</td><td class="holds">UC-10</td><td>No ordinary log line carries an argument value. Existing lines and replies are otherwise unchanged: the suites that read them cannot be run today.</td><td><span class="chip kept">kept</span></td></tr>
+<tr><td class="id">G-14</td><td class="holds">UC-11</td><td>Alert rules are Sigma files under <code>docs/siem/alerts</code>; a test fails when a rule names an event the server cannot emit.</td><td><span class="chip new">new</span></td></tr>
+<tr><td class="id">G-15</td><td class="holds">all</td><td>No new package. No provider can register or replace an audit part: the frame already refuses that namespace to providers.</td><td><span class="chip kept">kept rule</span></td></tr>
+<tr><td class="id">G-16</td><td class="holds">all</td><td>Product code only on this session&rsquo;s own branch. The frame files the other two contracts also touch are changed as little as the guarantees allow, and each change is listed for the merge.</td><td><span class="chip new">new</span></td></tr>
+</table></div>
+
+<h2>Tier 4 &mdash; acceptance tests</h2>
+<p>No disappointment line and no pre-mortem were asked: the gate was waived. The tests were drafted against the standing answer the pioneer gave for the two contracts before this one: &ldquo;Pre mortem is if there are holes or security issues as a result of our work here.&rdquo;</p>
+<div class="table-wrap"><table>
+<tr><th></th><th>Covers</th><th>What is checked, and what failure looks like</th></tr>
+<tr><td class="id">T-1</td><td class="holds">G-1, 2</td><td>Every rule the gate can refuse by is driven through a real client. Fails if any leaves other than exactly one record with that rule, the wrong event name or level, or if the tool ran. A rule in the source with no driver fails the test.</td></tr>
+<tr><td class="id">T-2</td><td class="holds">G-2</td><td>A mixed run of N requests of every kind leaves exactly N records, each naming its method, plus one for a withheld answer.</td></tr>
+<tr><td class="id">T-3</td><td class="holds">G-3</td><td>Every record carries every required field. Over HTTP with a real token the caller and HTTP facts are right, the token-id hash matches, and neither the token nor its id is anywhere in the file.</td></tr>
+<tr><td class="id">T-4</td><td class="holds">G-2, 4</td><td>With a trail that cannot write: a Write tool is refused and did not run, and the server says the trail is down; a read is refused by default and allowed when set so; once the trail accepts, the next write runs. When the &ldquo;allowed&rdquo; record is appended, the tool&rsquo;s counter has not moved.</td></tr>
+<tr><td class="id">T-5</td><td class="holds">G-5</td><td>The real program&rsquo;s <code>--verify-audit</code> passes a file the server wrote (exit 0) and names the exact line after a byte is flipped, a line removed, two swapped or the last cut short (exit 65); a missing file exits 66.</td></tr>
+<tr><td class="id">T-6</td><td class="holds">G-5</td><td>Across midnight on a test clock the chain continues into a new file and both verify in order; files past the retention are gone and newer ones kept.</td></tr>
+<tr><td class="id">T-7</td><td class="holds">G-6, 7</td><td>A sensitive argument, a token-shaped value at any depth and a 10 KB string each come out as specified. CR, LF and ESC in a tool name, an argument and a user agent leave exactly as many lines as records, each valid JSON. An undeclared sensitive name stops startup.</td></tr>
+<tr><td class="id">T-8</td><td class="holds">G-8</td><td>A request sent with a trace header has that trace id in its record, and code inside the tool sees the same; a listener observes a request span and a tool span.</td></tr>
+<tr><td class="id">T-9</td><td class="holds">G-9</td><td>The real program, started and stopped: started is the first record and carries the hash of the server&rsquo;s own file, stopped is the last, and the file verifies. A bare composition leaves no file.</td></tr>
+<tr><td class="id">T-10</td><td class="holds">G-10</td><td>A foreign origin, an unregistered issuer and an expired token each leave one record with no caller and no token text; the 61st request from one address in a minute leaves one.</td></tr>
+<tr><td class="id">T-11</td><td class="holds">G-11</td><td>Each record reaches an in-process collector with the same line as the file&rsquo;s. With the collector failing, requests are unaffected and the file is complete. A plain-http or credential-carrying endpoint stops startup, and the credential is in no output.</td></tr>
+<tr><td class="id">T-12</td><td class="holds">G-12</td><td>An unknown audit key, an unwritable directory, a bad mode and a zero retention each stop startup, naming it.</td></tr>
+<tr><td class="id">T-13</td><td class="holds">G-13</td><td>A marker value sent as an argument with the log at Debug appears in no ordinary log line; the line naming the arguments is still there.</td></tr>
+<tr><td class="id">T-14</td><td class="holds">G-14</td><td>Every alert file parses, names only events the server can emit, and the roadmap&rsquo;s four cases each have one.</td></tr>
+<tr><td class="id">T-15</td><td class="holds">G-1</td><td>With the installed filters tampered so the audit step is not first, or the request-kind gate not second, startup refuses and says which.</td></tr>
+<tr><td class="id">T-16</td><td class="holds">G-15, 16</td><td>The solution builds with warnings as errors, every package lock file is unchanged, and every test that needs no container passes.</td></tr>
+</table></div>
+<p><b>Untested, and why.</b> <span class="chip open">open</span> Anything on the shipped image, and the existing tests that need a container: the engine is down, so nothing shows this work left those unbroken. Survival of a power cut. A real upstream receiving the trace header. Behaviour under load. Two instances side by side beyond their file names. The adversarial rounds.</p>
+<p><b>Realigned.</b> None: no disappointment line was given.</p>
+
+<h2>Every magnitude and where it came from</h2>
+<div class="table-wrap"><table>
+<tr><th>Quantity</th><th>Value</th><th>Source</th><th></th></tr>
+<tr><td>A string argument is cut at</td><td class="num">2 KB</td><td>Roadmap, P3.3</td><td><span class="chip new">new</span></td></tr>
+<tr><td>Hash characters in a redaction tag</td><td class="num">8</td><td>Roadmap, P3.3</td><td><span class="chip new">new</span></td></tr>
+<tr><td>Files kept</td><td class="num">400 days</td><td>Roadmap decision D6, its default; never decided</td><td><span class="chip open">open</span></td></tr>
+<tr><td>Reads when the trail is down</td><td class="num">refused</td><td>Roadmap decision D7, its default; never decided</td><td><span class="chip open">open</span></td></tr>
+<tr><td>One record&rsquo;s arguments are capped at</td><td class="num">16 KB</td><td>Authored: eight times the string cut. A request body may be 1 MB, and one record should not be.</td><td><span class="chip new">judgement</span></td></tr>
+<tr><td>Collector queue; batch; flush; send timeout</td><td class="num">10,000; 100; 1 s; 5 s</td><td>Authored. No measurement stands behind them.</td><td><span class="chip new">judgement</span></td></tr>
+<tr><td>Exit codes of the check</td><td class="num">0, 65, 66</td><td>The sysexits convention the server already uses for 70 and 78: data error, no input</td><td><span class="chip new">new</span></td></tr>
+<tr><td>Instance id</td><td class="num">8 hex</td><td>Authored: enough to tell instances of one host apart</td><td><span class="chip new">judgement</span></td></tr>
+<tr><td>Requests per address per minute</td><td class="num">60</td><td>Existing, HttpServerComposition</td><td><span class="chip kept">kept</span></td></tr>
+<tr><td>A caller&rsquo;s value in a description is cut at</td><td class="num">200 chars</td><td>Existing, LogSafe.MaxLength</td><td><span class="chip kept">kept</span></td></tr>
+</table></div>
+
+<h2>Traceability</h2>
+<p>Every use case is held by a guardrail and every guardrail holds a use case. G-15 and G-16 hold all of them.</p>
+<div class="table-wrap"><table class="mat">
+<tr><th></th><th class="mono">G-1</th><th class="mono">G-2</th><th class="mono">G-3</th><th class="mono">G-4</th><th class="mono">G-5</th><th class="mono">G-6</th><th class="mono">G-7</th><th class="mono">G-8</th><th class="mono">G-9</th><th class="mono">G-10</th><th class="mono">G-11</th><th class="mono">G-12</th><th class="mono">G-13</th><th class="mono">G-14</th><th class="mono">G-15</th><th class="mono">G-16</th></tr>
+<tr><td class="mono">UC-1</td><td class="hit">&#9679;</td><td class="hit">&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+<tr><td class="mono">UC-2</td><td></td><td></td><td class="hit">&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+<tr><td class="mono">UC-3</td><td></td><td class="hit">&#9679;</td><td></td><td class="hit">&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+<tr><td class="mono">UC-4</td><td></td><td></td><td></td><td></td><td class="hit">&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+<tr><td class="mono">UC-5</td><td></td><td></td><td></td><td></td><td></td><td class="hit">&#9679;</td><td class="hit">&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+<tr><td class="mono">UC-6</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">&#9679;</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+<tr><td class="mono">UC-7</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">&#9679;</td><td></td><td></td><td></td><td></td><td></td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+<tr><td class="mono">UC-8</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">&#9679;</td><td></td><td></td><td></td><td></td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+<tr><td class="mono">UC-9</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">&#9679;</td><td></td><td></td><td></td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+<tr><td class="mono">UC-10</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">&#9679;</td><td></td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+<tr><td class="mono">UC-11</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">&#9679;</td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+<tr><td class="mono">UC-12</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">&#9679;</td><td></td><td></td><td class="all">&#9675;</td><td class="all">&#9675;</td></tr>
+</table></div>
+
+<h2>Boundaries</h2>
+<ul>
+<li>It does not take access away. Strikes, suspension and revocation are Phase 4, and read these records.</li>
+<li>It does not scan tool output for hostile instructions. The roadmap moved that to Phase 4.</li>
+<li>It does not define the outbound guard&rsquo;s refusals or the tool lock&rsquo;s. Those contracts are being drawn by two other sessions; this one gives them the event and the one call that records it.</li>
+<li>It does not prove a file was not rewritten whole. That needs the copy outside the machine compared, or a keyed signature.</li>
+<li>It does not touch the Dockerfile, add a package, or change a log line or a reply that exists today.</li>
+<li>It is not shown on the shipped image. Those tests are owed.</li>
+</ul>
+
+<h2>The gate</h2>
+<div class="gate">
+<h3>What was waived, and what still holds</h3>
+<p>No approval was asked. The pioneer&rsquo;s instruction to keep working stands in for it, and the entry in the contract log says so, so the record does not claim tiers the pioneer approved.</p>
+<p>What still holds: the contract was drawn before any code. A deviation found while building is recorded on the contract, not resolved quietly, and anything that needs the pioneer goes into the deferred file instead of stopping the work. A change to this contract is a whole redraw of this page and the conversation.</p>
+<p>Deliberately left open, so reading this page as it stands is itself a decision: the nine choices above; the 400 days; whether a failing collector should ever refuse writes; and whether the chain should be keyed.</p>
+</div>
+
+<div class="foot">
+<p><b>Read this session, before drawing.</b> The roadmap in full. In the product: GovernedServer, RequestGate, Caller and Refusal, FrameIntegrity, SettingsAllowlist, Policy, PolicyRegistry (first part), LimitStore, ArgumentGuard, Confirmation, ToolCallLoggingFilter, LogSafe, HostBuilders, Program, IdentityRegistration, PrincipalNormalization, OriginGuardMiddleware, the composition and pipeline order in HttpServerComposition, the settings files and the Dockerfile. In the tests: the frame harness, the in-process server, the test modules, the gate client, the Redis fixture. The SDK&rsquo;s own documentation for message filters, the shared Items and the stream transports. Every recorded ruling, forty in all.</p>
+<p><b>Not read.</b> The ledger of learnings: it is closed to this session while a review is open, so trial and adopted candidates could not be cited.</p>
+<p><b>No product code had changed when this page was written.</b></p>
+</div>
+</div>

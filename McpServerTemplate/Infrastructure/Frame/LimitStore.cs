@@ -65,10 +65,13 @@ public sealed class RedisLimitStore : ILimitStore, IDisposable
         {
             // contract-005 verify phase (SEC-V-01) — a connection string the client cannot read is configuration (exit 78),
             // not a crash (exit 70). Neither the value nor the keyword is shown: a password holding ',X=' splits into a
-            // keyword, so the parser's own message can carry part of the password.
+            // keyword, so the parser's own message can carry part of the password. The client has no way to write a comma
+            // in a value: quotes and a backslash are kept as text, and what follows the comma is read as another server to
+            // connect to. So the message says a password cannot hold one (an '=' in a password is read as written).
             throw new McpServerTemplate.Infrastructure.ConfigurationException(
                 "Limits:Redis is not a connection string the Redis client can read: a keyword or a value in it is not one it "
-                + "accepts. Its value is not shown, as it may hold a password; a password containing ',' or '=' must be quoted.",
+                + "accepts. Its value is not shown, as it may hold a password. A password cannot contain a comma: the client "
+                + "reads one as the end of the value, quoted or not.",
                 e);
         }
 
