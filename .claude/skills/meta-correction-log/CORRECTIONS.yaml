@@ -1300,7 +1300,10 @@ corrections:
       not asked
     supersedes: []
     recorded_by: main-agent
-    clerked: false
+    clerked: blocked
+    blocked_since: 2026-10-09
+    blocked_reason: this correction is the pioneer's instruction to use no subagents and the case clerk is one - whether the kit's own agents are covered is not said
+    blocked_waiting_for: the pioneer's word on whether the kit's agents (clerk, consolidator, auditor, verifier, recorder) may run while the team rule holds
     precedent: null
     clerk_note: null
 
