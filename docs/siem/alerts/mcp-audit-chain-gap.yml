@@ -1,0 +1,35 @@
+title: MCP server - a record is missing from the audit trail's copy
+id: 5a0f4c1e-7b1d-4c62-9a34-0c6f2f6d1a06
+status: experimental
+description: >
+  Every record carries a running number, seq, that rises by one within one server instance, and the hash of the record
+  before it. A number missing from the copy the monitoring system holds is a record that was dropped on the way to it,
+  or removed from the file before it was forwarded. Sigma has no way to say "consecutive", so this rule selects every
+  record and x-sequence names what must hold: build it with your monitoring system's own sequence or gap detection.
+  The check that reads the file itself is the server's own: McpServerTemplate --verify-audit <file>.
+references:
+  - docs/06-SECURITY-ROADMAP.md (Phase 3, P3.2, P3.7)
+author: McpServerTemplate
+date: 2026-10-09
+x-roadmap-case: chain-gap
+x-sequence:
+  field: seq
+  step: 1
+  group-by:
+    - hostname
+    - instance
+logsource:
+  product: mcp-server
+  service: audit
+detection:
+  selection:
+    seq|exists: true
+  condition: selection
+fields:
+  - datetime
+  - hostname
+  - instance
+  - seq
+  - prev_hash
+  - hash
+level: high

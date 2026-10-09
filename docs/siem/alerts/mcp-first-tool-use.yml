@@ -1,0 +1,38 @@
+title: MCP server - a caller uses a tool for the first time
+id: 5a0f4c1e-7b1d-4c62-9a34-0c6f2f6d1a05
+status: experimental
+description: >
+  A tool call the server admitted. The alert is the first time a caller and a tool appear together: Sigma has no way to
+  say "first", so this rule gives the selection and x-new-terms names the fields whose first combination is the alert.
+  Build it with your monitoring system's own new-terms or first-seen rule over those fields, with a history long enough
+  to cover how often your callers use each tool.
+references:
+  - docs/06-SECURITY-ROADMAP.md (Phase 3, P3.7)
+author: McpServerTemplate
+date: 2026-10-09
+x-roadmap-case: first-tool-use
+x-new-terms:
+  fields:
+    - principal.idp
+    - principal.sub
+    - mcp.tool
+  history: 30d
+logsource:
+  product: mcp-server
+  service: audit
+detection:
+  selection:
+    event|re:
+      - '^mcp_tool_call(:|$)'
+      - '^mcp_tool_confirmed(:|$)'
+  condition: selection
+fields:
+  - datetime
+  - principal.idp
+  - principal.sub
+  - principal.client_id
+  - mcp.provider
+  - mcp.tool
+  - mcp.risk
+  - source_ip
+level: informational

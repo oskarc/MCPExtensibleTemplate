@@ -50,6 +50,7 @@ public sealed class OtlpAuditSink : IAuditSink, IDisposable
     private long _dropped;
     private long _unreported;
     private long _lastReport;
+    private int _disposed;
 
     /// <summary>Creates the sink and starts its sender.</summary>
     public OtlpAuditSink(AuditOtlpSettings settings, AuditIdentity identity, string appId, ILogger<OtlpAuditSink> logger)
@@ -102,6 +103,12 @@ public sealed class OtlpAuditSink : IAuditSink, IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
+        // Once: the trail disposes its sinks, and the container that built this one disposes it too.
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
         // What is queued gets one last chance, briefly; the file has every record whatever happens here.
         _queue.Writer.TryComplete();
         try

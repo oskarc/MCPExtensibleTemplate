@@ -152,8 +152,22 @@ public sealed class StreamServer : IAsyncDisposable
         outsideTheFrame?.Invoke(builder.Services);
 
         var host = builder.Build();
-        GovernedServer.ValidateAtStartup(host.Services);
-        await host.StartAsync();
+        try
+        {
+            GovernedServer.ValidateAtStartup(host.Services);
+            await host.StartAsync();
+        }
+        catch
+        {
+            // What a server that refuses to start leaves behind is not this test's to keep.
+            host.Dispose();
+            if (auditDirectory is null && Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+
+            throw;
+        }
 
         var options = new McpClientOptions { ProtocolVersion = protocolVersion };
         if (canConfirm)
