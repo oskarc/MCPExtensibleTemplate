@@ -194,22 +194,25 @@ graph LR
 
     Pipeline -->|2| Auth["Authentication<br/>────────────<br/>Bearer token from a<br/>configured identity provider"]
 
-    Auth -->|3| Kinds["Request-kind gate<br/>────────────<br/>Only governed kinds"]
+    Auth -->|3| Audit["Audit step<br/>────────────<br/>Who, how, which trace"]
 
-    Kinds -->|4| Logger["ToolCallLoggingFilter<br/>────────────<br/>Correlation ID, timing"]
+    Audit -->|4| Kinds["Request-kind gate<br/>────────────<br/>Only governed kinds"]
 
-    Logger -->|5| Gate["Request gate<br/>────────────<br/>binding · scope · risk ·<br/>limits · arguments"]
+    Kinds -->|5| Logger["ToolCallLoggingFilter<br/>────────────<br/>Correlation ID, timing"]
 
-    Gate -->|6. Admitted| Execute["Execute Tool<br/>(Provider logic)"]
-    Gate -->|6. Refused| Refused["Error naming the rule<br/>+ security event logged"]
+    Logger -->|6| Gate["Request gate<br/>────────────<br/>binding · scope · risk ·<br/>limits · arguments"]
 
-    Execute -->|7| Cap["Output cap<br/>────────────<br/>Withhold an oversized answer"]
+    Gate -->|7. Admitted,<br/>recorded first| Execute["Execute Tool<br/>(Provider logic)"]
+    Gate -->|7. Refused,<br/>recorded first| Refused["Error naming the rule<br/>+ security event logged"]
 
-    Cap -->|8| Response["Response to<br/>Client"]
+    Execute -->|8| Cap["Output cap<br/>────────────<br/>Withhold an oversized answer"]
+
+    Cap -->|9| Response["Response to<br/>Client"]
 
     Refused --> Response
 
     style Auth fill:#ffccbc
+    style Audit fill:#ffccbc
     style Kinds fill:#ffccbc
     style Logger fill:#c5e1a5
     style Gate fill:#ffccbc

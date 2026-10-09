@@ -628,6 +628,8 @@ flowchart TB
 
 → Roadmap §3.3, P3.6, I7
 
+> **Amended 2026-10-09 (contract-006 as built).** For the audit sink this is built. While the trail cannot be written, a Write or Irreversible tool is refused, and one setting, `Audit:ReadWhenUnavailable` (default `deny`), decides for every other request, lists and sign-on included. The trail is tried again on every request, and its first record once it writes is `sys_monitor_disabled`, with how many events were missed.
+
 ---
 
 ## 15. A decision becomes an audit record
@@ -668,6 +670,8 @@ flowchart TB
 **What to notice.** The token itself never appears — only a hash of its id, which is enough to correlate and useless if the log leaks. The chain makes a deleted or edited record detectable: `--verify-audit` reports the first line where the chain breaks.
 
 → Roadmap §3.5, P3.1–P3.3
+
+> **Amended 2026-10-09 (contract-006 as built).** Two things differ from the diagram. The record is built and written before the decision takes effect: an allowed call is recorded when it is admitted, and runs after. And the chain's hash is the SHA-256 of the line as written, which holds the previous hash, so the check reads the file's own bytes. The export is a copy sent in the background; the file is the record. `sys_startup` now exists, as the first record of each server instance. See `docs/08-AUDIT-TRAIL.md`.
 
 ---
 

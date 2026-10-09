@@ -26,6 +26,7 @@ A production-ready [Model Context Protocol](https://modelcontextprotocol.io/) (M
 │   ├── Program.cs                        # Entry point — settings read once, transport, logging, exit codes
 │   ├── Infrastructure/
 │   │   ├── Frame/                        # The policy frame: policies, request gate, limits, confirmation, startup checks
+│   │   ├── Audit/                        # The audit trail: events, the chained file, --verify-audit, the collector copy
 │   │   ├── Identity/                     # Bearer-token identity, one scheme per identity provider; transport and origin guards
 │   │   ├── HttpServerComposition.cs      # The HTTP host: listener, allowed hosts, proxies, per-address limit, /mcp
 │   │   ├── LogSafe.cs                    # What reaches a log line is escaped and cut
@@ -242,7 +243,7 @@ All settings live in `appsettings.json` and can be overridden via environment va
 
 Every environment but Development — Production, Staging, a misspelled name — requires `Limits:Redis`, `Providers:Enabled` and a declared proxy.
 
-An unknown or retired key in the `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development`, `RateLimit` or `HttpTransport` sections stops the server from starting: an unknown key is named with the nearest real one, a retired key with why it is gone. Any `Kestrel` key is refused as well — the listener is configured from `HttpTransport` alone. A setting the server would silently ignore is refused rather than trusted.
+An unknown or retired key in the `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development`, `RateLimit`, `HttpTransport` or `Audit` sections stops the server from starting: an unknown key is named with the nearest real one, a retired key with why it is gone. Any `Kestrel` key is refused as well — the listener is configured from `HttpTransport` alone. A setting the server would silently ignore is refused rather than trusted.
 
 ## Documentation
 
@@ -376,7 +377,8 @@ A provider registers its own services and nothing of the server's. Its module ma
 - **HTTPS enforcement** — provider base URLs must be absolute HTTPS at startup
 - **Kestrel hardening** — 1 MB request body limit, 100 max connections, 30 s header timeout
 - **Rate limiting** — per caller and per caller per tool, across instances (agentic loop protection) + per-IP (HTTP abuse protection; behind a proxy this is the address the proxy reports — see [docs/04-CONFIGURATION.md](docs/04-CONFIGURATION.md))
-- **Log safety** — argument values logged at Debug only; every value that reaches a log line is escaped (a line break as `\n`, an invisible character as `\uXXXX`) and long values are cut, so one event is one line and none can be forged; log paths validated against traversal
+- **Audit trail** — every decision is written to a chained file before it takes effect: who asked, for what, whether it was allowed and by which rule; a change is refused when its record cannot be written, and the server checks its own file with `--verify-audit` ([docs/08-AUDIT-TRAIL.md](docs/08-AUDIT-TRAIL.md))
+- **Log safety** — the ordinary log never holds an argument's value; every value that reaches a log line is escaped (a line break as `\n`, an invisible character as `\uXXXX`) and long values are cut, so one event is one line and none can be forged; log paths validated against traversal
 - **CORS** — deny-all by default when in HTTP mode
 - **Binding** — defaults to `localhost`, not `0.0.0.0`; Development refuses anything else, and the developer error page is never switched on in any environment
 

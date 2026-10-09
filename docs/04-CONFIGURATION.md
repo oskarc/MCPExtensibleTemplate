@@ -4,7 +4,7 @@
 
 The MCP Server Template uses a hierarchical configuration system where settings can come from multiple sources, with clear precedence rules. This guide explains every setting the server reads and how to set them.
 
-One rule shapes everything below: **in the sections the frame governs — `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development`, `RateLimit`, `HttpTransport` and `Kestrel` — a key the server does not read stops it from starting.** A misspelled key is otherwise ignored silently, and an operator believes it is in force. The startup message names the key: an unknown one with the nearest real key, a retired one with why it is gone. `Kestrel` holds no key the server reads: the server configures its own listener from `HttpTransport`, so any `Kestrel` key stops it, with the reason.
+One rule shapes everything below: **in the sections the frame governs — `Authentication`, `Providers`, `Limits`, `Confirmation`, `Development`, `RateLimit`, `HttpTransport`, `Kestrel` and `Audit` — a key the server does not read stops it from starting.** A misspelled key is otherwise ignored silently, and an operator believes it is in force. The startup message names the key: an unknown one with the nearest real key, a retired one with why it is gone. `Kestrel` holds no key the server reads: the server configures its own listener from `HttpTransport`, so any `Kestrel` key stops it, with the reason.
 
 ---
 
@@ -289,6 +289,49 @@ Separately, HTTP requests are limited to 60 per minute per client address before
 - **Type**: `string` — base64, at least 32 bytes decoded
 - **Required**: when any enabled provider has a tool whose policy marks it *Irreversible*
 - **Description**: Signs the confirmations irreversible tools require. Generate one with `openssl rand -base64 32` and keep it in a secret store.
+
+---
+
+### Audit Settings
+
+Every decision the server makes is written to an audit trail before it takes effect. What is recorded, the file's format
+and how to check it are in [08-AUDIT-TRAIL.md](08-AUDIT-TRAIL.md); these are its settings. None is required: with nothing
+set the trail is written under `logs/audit`.
+
+#### `Audit:Path`
+- **Type**: `string` — a directory, absolute or relative to the working directory
+- **Default**: `logs/audit`
+- **Description**: Where the audit files are written, one per server instance per day. The server proves it can write there at startup and refuses to start if it cannot. A path containing `..` is refused.
+
+#### `Audit:ReadWhenUnavailable`
+- **Type**: `string` — `deny` or `allow`
+- **Default**: `deny`
+- **Description**: What happens to requests that change nothing while the audit trail cannot be written. `deny`: nothing is served. `allow`: they are served and not recorded. A *Write* or *Irreversible* tool is refused either way.
+
+#### `Audit:RetentionDays`
+- **Type**: `int` (1–36,500)
+- **Default**: `400`
+- **Description**: How many days of audit files are kept. Older files are removed when a new file is opened.
+
+#### `Audit:AppId`
+- **Type**: `string` — 1 to 64 letters, digits, dots, hyphens or underscores
+- **Default**: `mcp-server`
+- **Description**: The application's name in every audit record.
+
+#### `Audit:Otlp:Endpoint`
+- **Type**: `string` — an absolute `https` URL
+- **Default**: not set
+- **Description**: A collector that receives a copy of every audit record as an OTLP log record, for example `https://collector.example.com:4318/v1/logs`. It must carry no user information, query or fragment. Plain `http` is accepted in Development only, to a collector on loopback. A collector that is down never delays or refuses a request; the file stays the record.
+
+#### `Audit:Otlp:Headers:{name}`
+- **Type**: `string`
+- **Default**: not set
+- **Description**: A header sent with every export, for example the collector's credential. Keep it in a secret store. Setting a header without `Audit:Otlp:Endpoint` stops the server from starting.
+
+**What happens when the trail cannot be written** (the caller receives an MCP error):
+```
+sys_monitor_disabled (rule: audit-unavailable). The server cannot record this request right now, so it refuses it rather than act unrecorded. Try again shortly.
+```
 
 ---
 

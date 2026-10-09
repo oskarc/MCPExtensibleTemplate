@@ -3,8 +3,9 @@
 Written 2026-10-09 by the session that built it, on the pioneer's instruction to finish each task as well as it can be
 finished and to put what could not be finished, or was not this session's to decide, in a file instead of a question.
 
-The work is on the branch `roadmap/phase-3-audit`, in its own worktree. It is not merged, not pushed, and has never run
-in a container.
+The work is on the branch `roadmap/phase-3-audit`, in its own worktree. It is not merged into the shared branch, not
+pushed, and has never run in a container. It has taken in the shared branch as of 2026-10-09 (3d00983), so it holds the
+open contract's documentation pass and merges forward without that step.
 
 ## 1. Choices that were yours, and what I chose
 
@@ -42,24 +43,29 @@ seconds.
 | The kit's own steps after a build: the session audit, the independent verification, and writing what was learned to the ledger | The first two are kit agents. The third needs the ledger, which is closed while a review is open, or a kit agent. | Your word on whether the kit's own agents count as subagents, which three sessions have asked. The contract is recorded as implemented and unverified. |
 | Merging and pushing | The sessions agreed nothing is merged until the open contract's closing pass has pushed. | That pass. Then egress, this, tool lock, in that order. |
 
-## 3. Owed in files another session holds
+## 3. What was owed in files another session held
 
-The session closing the open contract holds the README, `docs/01` to `docs/05` and the dated amendments in `docs/06` and
-`docs/07` until its documentation pass is committed. I changed none of them. Owed once it is:
+The session closing the open contract held the README, `docs/01` to `docs/05` and the dated amendments in `docs/06` and
+`docs/07` while its documentation pass ran. That pass was committed on 2026-10-09 (3b2228f), this branch took it in by
+merging `epic/security-hardening`, and the edits owed were then made here:
 
-- `docs/README.md`: a line for `08-AUDIT-TRAIL.md` in the index.
-- `docs/04-CONFIGURATION.md`: the six `Audit` settings in the keys reference (the table is in `docs/08`), and `Audit` in
-  the list of governed sections.
-- `docs/01-ARCHITECTURE.md` and `docs/02`: the audit step in front of the request-kind gate, and the way out.
-- `docs/06-SECURITY-ROADMAP.md`: a dated amendment under Phase 3 saying where it was built differently (the four points
-  at the end of `docs/08`), and that P3.5's "principal identifiers beyond sub" was left as it stands: existing log lines
-  name the caller as `{idp}:{sub}` and were not changed.
-- `docs/07-SECURITY-FLOWCHARTS.md`: the same, as a dated amendment.
-- `docs/05`: the log-line examples lose the Debug line that printed arguments.
+- `docs/README.md`: `08-AUDIT-TRAIL.md` in the index, the table and the security links.
+- `docs/04-CONFIGURATION.md`: an Audit Settings section with the six settings, and `Audit` among the governed sections.
+- `docs/01-ARCHITECTURE.md`: the audit step in front of the request-kind gate, every decision recorded before it takes
+  effect, and the ordinary log holding no argument values. Two sentences there had become false and are corrected.
+- `docs/02-ARCHITECTURE-FLOWCHARTS.md`: the audit step in the filter-chain diagram (section 5). Its other diagrams do
+  not draw the audit step; none of them says anything that is now false.
+- `docs/03-TESTING-STRATEGY.md`: the audit tests in the test tree.
+- `docs/06-SECURITY-ROADMAP.md`: a dated amendment at the end of Phase 3, eleven points.
+- `docs/07-SECURITY-FLOWCHARTS.md`: dated amendments under flows 14 and 15.
+- `README.md`: the audit trail among the security features and in the file tree; one sentence about Debug logging that
+  had become false is corrected.
 
-Two lines the roadmap names were left as they are, because the end-to-end suite reads them and cannot be run: the fatal
-line of a server that cannot start does not begin with `sys_startup`, and the line of one that crashes does not begin
-with `sys_crash`. A crash is on the audit trail as `sys_crash` where the trail still exists.
+The documentation tests, the stronger ones from that pass included, pass with these in place.
+
+Still as they were: two lines the roadmap names were left, because the end-to-end suite reads them and cannot be run. The
+fatal line of a server that cannot start does not begin with `sys_startup`, and the line of one that crashes does not
+begin with `sys_crash`. A crash is on the audit trail as `sys_crash` where the trail still exists.
 
 ## 4. For the merge
 
