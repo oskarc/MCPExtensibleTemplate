@@ -335,7 +335,15 @@ contracts:
       a ruling of the pioneer's puts after every build (they are subagents, and the team rule forbids them
       today).
       realigned: none - the gate was waived and no disappointment line was given.
-    red_test: null
+    red_test:
+      broke: G-2
+      went_red: T-4
+      note: |
+        2026-10-09, on the branch at 33789b2. The gate's one line that refuses a request whose admission the
+        trail could not record was changed to let it through. Red: three of T-4's five tests (nothing served
+        while the trail is down; a write still refused with reads allowed; the trail coming back) and T-1's
+        driver for audit-unavailable. Restored, green: 6 of 6. The first run after restoring was still red -
+        the restored file kept an older timestamp than the broken build, which was reused; rebuilt, it passed.
     approval: waived-at-spec-lock
     approval_note: |
       No spec lock was held and no gate stopped the work. The pioneer was told, by this session and two
@@ -346,12 +354,90 @@ contracts:
       claim tiers the pioneer approved: the contract was drawn in full in the conversation before any code,
       and every choice that would have been put to them is under "Decided at the draw" and in
       docs/deferred/phase-3-audit.md.
-    status: approved
+    status: implemented
     verification_state: none
-    audited: false
-    transcript: null
+    audited: blocked
+    blocked_since: 2026-10-09
+    blocked_reason: the session auditor is a subagent, and the pioneer told the sessions building from the roadmap to use none (C-041); the same holds for the verifier and for the recorder that writes observations while a review is open
+    blocked_waiting_for: the pioneer's word on whether the kit's own agents may run while the team rule holds - asked by three sessions on 2026-10-09
+    transcript: 3dc05e61-9719-43fe-9b72-17f4c1a312c3
     observations: []
-    revisions: []
+    observations_held: |
+      Seven observations are written down and not in the ledger: the ledger is closed to this session while a
+      review is open, and the agent that records for it is a subagent. They are in section 6 of
+      docs/deferred/phase-3-audit.md on the branch, in full, to be recorded when either changes.
+    built_on: |
+      Branch roadmap/phase-3-audit, in its own worktree (D:/projects/mcp.worktrees/phase-3-audit), cut from
+      56aee9f: 3b627c7 (the trail, the chain, the gate's records), 33789b2 (the acceptance tests, the alert
+      rules), dae252e (the operator's document, the deferred file). Not merged and not pushed: the sessions
+      agreed nothing merges into epic/security-hardening before contract-005's closing pass has pushed.
+    tests_run:
+      date: 2026-10-09
+      command: dotnet test McpServerTemplate.Tests/McpServerTemplate.Tests.csproj -c Release
+      result: 757 passed, 136 failed, of 893
+      note: |
+        A baseline was taken on the branch before any change: 660 passed, 136 failed, of 796. Compared test by
+        test: every one of the 660 still passes; the 97 new tests all pass; the same 136 fail, each because
+        the suite's Redis is a container and the container engine is down (TestRedis, a null Docker endpoint).
+        So T-16 holds as worded - every test that needs no container passes - and nothing shows the 136 are
+        unbroken. The solution builds with warnings as errors, and no packages.lock.json differs from 56aee9f.
+        By test: T-1, T-2, T-15 AuditDecisionTests (25); T-4 AuditFailClosedTests (5); T-5, T-6
+        AuditChainTests (16) and AuditProgramTests (2, the real program); T-7, T-8, T-13 AuditRedactionTests
+        (13); T-3, T-8, T-10 AuditHttpTests (6); T-11 AuditExportTests (4) and AuditSettingsTests; T-12
+        AuditSettingsTests (22 with T-11's settings half); T-9 AuditProgramTests; T-14 AuditAlertRulesTests (3).
+        Measured once, on this machine: one flushed append takes 1.8 ms (300 in 531 ms).
+    revisions:
+      - what: |
+          UC-1 and G-2 said every request leaves one record written where its decision is made. Found while
+          building: the SDK turns some requests away before any incoming filter runs (a method the negotiated
+          protocol version does not have - ping and logging/setLevel under 2026-07-28), so the audit step never
+          meets them. Added: an outgoing message filter that records such a request on its way out, after the
+          fact, with the rule rejected-by-protocol, and a per-session note of which requests the audit step
+          met. T-1 gained a driver for that rule and T-2 a line for it.
+        authorised_by: |
+          agent, under the pioneer's instruction of 2026-10-09 to keep working and defer what is theirs
+          (C-042). Not put to the pioneer first. Listed in the deferred file's known limits for them to judge.
+        date: 2026-10-09
+        tests_changed: [T-1, T-2]
+      - what: |
+          T-7 asked that CR, LF and ESC sent in a user agent leave no extra line. They cannot be sent there:
+          the HTTP client and the web server each refuse a header carrying them before the server's code runs.
+          T-7 holds it for a tool name and for an argument's name and value. The user agent is written through
+          the same writer, as T-3 shows for an ordinary one.
+        authorised_by: |
+          agent, as above.
+        date: 2026-10-09
+        tests_changed: [T-7]
+      - what: |
+          T-1 drives every rule the source holds but two, each named in the test with its reason: unknown-item
+          (the SDK knows no third kind of completion reference and rejects one first, recorded as
+          malformed-request) and unrecorded (the audit step's own late record, which no governed request
+          reaches). confirmation-unsupported is driven over HTTP with a real token, not over the stream: only a
+          stateless request on an older protocol version cannot be asked to confirm.
+        authorised_by: |
+          agent, as above.
+        date: 2026-10-09
+        tests_changed: [T-1]
+      - what: |
+          UC-8 names three HTTP-layer refusals and three are recorded. Two HTTP answers are deliberately not: a
+          request with no token (answered with where to get one, which is how a standard client begins) and a
+          request for a host name the server does not answer for (refused by the web host before the server's
+          code). Both are in the deferred file as choices the pioneer may reverse.
+        authorised_by: |
+          agent, as above.
+        date: 2026-10-09
+        tests_changed: []
+      - what: |
+          G-13 kept every existing log line and reply as it was, and so two lines the roadmap names were left:
+          the fatal line of a server that cannot start does not begin with sys_startup, and the line of one that
+          crashes does not begin with sys_crash (the end-to-end suite reads both and cannot be run). A crash is
+          on the audit trail as sys_crash. Documentation in files another session holds (the README, docs/01 to
+          05, the dated amendments in docs/06 and 07) was not changed: a new docs/08-AUDIT-TRAIL.md carries it,
+          and the deferred file lists each edit owed.
+        authorised_by: |
+          agent, as above.
+        date: 2026-10-09
+        tests_changed: []
     cost: {turns: null, tokens: null, pioneer_minutes: null}
     file: docs/contracts/contract-006-every-decision-on-the-record.html
     artifact: https://claude.ai/artifact/7eWwrzrET4UGV948cK3y4u
